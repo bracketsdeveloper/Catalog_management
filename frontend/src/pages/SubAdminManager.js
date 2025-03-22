@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 export default function SubAdminManager() {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const [subAdmins, setSubAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -43,7 +44,7 @@ export default function SubAdminManager() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/admin/sub-admins", {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/sub-admins`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSubAdmins(res.data);
@@ -64,7 +65,7 @@ export default function SubAdminManager() {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "http://localhost:5000/api/admin/sub-admins",
+        `${BACKEND_URL}/api/admin/sub-admins`,
         newAdminData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -126,7 +127,7 @@ export default function SubAdminManager() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/admin/sub-admins/${adminId}`,
+        `${BACKEND_URL}/api/admin/sub-admins/${adminId}`,
         { permissions: tempPermissions },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -151,7 +152,7 @@ export default function SubAdminManager() {
     if (!window.confirm("Are you sure you want to delete this sub-admin?")) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:5000/api/admin/sub-admins/${adminId}`, {
+      await axios.delete(`${BACKEND_URL}/api/admin/sub-admins/${adminId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchSubAdmins();

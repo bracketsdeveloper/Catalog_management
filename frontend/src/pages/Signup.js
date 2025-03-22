@@ -6,6 +6,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function CreateAccount() {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -36,7 +37,7 @@ export default function CreateAccount() {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/auth/signup",
+        BACKEND_URL,
         {
           name,
           email,

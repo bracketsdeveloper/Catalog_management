@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function EmailVerification() {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const navigate = useNavigate();
   const [message, setMessage] = useState("Verifying...");
 
@@ -16,7 +17,7 @@ export default function EmailVerification() {
 
     const verifyEmail = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/auth/verify?token=${token}`);
+        const res = await axios.get(`${BACKEND_URL}/api/auth/verify?token=${token}`);
         setMessage(res.data.message);
         toast.success(res.data.message);
         setTimeout(() => {

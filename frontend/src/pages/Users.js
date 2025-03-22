@@ -5,6 +5,7 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 
 export default function UserManagement() {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const [users, setUsers] = useState([]);
   const [editingRole, setEditingRole] = useState(null);
   const [updatedRole, setUpdatedRole] = useState("");
@@ -16,7 +17,7 @@ export default function UserManagement() {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get("http://localhost:5000/api/admin/users", {
+        const response = await axios.get("${BACKEND_URL}/api/admin/users", {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
@@ -38,7 +39,7 @@ export default function UserManagement() {
   const handleRoleChange = async (userId) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/admin/users/${userId}/role`,
+        `${BACKEND_URL}/api/admin/users/${userId}/role`,
         { role: updatedRole },
         {
           headers: {
