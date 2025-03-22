@@ -1,14 +1,30 @@
-// routes/advancedSearchPhash.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const fs = require("fs-extra");
+const path = require("path");
 const axios = require("axios");
 const imghash = require("imghash");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const Product = require("../models/Product");
 
-const upload = multer({ dest: "uploads/" });
+// Use an environment variable for the upload directory; default to '/tmp/uploads'
+const uploadDir = process.env.UPLOAD_DIR || "/tmp/uploads";
+
+// Ensure the upload directory exists
+fs.ensureDirSync(uploadDir);
+
+// Configure multer storage with custom destination and filename
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
+const upload = multer({ storage });
 
 // Helper: Compute Hamming distance between two hash strings
 function hammingDistance(hash1, hash2) {
@@ -36,6 +52,9 @@ async function getImageHash(source) {
   }
 }
 
+// POST /advanced-search
+// Accepts a single image file, computes its perceptual hash (pHash),
+// and returns products with similar images based on Hamming distance.
 router.post(
   "/advanced-search",
   authenticate,
@@ -50,11 +69,13 @@ router.post(
       uploadedPath = req.file.path;
       // Compute hash for the uploaded image (local file)
       const uploadedHash = await imghash.hash(uploadedPath, 16);
+
       // Set similarity threshold (adjust as needed)
       const SIMILARITY_THRESHOLD = 10;
       const allProducts = await Product.find().lean();
       const matchedProducts = [];
 
+      // Compare each product image's hash with the uploaded image's hash
       for (const product of allProducts) {
         if (!product.images || product.images.length === 0) continue;
         let foundMatch = false;
@@ -77,7 +98,7 @@ router.post(
       console.error("Error performing advanced image search with pHash:", error);
       res.status(500).json({ message: "Error performing advanced image search with pHash" });
     } finally {
-      // Ensure the uploaded file is deleted after processing
+      // Clean up: delete the uploaded file after processing
       if (uploadedPath) {
         try {
           await fs.remove(uploadedPath);
