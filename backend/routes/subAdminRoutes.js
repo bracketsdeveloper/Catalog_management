@@ -1,7 +1,7 @@
 // routes/subAdminRoutes.js
 
 const express = require("express");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const router = express.Router();
 const User = require("../models/User");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
