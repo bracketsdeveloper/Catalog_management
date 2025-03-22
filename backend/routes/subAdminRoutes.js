@@ -1,26 +1,16 @@
-// routes/subAdminRoutes.js
-
 const express = require("express");
-const bcrypt = require("bcrypt");
 const router = express.Router();
 const User = require("../models/User");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-
 /**
  * GET /api/admin/sub-admins
  * Returns all users with role=ADMIN who are *not* the “super admin”
- * (assuming super admin = the user who is calling, or some condition)
  */
 router.get("/admin/sub-admins", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // e.g. fetch all users with role=ADMIN
+    // Fetch all users with role=ADMIN
     const admins = await User.find({ role: "ADMIN" }).lean();
-
-    // Optionally filter out "super admin" if you store that differently
-    // For example, if super admin has some known email or user._id:
-    // or store a separate field isSuperAdmin: true for the top-level admin.
-
     res.status(200).json(admins);
   } catch (error) {
     console.error("Error fetching sub-admins:", error);
@@ -41,17 +31,15 @@ router.post("/admin/sub-admins", authenticate, authorizeAdmin, async (req, res) 
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user with role=ADMIN (or SUB_ADMIN) and specified permissions
+    // Do not manually hash the password here.
+    // Let the pre-save hook in the User model handle password hashing.
     const newUser = new User({
       name,
       email,
       phone,
-      password: hashedPassword,  // Store hashed password
-      role: "ADMIN",             // or "SUB_ADMIN" if that's what you need
-      isVerified: true,          // boolean 'true'
+      password, // Plain text here; will be hashed automatically before save.
+      role: "ADMIN", // or "SUB_ADMIN" if that's what you need
+      isVerified: true, // Mark as verified
       permissions: permissions || [],
     });
 
@@ -107,7 +95,6 @@ router.delete("/admin/sub-admins/:id", authenticate, authorizeAdmin, async (req,
       return res.status(400).json({ message: "User is not an admin" });
     }
 
-    // Possibly ensure we are not deleting the super admin
     await user.remove();
     res.status(200).json({ message: "Sub-admin deleted successfully" });
   } catch (error) {

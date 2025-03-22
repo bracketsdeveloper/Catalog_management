@@ -36,14 +36,12 @@ export default function CreateAccount() {
     }
 
     try {
-      const response = await axios.post(
-        BACKEND_URL,
-        {
-          name,
-          email,
-          phone,
-          password,
-        }
+      const response = await axios.post(`${BACKEND_URL}/api/auth/signup`, {
+        name,
+        email,
+        phone,
+        password,
+      }
       );
 
       toast.success(response.data.message, {
