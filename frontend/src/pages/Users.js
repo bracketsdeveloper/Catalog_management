@@ -17,7 +17,7 @@ export default function UserManagement() {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get("${BACKEND_URL}/api/admin/users", {
+        const response = await axios.get(`${BACKEND_URL}/api/admin/users`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
