@@ -159,16 +159,10 @@ export default function CreateManualCatalog() {
   };
 
   // Filtering products
-  const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
-  const subCategories = Array.from(new Set(products.map((p) => p.subCategory).filter(Boolean)));
-  const brands = Array.from(new Set(products.map((p) => p.brandName).filter(Boolean)));
-  const stockLocations = Array.from(new Set(products.map((p) => p.stockCurrentlyWith).filter(Boolean)));
-
-  const toggleCat = (c) => {
-    setSelectedCategories((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
-    );
-  };
+  const allProductCategories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
+  const allProductSubCategories = Array.from(new Set(products.map((p) => p.subCategory).filter(Boolean)));
+  const allProductBrands = Array.from(new Set(products.map((p) => p.brandName).filter(Boolean)));
+  const allStockLocations = Array.from(new Set(products.map((p) => p.stockCurrentlyWith).filter(Boolean)));
 
   const filteredProducts = products.filter((prod) => {
     const term = searchTerm.toLowerCase();
@@ -187,7 +181,7 @@ export default function CreateManualCatalog() {
     const matchCat = selectedCategories.length === 0 || selectedCategories.includes(prod.category);
     const matchSub = selectedSubCategories.length === 0 || selectedSubCategories.includes(prod.subCategory);
     const matchBrand = selectedBrands.length === 0 || selectedBrands.includes(prod.brandName);
-    const matchStock = selectedStockLocations.length === 0 || selectedStockLocations.includes(prod.stockCurrentlyWith);
+    const matchStock = allStockLocations.length === 0 || allStockLocations.includes(prod.stockCurrentlyWith);
     return matchesSearch && matchCat && matchSub && matchBrand && matchStock;
   });
 
@@ -317,14 +311,19 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // Theme updates:
+  // Outer container: white background, dark text.
+  // Use purple borders and text for accents, blue for primary actions, and pink for warnings.
+
   if (loading) {
-    return <div className="p-6 text-gray-200">Loading...</div>;
+    return <div className="p-6 text-gray-400">Loading...</div>;
   }
 
   return (
-    <div className="p-6 bg-gray-900 text-gray-200 min-h-screen">
+    <div className="p-6 bg-white text-gray-900 min-h-screen">
+      {/* Top section: Save buttons & margin selection */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-2 md:space-y-0">
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
@@ -332,7 +331,7 @@ export default function CreateManualCatalog() {
             <select
               value={marginOption === "preset" ? selectedPresetMargin : "custom"}
               onChange={handleMarginOptionChange}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
             >
               {presetMarginOptions.map((m) => (
                 <option key={m} value={m}>
@@ -348,19 +347,19 @@ export default function CreateManualCatalog() {
                 placeholder="Enter margin"
                 value={customMargin}
                 onChange={handleCustomMarginChange}
-                className="bg-gray-700 px-3 py-2 rounded"
+                className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
               />
             )}
           </div>
           <button
             onClick={handleSaveCatalog}
-            className="bg-green-600 px-4 py-2 rounded hover:bg-green-700"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
           >
             {isEditMode ? "Update Catalog" : "Create Catalog"}
           </button>
           <button
             onClick={handleCreateQuotation}
-            className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
           >
             Create Quotation
           </button>
@@ -370,60 +369,66 @@ export default function CreateManualCatalog() {
       {/* Basic Info Form */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div>
-          <label className="block font-medium mb-1">
+          <label className="block font-medium mb-1 text-purple-700">
             Catalog Name {isEditMode ? "" : "*"}
           </label>
           <input
             type="text"
-            className="bg-gray-700 rounded w-full p-2"
+            className="bg-white border border-purple-300 rounded w-full p-2"
             value={catalogName}
             onChange={(e) => setCatalogName(e.target.value)}
             required
           />
         </div>
         <div>
-          <label className="block font-medium mb-1">
+          <label className="block font-medium mb-1 text-purple-700">
             Customer Name {isEditMode ? "" : "*"}
           </label>
           <input
             type="text"
-            className="bg-gray-700 rounded w-full p-2"
+            className="bg-white border border-purple-300 rounded w-full p-2"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             required
           />
         </div>
         <div>
-          <label className="block font-medium mb-1">Customer Email (optional)</label>
+          <label className="block font-medium mb-1 text-purple-700">
+            Customer Email (optional)
+          </label>
           <input
             type="email"
-            className="bg-gray-700 rounded w-full p-2"
+            className="bg-white border border-purple-300 rounded w-full p-2"
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
           />
         </div>
         <div>
-          <label className="block font-medium mb-1">Customer Company</label>
+          <label className="block font-medium mb-1 text-purple-700">
+            Customer Company
+          </label>
           <input
             type="text"
-            className="bg-gray-700 rounded w-full p-2"
+            className="bg-white border border-purple-300 rounded w-full p-2"
             value={customerCompany}
             onChange={(e) => setCustomerCompany(e.target.value)}
           />
         </div>
         <div>
-          <label className="block font-medium mb-1">Customer Address</label>
+          <label className="block font-medium mb-1 text-purple-700">
+            Customer Address
+          </label>
           <input
             type="text"
-            className="bg-gray-700 rounded w-full p-2"
+            className="bg-white border border-purple-300 rounded w-full p-2"
             value={customerAddress}
             onChange={(e) => setCustomerAddress(e.target.value)}
           />
         </div>
         <div>
-          <label className="block font-medium mb-1">State</label>
+          <label className="block font-medium mb-1 text-purple-700">State</label>
           <select
-            className="bg-gray-700 rounded w-full p-2"
+            className="bg-white border border-purple-300 rounded w-full p-2"
             value={customerAddress} // adjust if you have a separate state field
             onChange={(e) => setCustomerAddress(e.target.value)}
           >
@@ -439,29 +444,30 @@ export default function CreateManualCatalog() {
 
       {/* Fields to Display */}
       <div className="mb-6">
-        <label className="block font-medium mb-2">Fields to Display</label>
+        <label className="block font-medium mb-2 text-purple-700">Fields to Display</label>
         <div className="flex flex-wrap gap-4">
           {["images", "name", "category", "subCategory", "brandName", "price"].map(
             (field) => (
-              <label key={field} className="flex items-center space-x-2">
+              <label key={field} className="flex items-center space-x-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={fieldsToDisplay.includes(field)}
                   onChange={() => toggleField(field)}
+                  className="form-checkbox h-4 w-4 text-purple-600"
                 />
-                <span>{field}</span>
+                <span className="text-gray-900">{field}</span>
               </label>
             )
           )}
         </div>
       </div>
 
-      {/* Search & Filters */}
+      {/* Search & Filters for Products */}
       <div className="flex justify-between items-center mb-4">
         <input
           type="text"
           placeholder="Search products..."
-          className="w-1/2 px-3 py-2 rounded bg-gray-700 focus:outline-none"
+          className="w-1/2 px-3 py-2 rounded bg-white border border-purple-300 focus:outline-none focus:ring focus:ring-purple-500"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -470,29 +476,28 @@ export default function CreateManualCatalog() {
           <div className="relative">
             <button
               onClick={() => setCategoryOpen(!categoryOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
             >
               Cat ({selectedCategories.length})
             </button>
             {categoryOpen && (
-              <div className="absolute mt-2 w-40 bg-gray-800 p-2 rounded z-50">
-                {categories.map((c) => (
+              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
+                {allProductCategories.map((c) => (
                   <label
                     key={c}
-                    className="flex items-center space-x-2 text-sm hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedCategories.includes(c)}
                       onChange={() =>
                         setSelectedCategories((prev) =>
-                          prev.includes(c)
-                            ? prev.filter((x) => x !== c)
-                            : [...prev, c]
+                          prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
                         )
                       }
+                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span>{c}</span>
+                    <span className="text-gray-900">{c}</span>
                   </label>
                 ))}
               </div>
@@ -503,29 +508,28 @@ export default function CreateManualCatalog() {
           <div className="relative">
             <button
               onClick={() => setSubCategoryOpen(!subCategoryOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
             >
               Sub ({selectedSubCategories.length})
             </button>
             {subCategoryOpen && (
-              <div className="absolute mt-2 w-40 bg-gray-800 p-2 rounded z-50">
-                {subCategories.map((s) => (
+              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
+                {allProductSubCategories.map((s) => (
                   <label
                     key={s}
-                    className="flex items-center space-x-2 text-sm hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedSubCategories.includes(s)}
                       onChange={() =>
                         setSelectedSubCategories((prev) =>
-                          prev.includes(s)
-                            ? prev.filter((x) => x !== s)
-                            : [...prev, s]
+                          prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
                         )
                       }
+                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span>{s}</span>
+                    <span className="text-gray-900">{s}</span>
                   </label>
                 ))}
               </div>
@@ -536,16 +540,16 @@ export default function CreateManualCatalog() {
           <div className="relative">
             <button
               onClick={() => setBrandOpen(!brandOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
             >
               Brand ({selectedBrands.length})
             </button>
             {brandOpen && (
-              <div className="absolute mt-2 w-40 bg-gray-800 p-2 rounded z-50">
-                {brands.map((b) => (
+              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
+                {allProductBrands.map((b) => (
                   <label
                     key={b}
-                    className="flex items-center space-x-2 text-sm hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
                   >
                     <input
                       type="checkbox"
@@ -555,8 +559,9 @@ export default function CreateManualCatalog() {
                           prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]
                         )
                       }
+                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span>{b}</span>
+                    <span className="text-gray-900">{b}</span>
                   </label>
                 ))}
               </div>
@@ -567,16 +572,16 @@ export default function CreateManualCatalog() {
           <div className="relative">
             <button
               onClick={() => setStockOpen(!stockOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
             >
               Stock ({selectedStockLocations.length})
             </button>
             {stockOpen && (
-              <div className="absolute mt-2 w-40 bg-gray-800 p-2 rounded z-50">
-                {stockLocations.map((loc) => (
+              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
+                {allStockLocations.map((loc) => (
                   <label
                     key={loc}
-                    className="flex items-center space-x-2 text-sm hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
                   >
                     <input
                       type="checkbox"
@@ -588,8 +593,9 @@ export default function CreateManualCatalog() {
                             : [...prev, loc]
                         )
                       }
+                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span>{loc}</span>
+                    <span className="text-gray-900">{loc}</span>
                   </label>
                 ))}
               </div>
@@ -605,14 +611,14 @@ export default function CreateManualCatalog() {
           return (
             <div
               key={p._id}
-              className={`bg-gray-800 p-4 rounded relative flex flex-col ${
+              className={`bg-white border border-purple-200 rounded shadow p-4 relative flex flex-col ${
                 isSelected ? "border-2 border-blue-400" : ""
               }`}
             >
               <span
                 className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded ${
-                  p.stockInHand > 0 ? "bg-green-600" : "bg-red-600"
-                }`}
+                  p.stockInHand > 0 ? "bg-purple-600" : "bg-pink-600"
+                } text-white`}
               >
                 {p.stockInHand > 0 ? "Available" : "Out of stock"}
               </span>
@@ -623,22 +629,22 @@ export default function CreateManualCatalog() {
                   className="w-full h-32 object-cover mb-2 rounded"
                 />
               ) : (
-                <div className="w-full h-32 bg-gray-700 flex items-center justify-center mb-2 rounded">
-                  <span className="text-gray-400 text-sm">No Image</span>
+                <div className="w-full h-32 bg-gray-100 flex items-center justify-center mb-2 rounded">
+                  <span className="text-gray-500 text-sm">No Image</span>
                 </div>
               )}
-              <h4 className="font-bold text-sm mb-1">{p.name}</h4>
-              <p className="text-xs text-gray-400 mb-2">
+              <h4 className="font-bold text-sm mb-1 text-purple-700">{p.name}</h4>
+              <p className="text-xs text-purple-600 mb-2">
                 {p.category} {p.subCategory ? `/ ${p.subCategory}` : ""}
               </p>
-              <p className="text-xs">Price: ₹{p.price}</p>
+              <p className="text-xs text-gray-800">Price: ₹{p.price}</p>
               <button
                 onClick={() => handleSelectProduct(p)}
-                className={`mt-auto px-2 py-1 text-sm rounded ${
+                className={`mt-auto px-3 py-1 text-sm rounded ${
                   isSelected
-                    ? "bg-red-600 hover:bg-red-700"
+                    ? "bg-pink-600 hover:bg-pink-700"
                     : "bg-blue-600 hover:bg-blue-700"
-                }`}
+                } text-white`}
               >
                 {isSelected ? "Remove" : "Select"}
               </button>
@@ -646,7 +652,7 @@ export default function CreateManualCatalog() {
                 <input
                   type="number"
                   min="1"
-                  className="mt-2 bg-gray-600 p-1 rounded text-center"
+                  className="mt-2 bg-gray-100 border border-purple-300 p-1 rounded text-center"
                   value={productQuantities[p._id] || 1}
                   onChange={(e) => handleQuantityChange(p._id, e.target.value)}
                 />
