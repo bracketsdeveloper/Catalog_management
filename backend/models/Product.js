@@ -9,12 +9,23 @@ const productSchema = new mongoose.Schema({
   variationHinge: String,
   name: { type: String, required: true },
   brandName: String,
-  stockInHand: { type: Number, required: true },
-  stockCurrentlyWith: String,
   images: [String],
+  productDetails: { type: String, default: "" },
   // NEW FIELDS
-  price: { type: Number, default: 0 }, // or required: true if you prefer
-  productDetails: { type: String, default: "" }, // or required: false
+  qty: { type: Number, default: 0 },
+  MRP_Currency: { type: String, default: "" },
+  MRP: { type: Number, default: 0 },
+  MRP_Unit: { type: String, default: "" },
+  deliveryTime: { type: String, default: "" },
+  size: { type: String, default: "" },
+  color: { type: String, default: "" },
+  material: { type: String, default: "" },
+  priceRange: { type: String, default: "" },
+  weight: { type: String, default: "" },
+  hsnCode: { type: String, default: "" },
+  productCost_Currency: { type: String, default: "" },
+  productCost: { type: Number, default: 0 },
+  productCost_Unit: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -25,11 +25,23 @@ export default function ProductManagementPage() {
     variationHinge: "",
     name: "",
     brandName: "",
-    stockInHand: 0,
-    stockCurrentlyWith: "",
     images: [],
-    price: 0,
-    productDetails: ""
+    productDetails: "",
+    // NEW FIELDS
+    qty: 0,
+    MRP_Currency: "",
+    MRP: 0,
+    MRP_Unit: "",
+    deliveryTime: "",
+    size: "",
+    color: "",
+    material: "",
+    priceRange: "",
+    weight: "",
+    hsnCode: "",
+    productCost_Currency: "",
+    productCost: 0,
+    productCost_Unit: ""
   });
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -118,8 +130,6 @@ export default function ProductManagementPage() {
       prod.variationHinge +
       prod.name +
       prod.brandName +
-      prod.stockCurrentlyWith +
-      (prod.price || "") +
       (prod.productDetails || "")
     ).toLowerCase();
 
@@ -163,11 +173,22 @@ export default function ProductManagementPage() {
         variationHinge: product.variationHinge || "",
         name: product.name || "",
         brandName: product.brandName || "",
-        stockInHand: product.stockInHand || 0,
-        stockCurrentlyWith: product.stockCurrentlyWith || "",
         images: product.images || [],
-        price: product.price || 0,
-        productDetails: product.productDetails || ""
+        productDetails: product.productDetails || "",
+        qty: product.qty || 0,
+        MRP_Currency: product.MRP_Currency || "",
+        MRP: product.MRP || 0,
+        MRP_Unit: product.MRP_Unit || "",
+        deliveryTime: product.deliveryTime || "",
+        size: product.size || "",
+        color: product.color || "",
+        material: product.material || "",
+        priceRange: product.priceRange || "",
+        weight: product.weight || "",
+        hsnCode: product.hsnCode || "",
+        productCost_Currency: product.productCost_Currency || "",
+        productCost: product.productCost || 0,
+        productCost_Unit: product.productCost_Unit || ""
       });
     } else {
       setEditProductId(null);
@@ -180,11 +201,22 @@ export default function ProductManagementPage() {
         variationHinge: "",
         name: "",
         brandName: "",
-        stockInHand: 0,
-        stockCurrentlyWith: "",
         images: [],
-        price: 0,
-        productDetails: ""
+        productDetails: "",
+        qty: 0,
+        MRP_Currency: "",
+        MRP: 0,
+        MRP_Unit: "",
+        deliveryTime: "",
+        size: "",
+        color: "",
+        material: "",
+        priceRange: "",
+        weight: "",
+        hsnCode: "",
+        productCost_Currency: "",
+        productCost: 0,
+        productCost_Unit: ""
       });
     }
     setSingleProductModalOpen(true);
@@ -222,11 +254,23 @@ export default function ProductManagementPage() {
         variationHinge: newProductData.variationHinge,
         name: newProductData.name,
         brandName: newProductData.brandName,
-        stockInHand: newProductData.stockInHand,
-        stockCurrentlyWith: newProductData.stockCurrentlyWith,
         images: finalImages,
-        price: newProductData.price,
-        productDetails: newProductData.productDetails
+        productDetails: newProductData.productDetails,
+        // NEW FIELDS
+        qty: newProductData.qty,
+        MRP_Currency: newProductData.MRP_Currency,
+        MRP: newProductData.MRP,
+        MRP_Unit: newProductData.MRP_Unit,
+        deliveryTime: newProductData.deliveryTime,
+        size: newProductData.size,
+        color: newProductData.color,
+        material: newProductData.material,
+        priceRange: newProductData.priceRange,
+        weight: newProductData.weight,
+        hsnCode: newProductData.hsnCode,
+        productCost_Currency: newProductData.productCost_Currency,
+        productCost: newProductData.productCost,
+        productCost_Unit: newProductData.productCost_Unit
       };
 
       if (!editProductId) {
@@ -310,17 +354,29 @@ export default function ProductManagementPage() {
         variationHinge: row["Variation_hinge"] || "",
         name: row["Name"] || "",
         brandName: row["Brand Name"] || "",
-        stockInHand: row["Stock In Hand"] || 0,
-        stockCurrentlyWith: row["Stock Currently With"] || "",
-        price: row["Price"] || 0,
-        productDetails: row["Product_Details (optional)"] || "",
         images: [
           row["Main_Image_URL"],
           row["Second_Image_URL"],
           row["Third_Image_URL"],
           row["Fourth_Image_URL"],
           row["Other_image_URL"]
-        ].filter(Boolean)
+        ].filter(Boolean),
+        productDetails: row["Product_Details (optional)"] || "",
+        // NEW FIELDS mapping
+        qty: row["Qty"] || 0,
+        MRP_Currency: row["MRP_Currency"] || "",
+        MRP: row["MRP"] || 0,
+        MRP_Unit: row["MRP_Unit"] || "",
+        deliveryTime: row["Delivery Time"] || "",
+        size: row["Size"] || "",
+        color: row["Color"] || "",
+        material: row["Material"] || "",
+        priceRange: row["Price Range"] || "",
+        weight: row["Weight"] || "",
+        hsnCode: row["HSN Code"] || "",
+        productCost_Currency: row["Product Cost_Currency"] || "",
+        productCost: row["Product Cost"] || 0,
+        productCost_Unit: row["Product Cost_Unit"] || ""
       }));
 
       await axios.post(`${BACKEND_URL}/api/admin/products/bulk`, productsToUpload, {
@@ -351,9 +407,20 @@ export default function ProductManagementPage() {
       { v: "Variation_hinge (optional)" },
       { v: "Name (required)" },
       { v: "Brand Name (optional)" },
-      { v: "Stock In Hand (required)" },
-      { v: "Stock Currently With (optional)" },
-      { v: "Price" },
+      { v: "Qty" },
+      { v: "MRP_Currency" },
+      { v: "MRP" },
+      { v: "MRP_Unit" },
+      { v: "Delivery Time" },
+      { v: "Size" },
+      { v: "Color" },
+      { v: "Material" },
+      { v: "Price Range" },
+      { v: "Weight" },
+      { v: "HSN Code" },
+      { v: "Product Cost_Currency" },
+      { v: "Product Cost" },
+      { v: "Product Cost_Unit" },
       { v: "Product_Details (optional)" },
       { v: "Main_Image_URL (optional)" },
       { v: "Second_Image_URL (optional)" },
@@ -372,9 +439,20 @@ export default function ProductManagementPage() {
       "",
       "Sample Name",
       "BrandZ",
-      50,
-      "Warehouse A",
-      99.99,
+      100,
+      "INR",
+      999.99,
+      "per unit",
+      "3-5 days",
+      "M",
+      "Red",
+      "Cotton",
+      "Budget",
+      "500g",
+      "HSN123",
+      "INR",
+      750,
+      "per unit",
       "Some product info",
       "https://example.com/img1.jpg",
       "https://example.com/img2.jpg",
@@ -464,11 +542,6 @@ export default function ProductManagementPage() {
   // ---------------------- RENDER ----------------------
   return (
     <div className="bg-white text-gray-800 min-h-screen">
-      {/* Header with gradient */}
-      {/* <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 p-6">
-        <h1 className="text-2xl font-bold text-white">Product Management</h1>
-      </div> */}
-
       <div className="md:p-6 p-4 w-full max-w-7xl mx-auto">
         {/* Search + Advanced Search */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
@@ -491,7 +564,6 @@ export default function ProductManagementPage() {
             >
               <input {...advGetInputProps()} />
               {advancedSearchLoading ? (
-                // Spinner
                 <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin" />
               ) : (
                 <span className="text-sm">Search by Image</span>
@@ -685,7 +757,7 @@ export default function ProductManagementPage() {
 }
 
 /** ------------------------------------------------------------------
- *  ProductCard
+ *  ProductCard Component
  * ------------------------------------------------------------------*/
 function ProductCard({
   product,
@@ -699,24 +771,12 @@ function ProductCard({
   const currentIndex = carouselIndexMap[product._id] || 0;
   const images = product.images || [];
   const currentImg = images[currentIndex] || "";
-  const inStock = product.stockInHand > 0;
-
   return (
     <div className="bg-white border border-gray-200 rounded shadow-md p-4 relative">
       <div
         onClick={() => handleViewProduct(product._id)}
         className="cursor-pointer"
       >
-        {/* Stock badge */}
-        <span
-          className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded z-10 ${
-            inStock ? "bg-green-500 text-white" : "bg-red-500 text-white"
-          }`}
-        >
-          {inStock ? "Available" : "Out of stock"}
-        </span>
-
-        {/* Image carousel */}
         <div className="relative h-40 mb-4 flex items-center justify-center bg-gray-50 overflow-hidden">
           {images.length > 0 ? (
             <>
@@ -752,14 +812,11 @@ function ProductCard({
             <span className="text-sm text-gray-400">No image</span>
           )}
         </div>
-
-        {/* Info */}
         <h2 className="font-semibold text-lg mb-1 truncate">{product.name}</h2>
         <p className="text-sm text-gray-500">
           {product.category}
           {product.subCategory ? ` / ${product.subCategory}` : ""}
         </p>
-        <p className="text-sm text-gray-600 mt-1">Price: ₹{product.price}</p>
         {product.productDetails && (
           <p className="text-xs text-gray-500 italic mt-1 line-clamp-2">
             {product.productDetails}
@@ -773,7 +830,7 @@ function ProductCard({
             e.stopPropagation();
             openSingleProductModal(product);
           }}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 w-20 rounded z-50"
+          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 w-20 rounded"
         >
           Edit
         </button>
@@ -806,7 +863,7 @@ function SkeletonCard() {
 }
 
 /** ------------------------------------------------------------------
- *  SingleProductModal
+ *  SingleProductModal Component
  * ------------------------------------------------------------------*/
 function SingleProductModal({
   editProductId,
@@ -832,6 +889,7 @@ function SingleProductModal({
           </button>
           <form onSubmit={handleSingleProductSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              {/* Basic product details */}
               <div>
                 <label className="block font-medium mb-1">Product Tag</label>
                 <input
@@ -924,54 +982,158 @@ function SingleProductModal({
                   }
                 />
               </div>
+              {/* New Fields */}
               <div>
-                <label className="block font-medium mb-1">Stock In Hand</label>
+                <label className="block font-medium mb-1">Qty</label>
                 <input
                   type="number"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.stockInHand}
+                  value={newProductData.qty}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, stockInHand: e.target.value }))
+                    setNewProductData((prev) => ({ ...prev, qty: e.target.value }))
                   }
-                  required
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Stock Currently With</label>
+                <label className="block font-medium mb-1">MRP Currency</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.stockCurrentlyWith}
+                  value={newProductData.MRP_Currency}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      stockCurrentlyWith: e.target.value
-                    }))
+                    setNewProductData((prev) => ({ ...prev, MRP_Currency: e.target.value }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Price</label>
+                <label className="block font-medium mb-1">MRP</label>
                 <input
                   type="number"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.price}
+                  value={newProductData.MRP}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, price: e.target.value }))
+                    setNewProductData((prev) => ({ ...prev, MRP: e.target.value }))
                   }
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block font-medium mb-1">Product Details</label>
-                <textarea
-                  rows={3}
+              <div>
+                <label className="block font-medium mb-1">MRP Unit</label>
+                <input
+                  type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.productDetails}
+                  value={newProductData.MRP_Unit}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      productDetails: e.target.value
-                    }))
+                    setNewProductData((prev) => ({ ...prev, MRP_Unit: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Delivery Time</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.deliveryTime}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, deliveryTime: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Size</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.size}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, size: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Color</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.color}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, color: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Material</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.material}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, material: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Price Range</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.priceRange}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, priceRange: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Weight</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.weight}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, weight: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">HSN Code</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.hsnCode}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, hsnCode: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Product Cost Currency</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.productCost_Currency}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, productCost_Currency: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Product Cost</label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.productCost}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, productCost: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Product Cost Unit</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.productCost_Unit}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({ ...prev, productCost_Unit: e.target.value }))
                   }
                 />
               </div>
@@ -1045,8 +1207,7 @@ function SingleProductModal({
 }
 
 /** ------------------------------------------------------------------
- *  Reusable DropdownFilter & FilterItem
- *  (to show how you might DRY up the filter popups)
+ *  Reusable DropdownFilter & FilterItem Components
  * ------------------------------------------------------------------*/
 function DropdownFilter({ label, isOpen, setIsOpen, children }) {
   return (

@@ -74,12 +74,23 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge || "",
       name: req.body.name,
       brandName: req.body.brandName || "",
-      stockInHand: req.body.stockInHand,
-      stockCurrentlyWith: req.body.stockCurrentlyWith || "",
       images: req.body.images || [],
+      productDetails: req.body.productDetails || "",
       // NEW FIELDS
-      price: req.body.price || 0,
-      productDetails: req.body.productDetails || ""
+      qty: req.body.qty || 0,
+      MRP_Currency: req.body.MRP_Currency || "",
+      MRP: req.body.MRP || 0,
+      MRP_Unit: req.body.MRP_Unit || "",
+      deliveryTime: req.body.deliveryTime || "",
+      size: req.body.size || "",
+      color: req.body.color || "",
+      material: req.body.material || "",
+      priceRange: req.body.priceRange || "",
+      weight: req.body.weight || "",
+      hsnCode: req.body.hsnCode || "",
+      productCost_Currency: req.body.productCost_Currency || "",
+      productCost: req.body.productCost || 0,
+      productCost_Unit: req.body.productCost_Unit || ""
     });
 
     await newProduct.save();
@@ -105,12 +116,23 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge,
       name: req.body.name,
       brandName: req.body.brandName,
-      stockInHand: req.body.stockInHand,
-      stockCurrentlyWith: req.body.stockCurrentlyWith,
       images: req.body.images || [],
+      productDetails: req.body.productDetails,
       // NEW FIELDS
-      price: req.body.price,
-      productDetails: req.body.productDetails
+      qty: req.body.qty,
+      MRP_Currency: req.body.MRP_Currency,
+      MRP: req.body.MRP,
+      MRP_Unit: req.body.MRP_Unit,
+      deliveryTime: req.body.deliveryTime,
+      size: req.body.size,
+      color: req.body.color,
+      material: req.body.material,
+      priceRange: req.body.priceRange,
+      weight: req.body.weight,
+      hsnCode: req.body.hsnCode,
+      productCost_Currency: req.body.productCost_Currency,
+      productCost: req.body.productCost,
+      productCost_Unit: req.body.productCost_Unit
     };
 
     const updatedProduct = await Product.findByIdAndUpdate(productId, updatedData, {
@@ -152,12 +174,23 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       variationHinge: p.variationHinge,
       name: p.name,
       brandName: p.brandName,
-      stockInHand: p.stockInHand,
-      stockCurrentlyWith: p.stockCurrentlyWith,
       images: p.images,
+      productDetails: p.productDetails || "",
       // NEW FIELDS
-      price: p.price || 0,
-      productDetails: p.productDetails || ""
+      qty: p.qty || 0,
+      MRP_Currency: p.MRP_Currency || "",
+      MRP: p.MRP || 0,
+      MRP_Unit: p.MRP_Unit || "",
+      deliveryTime: p.deliveryTime || "",
+      size: p.size || "",
+      color: p.color || "",
+      material: p.material || "",
+      priceRange: p.priceRange || "",
+      weight: p.weight || "",
+      hsnCode: p.hsnCode || "",
+      productCost_Currency: p.productCost_Currency || "",
+      productCost: p.productCost || 0,
+      productCost_Unit: p.productCost_Unit || ""
     }));
 
     await Product.insertMany(products);
@@ -167,4 +200,5 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
     res.status(500).json({ message: "Server error during bulk upload" });
   }
 });
+
 module.exports = router;
