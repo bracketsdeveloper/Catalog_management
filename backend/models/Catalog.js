@@ -1,7 +1,11 @@
 const mongoose = require("mongoose");
 
+// A sub-schema to store product references plus variation info
 const productSubSchema = new mongoose.Schema({
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" }
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+  color: { type: String },
+  size: { type: String },
+  quantity: { type: Number, default: 1 }
 });
 
 // A remark schema for chatting
@@ -20,6 +24,7 @@ const catalogSchema = new mongoose.Schema({
   approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
   margin: { type: Number, default: 0 },
+  // "products" is now an array of productSubSchema
   products: [productSubSchema],
   fieldsToDisplay: [String],
   priceRange: {

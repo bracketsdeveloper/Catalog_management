@@ -12,7 +12,8 @@ export default function ProductCard({
 }) {
   const images = product.images || [];
   const currentImg = images[carouselIndex] || "";
-  const inStock = product.stockInHand > 0;
+  // Using productCost as Price (if available) or MRP as fallback
+  const price = product.productCost || product.MRP || 0;
 
   return (
     <div
@@ -20,21 +21,11 @@ export default function ProductCard({
         isSelected ? "border-pink-500 bg-pink-50" : "border-purple-200"
       }`}
     >
-      <span
-        className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded z-10 ${
-          inStock ? "bg-purple-600" : "bg-pink-600"
-        } text-white`}
-      >
-        {inStock ? "Available" : "Out of Stock"}
-      </span>
+      {/* Image Carousel */}
       <div className="relative h-40 mb-4 flex items-center justify-center bg-white border border-purple-100 rounded">
         {images.length > 0 ? (
           <>
-            <img
-              src={currentImg}
-              alt="Product"
-              className="h-40 object-cover rounded"
-            />
+            <img src={currentImg} alt="Product" className="h-40 object-cover rounded" />
             {images.length > 1 && (
               <>
                 <button
@@ -56,26 +47,27 @@ export default function ProductCard({
           <span className="text-sm text-gray-500">No image</span>
         )}
       </div>
-      <h2 className="font-bold text-xl mb-1 text-purple-900">
-        {product.name}
-      </h2>
+
+      {/* Product Info */}
+      <h2 className="font-bold text-xl mb-1 text-purple-900">{product.name}</h2>
       <p className="text-sm text-purple-700">
         {product.category}
         {product.subCategory ? ` / ${product.subCategory}` : ""}
       </p>
-      <p className="text-sm font-semibold text-purple-800">
-        Price: ₹{product.price}
-      </p>
+      <p className="text-sm text-purple-700">{product.brandName}</p>
+      <p className="text-sm font-semibold text-purple-800">Price: ₹{price}</p>
+      {/* {product.color && <p className="text-sm text-gray-600">Color: {product.color}</p>} */}
+      {product.size && <p className="text-sm text-gray-600">Size: {product.size}</p>}
+      {product.material && <p className="text-sm text-gray-600">Material: {product.material}</p>}
       {product.productDetails && (
-        <p className="text-xs text-purple-600 italic mt-1">
-          {product.productDetails}
-        </p>
+        <p className="text-xs text-purple-600 italic mt-1">{product.productDetails}</p>
       )}
-      
+
+      {/* Select Button */}
       <div className="mt-2">
         <button
           onClick={() => toggleSelectProduct(product._id)}
-          className={`w-full px-4 py-2 rounded text-sm font-semibold ${
+          className={`w-full px-4 py-2 rounded text-sm font-semibold absolute bottom-0 -right-0 ${
             isSelected
               ? "bg-pink-600 hover:bg-pink-700 text-white"
               : "bg-purple-600 hover:bg-purple-700 text-white"

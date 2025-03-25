@@ -4,33 +4,33 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 
 // EditableCell for inline editing
-function EditableCell({ value, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [currentValue, setCurrentValue] = useState(value);
+// function EditableCell({ value, onSave }) {
+//   const [editing, setEditing] = useState(false);
+//   const [currentValue, setCurrentValue] = useState(value);
 
-  useEffect(() => {
-    setCurrentValue(value);
-  }, [value]);
+//   useEffect(() => {
+//     setCurrentValue(value);
+//   }, [value]);
 
-  const handleDoubleClick = () => setEditing(true);
-  const handleBlur = () => {
-    setEditing(false);
-    onSave(currentValue);
-  };
+//   const handleDoubleClick = () => setEditing(true);
+//   const handleBlur = () => {
+//     setEditing(false);
+//     onSave(currentValue);
+//   };
 
-  return editing ? (
-    <input
-      type="text"
-      className="border p-1 rounded"
-      autoFocus
-      value={currentValue}
-      onChange={(e) => setCurrentValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  ) : (
-    <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
-  );
-}
+//   return editing ? (
+//     <input
+//       type="text"
+//       className="border p-1 rounded"
+//       autoFocus
+//       value={currentValue}
+//       onChange={(e) => setCurrentValue(e.target.value)}
+//       onBlur={handleBlur}
+//     />
+//   ) : (
+//     <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
+//   );
+// }
 
 export default function QuotationView() {
   const { id } = useParams();
@@ -157,7 +157,7 @@ export default function QuotationView() {
   // Compute margin factor
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
 
-  // Also compute grand totals from items:
+  // Compute totals from items
   let computedAmount = 0;
   let computedTotal = 0;
   editableQuotation.items.forEach((item) => {
@@ -268,7 +268,7 @@ export default function QuotationView() {
       </div>
 
       {/* Items Table */}
-      <table className="w-full border-collapse mb-6">
+      <table className="w-full border-collapse mb-6 text-sm">
         <thead>
           <tr className="border-b">
             <th className="p-2 text-left">Sl. No.</th>
@@ -285,10 +285,18 @@ export default function QuotationView() {
           {editableQuotation.items.map((item, index) => {
             const baseRate = parseFloat(item.rate) || 0;
             const quantity = parseFloat(item.quantity) || 0;
-            const effectiveRate = baseRate * marginFactor;
-            const amount = effectiveRate * quantity;
+            const effRate = baseRate * marginFactor;
+            const amount = effRate * quantity;
             const gst = parseFloat((amount * 0.18).toFixed(2));
             const total = parseFloat((amount + gst).toFixed(2));
+            // Use item.image if available; otherwise try item.productId.images[0]
+            const imageUrl =
+              item.image ||
+              (item.productId &&
+                item.productId.images &&
+                item.productId.images.length > 0
+                ? item.productId.images[0]
+                : "https://via.placeholder.com/150");
             return (
               <tr key={index} className="border-b">
                 <td className="p-2">
@@ -298,9 +306,9 @@ export default function QuotationView() {
                   />
                 </td>
                 <td className="p-2">
-                  {item.image ? (
+                  {imageUrl !== "https://via.placeholder.com/150" ? (
                     <img
-                      src={item.image}
+                      src={imageUrl}
                       alt={item.product}
                       className="w-16 h-16 object-cover"
                     />
@@ -322,7 +330,7 @@ export default function QuotationView() {
                 </td>
                 <td className="p-2">
                   <EditableCell
-                    value={effectiveRate.toFixed(2)}
+                    value={effRate.toFixed(2)}
                     onSave={(newVal) => {
                       const newBaseRate = parseFloat(newVal) / marginFactor;
                       updateItemField(index, "rate", newBaseRate.toFixed(2));
@@ -363,5 +371,33 @@ export default function QuotationView() {
         <p className="mt-2">Neeraj Dinodia</p>
       </div>
     </div>
+  );
+}
+
+function EditableCell({ value, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [currentValue, setCurrentValue] = useState(value);
+
+  useEffect(() => {
+    setCurrentValue(value);
+  }, [value]);
+
+  const handleDoubleClick = () => setEditing(true);
+  const handleBlur = () => {
+    setEditing(false);
+    onSave(currentValue);
+  };
+
+  return editing ? (
+    <input
+      type="text"
+      className="border p-1 rounded"
+      autoFocus
+      value={currentValue}
+      onChange={(e) => setCurrentValue(e.target.value)}
+      onBlur={handleBlur}
+    />
+  ) : (
+    <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
   );
 }

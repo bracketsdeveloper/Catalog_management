@@ -74,6 +74,7 @@ router.post("/signup", async (req, res) => {
 });
 
 // LOGIN
+// LOGIN
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -90,11 +91,20 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // 3) For VIEWER, ensure that they have not already logged in (single session only)
-    if (user.role === "VIEWER" && user.singleSession) {
-      return res.status(403).json({
-        error: "Viewer already logged in. Single session allowed.",
-      });
+    // 3) For VIEWER, check login limits
+    if (user.role === "VIEWER") {
+      // If using single session logic:
+      if (user.singleSession && user.loginCount >= 1) {
+        return res.status(403).json({
+          error: "Viewer already logged in. Single session allowed.",
+        });
+      }
+      // Otherwise, check against maxLogins limit
+      if (user.loginCount >= user.maxLogins) {
+        return res.status(403).json({
+          error: "Maximum login limit reached for this viewer.",
+        });
+      }
     }
 
     // 4) Compare password
@@ -103,9 +113,9 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials." });
     }
 
-    // 5) If user is a viewer, mark session as used (single session only)
+    // 5) For VIEWER, increment login count
     if (user.role === "VIEWER") {
-      user.singleSession = true;
+      user.loginCount += 1;
       await user.save();
     }
 
@@ -130,5 +140,6 @@ router.post("/login", async (req, res) => {
     return res.status(500).json({ error: "Internal server error." });
   }
 });
+
 
 module.exports = router;

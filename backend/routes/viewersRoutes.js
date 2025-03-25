@@ -16,20 +16,46 @@ router.get("/viewers", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// GET products for viewer or admin
+// GET products for viewer or admin (with pagination for admin)
 router.get("/products", authenticate, async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100;
+    const skip = (page - 1) * limit;
+
     if (req.user.role === "VIEWER") {
+      // Return only accessible products for this viewer
       const viewer = await User.findById(req.user._id).lean();
       if (!viewer) {
         return res.status(404).json({ message: "Viewer not found" });
       }
       const productIds = viewer.accessibleProducts || [];
-      const products = await Product.find({ _id: { $in: productIds } }).lean();
-      res.json({ products, visibleAttributes: viewer.visibleAttributes || [] });
+      // For a viewer, we might not strictly do pagination, but you can if you wish:
+      const products = await Product.find({ _id: { $in: productIds } })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      // Return total count as well for front-end pagination if needed
+      const totalCount = await Product.countDocuments({ _id: { $in: productIds } });
+
+      res.json({
+        products,
+        total: totalCount,
+        visibleAttributes: viewer.visibleAttributes || [],
+      });
     } else if (req.user.role === "ADMIN") {
-      const products = await Product.find().lean();
-      res.json({ products, visibleAttributes: [] });
+      // Admin can see all products with pagination
+      const [totalCount, products] = await Promise.all([
+        Product.countDocuments(),
+        Product.find().skip(skip).limit(limit).lean(),
+      ]);
+
+      res.json({
+        products,
+        total: totalCount,
+        visibleAttributes: [],
+      });
     } else {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -48,9 +74,7 @@ router.get("/products/:id", authenticate, async (req, res) => {
       if (!viewer) {
         return res.status(404).json({ message: "Viewer not found" });
       }
-      const accessibleIds = (viewer.accessibleProducts || []).map((id) =>
-        id.toString()
-      );
+      const accessibleIds = (viewer.accessibleProducts || []).map((id) => id.toString());
       if (!accessibleIds.includes(productId)) {
         return res.status(403).json({ message: "Not authorized to view this product" });
       }
@@ -85,7 +109,7 @@ router.post("/viewers", authenticate, authorizeAdmin, async (req, res) => {
       accessibleProducts,
       visibleAttributes,
       singleSession,
-      maxLogins, // new field for login count
+      maxLogins,
     } = req.body;
     if (!name || !email || !phone || !password) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -100,8 +124,8 @@ router.post("/viewers", authenticate, authorizeAdmin, async (req, res) => {
       isVerified: true,
       accessibleProducts: accessibleProducts || [],
       visibleAttributes: visibleAttributes || [],
-      singleSession: singleSession,
-      maxLogins: maxLogins || 1, // default to 1 login if not provided
+      singleSession: !!singleSession,
+      maxLogins: maxLogins || 1,
       loginCount: 0,
     });
     await newViewer.save();
@@ -123,9 +147,16 @@ router.put("/viewers/:id", authenticate, authorizeAdmin, async (req, res) => {
       accessibleProducts,
       visibleAttributes,
       singleSession,
-      maxLogins, // new field
+      maxLogins,
     } = req.body;
-    const updateData = { name, email, phone, accessibleProducts, visibleAttributes, singleSession };
+    const updateData = {
+      name,
+      email,
+      phone,
+      accessibleProducts,
+      visibleAttributes,
+      singleSession: !!singleSession,
+    };
     if (maxLogins !== undefined) {
       updateData.maxLogins = maxLogins;
     }
@@ -137,8 +168,9 @@ router.put("/viewers/:id", authenticate, authorizeAdmin, async (req, res) => {
       new: true,
       runValidators: true,
     });
-    if (!updatedViewer)
+    if (!updatedViewer) {
       return res.status(404).json({ message: "Viewer not found" });
+    }
     res.json(updatedViewer);
   } catch (error) {
     console.error("Error updating viewer:", error);
@@ -154,8 +186,9 @@ router.put("/viewers/:id/reactivate", authenticate, authorizeAdmin, async (req, 
       { loginCount: 0 },
       { new: true }
     );
-    if (!updatedViewer)
+    if (!updatedViewer) {
       return res.status(404).json({ message: "Viewer not found" });
+    }
     res.json({ message: "Viewer reactivated successfully", viewer: updatedViewer });
   } catch (error) {
     console.error("Error reactivating viewer:", error);
@@ -167,8 +200,9 @@ router.put("/viewers/:id/reactivate", authenticate, authorizeAdmin, async (req, 
 router.delete("/viewers/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const deleted = await User.findByIdAndDelete(req.params.id);
-    if (!deleted)
+    if (!deleted) {
       return res.status(404).json({ message: "Viewer not found" });
+    }
     res.json({ message: "Viewer deleted successfully" });
   } catch (error) {
     console.error("Error deleting viewer:", error);

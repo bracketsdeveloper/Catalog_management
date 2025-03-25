@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const productSchema = new mongoose.Schema({
   productTag: { type: String, required: true },
-  productId: { type: String, required: true },
+  productId: { type: String, required: true, unique: true },
   variantId: String,
   category: { type: String, required: true },
   subCategory: String,
@@ -10,6 +10,8 @@ const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   brandName: String,
   images: [String],
+  // New field for storing precomputed image hashes
+  imageHashes: [String],
   productDetails: { type: String, default: "" },
   // NEW FIELDS
   qty: { type: Number, default: 0 },

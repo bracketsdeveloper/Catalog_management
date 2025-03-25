@@ -1,17 +1,18 @@
 const mongoose = require("mongoose");
 
+// Each item on the quotation references a specific product
 const quotationItemSchema = new mongoose.Schema({
   slNo: { type: Number, required: true },
-  image: { type: String },
-  product: { type: String, required: true },
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" }, // <-- NEW
+  product: { type: String, required: true }, // name or short label for display
   quantity: { type: Number, required: true },
-  rate: { type: Number, required: true },
+  rate: { type: Number, required: true },    // derived from productCost
   amount: { type: Number, required: true },
   gst: { type: Number, required: true },
   total: { type: Number, required: true }
 });
 
-// Same remark schema can be re-used
+// For remarks or chat-like notes
 const remarkSchema = new mongoose.Schema({
   sender: { type: String },
   message: { type: String },
@@ -35,6 +36,7 @@ const quotationSchema = new mongoose.Schema({
 
 quotationSchema.pre("save", async function (next) {
   if (this.isNew) {
+    // auto-generate a simple incremental quotationNumber
     const count = await this.constructor.countDocuments();
     const newNumber = (count + 1).toString().padStart(4, "0");
     this.quotationNumber = newNumber;

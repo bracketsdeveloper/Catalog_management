@@ -1,7 +1,4 @@
-"use client";
-
 import React from "react";
-import { useDropzone } from "react-dropzone";
 
 export default function FilterBar({
   searchTerm,
@@ -10,57 +7,47 @@ export default function FilterBar({
   handleClearAdvancedSearch,
   advGetRootProps,
   advGetInputProps,
-  categories,
-  subCategories,
-  brands,
-  stockLocations,
-  selectedCategories,
-  toggleCategory,
-  categoryOpen,
-  setCategoryOpen,
-  selectedSubCategories,
-  toggleSubCategory,
-  subCategoryOpen,
-  setSubCategoryOpen,
-  selectedBrands,
-  toggleBrand,
-  brandOpen,
-  setBrandOpen,
-  selectedStockLocations,
-  toggleStockLocation,
-  stockOpen,
-  setStockOpen,
+  // Full filter option lists with defaults
+  categories = [],
+  subCategories = [],
+  brands = [],
+  selectedPriceRanges = [],
+  selectedVariationHinges = [],
+  // State for selected filters and dropdown toggles with defaults
+  selectedCategories = [],
+  setSelectedCategories = () => {},
+  categoryOpen = false,
+  setCategoryOpen = () => {},
+  selectedSubCategories = [],
+  setSelectedSubCategories = () => {},
+  subCategoryOpen = false,
+  setSubCategoryOpen = () => {},
+  selectedBrands = [],
+  setSelectedBrands = () => {},
+  brandOpen = false,
+  setBrandOpen = () => {},
+  setSelectedPriceRanges = () => {},
+  priceRangeOpen = false,
+  setPriceRangeOpen = () => {},
+  setSelectedVariationHinges = () => {},
+  variationHingeOpen = false,
+  setVariationHingeOpen = () => {},
 }) {
+  // Helper toggle function for a filter value
+  const toggleFilter = (value, list, setList) => {
+    if (list.includes(value)) {
+      setList(list.filter((item) => item !== value));
+    } else {
+      setList([...list, value]);
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-      <div className="flex gap-4 items-center w-full md:w-1/2">
-        <input
-          type="text"
-          placeholder="Search by any field..."
-          className="w-full px-4 py-2 rounded border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring focus:ring-purple-500"
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            if (advancedSearchActive) handleClearAdvancedSearch();
-          }}
-        />
-        <div
-          {...advGetRootProps()}
-          className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded cursor-pointer hover:bg-gray-100"
-        >
-          <input {...advGetInputProps()} />
-          <span className="text-sm text-gray-800">Search by Image</span>
-        </div>
-        {advancedSearchActive && (
-          <button
-            onClick={handleClearAdvancedSearch}
-            className="bg-pink-600 px-4 py-2 rounded hover:bg-pink-700 text-sm text-white"
-          >
-            Clear Image Search
-          </button>
-        )}
-      </div>
+      {/* Optional: additional search controls can be placed here */}
+      <div className="flex gap-4 items-center w-full md:w-1/2"></div>
       <div className="flex gap-4 mt-4 md:mt-0">
+        {/* Categories Dropdown */}
         <div className="relative inline-block">
           <button
             onClick={() => setCategoryOpen(!categoryOpen)}
@@ -69,7 +56,7 @@ export default function FilterBar({
             Categories ({selectedCategories.length})
           </button>
           {categoryOpen && (
-            <div className="absolute mt-2 w-40 md:w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
+            <div className="absolute mt-2 w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
               {categories.map((cat) => (
                 <label
                   key={cat}
@@ -79,7 +66,7 @@ export default function FilterBar({
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-600"
                     checked={selectedCategories.includes(cat)}
-                    onChange={() => toggleCategory(cat)}
+                    onChange={() => toggleFilter(cat, selectedCategories, setSelectedCategories)}
                   />
                   <span className="text-gray-800">{cat}</span>
                 </label>
@@ -87,6 +74,7 @@ export default function FilterBar({
             </div>
           )}
         </div>
+        {/* SubCategories Dropdown */}
         <div className="relative inline-block">
           <button
             onClick={() => setSubCategoryOpen(!subCategoryOpen)}
@@ -95,7 +83,7 @@ export default function FilterBar({
             SubCats ({selectedSubCategories.length})
           </button>
           {subCategoryOpen && (
-            <div className="absolute mt-2 w-40 md:w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
+            <div className="absolute mt-2 w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
               {subCategories.map((sub) => (
                 <label
                   key={sub}
@@ -105,7 +93,7 @@ export default function FilterBar({
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-600"
                     checked={selectedSubCategories.includes(sub)}
-                    onChange={() => toggleSubCategory(sub)}
+                    onChange={() => toggleFilter(sub, selectedSubCategories, setSelectedSubCategories)}
                   />
                   <span className="text-gray-800">{sub}</span>
                 </label>
@@ -113,6 +101,7 @@ export default function FilterBar({
             </div>
           )}
         </div>
+        {/* Brands Dropdown */}
         <div className="relative inline-block">
           <button
             onClick={() => setBrandOpen(!brandOpen)}
@@ -121,7 +110,7 @@ export default function FilterBar({
             Brands ({selectedBrands.length})
           </button>
           {brandOpen && (
-            <div className="absolute mt-2 w-40 md:w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
+            <div className="absolute mt-2 w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
               {brands.map((br) => (
                 <label
                   key={br}
@@ -131,7 +120,7 @@ export default function FilterBar({
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-600"
                     checked={selectedBrands.includes(br)}
-                    onChange={() => toggleBrand(br)}
+                    onChange={() => toggleFilter(br, selectedBrands, setSelectedBrands)}
                   />
                   <span className="text-gray-800">{br}</span>
                 </label>
@@ -139,27 +128,55 @@ export default function FilterBar({
             </div>
           )}
         </div>
+        {/* Price Ranges Dropdown */}
         <div className="relative inline-block">
           <button
-            onClick={() => setStockOpen(!stockOpen)}
+            onClick={() => setPriceRangeOpen(!priceRangeOpen)}
             className="bg-white px-4 py-2 rounded border border-gray-300 text-gray-800 hover:bg-gray-100"
           >
-            Stock ({selectedStockLocations.length})
+            Price Range ({selectedPriceRanges.length})
           </button>
-          {stockOpen && (
-            <div className="absolute mt-2 w-40 md:w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
-              {stockLocations.map((loc) => (
+          {priceRangeOpen && (
+            <div className="absolute mt-2 w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
+              {selectedPriceRanges.map((pr) => (
                 <label
-                  key={loc}
+                  key={pr}
                   className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                 >
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-600"
-                    checked={selectedStockLocations.includes(loc)}
-                    onChange={() => toggleStockLocation(loc)}
+                    checked={selectedPriceRanges.includes(pr)}
+                    onChange={() => toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)}
                   />
-                  <span className="text-gray-800">{loc}</span>
+                  <span className="text-gray-800">{pr}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Variation Hinges Dropdown */}
+        <div className="relative inline-block">
+          <button
+            onClick={() => setVariationHingeOpen(!variationHingeOpen)}
+            className="bg-white px-4 py-2 rounded border border-gray-300 text-gray-800 hover:bg-gray-100"
+          >
+            Variation Hinge ({selectedVariationHinges.length})
+          </button>
+          {variationHingeOpen && (
+            <div className="absolute mt-2 w-48 rounded-md shadow-lg bg-white border border-gray-300 p-2 z-20">
+              {selectedVariationHinges.map((vh) => (
+                <label
+                  key={vh}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-600"
+                    checked={selectedVariationHinges.includes(vh)}
+                    onChange={() => toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)}
+                  />
+                  <span className="text-gray-800">{vh}</span>
                 </label>
               ))}
             </div>

@@ -1,16 +1,34 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
+// Define all product attributes available for selection
 const allAttributes = [
-  "price",
+  "productTag",
+  "productId",
+  "variantId",
   "category",
   "subCategory",
-  "brandName",
-  "stockInHand",
-  "stockCurrentlyWith",
+  "variationHinge",
   "name",
-  "productDetails",
+  "brandName",
+  "qty",
+  "MRP_Currency",
+  "MRP",
+  "MRP_Unit",
+  "deliveryTime",
+  "size",
+  "color",
+  "material",
+  "priceRange",
+  "weight",
+  "hsnCode",
+  "productCost_Currency",
+  "productCost",
+  "productCost_Unit",
+  "productDetails"
 ];
 
 export default function ViewersManager() {
@@ -28,26 +46,23 @@ export default function ViewersManager() {
     phone: "",
     password: "",
     accessibleProducts: [],
-    visibleAttributes: allAttributes,
+    visibleAttributes: allAttributes, // show all available fields by default
     singleSession: true,
-    maxLogins: 1, // New field: maximum allowed logins for the viewer
+    maxLogins: 1,
   });
 
   useEffect(() => {
     fetchViewers();
     fetchProducts();
-    // Restore the complete form data if it was saved before navigating away
-    // and merge in any selected products saved separately.
+    // Restore any partially saved form data from localStorage
     const storedData = localStorage.getItem("newViewerData");
     const storedProducts = localStorage.getItem("selectedViewerProductIds");
     let restoredData = {};
-
     if (storedData) {
       restoredData = JSON.parse(storedData);
       localStorage.removeItem("newViewerData");
     }
     if (storedProducts) {
-      // If the full form data wasn't saved, start with default structure.
       restoredData.accessibleProducts = JSON.parse(storedProducts);
       localStorage.removeItem("selectedViewerProductIds");
     }
@@ -73,13 +88,14 @@ export default function ViewersManager() {
     }
   };
 
+  // For demonstration, fetch the first 100 products (you might use these for selecting accessible products)
   const fetchProducts = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products?page=1&limit=100`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setProducts(res.data);
+      setProducts(res.data.products || []);
     } catch (err) {
       console.error("Error fetching products:", err);
     }
@@ -119,7 +135,7 @@ export default function ViewersManager() {
       accessibleProducts: viewer.accessibleProducts || [],
       visibleAttributes: viewer.visibleAttributes || allAttributes,
       singleSession: viewer.singleSession,
-      maxLogins: viewer.maxLogins || 1, // populate maxLogins (default to 1)
+      maxLogins: viewer.maxLogins || 1,
     });
   };
 
@@ -130,9 +146,7 @@ export default function ViewersManager() {
       await axios.put(
         `${BACKEND_URL}/api/admin/viewers/${editingViewerId}`,
         newViewerData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setEditingViewerId(null);
       setNewViewerData({
@@ -166,7 +180,6 @@ export default function ViewersManager() {
     }
   };
 
-  // Reactivate sets singleSession to false so that viewer can log in again.
   const handleReactivateViewer = async (viewerId) => {
     try {
       const token = localStorage.getItem("token");
@@ -195,12 +208,11 @@ export default function ViewersManager() {
   };
 
   const handleSelectProducts = () => {
-    // Save the complete form data so it's restored upon returning from product selection
+    // Save current form data before leaving
     localStorage.setItem("newViewerData", JSON.stringify(newViewerData));
     navigate("/admin-dashboard/select-products");
   };
 
-  // Copy credentials function:
   const copyCredentials = (viewer) => {
     const loginUrl = `${process.env.REACT_APP_FRONTEND_URL}/login`;
     const credentialsText = `Login URL: ${loginUrl}
@@ -211,10 +223,11 @@ Password: ${viewer.plainPassword || "N/A"}`;
   };
 
   return (
-    <div className="p-4 md:p-6 bg-white text-gray-900 min-h-screen">
+    <div className="p-6 bg-white text-gray-900 min-h-screen">
       <h1 className="text-2xl font-bold mb-6 text-purple-700">Viewers Manager</h1>
       {error && <p className="text-pink-600 mb-4">{error}</p>}
-      {/* Viewer Form Popup */}
+
+      {/* Viewer Form */}
       <div className="bg-white p-4 rounded shadow mb-8 border border-purple-200">
         <h2 className="text-lg font-semibold mb-3">
           {editingViewerId ? "Edit Viewer" : "Create New Viewer"}
@@ -280,12 +293,17 @@ Password: ${viewer.plainPassword || "N/A"}`;
                 required
                 value={newViewerData.maxLogins}
                 onChange={(e) =>
-                  setNewViewerData({ ...newViewerData, maxLogins: Number(e.target.value) })
+                  setNewViewerData({
+                    ...newViewerData,
+                    maxLogins: Number(e.target.value),
+                  })
                 }
                 className="w-full px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
               />
             </div>
           </div>
+
+          {/* Accessible Products */}
           <div>
             <label className="block text-sm mb-1">Accessible Products</label>
             <button
@@ -300,7 +318,10 @@ Password: ${viewer.plainPassword || "N/A"}`;
                 newViewerData.accessibleProducts.map((prodId) => {
                   const prod = products.find((p) => p._id === prodId);
                   return prod ? (
-                    <span key={prodId} className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-sm">
+                    <span
+                      key={prodId}
+                      className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-sm"
+                    >
                       {prod.name}
                     </span>
                   ) : null;
@@ -310,6 +331,8 @@ Password: ${viewer.plainPassword || "N/A"}`;
               )}
             </div>
           </div>
+
+          {/* Visible Attributes */}
           <div>
             <label className="block text-sm mb-1">Visible Product Attributes</label>
             <div className="flex flex-wrap gap-2">
@@ -326,9 +349,11 @@ Password: ${viewer.plainPassword || "N/A"}`;
               ))}
             </div>
           </div>
+
           <div>
             <p className="text-xs text-gray-600">
-              Viewer can log in on one session on one device. If they log out, they will not be able to log in again.
+              Viewer can log in on one session on one device. If they log out, they will not be
+              able to log in again (depending on singleSession usage).
             </p>
           </div>
           <button
@@ -339,6 +364,7 @@ Password: ${viewer.plainPassword || "N/A"}`;
           </button>
         </form>
       </div>
+
       {/* Existing Viewers Table */}
       <div className="bg-white p-4 rounded shadow border border-purple-200">
         <h2 className="text-lg font-semibold mb-3">Existing Viewers</h2>
@@ -365,13 +391,9 @@ Password: ${viewer.plainPassword || "N/A"}`;
                     <td className="px-4 py-2">{viewer.name}</td>
                     <td className="px-4 py-2">{viewer.email}</td>
                     <td className="px-4 py-2">
-                      {viewer.accessibleProducts && viewer.accessibleProducts.length > 0 ? (
-                        <span className="text-sm">
-                          {viewer.accessibleProducts.length} products selected
-                        </span>
-                      ) : (
-                        "None"
-                      )}
+                      {viewer.accessibleProducts && viewer.accessibleProducts.length > 0
+                        ? `${viewer.accessibleProducts.length} products selected`
+                        : "None"}
                     </td>
                     <td className="px-4 py-2">
                       {viewer.visibleAttributes && viewer.visibleAttributes.length > 0

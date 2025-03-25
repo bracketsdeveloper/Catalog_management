@@ -4,23 +4,25 @@ export default function FilterBarForViewer({
   searchTerm,
   setSearchTerm,
   visibleAttributes = [],
-  categories,
-  subCategories,
-  brands,
-  stockLocations,
-  selectedCategories,
+  advGetRootProps,
+  advGetInputProps,
+  categories = [],
+  subCategories = [],
+  brands = [],
+  stockLocations = [],
+  selectedCategories = [],
   toggleCategory,
   categoryOpen,
   setCategoryOpen,
-  selectedSubCategories,
+  selectedSubCategories = [],
   toggleSubCategory,
   subCategoryOpen,
   setSubCategoryOpen,
-  selectedBrands,
+  selectedBrands = [],
   toggleBrand,
   brandOpen,
   setBrandOpen,
-  selectedStockLocations,
+  selectedStockLocations = [],
   toggleStockLocation,
   stockOpen,
   setStockOpen,
@@ -31,7 +33,7 @@ export default function FilterBarForViewer({
         <input
           type="text"
           placeholder="Search..."
-          className="w-full px-3 py-2 rounded bg-gray-700 focus:outline-none"
+          className="w-full px-3 py-2 rounded bg-white border border-purple-300 focus:outline-none focus:ring focus:ring-purple-500"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -41,24 +43,24 @@ export default function FilterBarForViewer({
           <div className="relative inline-block">
             <button
               onClick={() => setCategoryOpen(!categoryOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white px-3 py-2 rounded border border-purple-300 text-purple-700 hover:bg-purple-100"
             >
               Categories ({selectedCategories.length})
             </button>
             {categoryOpen && (
-              <div className="origin-top-left absolute mt-2 w-32 md:w-48 rounded-md shadow-lg bg-gray-800 p-2 z-20">
+              <div className="origin-top-left absolute mt-2 w-40 rounded-md shadow-lg bg-white border border-purple-300 p-2 z-20">
                 {categories.map((cat) => (
                   <label
                     key={cat}
-                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-purple-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      className="form-checkbox h-4 w-4"
+                      className="form-checkbox h-4 w-4 text-pink-500"
                       checked={selectedCategories.includes(cat)}
                       onChange={() => toggleCategory(cat)}
                     />
-                    <span>{cat}</span>
+                    <span className="text-purple-700">{cat}</span>
                   </label>
                 ))}
               </div>
@@ -69,24 +71,24 @@ export default function FilterBarForViewer({
           <div className="relative inline-block">
             <button
               onClick={() => setSubCategoryOpen(!subCategoryOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white px-3 py-2 rounded border border-purple-300 text-purple-700 hover:bg-purple-100"
             >
               SubCats ({selectedSubCategories.length})
             </button>
             {subCategoryOpen && (
-              <div className="origin-top-left absolute mt-2 w-32 md:w-48 rounded-md shadow-lg bg-gray-800 p-2 z-20">
+              <div className="origin-top-left absolute mt-2 w-40 rounded-md shadow-lg bg-white border border-purple-300 p-2 z-20">
                 {subCategories.map((sub) => (
                   <label
                     key={sub}
-                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-purple-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      className="form-checkbox h-4 w-4"
+                      className="form-checkbox h-4 w-4 text-pink-500"
                       checked={selectedSubCategories.includes(sub)}
                       onChange={() => toggleSubCategory(sub)}
                     />
-                    <span>{sub}</span>
+                    <span className="text-purple-700">{sub}</span>
                   </label>
                 ))}
               </div>
@@ -97,58 +99,31 @@ export default function FilterBarForViewer({
           <div className="relative inline-block">
             <button
               onClick={() => setBrandOpen(!brandOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
+              className="bg-white px-3 py-2 rounded border border-purple-300 text-purple-700 hover:bg-purple-100"
             >
               Brands ({selectedBrands.length})
             </button>
             {brandOpen && (
-              <div className="origin-top-left absolute mt-2 w-32 md:w-48 rounded-md shadow-lg bg-gray-800 p-2 z-20">
+              <div className="origin-top-left absolute mt-2 w-40 rounded-md shadow-lg bg-white border border-purple-300 p-2 z-20">
                 {brands.map((br) => (
                   <label
                     key={br}
-                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-700 p-1 rounded"
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-purple-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      className="form-checkbox h-4 w-4"
+                      className="form-checkbox h-4 w-4 text-pink-500"
                       checked={selectedBrands.includes(br)}
                       onChange={() => toggleBrand(br)}
                     />
-                    <span>{br}</span>
+                    <span className="text-purple-700">{br}</span>
                   </label>
                 ))}
               </div>
             )}
           </div>
         )}
-        {visibleAttributes.includes("stockCurrentlyWith") && stockLocations.length > 0 && (
-          <div className="relative inline-block">
-            <button
-              onClick={() => setStockOpen(!stockOpen)}
-              className="bg-gray-700 px-3 py-2 rounded"
-            >
-              Stock ({selectedStockLocations.length})
-            </button>
-            {stockOpen && (
-              <div className="origin-top-left absolute mt-2 w-32 md:w-48 rounded-md shadow-lg bg-gray-800 p-2 z-20">
-                {stockLocations.map((loc) => (
-                  <label
-                    key={loc}
-                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-700 p-1 rounded"
-                  >
-                    <input
-                      type="checkbox"
-                      className="form-checkbox h-4 w-4"
-                      checked={selectedStockLocations.includes(loc)}
-                      onChange={() => toggleStockLocation(loc)}
-                    />
-                    <span>{loc}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* If you have additional filters (e.g., stock, variationHinge, etc.), add them similarly */}
       </div>
     </div>
   );

@@ -1,16 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 
-// List of Indian states
-const indianStates = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
-  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra",
-  "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim",
-  "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
-];
+const limit = 100;
+
+// Optional bag icon
+const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
 
 export default function CreateManualCatalog() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -18,29 +15,53 @@ export default function CreateManualCatalog() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // Product data
+  // ----------------------- States -----------------------
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Search & filter
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Filter Options (fetched from backend)
+  const [fullCategories, setFullCategories] = useState([]);
+  const [fullSubCategories, setFullSubCategories] = useState([]);
+  const [fullBrands, setFullBrands] = useState([]);
+  const [fullPriceRanges, setFullPriceRanges] = useState([]);
+  const [fullVariationHinges, setFullVariationHinges] = useState([]);
+
+  // Selected Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubCategories, setSelectedSubCategories] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedStockLocations, setSelectedStockLocations] = useState([]);
+  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
+  const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+
+  // Dropdown toggles
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [stockOpen, setStockOpen] = useState(false);
+  const [priceRangeOpen, setPriceRangeOpen] = useState(false);
+  const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
-  // Selected products & quantities
+  // Variation modal (multi-add)
+  const [variationModalOpen, setVariationModalOpen] = useState(false);
+  const [variationModalProduct, setVariationModalProduct] = useState(null);
+
+  // Editing a single item in cart
+  const [editIndex, setEditIndex] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+
+  // Advanced Image Search
+  const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
+  const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
+  const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
+  const imageInputRef = useRef(null);
+
+  // ----------------------- Catalog / Quotation -----------------------
   const [selectedProducts, setSelectedProducts] = useState([]);
-  const [productQuantities, setProductQuantities] = useState({});
-
-  // Fields to display
-  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "price"]);
-
-  // Catalog Info
+  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const [catalogName, setCatalogName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -54,57 +75,134 @@ export default function CreateManualCatalog() {
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
   const [customMargin, setCustomMargin] = useState("");
 
+  // Cart panel open/close
+  const [cartOpen, setCartOpen] = useState(false);
+
+  // ----------------------- useEffects -----------------------
   useEffect(() => {
-    fetchAllProducts();
+    fetchFilterOptions();
+  }, []);
+
+  useEffect(() => {
+    fetchProducts(1);
+    // eslint-disable-next-line
+  }, [
+    searchTerm,
+    selectedCategories,
+    selectedSubCategories,
+    selectedBrands,
+    selectedPriceRanges,
+    selectedVariationHinges
+  ]);
+
+  useEffect(() => {
     if (isEditMode) {
       fetchExistingCatalog();
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, [id]);
 
-  const fetchAllProducts = async () => {
+  // ----------------------- Fetch Filter Options -----------------------
+  const fetchFilterOptions = async () => {
     try {
-      setLoading(true);
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setProducts(res.data);
+      setFullCategories(res.data.categories || []);
+      setFullSubCategories(res.data.subCategories || []);
+      setFullBrands(res.data.brands || []);
+      setFullPriceRanges(res.data.priceRanges || []);
+      setFullVariationHinges(res.data.variationHinges || []);
     } catch (error) {
-      console.error("Error fetching products:", error);
+      console.error("Error fetching filter options:", error);
     }
   };
 
+  // ----------------------- Fetch Products (Server-side Pagination) -----------------------
+  const fetchProducts = async (page = 1) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const params = new URLSearchParams();
+      params.append("page", page);
+      params.append("limit", limit);
+
+      if (searchTerm) params.append("search", searchTerm);
+      if (selectedCategories.length > 0)
+        params.append("categories", selectedCategories.join(","));
+      if (selectedSubCategories.length > 0)
+        params.append("subCategories", selectedSubCategories.join(","));
+      if (selectedBrands.length > 0)
+        params.append("brands", selectedBrands.join(","));
+      if (selectedPriceRanges.length > 0)
+        params.append("priceRanges", selectedPriceRanges.join(","));
+      if (selectedVariationHinges.length > 0)
+        params.append("variationHinges", selectedVariationHinges.join(","));
+
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/products?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setProducts(res.data.products || []);
+      setCurrentPage(res.data.currentPage || 1);
+      setTotalPages(res.data.totalPages || 1);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ----------------------- Fetch Existing Catalog (Edit Mode) -----------------------
   const fetchExistingCatalog = async () => {
     try {
       const token = localStorage.getItem("token");
       const { data } = await axios.get(`${BACKEND_URL}/api/admin/catalogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       setCatalogName(data.catalogName);
       setCustomerName(data.customerName);
       setCustomerEmail(data.customerEmail || "");
       setCustomerCompany(data.customerCompany || "");
       setCustomerAddress(data.customerAddress || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
+
+      // margin
       const existingMargin = data.margin || presetMarginOptions[0];
-      setSelectedMargin(existingMargin);
       if (presetMarginOptions.includes(existingMargin)) {
         setMarginOption("preset");
         setSelectedPresetMargin(existingMargin);
+        setSelectedMargin(existingMargin);
       } else {
         setMarginOption("custom");
         setCustomMargin(String(existingMargin));
+        setSelectedMargin(existingMargin);
       }
-      const productArray = data.products.map((item) => item.productId);
-      setSelectedProducts(productArray);
-      const quantitiesObj = {};
-      productArray.forEach((prod) => {
-        quantitiesObj[prod._id] = 1;
-      });
-      setProductQuantities(quantitiesObj);
+
+      const productArray = data.products || [];
+      const mappedRows = productArray
+        .map((item) => {
+          const prodDoc = item.productId;
+          if (!prodDoc) return null;
+          return {
+            productId: prodDoc._id,
+            name: prodDoc.name,
+            productCost: prodDoc.productCost,
+            color: item.color || prodDoc.color || "",
+            size: item.size || prodDoc.size || "",
+            quantity: item.quantity || 1,
+            material: prodDoc.material || "",
+            weight: prodDoc.weight || "",
+          };
+        })
+        .filter(Boolean);
+
+      setSelectedProducts(mappedRows);
     } catch (error) {
       console.error("Error fetching catalog for edit:", error);
     } finally {
@@ -112,108 +210,158 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // Margin logic
-  const handlePresetMarginChange = (value) => {
-    const marginVal = parseFloat(value);
-    setSelectedPresetMargin(marginVal);
-    setSelectedMargin(marginVal);
-    recalcPrices(marginVal);
-  };
-
-  const handleCustomMarginChange = (e) => {
-    const val = e.target.value;
-    setCustomMargin(val);
-    const marginVal = parseFloat(val);
-    if (!isNaN(marginVal) && marginVal > 0) {
-      setSelectedMargin(marginVal);
-      recalcPrices(marginVal);
+  // ----------------------- Advanced Image Search -----------------------
+  const handleImageSearchClick = () => {
+    if (imageInputRef.current) {
+      imageInputRef.current.click();
     }
   };
 
-  const recalcPrices = (marginVal) => {
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (selectedProducts.some((sp) => sp._id === p._id)) {
-          const newPrice = p.price + (p.price * marginVal) / 100;
-          return { ...p, price: parseFloat(newPrice.toFixed(2)) };
-        }
-        return p;
-      })
-    );
-    setSelectedProducts((prev) =>
-      prev.map((sp) => {
-        const updatedPrice = sp.price + (sp.price * marginVal) / 100;
-        return { ...sp, price: parseFloat(updatedPrice.toFixed(2)) };
-      })
-    );
-  };
+  const handleImageSearch = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAdvancedSearchLoading(true);
 
-  const handleMarginOptionChange = (e) => {
-    const val = e.target.value;
-    if (val === "custom") {
-      setMarginOption("custom");
-    } else {
-      setMarginOption("preset");
-      handlePresetMarginChange(val);
-    }
-  };
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("image", file);
 
-  // Filtering products
-  const allProductCategories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
-  const allProductSubCategories = Array.from(new Set(products.map((p) => p.subCategory).filter(Boolean)));
-  const allProductBrands = Array.from(new Set(products.map((p) => p.brandName).filter(Boolean)));
-  const allStockLocations = Array.from(new Set(products.map((p) => p.stockCurrentlyWith).filter(Boolean)));
-
-  const filteredProducts = products.filter((prod) => {
-    const term = searchTerm.toLowerCase();
-    const combinedString = (
-      prod.name +
-      prod.category +
-      prod.subCategory +
-      prod.brandName +
-      prod.stockCurrentlyWith +
-      (prod.productId || "") +
-      (prod.productTag || "") +
-      (prod.price || "") +
-      (prod.productDetails || "")
-    ).toLowerCase();
-    const matchesSearch = !searchTerm || combinedString.includes(term);
-    const matchCat = selectedCategories.length === 0 || selectedCategories.includes(prod.category);
-    const matchSub = selectedSubCategories.length === 0 || selectedSubCategories.includes(prod.subCategory);
-    const matchBrand = selectedBrands.length === 0 || selectedBrands.includes(prod.brandName);
-    const matchStock = allStockLocations.length === 0 || allStockLocations.includes(prod.stockCurrentlyWith);
-    return matchesSearch && matchCat && matchSub && matchBrand && matchStock;
-  });
-
-  // Selecting products
-  const handleSelectProduct = (product) => {
-    const isSelected = selectedProducts.some((sp) => sp._id === product._id);
-    if (isSelected) {
-      setSelectedProducts((prev) => prev.filter((p) => p._id !== product._id));
-      setProductQuantities((prev) => {
-        const newQuantities = { ...prev };
-        delete newQuantities[product._id];
-        return newQuantities;
+      const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
       });
-    } else {
-      setSelectedProducts((prev) => [...prev, product]);
-      setProductQuantities((prev) => ({ ...prev, [product._id]: 1 }));
-      if (selectedMargin > 0) {
-        const newPrice = product.price + (product.price * selectedMargin) / 100;
-        product.price = parseFloat(newPrice.toFixed(2));
-      }
+
+      setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
+      setAdvancedSearchActive(true);
+    } catch (error) {
+      console.error("Error in advanced image search:", error);
+      alert("Image search failed. Check console.");
+    } finally {
+      setAdvancedSearchLoading(false);
     }
   };
 
-  const handleQuantityChange = (productId, value) => {
-    const qty = parseInt(value);
-    setProductQuantities((prev) => ({
-      ...prev,
-      [productId]: isNaN(qty) ? 1 : qty,
-    }));
+  const handleClearAdvancedSearch = () => {
+    setAdvancedSearchActive(false);
+    setAdvancedSearchResults([]);
   };
 
-  // Toggling fields to display
+  // ----------------------- Filter Helpers -----------------------
+  const toggleFilter = (value, list, setList) => {
+    if (list.includes(value)) {
+      setList(list.filter((x) => x !== value));
+    } else {
+      setList([...list, value]);
+    }
+  };
+
+  // ----------------------- Variation Modal Handlers -----------------------
+  const openVariationSelector = (product) => {
+    setVariationModalProduct(product);
+    setVariationModalOpen(true);
+  };
+  const closeVariationSelector = () => {
+    setVariationModalOpen(false);
+    setVariationModalProduct(null);
+  };
+
+  // ----------------------- Add Items Without Duplicates -----------------------
+  function isDuplicate(prodId, color, size) {
+    return selectedProducts.some(
+      (sp) =>
+        sp.productId === prodId &&
+        (sp.color || "") === (color || "") &&
+        (sp.size || "") === (size || "")
+    );
+  }
+
+  // Single color/size
+  const handleAddSingle = (item) => {
+    if (isDuplicate(item.productId, item.color, item.size)) {
+      alert("This item with the same color & size is already added!");
+      return;
+    }
+    setSelectedProducts((prev) => [...prev, item]);
+  };
+
+  // Multi-add from VariationModal
+  const handleAddVariations = (variations) => {
+    if (!variationModalProduct) return;
+    const newItems = variations.map((v) => {
+      let effectiveCost = variationModalProduct.productCost || 0;
+      if (selectedMargin > 0) {
+        effectiveCost *= (1 + selectedMargin / 100);
+        effectiveCost = parseFloat(effectiveCost.toFixed(2));
+      }
+      return {
+        productId: variationModalProduct._id,
+        name: variationModalProduct.name,
+        productCost: effectiveCost,
+        color: v.color || "",
+        size: v.size || "",
+        quantity: v.quantity || 1,
+        material: variationModalProduct.material || "",
+        weight: variationModalProduct.weight || "",
+      };
+    });
+
+    // Filter out duplicates
+    const filtered = newItems.filter((item) => {
+      if (isDuplicate(item.productId, item.color, item.size)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (filtered.length < newItems.length) {
+      alert("Some variations were duplicates and were not added.");
+    }
+
+    if (filtered.length > 0) {
+      setSelectedProducts((prev) => [...prev, ...filtered]);
+    }
+    closeVariationSelector();
+  };
+
+  // ----------------------- Edit Selected Row -----------------------
+  const handleEditItem = (index) => {
+    setEditIndex(index);
+    setEditModalOpen(true);
+  };
+
+  const handleUpdateItem = (updatedItem) => {
+    setSelectedProducts((prev) => {
+      const newArr = [...prev];
+
+      // check if duplicate (besides the item we are editing)
+      const isDup = newArr.some((sp, i) => {
+        if (i === editIndex) return false;
+        return (
+          sp.productId === newArr[editIndex].productId &&
+          (sp.color || "") === (updatedItem.color || "") &&
+          (sp.size || "") === (updatedItem.size || "")
+        );
+      });
+
+      if (isDup) {
+        alert("This update creates a duplicate. Not updating.");
+        return newArr;
+      }
+
+      newArr[editIndex] = { ...newArr[editIndex], ...updatedItem };
+      return newArr;
+    });
+  };
+
+  // ----------------------- Remove Selected Row -----------------------
+  const handleRemoveSelectedRow = (index) => {
+    setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ----------------------- Fields to Display -----------------------
   const toggleField = (field) => {
     if (fieldsToDisplay.includes(field)) {
       setFieldsToDisplay((prev) => prev.filter((f) => f !== field));
@@ -222,7 +370,7 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // Save / Update Catalog
+  // ----------------------- Save / Update Catalog -----------------------
   const handleSaveCatalog = async () => {
     if (!catalogName || !customerName) {
       alert("Please enter Catalog Name and Customer Name");
@@ -232,17 +380,25 @@ export default function CreateManualCatalog() {
       alert("Please select at least one product");
       return;
     }
-    const productIds = selectedProducts.map((p) => p._id);
+
+    const productDocs = selectedProducts.map((p) => ({
+      productId: p.productId,
+      color: p.color,
+      size: p.size,
+      quantity: p.quantity
+    }));
+
     const body = {
       catalogName,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
-      productIds,
+      products: productDocs,
       fieldsToDisplay,
-      margin: selectedMargin,
+      margin: selectedMargin
     };
+
     try {
       const token = localStorage.getItem("token");
       if (isEditMode) {
@@ -263,7 +419,7 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // Create Quotation
+  // ----------------------- Create Quotation -----------------------
   const handleCreateQuotation = async () => {
     if (!catalogName || !customerName) {
       alert("Please enter Catalog Name and Customer Name");
@@ -273,23 +429,28 @@ export default function CreateManualCatalog() {
       alert("Please select at least one product for the quotation");
       return;
     }
+
+    // We now store productId for each item (instead of image).
     const items = selectedProducts.map((p, index) => {
-      const quantity = productQuantities[p._id] || 1;
-      const rate = p.price;
+      const quantity = p.quantity || 1;
+      const baseRate = p.productCost || 0;
+      const rate = parseFloat(baseRate.toFixed(2));
       const amount = rate * quantity;
       const gst = parseFloat((amount * 0.18).toFixed(2));
       const total = parseFloat((amount + gst).toFixed(2));
+
       return {
         slNo: index + 1,
-        image: p.images?.[0] || "",
-        product: p.name,
+        productId: p.productId, // store productId
+        product: p.name + (p.color ? `(${p.color})` : "") + (p.size ? `[${p.size}]` : ""),
         quantity,
         rate,
         amount,
         gst,
-        total,
+        total
       };
     });
+
     try {
       const token = localStorage.getItem("token");
       const body = {
@@ -299,7 +460,7 @@ export default function CreateManualCatalog() {
         customerCompany,
         customerAddress,
         margin: selectedMargin,
-        items,
+        items
       };
       await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
         headers: { Authorization: `Bearer ${token}` },
@@ -311,27 +472,48 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // Theme updates:
-  // Outer container: white background, dark text.
-  // Use purple borders and text for accents, blue for primary actions, and pink for warnings.
+  // ----------------------- Pagination Controls -----------------------
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      fetchProducts(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      fetchProducts(currentPage + 1);
+    }
+  };
+
+  const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
   if (loading) {
-    return <div className="p-6 text-gray-400">Loading...</div>;
+    return <div className="p-6 text-gray-500">Loading...</div>;
   }
 
   return (
-    <div className="p-6 bg-white text-gray-900 min-h-screen">
-      {/* Top section: Save buttons & margin selection */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-2 md:space-y-0">
+    <div className="relative bg-white text-gray-800 min-h-screen p-6">
+      {/* Top: Catalog name & margin & Quotation Buttons */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
-        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Margin Selection */}
           <div className="flex items-center space-x-2">
             <select
               value={marginOption === "preset" ? selectedPresetMargin : "custom"}
-              onChange={handleMarginOptionChange}
-              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "custom") {
+                  setMarginOption("custom");
+                } else {
+                  setMarginOption("preset");
+                  setSelectedPresetMargin(parseFloat(val));
+                  setSelectedMargin(parseFloat(val));
+                }
+              }}
+              className="px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
             >
               {presetMarginOptions.map((m) => (
                 <option key={m} value={m}>
@@ -346,11 +528,20 @@ export default function CreateManualCatalog() {
                 min="1"
                 placeholder="Enter margin"
                 value={customMargin}
-                onChange={handleCustomMarginChange}
-                className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
+                onChange={(e) => {
+                  setCustomMargin(e.target.value);
+                  const mv = parseFloat(e.target.value);
+                  if (!isNaN(mv) && mv > 0) {
+                    setSelectedMargin(mv);
+                  }
+                }}
+                className="px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
+                style={{ width: 100 }}
               />
             )}
           </div>
+
+          {/* Create / Update Buttons */}
           <button
             onClick={handleSaveCatalog}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -366,236 +557,282 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Basic Info Form */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      {/* Catalog Info Form */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <div>
-          <label className="block font-medium mb-1 text-purple-700">
-            Catalog Name {isEditMode ? "" : "*"}
+          <label className="block mb-1 font-medium text-purple-700">
+            Catalog Name *
           </label>
           <input
             type="text"
-            className="bg-white border border-purple-300 rounded w-full p-2"
+            className="border border-purple-300 rounded w-full p-2"
             value={catalogName}
             onChange={(e) => setCatalogName(e.target.value)}
             required
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-purple-700">
-            Customer Name {isEditMode ? "" : "*"}
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Name *
           </label>
           <input
             type="text"
-            className="bg-white border border-purple-300 rounded w-full p-2"
+            className="border border-purple-300 rounded w-full p-2"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             required
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-purple-700">
-            Customer Email (optional)
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Email
           </label>
           <input
             type="email"
-            className="bg-white border border-purple-300 rounded w-full p-2"
+            className="border border-purple-300 rounded w-full p-2"
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-purple-700">
+          <label className="block mb-1 font-medium text-purple-700">
             Customer Company
           </label>
           <input
             type="text"
-            className="bg-white border border-purple-300 rounded w-full p-2"
+            className="border border-purple-300 rounded w-full p-2"
             value={customerCompany}
             onChange={(e) => setCustomerCompany(e.target.value)}
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-purple-700">
+          <label className="block mb-1 font-medium text-purple-700">
             Customer Address
           </label>
           <input
             type="text"
-            className="bg-white border border-purple-300 rounded w-full p-2"
+            className="border border-purple-300 rounded w-full p-2"
             value={customerAddress}
             onChange={(e) => setCustomerAddress(e.target.value)}
           />
-        </div>
-        <div>
-          <label className="block font-medium mb-1 text-purple-700">State</label>
-          <select
-            className="bg-white border border-purple-300 rounded w-full p-2"
-            value={customerAddress} // adjust if you have a separate state field
-            onChange={(e) => setCustomerAddress(e.target.value)}
-          >
-            <option value="">Select State</option>
-            {indianStates.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
       {/* Fields to Display */}
       <div className="mb-6">
-        <label className="block font-medium mb-2 text-purple-700">Fields to Display</label>
-        <div className="flex flex-wrap gap-4">
-          {["images", "name", "category", "subCategory", "brandName", "price"].map(
-            (field) => (
-              <label key={field} className="flex items-center space-x-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={fieldsToDisplay.includes(field)}
-                  onChange={() => toggleField(field)}
-                  className="form-checkbox h-4 w-4 text-purple-600"
-                />
-                <span className="text-gray-900">{field}</span>
-              </label>
-            )
-          )}
+        <label className="block mb-2 font-medium text-purple-700">
+          Fields to Display
+        </label>
+        <div className="flex flex-wrap gap-3">
+          {[
+            "images",
+            "name",
+            "category",
+            "subCategory",
+            "brandName",
+            "productCost",
+            "size",
+            "color",
+            "material",
+            "weight",
+          ].map((field) => (
+            <label key={field} className="flex items-center space-x-1 text-sm">
+              <input
+                type="checkbox"
+                checked={fieldsToDisplay.includes(field)}
+                onChange={() => toggleField(field)}
+                className="form-checkbox h-4 w-4 text-purple-600"
+              />
+              <span className="text-gray-900">{field}</span>
+            </label>
+          ))}
         </div>
       </div>
 
-      {/* Search & Filters for Products */}
-      <div className="flex justify-between items-center mb-4">
-        <input
-          type="text"
-          placeholder="Search products..."
-          className="w-1/2 px-3 py-2 rounded bg-white border border-purple-300 focus:outline-none focus:ring focus:ring-purple-500"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <div className="flex space-x-2">
-          {/* Category Filter */}
+      {/* Search + Advanced Image Search + Filters */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        {/* Left side: text search + "search by image" */}
+        <div className="flex items-center space-x-2 w-full md:w-1/2">
+          <input
+            type="text"
+            placeholder="Search products..."
+            className="flex-grow px-3 py-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {/* Search by Image Button */}
+          <button
+            onClick={handleImageSearchClick}
+            className="px-3 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 flex items-center"
+          >
+            {advancedSearchLoading ? (
+              <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin mr-1"></div>
+            ) : null}
+            <span>Search by Image</span>
+          </button>
+          <input
+            type="file"
+            ref={imageInputRef}
+            style={{ display: "none" }}
+            accept="image/*"
+            onChange={handleImageSearch}
+          />
+          {advancedSearchActive && (
+            <button
+              onClick={handleClearAdvancedSearch}
+              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+            >
+              Clear Image
+            </button>
+          )}
+        </div>
+
+        {/* Right side: filters */}
+        <div className="flex flex-wrap gap-2">
+          {/* Category */}
           <div className="relative">
             <button
               onClick={() => setCategoryOpen(!categoryOpen)}
-              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
+              className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
             >
               Cat ({selectedCategories.length})
             </button>
             {categoryOpen && (
-              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
-                {allProductCategories.map((c) => (
+              <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20">
+                {fullCategories.map((cat) => (
                   <label
-                    key={c}
-                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
+                    key={cat}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedCategories.includes(c)}
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={selectedCategories.includes(cat)}
                       onChange={() =>
-                        setSelectedCategories((prev) =>
-                          prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
-                        )
+                        toggleFilter(cat, selectedCategories, setSelectedCategories)
                       }
-                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span className="text-gray-900">{c}</span>
+                    <span className="truncate">{cat}</span>
                   </label>
                 ))}
               </div>
             )}
           </div>
 
-          {/* SubCategory Filter */}
+          {/* SubCategory */}
           <div className="relative">
             <button
               onClick={() => setSubCategoryOpen(!subCategoryOpen)}
-              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
+              className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
             >
-              Sub ({selectedSubCategories.length})
+              SubCat ({selectedSubCategories.length})
             </button>
             {subCategoryOpen && (
-              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
-                {allProductSubCategories.map((s) => (
+              <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20">
+                {fullSubCategories.map((sub) => (
                   <label
-                    key={s}
-                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
+                    key={sub}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedSubCategories.includes(s)}
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={selectedSubCategories.includes(sub)}
                       onChange={() =>
-                        setSelectedSubCategories((prev) =>
-                          prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-                        )
+                        toggleFilter(sub, selectedSubCategories, setSelectedSubCategories)
                       }
-                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span className="text-gray-900">{s}</span>
+                    <span className="truncate">{sub}</span>
                   </label>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Brand Filter */}
+          {/* Brand */}
           <div className="relative">
             <button
               onClick={() => setBrandOpen(!brandOpen)}
-              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
+              className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
             >
               Brand ({selectedBrands.length})
             </button>
             {brandOpen && (
-              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
-                {allProductBrands.map((b) => (
+              <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20">
+                {fullBrands.map((br) => (
                   <label
-                    key={b}
-                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
+                    key={br}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedBrands.includes(b)}
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={selectedBrands.includes(br)}
                       onChange={() =>
-                        setSelectedBrands((prev) =>
-                          prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]
-                        )
+                        toggleFilter(br, selectedBrands, setSelectedBrands)
                       }
-                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span className="text-gray-900">{b}</span>
+                    <span className="truncate">{br}</span>
                   </label>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Stock Filter */}
+          {/* Price Range */}
           <div className="relative">
             <button
-              onClick={() => setStockOpen(!stockOpen)}
-              className="bg-white border border-purple-300 px-3 py-2 rounded text-gray-900"
+              onClick={() => setPriceRangeOpen(!priceRangeOpen)}
+              className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
             >
-              Stock ({selectedStockLocations.length})
+              Price ({selectedPriceRanges.length})
             </button>
-            {stockOpen && (
-              <div className="absolute mt-2 w-40 bg-white border border-purple-300 p-2 rounded z-50">
-                {allStockLocations.map((loc) => (
+            {priceRangeOpen && (
+              <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20">
+                {fullPriceRanges.map((pr) => (
                   <label
-                    key={loc}
-                    className="flex items-center space-x-2 text-sm hover:bg-purple-100 p-1 rounded cursor-pointer"
+                    key={pr}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedStockLocations.includes(loc)}
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={selectedPriceRanges.includes(pr)}
                       onChange={() =>
-                        setSelectedStockLocations((prev) =>
-                          prev.includes(loc)
-                            ? prev.filter((x) => x !== loc)
-                            : [...prev, loc]
-                        )
+                        toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)
                       }
-                      className="form-checkbox h-4 w-4 text-purple-600"
                     />
-                    <span className="text-gray-900">{loc}</span>
+                    <span className="truncate">{pr}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Variation Hinge */}
+          <div className="relative">
+            <button
+              onClick={() => setVariationHingeOpen(!variationHingeOpen)}
+              className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+            >
+              Hinge ({selectedVariationHinges.length})
+            </button>
+            {variationHingeOpen && (
+              <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20">
+                {fullVariationHinges.map((vh) => (
+                  <label
+                    key={vh}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={selectedVariationHinges.includes(vh)}
+                      onChange={() =>
+                        toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)
+                      }
+                    />
+                    <span className="truncate">{vh}</span>
                   </label>
                 ))}
               </div>
@@ -604,62 +841,494 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Product Cards */}
-      <div className="grid grid-cols-4 gap-6">
-        {filteredProducts.map((p) => {
-          const isSelected = selectedProducts.some((sp) => sp._id === p._id);
-          return (
-            <div
-              key={p._id}
-              className={`bg-white border border-purple-200 rounded shadow p-4 relative flex flex-col ${
-                isSelected ? "border-2 border-blue-400" : ""
-              }`}
-            >
-              <span
-                className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded ${
-                  p.stockInHand > 0 ? "bg-purple-600" : "bg-pink-600"
-                } text-white`}
-              >
-                {p.stockInHand > 0 ? "Available" : "Out of stock"}
-              </span>
-              {p.images?.length > 0 ? (
-                <img
-                  src={p.images[0]}
-                  alt={p.name}
-                  className="w-full h-32 object-cover mb-2 rounded"
-                />
-              ) : (
-                <div className="w-full h-32 bg-gray-100 flex items-center justify-center mb-2 rounded">
-                  <span className="text-gray-500 text-sm">No Image</span>
-                </div>
-              )}
-              <h4 className="font-bold text-sm mb-1 text-purple-700">{p.name}</h4>
-              <p className="text-xs text-purple-600 mb-2">
-                {p.category} {p.subCategory ? `/ ${p.subCategory}` : ""}
-              </p>
-              <p className="text-xs text-gray-800">Price: ₹{p.price}</p>
+      {/* Product Grid or Loading */}
+      {loading ? (
+        <div>Loading products...</div>
+      ) : (
+        <>
+          {advancedSearchActive && advancedSearchResults.length === 0 && (
+            <div className="text-gray-600 mb-2 text-sm">
+              No products found from image search.
+            </div>
+          )}
+          {!advancedSearchActive && searchTerm && (
+            <div className="text-gray-600 mb-2 text-sm">
+              Searching for "{searchTerm}"...
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {finalProducts.map((prod) => (
+              <ProductCard
+                key={prod._id}
+                product={prod}
+                selectedMargin={selectedMargin}
+                onAddSelected={handleAddSingle}
+                openVariationSelector={openVariationSelector}
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {!advancedSearchActive && (
+            <div className="flex justify-center items-center mt-6 space-x-4">
               <button
-                onClick={() => handleSelectProduct(p)}
-                className={`mt-auto px-3 py-1 text-sm rounded ${
-                  isSelected
-                    ? "bg-pink-600 hover:bg-pink-700"
-                    : "bg-blue-600 hover:bg-blue-700"
-                } text-white`}
+                onClick={handlePrevPage}
+                disabled={currentPage <= 1}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded disabled:opacity-50"
               >
-                {isSelected ? "Remove" : "Select"}
+                Prev
               </button>
-              {isSelected && (
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage >= totalPages}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Floating Bag Icon w/ Count */}
+      <div
+        className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
+        style={{ width: 60, height: 60 }}
+        onClick={() => setCartOpen(true)}
+      >
+        <BagIcon />
+        {selectedProducts.length > 0 && (
+          <span className="absolute text-xs bg-red-500 w-5 h-5 rounded-full text-center -top-1 -right-1 text-white">
+            {selectedProducts.length}
+          </span>
+        )}
+      </div>
+
+      {/* Cart panel */}
+      {cartOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black bg-opacity-30">
+          <div className="bg-white w-full sm:w-96 h-full shadow-md p-4 flex flex-col relative">
+            <h2 className="text-lg font-bold text-purple-700 mb-4">
+              Selected Items ({selectedProducts.length})
+            </h2>
+            <button
+              onClick={() => setCartOpen(false)}
+              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+            >
+              <span className="text-xl font-bold">&times;</span>
+            </button>
+
+            <div className="flex-grow overflow-auto">
+              {selectedProducts.length === 0 && (
+                <p className="text-gray-600">No products selected.</p>
+              )}
+              {selectedProducts.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col border border-purple-200 rounded p-2 mb-2"
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-sm text-purple-800">
+                        {row.name}
+                      </div>
+                      {row.color && <div className="text-xs">Color: {row.color}</div>}
+                      {row.size && <div className="text-xs">Size: {row.size}</div>}
+                      <div className="text-xs">Cost: ₹{row.productCost}</div>
+                      <div className="text-xs">Qty: {row.quantity}</div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveSelectedRow(idx)}
+                      className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => handleEditItem(idx)}
+                    className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setCartOpen(false)}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded self-end mt-2"
+            >
+              Save & Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Variation Modal (multi-add) */}
+      {variationModalOpen && variationModalProduct && (
+        <VariationModal
+          product={variationModalProduct}
+          closeModal={closeVariationSelector}
+          onSave={handleAddVariations}
+          selectedMargin={selectedMargin}
+        />
+      )}
+
+      {/* Variation Edit Modal (single item edit) */}
+      {editModalOpen && editIndex != null && (
+        <VariationEditModal
+          item={selectedProducts[editIndex]}
+          margin={selectedMargin}
+          onClose={() => {
+            setEditIndex(null);
+            setEditModalOpen(false);
+          }}
+          onUpdate={(updatedItem) => {
+            handleUpdateItem(updatedItem);
+            setEditIndex(null);
+            setEditModalOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ----------------------- PRODUCT CARD -----------------------
+function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
+  const colorOptions = Array.isArray(product.color)
+    ? product.color
+    : typeof product.color === "string"
+    ? product.color.split(",").map((c) => c.trim())
+    : [];
+
+  const sizeOptions = Array.isArray(product.size)
+    ? product.size
+    : typeof product.size === "string"
+    ? product.size.split(",").map((s) => s.trim())
+    : [];
+
+  // If there's exactly 1 color & 1 size, we show "Select", otherwise "Choose Variation"
+  const singleColor = colorOptions.length === 1;
+  const singleSize = sizeOptions.length === 1;
+
+  const handleSingleSelect = () => {
+    let cost = product.productCost || 0;
+    if (selectedMargin > 0) {
+      cost *= 1 + selectedMargin / 100;
+      cost = parseFloat(cost.toFixed(2));
+    }
+    const newItem = {
+      productId: product._id,
+      name: product.name,
+      productCost: cost,
+      color: singleColor ? colorOptions[0] : "",
+      size: singleSize ? sizeOptions[0] : "",
+      quantity: 1,
+      material: product.material || "",
+      weight: product.weight || "",
+    };
+    onAddSelected(newItem);
+  };
+
+  return (
+    <div className="bg-white border border-purple-200 rounded shadow-md p-4 relative">
+      {product.stockInHand !== undefined && (
+        <span
+          className={`absolute top-2 right-2 text-white text-xs font-bold px-2 py-1 rounded ${
+            product.stockInHand > 0 ? "bg-green-500" : "bg-red-500"
+          }`}
+        >
+          {product.stockInHand > 0 ? "Available" : "Out of stock"}
+        </span>
+      )}
+      <div className="h-40 flex items-center justify-center bg-gray-50 overflow-hidden mb-4">
+        {product.images && product.images.length > 0 ? (
+          <img src={product.images[0]} alt={product.name} className="object-contain h-full" />
+        ) : (
+          <span className="text-gray-400 text-sm">No Image</span>
+        )}
+      </div>
+      <h2 className="font-semibold text-lg mb-1 truncate text-purple-700">{product.name}</h2>
+      <h3 className="font-semibold text-md text-red-600 mb-1 truncate">₹{product.productCost}</h3>
+      <p className="text-xs text-gray-600 mb-2">
+        {product.category}
+        {product.subCategory ? ` / ${product.subCategory}` : ""}
+      </p>
+
+      {singleColor && singleSize ? (
+        <button
+          onClick={handleSingleSelect}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+        >
+          Select
+        </button>
+      ) : (
+        <button
+          onClick={() => openVariationSelector(product)}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+        >
+          Choose Variation
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ----------------------- VARIATION MODAL (Multi-Add) -----------------------
+function VariationModal({ product, closeModal, onSave, selectedMargin }) {
+  const [variations, setVariations] = useState([]);
+
+  const colorOptions = Array.isArray(product.color)
+    ? product.color
+    : typeof product.color === "string"
+    ? product.color.split(",").map((c) => c.trim())
+    : [];
+
+  const sizeOptions = Array.isArray(product.size)
+    ? product.size
+    : typeof product.size === "string"
+    ? product.size.split(",").map((s) => s.trim())
+    : [];
+
+  const [pickedColor, setPickedColor] = useState(colorOptions[0] || "");
+  const [pickedSize, setPickedSize] = useState(sizeOptions[0] || "");
+  const [pickedQuantity, setPickedQuantity] = useState(1);
+
+  const handleAddLine = () => {
+    const line = {
+      color: pickedColor || "",
+      size: pickedSize || "",
+      quantity: parseInt(pickedQuantity) || 1,
+    };
+    setVariations((prev) => [...prev, line]);
+  };
+
+  const handleRemoveLine = (index) => {
+    setVariations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveAndClose = () => {
+    if (variations.length === 0) {
+      alert("Add product to save");
+      return;
+    }
+    onSave(variations);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-full py-8 px-4">
+        <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
+          <button
+            onClick={closeModal}
+            className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+          >
+            <span className="text-xl font-bold">&times;</span>
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-purple-700">
+            Choose Variations for {product.name}
+          </h2>
+
+          {/* Variation pick */}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
+              {colorOptions.length ? (
+                <select
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedColor}
+                  onChange={(e) => setPickedColor(e.target.value)}
+                >
+                  {colorOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : (
                 <input
-                  type="number"
-                  min="1"
-                  className="mt-2 bg-gray-100 border border-purple-300 p-1 rounded text-center"
-                  value={productQuantities[p._id] || 1}
-                  onChange={(e) => handleQuantityChange(p._id, e.target.value)}
+                  type="text"
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedColor}
+                  onChange={(e) => setPickedColor(e.target.value)}
+                  placeholder="No colors? Type custom"
                 />
               )}
             </div>
-          );
-        })}
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
+              {sizeOptions.length ? (
+                <select
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedSize}
+                  onChange={(e) => setPickedSize(e.target.value)}
+                >
+                  {sizeOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedSize}
+                  onChange={(e) => setPickedSize(e.target.value)}
+                  placeholder="No sizes? Type custom"
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Qty</label>
+              <input
+                type="number"
+                min="1"
+                className="border border-purple-300 rounded p-1 w-full"
+                value={pickedQuantity}
+                onChange={(e) => setPickedQuantity(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={handleAddLine}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+          >
+            + Add
+          </button>
+
+          {/* Variation lines */}
+          <div className="mt-4 space-y-2">
+            {variations.length === 0 && (
+              <p className="text-red-500 text-sm font-semibold">Add product to save</p>
+            )}
+            {variations.map((line, idx) => (
+              <div key={idx} className="flex items-center justify-between border p-2 rounded">
+                <div>
+                  <span className="mr-2 font-semibold">{line.color}</span>
+                  <span className="mr-2 font-semibold">{line.size}</span>
+                  <span>Qty: {line.quantity}</span>
+                </div>
+                <button
+                  onClick={() => handleRemoveLine(idx)}
+                  className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex justify-end space-x-2">
+            <button
+              onClick={closeModal}
+              className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveAndClose}
+              className={`px-4 py-2 rounded text-white ${
+                variations.length > 0
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-gray-300 cursor-not-allowed"
+              }`}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------- Variation Edit Modal (Single Item) -----------------------
+function VariationEditModal({ item, margin, onClose, onUpdate }) {
+  // item: { productId, name, productCost, color, size, quantity, ... }
+  const [color, setColor] = useState(item.color || "");
+  const [size, setSize] = useState(item.size || "");
+  const [quantity, setQuantity] = useState(item.quantity || 1);
+
+  const handleSave = () => {
+    // We'll check duplicates in the parent
+    const updatedItem = {
+      color,
+      size,
+      quantity: parseInt(quantity) || 1,
+    };
+    onUpdate(updatedItem);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-full py-8 px-4">
+        <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
+          <button
+            onClick={onClose}
+            className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+          >
+            <span className="text-xl font-bold">&times;</span>
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-purple-700">
+            Edit Variation for {item.name}
+          </h2>
+
+          <div className="space-y-4">
+            {/* Color */}
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
+              <input
+                type="text"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            {/* Size */}
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
+              <input
+                type="text"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            {/* Quantity */}
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Quantity</label>
+              <input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end space-x-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Save
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -34,72 +34,79 @@ export default function ViewerProductDetails() {
   if (loading) {
     return <Loader />;
   }
-
   if (!product) {
     return <div className="p-4">Product not found</div>;
   }
 
+  // Mapping attribute keys to friendly labels
+  const attributeLabels = {
+    productTag: "Product Tag",
+    productId: "Product ID",
+    variantId: "Variant ID",
+    category: "Category",
+    subCategory: "Sub Category",
+    variationHinge: "Variation Hinge",
+    name: "Name",
+    brandName: "Brand Name",
+    qty: "Quantity",
+    MRP_Currency: "MRP Currency",
+    MRP: "MRP",
+    MRP_Unit: "MRP Unit",
+    deliveryTime: "Delivery Time",
+    size: "Size",
+    color: "Color",
+    material: "Material",
+    priceRange: "Price Range",
+    weight: "Weight",
+    hsnCode: "HSN Code",
+    productCost_Currency: "Cost Currency",
+    productCost: "Cost",
+    productCost_Unit: "Cost Unit",
+    productDetails: "Details",
+  };
+
+  // Render only the attributes that are included in visibleAttributes.
+  const renderAttributes = () => {
+    return visibleAttributes.map((attr) => {
+      const label = attributeLabels[attr] || attr;
+      const value = product[attr];
+      if (value === undefined || value === null || value === "") return null;
+      return (
+        <p key={attr} className="mb-2 text-sm">
+          <span className="font-semibold text-purple-700">{label}:</span>{" "}
+          <span className="text-gray-800">{value}</span>
+        </p>
+      );
+    });
+  };
+
   return (
-    <div className="relative p-4 md:p-8 bg-gray-900 text-gray-200 min-h-screen">
+    <div className="relative p-6 md:p-8 bg-white text-gray-900 min-h-screen">
       <button
         onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 bg-gray-700 px-3 py-2 rounded hover:bg-gray-600"
+        className="absolute top-4 left-4 bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-white"
       >
         Back
       </button>
       <div className="flex flex-col md:flex-row gap-8 mt-12">
-        {/* Left 40%: Image */}
+        {/* Left: Product Image */}
         <div className="md:w-2/5">
           {product.images && product.images.length > 0 ? (
             <img
               src={product.images[0]}
               alt={product.name}
-              className="w-full h-auto rounded"
+              className="w-full h-auto rounded shadow"
             />
           ) : (
-            <div className="w-full h-64 bg-gray-700 flex items-center justify-center rounded">
-              <span>No Image Available</span>
+            <div className="w-full h-64 bg-gray-200 flex items-center justify-center rounded shadow">
+              <span className="text-gray-600">No Image Available</span>
             </div>
           )}
         </div>
-        {/* Right 40%: Visible Attributes */}
+        {/* Right: Product Attributes */}
         <div className="md:w-2/5">
-          <h1 className="text-3xl font-bold mb-4">{product.name}</h1>
-          {visibleAttributes.includes("category") && product.category && (
-            <p className="mb-2">
-              <strong>Category:</strong> {product.category}
-            </p>
-          )}
-          {visibleAttributes.includes("subCategory") && product.subCategory && (
-            <p className="mb-2">
-              <strong>Sub Category:</strong> {product.subCategory}
-            </p>
-          )}
-          {visibleAttributes.includes("brandName") && product.brandName && (
-            <p className="mb-2">
-              <strong>Brand:</strong> {product.brandName}
-            </p>
-          )}
-          {visibleAttributes.includes("price") && (
-            <p className="mb-2">
-              <strong>Price:</strong> ₹{product.price}
-            </p>
-          )}
-          {visibleAttributes.includes("stockInHand") && (
-            <p className="mb-2">
-              <strong>Stock In Hand:</strong> {product.stockInHand}
-            </p>
-          )}
-          {visibleAttributes.includes("stockCurrentlyWith") && product.stockCurrentlyWith && (
-            <p className="mb-2">
-              <strong>Stock Currently With:</strong> {product.stockCurrentlyWith}
-            </p>
-          )}
-          {visibleAttributes.includes("productDetails") && product.productDetails && (
-            <p className="mb-2">
-              <strong>Details:</strong> {product.productDetails}
-            </p>
-          )}
+          <h1 className="text-3xl font-bold mb-4 text-pink-600">{product.name}</h1>
+          {renderAttributes()}
         </div>
       </div>
     </div>

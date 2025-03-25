@@ -7,7 +7,9 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 // 1) Get all catalogs
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const catalogs = await Catalog.find().populate("products.productId").exec();
+    const catalogs = await Catalog.find()
+      .populate("products.productId")
+      .exec();
     res.json(catalogs);
   } catch (error) {
     console.error("Error fetching catalogs:", error);
@@ -24,21 +26,20 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       customerEmail,
       customerCompany,
       customerAddress,
-      productIds,
+      products,
       fieldsToDisplay,
       priceRange,
       margin
     } = req.body;
 
-    const productsArray = (productIds || []).map((id) => ({ productId: id }));
-
+    // `products` is an array of objects: [ { productId, color, size, quantity }, ... ]
     const newCatalog = new Catalog({
       catalogName,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
-      products: productsArray,
+      products: products || [],
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
       priceRange,
@@ -53,7 +54,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// 3) AI Generate route (example)
+// 3) Example AI Generate route
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { fromPrice, toPrice, filters } = req.body;
@@ -70,10 +71,12 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
     if (filters?.stockLocations?.length) {
       query.stockCurrentlyWith = { $in: filters.stockLocations };
     }
+
     const allFiltered = await Product.find(query).lean();
     const n = allFiltered.length;
     let bestSubset = [];
     let bestSum = 0;
+
     function backtrack(index, currentSubset, currentSum) {
       if (currentSum > toPrice) return;
       if (currentSum >= fromPrice && currentSum <= toPrice) {
@@ -83,12 +86,14 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
       if (index >= n) return;
       backtrack(index + 1, currentSubset, currentSum);
       const product = allFiltered[index];
-      const newSum = currentSum + (product.price || 0);
+      const newSum = currentSum + (product.productCost || 0);
       currentSubset.push(product);
       backtrack(index + 1, currentSubset, newSum);
       currentSubset.pop();
     }
+
     backtrack(0, [], 0);
+
     res.json(bestSubset);
   } catch (error) {
     console.error("Error AI generating catalog (sum-based):", error);
@@ -99,7 +104,8 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
 // 4) Get a single catalog
 router.get("/catalogs/:id", async (req, res) => {
   try {
-    const catalog = await Catalog.findById(req.params.id).populate("products.productId");
+    const catalog = await Catalog.findById(req.params.id)
+      .populate("products.productId");
     if (!catalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
@@ -133,11 +139,12 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       customerEmail,
       customerCompany,
       customerAddress,
-      productIds,
+      products,
       fieldsToDisplay,
       margin,
       priceRange
     } = req.body;
+
     const updatedData = {
       catalogName,
       customerName,
@@ -148,10 +155,17 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       margin,
       priceRange
     };
-    if (productIds) {
-      updatedData.products = productIds.map((id) => ({ productId: id }));
+
+    if (products) {
+      // Expect an array of objects: [ { productId, color, size, quantity }, ... ]
+      updatedData.products = products;
     }
-    const updatedCatalog = await Catalog.findByIdAndUpdate(req.params.id, updatedData, { new: true });
+
+    const updatedCatalog = await Catalog.findByIdAndUpdate(
+      req.params.id,
+      updatedData,
+      { new: true }
+    );
     if (!updatedCatalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
@@ -165,7 +179,11 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
 // 7) Approve a catalog
 router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const updatedCatalog = await Catalog.findByIdAndUpdate(req.params.id, { approveStatus: true }, { new: true });
+    const updatedCatalog = await Catalog.findByIdAndUpdate(
+      req.params.id,
+      { approveStatus: true },
+      { new: true }
+    );
     if (!updatedCatalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
@@ -180,7 +198,11 @@ router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, re
 router.put("/catalogs/:id/remarks", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { remarks } = req.body;
-    const updatedCatalog = await Catalog.findByIdAndUpdate(req.params.id, { remarks }, { new: true });
+    const updatedCatalog = await Catalog.findByIdAndUpdate(
+      req.params.id,
+      { remarks },
+      { new: true }
+    );
     if (!updatedCatalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }

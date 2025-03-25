@@ -12,6 +12,17 @@ export default function ProductManagementPage() {
   // ---------------------- STATES ----------------------
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 100;
+
+  // Separate filter options (fetched from backend)
+  const [fullCategories, setFullCategories] = useState([]);
+  const [fullSubCategories, setFullSubCategories] = useState([]);
+  const [fullBrands, setFullBrands] = useState([]);
+  const [fullPriceRanges, setFullPriceRanges] = useState([]);
+  const [fullVariationHinges, setFullVariationHinges] = useState([]);
 
   // Single product modal
   const [singleProductModalOpen, setSingleProductModalOpen] = useState(false);
@@ -27,7 +38,6 @@ export default function ProductManagementPage() {
     brandName: "",
     images: [],
     productDetails: "",
-    // NEW FIELDS
     qty: 0,
     MRP_Currency: "",
     MRP: 0,
@@ -49,34 +59,81 @@ export default function ProductManagementPage() {
   const [bulkMode, setBulkMode] = useState(false);
   const [csvData, setCsvData] = useState([]);
 
-  // Filters + search
+  // Filters + search (selected filters)
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubCategories, setSelectedSubCategories] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedStockLocations, setSelectedStockLocations] = useState([]);
+  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
+  const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+
+  // Dropdown open/close states
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [stockOpen, setStockOpen] = useState(false);
+  const [priceRangeOpen, setPriceRangeOpen] = useState(false);
+  const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
-  // Carousel index for each product
+  // Carousel indices
   const [carouselIndexMap, setCarouselIndexMap] = useState({});
 
-  // Advanced (image) search
+  // Advanced image search
   const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
   const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
 
-  // ---------------------- FETCHING PRODUCTS ----------------------
-  const fetchProducts = async () => {
+  // ---------------------- FETCH FILTER OPTIONS ----------------------
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setFullCategories(res.data.categories);
+        setFullSubCategories(res.data.subCategories);
+        setFullBrands(res.data.brands);
+        setFullPriceRanges(res.data.priceRanges);
+        setFullVariationHinges(res.data.variationHinges);
+      } catch (error) {
+        console.error("Error fetching filter options:", error);
+      }
+    };
+    fetchFilterOptions();
+  }, [BACKEND_URL]);
+
+  // ---------------------- FETCH PRODUCTS (WITH SERVER-SIDE FILTERING & PAGINATION) ----------------------
+  const fetchProducts = async (page = currentPage) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setProducts(res.data);
+      const params = new URLSearchParams();
+      params.append("page", page);
+      params.append("limit", limit);
+      if (searchTerm) params.append("search", searchTerm);
+      if (selectedCategories.length > 0)
+        params.append("categories", selectedCategories.join(","));
+      if (selectedSubCategories.length > 0)
+        params.append("subCategories", selectedSubCategories.join(","));
+      if (selectedBrands.length > 0)
+        params.append("brands", selectedBrands.join(","));
+      if (selectedPriceRanges.length > 0)
+        params.append("priceRanges", selectedPriceRanges.join(","));
+      if (selectedVariationHinges.length > 0)
+        params.append("variationHinges", selectedVariationHinges.join(","));
+
+      console.log("Query params:", params.toString());
+
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/products?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      setProducts(res.data.products);
+      setCurrentPage(res.data.currentPage);
+      setTotalPages(res.data.totalPages);
     } catch (error) {
       console.error("Error fetching products:", error);
     } finally {
@@ -84,81 +141,27 @@ export default function ProductManagementPage() {
     }
   };
 
+  // Refetch products when filter selections or search term changes
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(1);
     // eslint-disable-next-line
-  }, []);
+  }, [
+    searchTerm,
+    selectedCategories,
+    selectedSubCategories,
+    selectedBrands,
+    selectedPriceRanges,
+    selectedVariationHinges
+  ]);
 
-  // ---------------------- FILTERS + SEARCH ----------------------
-  const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
-  const subCategories = Array.from(new Set(products.map((p) => p.subCategory).filter(Boolean)));
-  const brands = Array.from(new Set(products.map((p) => p.brandName).filter(Boolean)));
-  const stockLocations = Array.from(
-    new Set(products.map((p) => p.stockCurrentlyWith).filter(Boolean))
-  );
-
-  const toggleCategory = (cat) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
+  // ---------------------- HELPER: Toggle Filter ----------------------
+  const toggleFilter = (value, list, setList) => {
+    if (list.includes(value)) {
+      setList(list.filter((item) => item !== value));
+    } else {
+      setList([...list, value]);
+    }
   };
-  const toggleSubCategory = (sub) => {
-    setSelectedSubCategories((prev) =>
-      prev.includes(sub) ? prev.filter((c) => c !== sub) : [...prev, sub]
-    );
-  };
-  const toggleBrand = (br) => {
-    setSelectedBrands((prev) =>
-      prev.includes(br) ? prev.filter((c) => c !== br) : [...prev, br]
-    );
-  };
-  const toggleStockLocation = (loc) => {
-    setSelectedStockLocations((prev) =>
-      prev.includes(loc) ? prev.filter((c) => c !== loc) : [...prev, loc]
-    );
-  };
-
-  // Basic search + filter logic
-  const filteredProducts = products.filter((prod) => {
-    const term = searchTerm.toLowerCase();
-    const combinedString = (
-      prod.productTag +
-      prod.productId +
-      prod.variantId +
-      prod.category +
-      prod.subCategory +
-      prod.variationHinge +
-      prod.name +
-      prod.brandName +
-      (prod.productDetails || "")
-    ).toLowerCase();
-
-    const matchesSearch = !searchTerm || combinedString.includes(term);
-
-    const matchesCategory =
-      selectedCategories.length === 0 || selectedCategories.includes(prod.category);
-
-    const matchesSubCategory =
-      selectedSubCategories.length === 0 || selectedSubCategories.includes(prod.subCategory);
-
-    const matchesBrand =
-      selectedBrands.length === 0 || selectedBrands.includes(prod.brandName);
-
-    const matchesStock =
-      selectedStockLocations.length === 0 ||
-      selectedStockLocations.includes(prod.stockCurrentlyWith);
-
-    return (
-      matchesSearch &&
-      matchesCategory &&
-      matchesSubCategory &&
-      matchesBrand &&
-      matchesStock
-    );
-  });
-
-  // Final array of products displayed in grid
-  const displayedProducts = advancedSearchActive ? advancedSearchResults : filteredProducts;
 
   // ---------------------- SINGLE PRODUCT MODAL HANDLERS ----------------------
   const openSingleProductModal = (product = null) => {
@@ -233,15 +236,19 @@ export default function ProductManagementPage() {
       const token = localStorage.getItem("token");
       let finalImages = [];
 
-      // If images are newly selected File objects, upload them
-      if (newProductData.images.length && typeof newProductData.images[0] !== "string") {
+      // Upload images if they are File objects
+      if (
+        newProductData.images.length &&
+        typeof newProductData.images[0] !== "string"
+      ) {
         for (let i = 0; i < newProductData.images.length; i++) {
           const res = await uploadImage(newProductData.images[i]);
           finalImages.push(res.url);
-          setUploadProgress(Math.round(((i + 1) / newProductData.images.length) * 100));
+          setUploadProgress(
+            Math.round(((i + 1) / newProductData.images.length) * 100)
+          );
         }
       } else {
-        // They might still be existing URLs if editing
         finalImages = newProductData.images;
       }
 
@@ -256,7 +263,6 @@ export default function ProductManagementPage() {
         brandName: newProductData.brandName,
         images: finalImages,
         productDetails: newProductData.productDetails,
-        // NEW FIELDS
         qty: newProductData.qty,
         MRP_Currency: newProductData.MRP_Currency,
         MRP: newProductData.MRP,
@@ -274,15 +280,17 @@ export default function ProductManagementPage() {
       };
 
       if (!editProductId) {
-        // Create new
         await axios.post(`${BACKEND_URL}/api/admin/products`, payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        // Update existing
-        await axios.put(`${BACKEND_URL}/api/admin/products/${editProductId}`, payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await axios.put(
+          `${BACKEND_URL}/api/admin/products/${editProductId}`,
+          payload,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
       }
 
       fetchProducts();
@@ -298,7 +306,7 @@ export default function ProductManagementPage() {
   const handleFileChange = (e) => {
     setNewProductData((prev) => ({
       ...prev,
-      images: [...e.target.files] // store File objects
+      images: [...e.target.files]
     }));
   };
 
@@ -344,7 +352,6 @@ export default function ProductManagementPage() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-
       const productsToUpload = csvData.map((row) => ({
         productTag: row["Product Tag"] || "",
         productId: row["Product ID"] || "",
@@ -362,7 +369,6 @@ export default function ProductManagementPage() {
           row["Other_image_URL"]
         ].filter(Boolean),
         productDetails: row["Product_Details (optional)"] || "",
-        // NEW FIELDS mapping
         qty: row["Qty"] || 0,
         MRP_Currency: row["MRP_Currency"] || "",
         MRP: row["MRP"] || 0,
@@ -396,8 +402,6 @@ export default function ProductManagementPage() {
 
   const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
-
-    // Example headers with optional styling
     const headerRow = [
       { v: "Product Tag (required)" },
       { v: "Product ID (required)" },
@@ -429,7 +433,6 @@ export default function ProductManagementPage() {
       { v: "Other_image_URL (optional)" }
     ];
 
-    // Example row
     const exampleRow = [
       "Tag123",
       "Prod123",
@@ -475,23 +478,29 @@ export default function ProductManagementPage() {
   };
 
   // ---------------------- ADVANCED (IMAGE) SEARCH ----------------------
-  const { getRootProps: advGetRootProps, getInputProps: advGetInputProps } = useDropzone({
+  const {
+    getRootProps: advGetRootProps,
+    getInputProps: advGetInputProps
+  } = useDropzone({
     accept: "image/*",
     multiple: false,
     onDrop: useCallback(
       async ([file]) => {
         try {
           setAdvancedSearchLoading(true);
-
           const token = localStorage.getItem("token");
           const formData = new FormData();
           formData.append("image", file);
-
-          // This endpoint must be set up on your server
-          const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, formData, {
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
-          });
-
+          const res = await axios.post(
+            `${BACKEND_URL}/api/products/advanced-search`,
+            formData,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "multipart/form-data"
+              }
+            }
+          );
           setAdvancedSearchResults(res.data);
           setAdvancedSearchActive(true);
         } catch (error) {
@@ -539,6 +548,19 @@ export default function ProductManagementPage() {
     window.location.href = `/admin-dashboard/product-details/${prodId}`;
   };
 
+  // ---------------------- PAGINATION CONTROLS ----------------------
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      fetchProducts(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      fetchProducts(currentPage + 1);
+    }
+  };
+
   // ---------------------- RENDER ----------------------
   return (
     <div className="bg-white text-gray-800 min-h-screen">
@@ -551,12 +573,8 @@ export default function ProductManagementPage() {
               placeholder="Search by any field..."
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                if (advancedSearchActive) setAdvancedSearchActive(false);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
-
             {/* Advanced Image Search */}
             <div
               {...advGetRootProps()}
@@ -569,7 +587,6 @@ export default function ProductManagementPage() {
                 <span className="text-sm">Search by Image</span>
               )}
             </div>
-
             {advancedSearchActive && (
               <button
                 onClick={handleClearAdvancedSearch}
@@ -579,7 +596,6 @@ export default function ProductManagementPage() {
               </button>
             )}
           </div>
-
           {/* Single Upload + Bulk Upload Toggles */}
           <div className="space-x-2">
             <button
@@ -595,7 +611,6 @@ export default function ProductManagementPage() {
               >
                 {bulkMode ? "Hide Bulk Options" : "Upload in Bulk"}
               </button>
-
               {bulkMode && (
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                   <div className="py-1">
@@ -618,102 +633,111 @@ export default function ProductManagementPage() {
           </div>
         </div>
 
-        {/* Bulk Upload */}
-        {csvData.length > 0 && (
-          <div className="border border-gray-300 p-4 rounded mb-4">
-            <p className="mb-2">
-              Ready to upload {csvData.length} products from your spreadsheet
-            </p>
-            <button
-              onClick={processBulkUpload}
-              disabled={loading}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-            >
-              {loading ? "Processing Bulk..." : "Confirm Bulk Upload"}
-            </button>
-          </div>
-        )}
-
-        {bulkMode && (
-          <div className="mb-6 p-4 border-2 border-dashed border-purple-300 rounded">
-            <div
-              {...getRootProps()}
-              className="cursor-pointer p-4 text-center text-purple-600"
-            >
-              <input {...getInputProps()} />
-              <p>Drag & drop CSV or Excel file here, or click to browse</p>
-            </div>
+        {/* Display search results info if search term provided */}
+        {searchTerm && (
+          <div className="mb-4 text-sm text-gray-600">
+            Found {products.length} products with "{searchTerm}"
           </div>
         )}
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-4 mb-6 relative">
+        <div className="flex flex-wrap items-center gap-4 mb-6">
           <DropdownFilter
             label={`Categories (${selectedCategories.length})`}
             isOpen={categoryOpen}
             setIsOpen={setCategoryOpen}
           >
-            {categories.map((cat) => (
+            {fullCategories.map((cat) => (
               <FilterItem
                 key={cat}
                 checked={selectedCategories.includes(cat)}
-                onChange={() => toggleCategory(cat)}
+                onChange={() =>
+                  toggleFilter(cat, selectedCategories, setSelectedCategories)
+                }
               >
                 {cat}
               </FilterItem>
             ))}
           </DropdownFilter>
-
           <DropdownFilter
             label={`SubCats (${selectedSubCategories.length})`}
             isOpen={subCategoryOpen}
             setIsOpen={setSubCategoryOpen}
           >
-            {subCategories.map((sub) => (
+            {fullSubCategories.map((sub) => (
               <FilterItem
                 key={sub}
                 checked={selectedSubCategories.includes(sub)}
-                onChange={() => toggleSubCategory(sub)}
+                onChange={() =>
+                  toggleFilter(
+                    sub,
+                    selectedSubCategories,
+                    setSelectedSubCategories
+                  )
+                }
               >
                 {sub}
               </FilterItem>
             ))}
           </DropdownFilter>
-
           <DropdownFilter
             label={`Brands (${selectedBrands.length})`}
             isOpen={brandOpen}
             setIsOpen={setBrandOpen}
           >
-            {brands.map((br) => (
+            {fullBrands.map((br) => (
               <FilterItem
                 key={br}
                 checked={selectedBrands.includes(br)}
-                onChange={() => toggleBrand(br)}
+                onChange={() =>
+                  toggleFilter(br, selectedBrands, setSelectedBrands)
+                }
               >
                 {br}
               </FilterItem>
             ))}
           </DropdownFilter>
-
           <DropdownFilter
-            label={`Stock (${selectedStockLocations.length})`}
-            isOpen={stockOpen}
-            setIsOpen={setStockOpen}
+            label={`Price Range (${selectedPriceRanges.length})`}
+            isOpen={priceRangeOpen}
+            setIsOpen={setPriceRangeOpen}
           >
-            {stockLocations.map((loc) => (
+            {fullPriceRanges.map((pr) => (
               <FilterItem
-                key={loc}
-                checked={selectedStockLocations.includes(loc)}
-                onChange={() => toggleStockLocation(loc)}
+                key={pr}
+                checked={selectedPriceRanges.includes(pr)}
+                onChange={() =>
+                  toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)
+                }
               >
-                {loc}
+                {pr}
+              </FilterItem>
+            ))}
+          </DropdownFilter>
+          <DropdownFilter
+            label={`Variation Hinge (${selectedVariationHinges.length})`}
+            isOpen={variationHingeOpen}
+            setIsOpen={setVariationHingeOpen}
+          >
+            {fullVariationHinges.map((vh) => (
+              <FilterItem
+                key={vh}
+                checked={selectedVariationHinges.includes(vh)}
+                onChange={() =>
+                  toggleFilter(
+                    vh,
+                    selectedVariationHinges,
+                    setSelectedVariationHinges
+                  )
+                }
+              >
+                {vh}
               </FilterItem>
             ))}
           </DropdownFilter>
         </div>
 
-        {/* Loading skeleton or Product Grid */}
+        {/* Product Grid or Loading Skeleton */}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -722,22 +746,43 @@ export default function ProductManagementPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {displayedProducts.map((product) => {
-              return (
-                <ProductCard
-                  key={product._id}
-                  product={product}
-                  handleViewProduct={handleViewProduct}
-                  handleDeleteProduct={handleDeleteProduct}
-                  openSingleProductModal={openSingleProductModal}
-                  carouselIndexMap={carouselIndexMap}
-                  handleNextImage={handleNextImage}
-                  handlePrevImage={handlePrevImage}
-                />
-              );
-            })}
+            {(
+              advancedSearchActive ? advancedSearchResults : products
+            ).map((product) => (
+              <ProductCard
+                key={product._id}
+                product={product}
+                handleViewProduct={handleViewProduct}
+                handleDeleteProduct={handleDeleteProduct}
+                openSingleProductModal={openSingleProductModal}
+                carouselIndexMap={carouselIndexMap}
+                handleNextImage={handleNextImage}
+                handlePrevImage={handlePrevImage}
+              />
+            ))}
           </div>
         )}
+
+        {/* Pagination Controls */}
+        <div className="flex justify-center items-center mt-6 space-x-4">
+          <button
+            onClick={handlePrevPage}
+            disabled={currentPage <= 1}
+            className="px-4 py-2 bg-gray-300 text-gray-800 rounded disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span>
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={handleNextPage}
+            disabled={currentPage >= totalPages}
+            className="px-4 py-2 bg-gray-300 text-gray-800 rounded disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
 
       {/* Single Product Modal */}
@@ -773,18 +818,11 @@ function ProductCard({
   const currentImg = images[currentIndex] || "";
   return (
     <div className="bg-white border border-gray-200 rounded shadow-md p-4 relative">
-      <div
-        onClick={() => handleViewProduct(product._id)}
-        className="cursor-pointer"
-      >
+      <div onClick={() => handleViewProduct(product._id)} className="cursor-pointer">
         <div className="relative h-40 mb-4 flex items-center justify-center bg-gray-50 overflow-hidden">
           {images.length > 0 ? (
             <>
-              <img
-                src={currentImg}
-                alt="prod"
-                className="h-full object-contain"
-              />
+              <img src={currentImg} alt="prod" className="h-full object-contain" />
               {images.length > 1 && (
                 <>
                   <button
@@ -812,7 +850,18 @@ function ProductCard({
             <span className="text-sm text-gray-400">No image</span>
           )}
         </div>
+        
+        {/* 
+            CHANGED THIS SECTION BELOW TO DISPLAY MRP
+            INSTEAD OF productCost 
+        */}
         <h2 className="font-semibold text-lg mb-1 truncate">{product.name}</h2>
+        <h3 className="font-semibold text-md text-red-600 mb-1 truncate">₹<strike>{product.MRP}/{product.MRP_Unit}</strike><br/>
+         
+        </h3>
+        <h3 className="font-semibold text-md text-green-600 mb-1 truncate">₹
+        {product.productCost}/{product.productCost_Unit}</h3>
+        
         <p className="text-sm text-gray-500">
           {product.category}
           {product.subCategory ? ` / ${product.subCategory}` : ""}
@@ -823,7 +872,6 @@ function ProductCard({
           </p>
         )}
       </div>
-
       <div className="mt-4 flex justify-between items-center">
         <button
           onClick={(e) => {
@@ -849,7 +897,7 @@ function ProductCard({
 }
 
 /** ------------------------------------------------------------------
- *  SkeletonCard (loading)
+ *  SkeletonCard Component (Loading)
  * ------------------------------------------------------------------*/
 function SkeletonCard() {
   return (
@@ -889,7 +937,7 @@ function SingleProductModal({
           </button>
           <form onSubmit={handleSingleProductSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              {/* Basic product details */}
+              {/* Basic Product Details */}
               <div>
                 <label className="block font-medium mb-1">Product Tag</label>
                 <input
@@ -897,7 +945,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.productTag}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, productTag: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      productTag: e.target.value
+                    }))
                   }
                   required
                 />
@@ -909,7 +960,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.productId}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, productId: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      productId: e.target.value
+                    }))
                   }
                   required
                 />
@@ -921,7 +975,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.variantId}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, variantId: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      variantId: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -932,7 +989,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.category}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, category: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      category: e.target.value
+                    }))
                   }
                   required
                 />
@@ -944,7 +1004,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.subCategory}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, subCategory: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      subCategory: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -955,7 +1018,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.variationHinge}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, variationHinge: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      variationHinge: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -966,7 +1032,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.name}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, name: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      name: e.target.value
+                    }))
                   }
                   required
                 />
@@ -978,11 +1047,15 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.brandName}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, brandName: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      brandName: e.target.value
+                    }))
                   }
                 />
               </div>
-              {/* New Fields */}
+
+              {/* Additional Fields */}
               <div>
                 <label className="block font-medium mb-1">Qty</label>
                 <input
@@ -990,7 +1063,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.qty}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, qty: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      qty: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1001,7 +1077,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.MRP_Currency}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, MRP_Currency: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      MRP_Currency: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1012,7 +1091,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.MRP}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, MRP: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      MRP: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1023,7 +1105,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.MRP_Unit}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, MRP_Unit: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      MRP_Unit: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1034,7 +1119,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.deliveryTime}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, deliveryTime: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      deliveryTime: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1045,7 +1133,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.size}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, size: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      size: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1056,7 +1147,10 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.color}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, color: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      color: e.target.value
+                    }))
                   }
                 />
               </div>
@@ -1067,100 +1161,135 @@ function SingleProductModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.material}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, material: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      material: e.target.value
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Price Range</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Price Range
+                </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.priceRange}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, priceRange: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      priceRange: e.target.value
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Weight</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Weight
+                </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.weight}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, weight: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      weight: e.target.value
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">HSN Code</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  HSN Code
+                </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.hsnCode}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, hsnCode: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      hsnCode: e.target.value
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Product Cost Currency</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Product Cost Currency
+                </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.productCost_Currency}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, productCost_Currency: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      productCost_Currency: e.target.value
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Product Cost</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Product Cost
+                </label>
                 <input
                   type="number"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.productCost}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, productCost: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      productCost: e.target.value
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Product Cost Unit</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Product Cost Unit
+                </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.productCost_Unit}
                   onChange={(e) =>
-                    setNewProductData((prev) => ({ ...prev, productCost_Unit: e.target.value }))
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      productCost_Unit: e.target.value
+                    }))
                   }
                 />
               </div>
             </div>
 
-            {/* Existing images if editing */}
+            {/* Existing Images */}
             {editProductId &&
               newProductData.images?.length > 0 &&
               typeof newProductData.images[0] === "string" && (
                 <div>
-                  <label className="block font-medium mb-2">Existing Images</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Existing Images
+                  </label>
                   <div className="flex flex-wrap gap-2">
                     {newProductData.images.map((imgUrl, idx) => (
                       <div key={idx} className="relative">
                         <img
                           src={imgUrl}
                           alt="existing"
-                          className="w-24 h-24 object-cover border border-gray-300"
+                          className="w-24 h-24 object-cover border border-gray-300 rounded"
                         />
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={() =>
                             setNewProductData((prev) => ({
                               ...prev,
                               images: prev.images.filter((_, i) => i !== idx)
-                            }));
-                          }}
+                            }))
+                          }
                           className="absolute top-0 right-0 bg-red-600 text-white text-xs p-1 rounded"
                         >
                           X
@@ -1171,9 +1300,11 @@ function SingleProductModal({
                 </div>
               )}
 
-            {/* Upload new images */}
+            {/* Upload New Images */}
             <div>
-              <label className="block font-medium mb-1">Upload Images</label>
+              <label className="block text-sm font-medium text-gray-700">
+                Upload Images
+              </label>
               <input
                 type="file"
                 multiple
@@ -1207,7 +1338,7 @@ function SingleProductModal({
 }
 
 /** ------------------------------------------------------------------
- *  Reusable DropdownFilter & FilterItem Components
+ *  DropdownFilter & FilterItem Components
  * ------------------------------------------------------------------*/
 function DropdownFilter({ label, isOpen, setIsOpen, children }) {
   return (

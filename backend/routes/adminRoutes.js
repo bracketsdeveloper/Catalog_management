@@ -1,13 +1,18 @@
 const express = require("express");
-const User = require("../models/User");
-const Product = require("../models/Product");
-const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
-
 const router = express.Router();
+const multer = require("multer");
+const fs = require("fs-extra");
+const axios = require("axios");
+const imghash = require("imghash");
+const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+const Product = require("../models/Product");
+const User = require("../models/User");
 
-// --------------------------------------
-// Fetch all users
-// --------------------------------------
+// ------------------------------
+// USER ENDPOINTS
+// ------------------------------
+
+// Fetch all users (only selected fields)
 router.get("/users", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const users = await User.find({}, "name dateOfBirth address phone email role");
@@ -18,9 +23,7 @@ router.get("/users", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// --------------------------------------
 // Update user role
-// --------------------------------------
 router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
@@ -30,16 +33,10 @@ router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => 
   }
 
   try {
-    const user = await User.findByIdAndUpdate(
-      id,
-      { role },
-      { new: true, runValidators: true }
-    );
-
+    const user = await User.findByIdAndUpdate(id, { role }, { new: true, runValidators: true });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-
     res.status(200).json({ message: "Role updated successfully", user });
   } catch (err) {
     console.error("Error updating user role:", err);
@@ -47,24 +44,134 @@ router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-// --------------------------------------
-// Get all products
-// --------------------------------------
+// ------------------------------
+// PRODUCT ENDPOINTS
+// ------------------------------
+
+// GET /api/admin/products - Filtered & Paginated Products with Search
 router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
-    res.json(products);
+    const {
+      page = 1,
+      limit = 100,
+      search,
+      categories,
+      subCategories,
+      brands,
+      priceRanges,
+      variationHinges
+    } = req.query;
+    const query = {};
+
+    // Global search using regex on multiple fields
+    if (search) {
+      const regex = { $regex: search, $options: "i" };
+      query.$or = [
+        { productTag: regex },
+        { productId: regex },
+        { variantId: regex },
+        { category: regex },
+        { subCategory: regex },
+        { variationHinge: regex },
+        { name: regex },
+        { brandName: regex },
+        { productDetails: regex },
+        { priceRange: regex },
+        { MRP_Currency: regex },
+        { MRP_Unit: regex },
+        { deliveryTime: regex },
+        { size: regex },
+        { color: regex },
+        { material: regex },
+        { weight: regex },
+        { hsnCode: regex },
+        { productCost_Currency: regex },
+        { productCost_Unit: regex },
+        { images: { $elemMatch: regex } }
+      ];
+    }
+
+    // Additional filtering using $in operator on comma-separated values
+    if (categories) query.category = { $in: categories.split(",") };
+    if (subCategories) query.subCategory = { $in: subCategories.split(",") };
+    if (brands) query.brandName = { $in: brands.split(",") };
+    if (priceRanges) query.priceRange = { $in: priceRanges.split(",") };
+    if (variationHinges) query.variationHinge = { $in: variationHinges.split(",") };
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+    const totalProducts = await Product.countDocuments(query);
+
+    res.status(200).json({
+      products,
+      currentPage: pageNum,
+      totalPages: Math.ceil(totalProducts / limitNum)
+    });
   } catch (error) {
     console.error("Error fetching products:", error);
     res.status(500).json({ message: "Server error fetching products" });
   }
 });
 
-// --------------------------------------
-// Create single product
-// --------------------------------------
+// GET /api/admin/products/filters - Returns distinct filter values
+router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const categories = await Product.distinct("category");
+    const subCategories = await Product.distinct("subCategory");
+    const brands = await Product.distinct("brandName");
+    const priceRanges = await Product.distinct("priceRange");
+    const variationHinges = await Product.distinct("variationHinge");
+
+    res.status(200).json({
+      categories,
+      subCategories,
+      brands,
+      priceRanges,
+      variationHinges
+    });
+  } catch (error) {
+    console.error("Error fetching filter options:", error);
+    res.status(500).json({ message: "Error fetching filter options" });
+  }
+});
+
+// Helper functions to compute image hashes
+async function computeImageHash(source) {
+  try {
+    if (/^https?:\/\//i.test(source)) {
+      const response = await axios.get(source, { responseType: "arraybuffer" });
+      const buffer = Buffer.from(response.data, "binary");
+      return await imghash.hash(buffer, 16);
+    } else {
+      return await imghash.hash(source, 16);
+    }
+  } catch (error) {
+    console.error("Error computing hash for:", source, error);
+    return null;
+  }
+}
+
+async function computeAllHashes(imageUrls) {
+  const hashes = [];
+  for (const url of imageUrls) {
+    const hash = await computeImageHash(url);
+    if (hash) hashes.push(hash);
+  }
+  return hashes;
+}
+
+// POST /api/admin/products - Create a single product (with hash computation)
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const images = req.body.images || [];
+    const imageHashes = await computeAllHashes(images);
+
     const newProduct = new Product({
       productTag: req.body.productTag,
       productId: req.body.productId,
@@ -74,9 +181,9 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge || "",
       name: req.body.name,
       brandName: req.body.brandName || "",
-      images: req.body.images || [],
+      images,
+      imageHashes,
       productDetails: req.body.productDetails || "",
-      // NEW FIELDS
       qty: req.body.qty || 0,
       MRP_Currency: req.body.MRP_Currency || "",
       MRP: req.body.MRP || 0,
@@ -92,7 +199,6 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       productCost: req.body.productCost || 0,
       productCost_Unit: req.body.productCost_Unit || ""
     });
-
     await newProduct.save();
     res.status(201).json({ message: "Product created successfully", product: newProduct });
   } catch (error) {
@@ -101,12 +207,12 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// --------------------------------------
-// Update single product
-// --------------------------------------
+// PUT /api/admin/products/:id - Update a single product (with hash computation)
 router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const productId = req.params.id;
+    const images = req.body.images || [];
+    const imageHashes = await computeAllHashes(images);
+
     const updatedData = {
       productTag: req.body.productTag,
       productId: req.body.productId,
@@ -116,9 +222,9 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge,
       name: req.body.name,
       brandName: req.body.brandName,
-      images: req.body.images || [],
+      images,
+      imageHashes,
       productDetails: req.body.productDetails,
-      // NEW FIELDS
       qty: req.body.qty,
       MRP_Currency: req.body.MRP_Currency,
       MRP: req.body.MRP,
@@ -135,37 +241,29 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       productCost_Unit: req.body.productCost_Unit
     };
 
-    const updatedProduct = await Product.findByIdAndUpdate(productId, updatedData, {
-      new: true
-    });
-    res.json({ message: "Product updated successfully", product: updatedProduct });
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updatedData, { new: true });
+    res.status(200).json({ message: "Product updated successfully", product: updatedProduct });
   } catch (error) {
     console.error("Error updating product:", error);
     res.status(500).json({ message: "Server error updating product" });
   }
 });
 
-// --------------------------------------
-// Delete single product
-// --------------------------------------
+// DELETE /api/admin/products/:id - Delete a product
 router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const productId = req.params.id;
-    await Product.findByIdAndDelete(productId);
-    res.json({ message: "Product deleted successfully" });
+    await Product.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
     console.error("Error deleting product:", error);
     res.status(500).json({ message: "Server error deleting product" });
   }
 });
 
-// --------------------------------------
-// Bulk Upload (Updated to check required fields)
-// --------------------------------------
+// POST /api/admin/products/bulk - Bulk upload products (with hash computation)
 router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Each item in req.body is an object representing a product
-    const products = req.body.map((p) => ({
+    const productsData = req.body.map((p) => ({
       productTag: p.productTag,
       productId: p.productId,
       variantId: p.variantId,
@@ -176,7 +274,6 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       brandName: p.brandName,
       images: p.images,
       productDetails: p.productDetails || "",
-      // NEW FIELDS
       qty: p.qty || 0,
       MRP_Currency: p.MRP_Currency || "",
       MRP: p.MRP || 0,
@@ -193,12 +290,23 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       productCost_Unit: p.productCost_Unit || ""
     }));
 
-    await Product.insertMany(products);
+    // Compute and assign image hashes for each product
+    for (const prodData of productsData) {
+      prodData.imageHashes = await computeAllHashes(prodData.images || []);
+    }
+
+    await Product.insertMany(productsData);
     res.status(201).json({ message: "Products created successfully" });
   } catch (error) {
     console.error("Error bulk uploading products:", error);
     res.status(500).json({ message: "Server error during bulk upload" });
   }
 });
+
+// ------------------------------
+// Advanced Image Search Endpoint
+// ------------------------------
+// Accepts a single image, computes its hash, and returns products with similar images
+
 
 module.exports = router;

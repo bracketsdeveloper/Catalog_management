@@ -1,13 +1,30 @@
-"use client"; // Remove if using plain Create React App instead of Next.js
+"use client"; // Remove if using plain Create React App
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom"; // or next/router if using Next.js
+import { useParams } from "react-router-dom"; 
 import axios from "axios";
-import PptxGenJS from "pptxgenjs";
+
+// Fields we never want to display
+const NEVER_DISPLAY_FIELDS = ["color", "weight"];
+
+// Mandatory fields always shown on the right
+const COMMON_FIELDS = ["name", "price", "category", "productDetails"];
+
+// Mapping from field to product doc property
+const fieldMapping = {
+  name: "name",
+  price: "productCost", // We'll calculate price with margin
+  category: "category",
+  productDetails: "productDetails",
+  brandName: "brandName",
+  subCategory: "subCategory",
+  size: "size",
+  // no "color" or "weight"
+};
 
 export default function CatalogView() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-  const { id } = useParams(); // read the catalog ID from the URL
+  const { id } = useParams();
 
   const [catalog, setCatalog] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,223 +49,152 @@ export default function CatalogView() {
     }
   };
 
-  // PPT Export function: effective price = p.price * (1 + margin/100)
-  async function handleExportPPT(catalog) {
-    try {
-      const pptx = new PptxGenJS();
-      pptx.title = `Catalog - ${catalog.catalogName}`;
-
-      // Slide 1: Template slide 1
-      const slide1 = pptx.addSlide();
-      slide1.background = { path: "/templateSlide1.jpg" };
-
-      // Slide 2: Template slide 2
-      const slide2 = pptx.addSlide();
-      slide2.background = { path: "/templateSlide2.jpg" };
-
-      // Slide 3: Template slide 3 with "Gift Options" text in the center
-      const slide3 = pptx.addSlide();
-      slide3.background = { path: "/templateSlide3.jpg" };
-      slide3.addText("Gift Options", {
-        x: 1.5,
-        y: 3.0,
-        w: 7.0,
-        fontSize: 48,
-        bold: true,
-        color: "ffffff",
-        align: "center",
-      });
-
-      // Product slides: from slide 4 onward
-      catalog.products?.forEach((prodObj, index) => {
-        const p = prodObj.productId || prodObj;
-        const slide = pptx.addSlide();
-        // Use the same background to match the theme
-        slide.background = { path: "/templateSlide3.jpg" };
-
-        // Use product image URL directly (ensure it's fully qualified)
-        const productImageUrl = (p.images && p.images[0]) ? p.images[0] : "";
-        if (productImageUrl) {
-          slide.addImage({
-            x: 0.5,
-            y: 1.5,
-            w: 3.0,
-            h: 3.0,
-            url: productImageUrl,
-          });
-        } else {
-          // Placeholder if no image is available
-          slide.addShape(pptx.ShapeType.rect, {
-            x: 0.5,
-            y: 1.5,
-            w: 3.0,
-            h: 3.0,
-            line: { color: "CCCCCC", width: 1 },
-            fill: { color: "EFEFEF" },
-          });
-          slide.addText("No Image", {
-            x: 0.5,
-            y: 2.9,
-            w: 3.0,
-            align: "center",
-            fontSize: 12,
-            color: "888888",
-          });
-        }
-
-        // Right side: product details (starting at x = 4.5)
-        const textX = 4.5;
-        const topY = 1.0;
-        slide.addText(`Product #${index + 1}`, {
-          x: textX,
-          y: topY,
-          fontSize: 24,
-          bold: true,
-          color: "363636",
-        });
-        slide.addText(`Name: ${p.name || ""}`, {
-          x: textX,
-          y: topY + 1.0,
-          fontSize: 14,
-          color: "363636",
-        });
-        slide.addText(`Brand: ${p.brandName || ""}`, {
-          x: textX,
-          y: topY + 1.5,
-          fontSize: 14,
-          color: "363636",
-        });
-        slide.addText(`Category: ${p.category || ""} / ${p.subCategory || ""}`, {
-          x: textX,
-          y: topY + 2.0,
-          fontSize: 14,
-          color: "363636",
-        });
-        // Calculate effective price: multiply by (1 + margin/100)
-        const effectivePrice = p.price !== undefined ? p.price * (1 + (catalog.margin || 0) / 100) : null;
-        slide.addText(`Price: ₹${effectivePrice !== null ? effectivePrice.toFixed(2) : "N/A"}`, {
-          x: textX,
-          y: topY + 2.5,
-          fontSize: 14,
-          color: "363636",
-        });
-        slide.addText(`Details: ${p.productDetails || ""}`, {
-          x: textX,
-          y: topY + 3.0,
-          fontSize: 14,
-          color: "363636",
-          w: 4.0,
-          h: 2.0,
-          valign: "top",
-          wrap: true,
-        });
-      });
-
-      // Final slide: Template slide Last
-      const lastSlide = pptx.addSlide();
-      lastSlide.background = { path: "/templateSlideLast.jpg" };
-
-      await pptx.writeFile({ fileName: `Catalog-${catalog.catalogName}.pptx` });
-    } catch (error) {
-      console.error("PPT export error:", error);
-      alert("PPT export failed");
-    }
-  }
-
   if (loading) {
-    return <div className="p-6 text-gray-200">Loading catalog...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-purple-50 via-blue-50 to-pink-50">
+        <p className="text-gray-500 text-lg">Loading catalog...</p>
+      </div>
+    );
   }
-
   if (error) {
-    return <div className="p-6 text-red-400">{error}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-purple-50 via-blue-50 to-pink-50">
+        <p className="text-red-500 text-lg">{error}</p>
+      </div>
+    );
   }
-
   if (!catalog) {
-    return <div className="p-6 text-gray-200">Catalog not found.</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-purple-50 via-blue-50 to-pink-50">
+        <p className="text-gray-500 text-lg">Catalog not found.</p>
+      </div>
+    );
   }
 
-  // Extract fields to display and products from catalog
-  const { fieldsToDisplay, products } = catalog;
+  const { fieldsToDisplay = [], products = [] } = catalog;
+  // Filter out any fields we never display
+  const safeFieldsToDisplay = fieldsToDisplay.filter(
+    (f) => !NEVER_DISPLAY_FIELDS.includes(f)
+  );
 
-  return (
-    <div className="min-h-screen bg-gray-100 text-gray-800 p-6">
-      {/* Catalog header */}
-      <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">{catalog.catalogName}</h1>
-            <p className="text-sm text-gray-600 mb-4">
-              Created for: {catalog.customerName}
-              {catalog.customerEmail ? ` (${catalog.customerEmail})` : ""}
-            </p>
-          </div>
-          {/* <button
-            onClick={() => handleExportPPT(catalog)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          >
-            Export PPT
-          </button> */}
-        </div>
+  function renderProduct(productDoc) {
+    // Calculate margin-based price if productCost exists
+    let effectivePrice = null;
+    if (typeof productDoc.productCost === "number") {
+      const marginVal = typeof catalog.margin === "number" ? catalog.margin : 0;
+      effectivePrice = (productDoc.productCost * (1 + marginVal / 100)).toFixed(2);
+    }
 
-        {/* Product List */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-          {products && products.length > 0 ? (
-            products.map((item, idx) => {
-              const product = item.productId; // populated from .populate("products.productId")
-              if (!product) return null;
-
-              // Calculate effective price
-              const effectivePrice =
-                product.price !== undefined
-                  ? (product.price * (1 + (catalog.margin || 0) / 100)).toFixed(2)
-                  : "N/A";
-
-              return (
-                <div key={idx} className="bg-white border rounded shadow-sm p-4">
-                  {fieldsToDisplay.includes("images") && product.images?.length > 0 && (
-                    <div className="mb-3">
-                      <img
-                        src={product.images[0]}
-                        alt={product.name}
-                        className="w-full h-40 object-cover rounded"
-                      />
-                    </div>
-                  )}
-                  {fieldsToDisplay.includes("name") && (
-                    <h2 className="text-lg font-semibold mb-1">{product.name}</h2>
-                  )}
-                  {fieldsToDisplay.includes("brandName") && product.brandName && (
-                    <p className="text-sm text-gray-600 mb-1">
-                      Brand: {product.brandName}
-                    </p>
-                  )}
-                  {fieldsToDisplay.includes("category") && (
-                    <p className="text-sm text-gray-600 mb-1">
-                      Category: {product.category}
-                      {product.subCategory && fieldsToDisplay.includes("subCategory")
-                        ? ` / ${product.subCategory}`
-                        : ""}
-                    </p>
-                  )}
-                  {fieldsToDisplay.includes("price") && product.price !== undefined && (
-                    <p className="text-sm mb-1 font-bold">
-                      ₹{effectivePrice}
-                    </p>
-                  )}
-                  {fieldsToDisplay.includes("productDetails") && product.productDetails && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      {product.productDetails}
-                    </p>
-                  )}
-                </div>
-              );
-            })
+    return (
+      <div className="flex gap-4 items-start bg-white shadow-lg rounded p-4">
+        {/* LEFT: image (if "images" in fields) */}
+        <div className="w-1/3">
+          {safeFieldsToDisplay.includes("images") && productDoc.images && productDoc.images[0] ? (
+            <img
+              src={productDoc.images[0]}
+              alt={productDoc.name}
+              className="w-full h-40 object-cover rounded"
+            />
           ) : (
-            <div className="col-span-full text-gray-500">
-              No products in this catalog
+            <div className="w-full h-40 bg-gray-100 flex items-center justify-center rounded">
+              <span className="text-gray-400 text-sm">No Image</span>
             </div>
           )}
         </div>
+
+        {/* RIGHT: Show mandatory fields first, then optional fields */}
+        <div className="flex-1">
+          {/* 1) Name */}
+          <h2 className="text-xl font-semibold mb-1 text-purple-700">
+            {productDoc.name || "Unnamed Product"}
+          </h2>
+
+          {/* 2) Price => productCost + margin */}
+          <p className="text-md text-gray-800 font-bold mb-1">
+            ₹{effectivePrice !== null ? effectivePrice : "N/A"}
+          </p>
+
+          {/* 3) Category + subCategory if allowed */}
+          <p className="text-sm text-gray-600 mb-1">
+            Category: {productDoc.category || ""}
+            {productDoc.subCategory &&
+              safeFieldsToDisplay.includes("subCategory") &&
+              ` / ${productDoc.subCategory}`}
+          </p>
+
+          {/* 4) productDetails */}
+          {productDoc.productDetails && (
+            <p className="text-sm text-gray-600 mt-2">
+              <span className="font-semibold">Description:</span>{" "}
+              {productDoc.productDetails}
+            </p>
+          )}
+
+          {/* Additional fields: brandName, size, etc. 
+              Skip anything in COMMON_FIELDS or not in fieldMapping or missing value. */}
+          {safeFieldsToDisplay.map((field) => {
+            if (COMMON_FIELDS.includes(field)) return null;
+            const mappedKey = fieldMapping[field];
+            if (!mappedKey) return null;
+            const val = productDoc[mappedKey];
+            if (!val) return null;
+
+            // e.g. brandName => "Brand: Nike"
+            let label = field;
+            if (field === "brandName") label = "Brand";
+            else if (field === "subCategory") label = "Sub-Category";
+            else {
+              // capitalized field
+              label = field.charAt(0).toUpperCase() + field.slice(1);
+            }
+
+            return (
+              <p key={field} className="text-sm text-gray-600 mt-1">
+                <span className="font-semibold">{label}:</span> {val}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-tr from-purple-50 via-blue-50 to-pink-50 text-gray-800 p-6">
+      {/* Catalog Info */}
+      <div className="max-w-4xl mx-auto mb-8">
+        <div className="bg-white p-6 rounded shadow-lg">
+          <h1 className="text-3xl font-bold text-purple-700 mb-2">
+            {catalog.catalogName}
+          </h1>
+          <p className="text-sm text-gray-600 mb-2">
+            <span className="font-semibold">For:</span> {catalog.customerName}
+            {catalog.customerEmail ? ` (${catalog.customerEmail})` : ""}
+          </p>
+          {/* If you want more catalog details, add them here */}
+        </div>
+      </div>
+
+      {/* Product List */}
+      <div className="max-w-4xl mx-auto grid grid-cols-1 gap-6">
+        {products.length > 0 ? (
+          products.map((subDoc, i) => {
+            const productDoc = subDoc.productId;
+            if (!productDoc) {
+              return (
+                <div
+                  key={i}
+                  className="bg-white p-4 rounded shadow-lg text-gray-600"
+                >
+                  No product data
+                </div>
+              );
+            }
+            return <div key={i}>{renderProduct(productDoc)}</div>;
+          })
+        ) : (
+          <p className="text-gray-600">No products in this catalog.</p>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const axios = require("axios");
 
 // Load environment variables
 dotenv.config();
@@ -14,10 +15,17 @@ app.use(express.json());
 // Configure CORS for frontend (localhost:3000)
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
+    origin: '*'//process.env.FRONTEND_URL,
+    // credentials: true,
   })
 );
+
+const syncRoutes = require("./routes/syncRoutes");
+app.use("/api", syncRoutes);
+// console.log("SheetDB URL:", process.env.SHEETDB_URL);
+
+
+
 
 // MongoDB connection
 mongoose

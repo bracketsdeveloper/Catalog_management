@@ -1,37 +1,53 @@
-"use client";
-
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useDropzone } from "react-dropzone";
+import { useNavigate } from "react-router-dom";
 import FilterBar from "../components/FilterBar";
 import ProductGrid from "../components/ProductGrid";
 import Loader from "../components/Loader";
-import { useNavigate } from "react-router-dom";
 
 export default function SelectProductsForViewer() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const navigate = useNavigate();
 
+  const [page, setPage] = useState(1);
+  const limit = 100; // 100 products per page
+  const [totalPages, setTotalPages] = useState(1);
+
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Selected filters (for filtering products)
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubCategories, setSelectedSubCategories] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedStockLocations, setSelectedStockLocations] = useState([]);
+  const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
+
+  // Full distinct filter options fetched from API
+  const [fullCategories, setFullCategories] = useState([]);
+  const [fullSubCategories, setFullSubCategories] = useState([]);
+  const [fullBrands, setFullBrands] = useState([]);
+  const [fullVariationHinges, setFullVariationHinges] = useState([]);
+  const [fullPriceRanges, setFullPriceRanges] = useState([]);
+
   const [carouselIndexMap, setCarouselIndexMap] = useState({});
-  const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
-  const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
-  const [isAdvancedSearchLoading, setIsAdvancedSearchLoading] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
 
-  // Dropdown states for FilterBar
+  // Dropdown toggles for filters
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [stockOpen, setStockOpen] = useState(false);
+  const [variationHingeOpen, setVariationHingeOpen] = useState(false);
+  const [priceRangeOpen, setPriceRangeOpen] = useState(false);
 
-  // Advanced image search dropzone
+  // Advanced image search state
+  const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
+  const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
+  const [isAdvancedSearchLoading, setIsAdvancedSearchLoading] = useState(false);
+
+  // DRAG & DROP for image search
   const { getRootProps: advGetRootProps, getInputProps: advGetInputProps } = useDropzone({
     accept: "image/*",
     multiple: false,
@@ -42,7 +58,7 @@ export default function SelectProductsForViewer() {
         const formData = new FormData();
         formData.append("image", file);
         const res = await axios.post(
-          `${BACKEND_URL}/api/products/advanced-search`,
+          `${BACKEND_URL}/api/admin/products/advanced-search`,
           formData,
           {
             headers: {
@@ -53,10 +69,10 @@ export default function SelectProductsForViewer() {
         );
         setAdvancedSearchResults(res.data);
         setAdvancedSearchActive(true);
-        setIsAdvancedSearchLoading(false);
       } catch (error) {
         console.error("Error in advanced search:", error);
         alert("Image search failed");
+      } finally {
         setIsAdvancedSearchLoading(false);
       }
     }, [BACKEND_URL]),
@@ -67,14 +83,47 @@ export default function SelectProductsForViewer() {
     setAdvancedSearchResults([]);
   };
 
-  const fetchProducts = async () => {
+  // Fetch distinct filter options from API
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setFullCategories(res.data.categories);
+        setFullSubCategories(res.data.subCategories);
+        setFullBrands(res.data.brands);
+        setFullPriceRanges(res.data.priceRanges);
+        setFullVariationHinges(res.data.variationHinges);
+      } catch (error) {
+        console.error("Error fetching filter options:", error);
+      }
+    };
+    fetchFilterOptions();
+  }, [BACKEND_URL]);
+
+  // Fetch products with pagination & filters
+  const fetchProducts = async (pageNumber = 1) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      const params = { page: pageNumber, limit };
+      if (searchTerm) params.search = searchTerm;
+      if (selectedCategories.length > 0) params.categories = selectedCategories.join(",");
+      if (selectedSubCategories.length > 0) params.subCategories = selectedSubCategories.join(",");
+      if (selectedBrands.length > 0) params.brands = selectedBrands.join(",");
+      if (selectedVariationHinges.length > 0) params.variationHinges = selectedVariationHinges.join(",");
+      if (selectedPriceRanges.length > 0) params.priceRanges = selectedPriceRanges.join(",");
+
       const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
         headers: { Authorization: `Bearer ${token}` },
+        params,
       });
-      setProducts(res.data);
+
+      setProducts(res.data.products || []);
+      setPage(res.data.currentPage || pageNumber);
+      setTotalPages(res.data.totalPages || 1);
     } catch (error) {
       console.error("Error fetching products:", error);
     } finally {
@@ -82,86 +131,46 @@ export default function SelectProductsForViewer() {
     }
   };
 
+  // Reset page whenever filters or search term change
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    fetchProducts(1);
+  }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedVariationHinges, selectedPriceRanges]);
 
-  // Generate filter options
-  const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
-  const subCategories = Array.from(new Set(products.map((p) => p.subCategory).filter(Boolean)));
-  const brands = Array.from(new Set(products.map((p) => p.brandName).filter(Boolean)));
-  const stockLocations = Array.from(new Set(products.map((p) => p.stockCurrentlyWith).filter(Boolean)));
+  const displayedProducts = advancedSearchActive ? advancedSearchResults : products;
 
-  const toggleCategory = (cat) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
-  };
-  const toggleSubCategory = (sub) => {
-    setSelectedSubCategories((prev) =>
-      prev.includes(sub) ? prev.filter((c) => c !== sub) : [...prev, sub]
-    );
-  };
-  const toggleBrand = (br) => {
-    setSelectedBrands((prev) =>
-      prev.includes(br) ? prev.filter((c) => c !== br) : [...prev, br]
-    );
-  };
-  const toggleStockLocation = (loc) => {
-    setSelectedStockLocations((prev) =>
-      prev.includes(loc) ? prev.filter((c) => c !== loc) : [...prev, loc]
-    );
-  };
-
-  const filteredProducts = products.filter((prod) => {
-    const term = searchTerm.toLowerCase();
-    const combinedString = (
-      prod.productTag +
-      prod.productId +
-      prod.variantId +
-      prod.category +
-      prod.subCategory +
-      prod.variationHinge +
-      prod.name +
-      prod.brandName +
-      prod.stockCurrentlyWith +
-      (prod.price || "") +
-      (prod.productDetails || "")
-    ).toLowerCase();
-    const matchesSearch = !searchTerm || combinedString.includes(term);
-    const matchesCategory =
-      selectedCategories.length === 0 || selectedCategories.includes(prod.category);
-    const matchesSubCategory =
-      selectedSubCategories.length === 0 || selectedSubCategories.includes(prod.subCategory);
-    const matchesBrand =
-      selectedBrands.length === 0 || selectedBrands.includes(prod.brandName);
-    const matchesStock =
-      selectedStockLocations.length === 0 || selectedStockLocations.includes(prod.stockCurrentlyWith);
-    return matchesSearch && matchesCategory && matchesSubCategory && matchesBrand && matchesStock;
-  });
-
-  const displayedProducts = advancedSearchActive ? advancedSearchResults : filteredProducts;
-
-  // Toggle select/deselect a product
+  // Toggle selection for a product
   const toggleSelectProduct = (prodId) => {
     setSelectedProductIds((prev) =>
       prev.includes(prodId) ? prev.filter((id) => id !== prodId) : [...prev, prodId]
     );
   };
 
-  // Select all displayed products
-  const handleSelectAllProducts = () => {
-    const allIds = displayedProducts.map((p) => p._id);
-    setSelectedProductIds(allIds);
+  // Updated "Select All" to fetch all matching product IDs across pages
+  const handleSelectAllProducts = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      // Use a high limit to cover all matching products
+      const params = { page: 1, limit: 10000 };
+      if (searchTerm) params.search = searchTerm;
+      if (selectedCategories.length > 0) params.categories = selectedCategories.join(",");
+      if (selectedSubCategories.length > 0) params.subCategories = selectedSubCategories.join(",");
+      if (selectedBrands.length > 0) params.brands = selectedBrands.join(",");
+      if (selectedVariationHinges.length > 0) params.variationHinges = selectedVariationHinges.join(",");
+      if (selectedPriceRanges.length > 0) params.priceRanges = selectedPriceRanges.join(",");
+
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+      const allIds = res.data.products.map((p) => p._id);
+      setSelectedProductIds(allIds);
+    } catch (err) {
+      console.error("Error selecting all products:", err);
+    }
   };
 
-  // Fixed proceed button at bottom right
   const handleProceed = () => {
     localStorage.setItem("selectedViewerProductIds", JSON.stringify(selectedProductIds));
-    navigate("/admin-dashboard/viewer-manager");
-  };
-
-  const handleClose = () => {
     navigate("/admin-dashboard/viewer-manager");
   };
 
@@ -171,8 +180,7 @@ export default function SelectProductsForViewer() {
       const p = products.find((x) => x._id === prodId);
       if (!p || !p.images || p.images.length === 0) return prev;
       const currentIndex = prev[prodId] || 0;
-      const newIndex = (currentIndex + 1) % p.images.length;
-      next[prodId] = newIndex;
+      next[prodId] = (currentIndex + 1) % p.images.length;
       return next;
     });
   };
@@ -183,11 +191,19 @@ export default function SelectProductsForViewer() {
       const p = products.find((x) => x._id === prodId);
       if (!p || !p.images || p.images.length === 0) return prev;
       const currentIndex = prev[prodId] || 0;
-      const newIndex = (currentIndex - 1 + p.images.length) % p.images.length;
-      next[prodId] = newIndex;
+      next[prodId] = (currentIndex - 1 + p.images.length) % p.images.length;
       return next;
     });
   };
+
+  // Reset page on filters or search change
+  const handleResetPage = () => {
+    setPage(1);
+    fetchProducts(1);
+  };
+
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
 
   return (
     <div className="p-6 bg-purple-200 text-gray-900 min-h-screen relative">
@@ -195,12 +211,16 @@ export default function SelectProductsForViewer() {
         <div className="flex gap-4 items-center w-full md:w-1/2">
           <input
             type="text"
-            placeholder="Search by any field..."
+            placeholder="Search..."
             className="w-full px-3 py-2 rounded border border-gray-300 focus:outline-none focus:ring focus:ring-purple-500"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              if (advancedSearchActive) handleClearAdvancedSearch();
+              handleClearAdvancedSearch();
+              handleResetPage();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleResetPage();
             }}
           />
           <div
@@ -228,7 +248,7 @@ export default function SelectProductsForViewer() {
             Select All
           </button>
           <button
-            onClick={handleClose}
+            onClick={() => navigate("/admin-dashboard/viewer-manager")}
             className="bg-gray-500 px-4 py-2 rounded hover:bg-gray-400 text-sm text-white"
           >
             Close
@@ -236,6 +256,13 @@ export default function SelectProductsForViewer() {
         </div>
       </div>
 
+      {searchTerm && (
+        <div className="mb-4 text-sm text-gray-600">
+          Found {products.length} products with "{searchTerm}"
+        </div>
+      )}
+
+      {/* Pass full filter values to FilterBar */}
       <FilterBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -243,35 +270,38 @@ export default function SelectProductsForViewer() {
         handleClearAdvancedSearch={handleClearAdvancedSearch}
         advGetRootProps={advGetRootProps}
         advGetInputProps={advGetInputProps}
-        categories={categories}
-        subCategories={subCategories}
-        brands={brands}
-        stockLocations={stockLocations}
+        categories={fullCategories}
+        subCategories={fullSubCategories}
+        brands={fullBrands}
         selectedCategories={selectedCategories}
-        toggleCategory={toggleCategory}
+        setSelectedCategories={setSelectedCategories}
         categoryOpen={categoryOpen}
         setCategoryOpen={setCategoryOpen}
         selectedSubCategories={selectedSubCategories}
-        toggleSubCategory={toggleSubCategory}
+        setSelectedSubCategories={setSelectedSubCategories}
         subCategoryOpen={subCategoryOpen}
         setSubCategoryOpen={setSubCategoryOpen}
         selectedBrands={selectedBrands}
-        toggleBrand={toggleBrand}
+        setSelectedBrands={setSelectedBrands}
         brandOpen={brandOpen}
         setBrandOpen={setBrandOpen}
-        selectedStockLocations={selectedStockLocations}
-        toggleStockLocation={toggleStockLocation}
-        stockOpen={stockOpen}
-        setStockOpen={setStockOpen}
+        selectedPriceRanges={selectedPriceRanges}
+        setSelectedPriceRanges={setSelectedPriceRanges}
+        priceRangeOpen={priceRangeOpen}
+        setPriceRangeOpen={setPriceRangeOpen}
+        selectedVariationHinges={selectedVariationHinges}
+        setSelectedVariationHinges={setSelectedVariationHinges}
+        variationHingeOpen={variationHingeOpen}
+        setVariationHingeOpen={setVariationHingeOpen}
       />
 
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="bg-gray-100 p-4 rounded animate-pulse">
-              <div className="bg-gray-300 h-40 w-full rounded mb-4"></div>
-              <div className="h-5 bg-gray-300 rounded w-3/4 mb-2"></div>
-              <div className="h-5 bg-gray-300 rounded w-1/2 mb-2"></div>
+              <div className="bg-gray-200 h-40 w-full rounded mb-4"></div>
+              <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-5 bg-gray-200 rounded w-1/2 mb-2"></div>
             </div>
           ))}
         </div>
@@ -289,7 +319,38 @@ export default function SelectProductsForViewer() {
         />
       )}
 
-      {/* Fixed Proceed Button */}
+      {!advancedSearchActive && (
+        <div className="flex justify-center items-center mt-4 space-x-4">
+          <button
+            disabled={!canPrev}
+            onClick={() => {
+              setPage(page - 1);
+              fetchProducts(page - 1);
+            }}
+            className={`px-4 py-2 rounded text-sm font-semibold ${
+              page > 1 ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-gray-300 text-gray-500"
+            }`}
+          >
+            Prev
+          </button>
+          <span className="text-sm">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => {
+              setPage(page + 1);
+              fetchProducts(page + 1);
+            }}
+            className={`px-4 py-2 rounded text-sm font-semibold ${
+              page < totalPages ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-gray-300 text-gray-500"
+            }`}
+          >
+            Next
+          </button>
+        </div>
+      )}
+
       <div className="fixed bottom-4 right-4 z-30">
         <button
           onClick={handleProceed}

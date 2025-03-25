@@ -432,16 +432,17 @@ export default function CatalogManagement() {
             });
             slide.addText("No Image", {
               x: 1.2,
-              y: 2.5,
+              y: 1.5,
               w: 3.0,
               align: "center",
-              fontSize: 12,
+              fontSize: 8,
               color: "888888",
+              lineSpacing:20
             });
           }
         }
 
-        let yPos = 1.0;
+        let yPos = 0.7;
         const textX = fields.includes("images") ? 5.5 : 1.2;
         fields.forEach((field) => {
           if (field === "images") return;
@@ -457,28 +458,28 @@ export default function CatalogManagement() {
               valign: "middle",
               wrap: true,
             });
-            yPos += 1.2;
+            yPos += 0.3;
           } else if (field === "price") {
             const effectivePrice = p.price * (1 + (catalog.margin || 0) / 100);
             slide.addText(
               [
-                { text: `${fieldMapping[field]}: `, bold: true, fontSize: 15, color: "363636" },
-                { text: `${effectivePrice.toFixed(2)}`, bold: false, fontSize: 15, color: "363636" },
+                { text: `${fieldMapping[field]}: `, bold: true, fontSize: 13, color: "363636" },
+                { text: `${effectivePrice.toFixed(2)}`, bold: false, fontSize: 13, color: "363636" },
               ],
               { x: textX, y: yPos, w: 4.0, h: 0.5, valign: "middle", wrap: true }
             );
-            yPos += 0.5;
+            yPos += 0.3;
           } else {
             const label = fieldMapping[field] || field;
             const value = p[field] !== undefined ? p[field] : "";
             slide.addText(
               [
-                { text: `${label}: `, bold: true, fontSize: 15, color: "363636" },
-                { text: `${value}`, bold: false, fontSize: 15, color: "363636" },
+                { text: `${label}: `, bold: true, fontSize: 13, color: "363636" },
+                { text: `${value}`, bold: false, fontSize: 13, color: "363636" },
               ],
               { x: textX, y: yPos, w: 4.0, h: 0.5, valign: "middle", wrap: true }
             );
-            yPos += 0.5;
+            yPos += 0.3;
           }
         });
       }

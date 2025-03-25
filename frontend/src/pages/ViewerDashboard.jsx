@@ -1,47 +1,56 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { useDropzone } from "react-dropzone";
 import { useNavigate } from "react-router-dom";
-import Loader from "../components/Loader";
+import { useDropzone } from "react-dropzone";  // <-- Ensure this is present
 import FilterBarForViewer from "../components/FilterBarforViewer.jsx";
 import ProductCardforViewer from "../components/ProductCardforViewer.jsx";
+import Loader from "../components/Loader";
+
+// Define default visible attributes for the viewer
+const defaultAttributes = [
+  "name",
+  "category",
+  "subCategory",
+  "brandName",
+  "productCost",       // new price field
+  "variationHinge",
+  "productDetails",
+  "color",
+  "size",
+  "material",
+];
 
 export default function ViewerDashboard() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const navigate = useNavigate();
 
-  const defaultAttributes = [
-    "price",
-    "category",
-    "subCategory",
-    "brandName",
-    "stockCurrentlyWith",
-    "productDetails",
-    "name",
-  ];
-
   const [products, setProducts] = useState([]);
   const [visibleAttributes, setVisibleAttributes] = useState(defaultAttributes);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Filters (derived from fetched products)
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubCategories, setSelectedSubCategories] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedStockLocations, setSelectedStockLocations] = useState([]);
+
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [stockOpen, setStockOpen] = useState(false);
+
+  // Advanced image search states
   const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
   const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
   const [isAdvancedSearchLoading, setIsAdvancedSearchLoading] = useState(false);
+
+  // Carousel state for product images
   const [carouselIndexMap, setCarouselIndexMap] = useState({});
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      // The viewer endpoint returns an object with products and visibleAttributes.
+      // Viewer endpoint returns products & visibleAttributes for this viewer
       const res = await axios.get(`${BACKEND_URL}/api/viewer/products`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -58,11 +67,10 @@ export default function ViewerDashboard() {
     fetchProducts();
   }, []);
 
-  // Derived filter options based on fetched products.
+  // Derived filter options from fetched products
   const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
   const subCategories = Array.from(new Set(products.map((p) => p.subCategory).filter(Boolean)));
   const brands = Array.from(new Set(products.map((p) => p.brandName).filter(Boolean)));
-  const stockLocations = Array.from(new Set(products.map((p) => p.stockCurrentlyWith).filter(Boolean)));
 
   const toggleCategory = (cat) => {
     setSelectedCategories((prev) =>
@@ -79,12 +87,8 @@ export default function ViewerDashboard() {
       prev.includes(br) ? prev.filter((c) => c !== br) : [...prev, br]
     );
   };
-  const toggleStockLocation = (loc) => {
-    setSelectedStockLocations((prev) =>
-      prev.includes(loc) ? prev.filter((c) => c !== loc) : [...prev, loc]
-    );
-  };
 
+  // Filter products based on search term and selected filters
   const filteredProducts = products.filter((prod) => {
     const term = searchTerm.toLowerCase();
     const combinedString = (
@@ -96,19 +100,14 @@ export default function ViewerDashboard() {
       (prod.variationHinge || "") +
       (prod.name || "") +
       (prod.brandName || "") +
-      (prod.stockCurrentlyWith || "") +
-      (prod.price || "") +
+      (prod.productCost || "") +
       (prod.productDetails || "")
     ).toLowerCase();
     const matchesSearch = !searchTerm || combinedString.includes(term);
-    const matchesCategory =
-      selectedCategories.length === 0 || selectedCategories.includes(prod.category);
-    const matchesSubCategory =
-      selectedSubCategories.length === 0 || selectedSubCategories.includes(prod.subCategory);
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(prod.category);
+    const matchesSubCategory = selectedSubCategories.length === 0 || selectedSubCategories.includes(prod.subCategory);
     const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(prod.brandName);
-    const matchesStock =
-      selectedStockLocations.length === 0 || selectedStockLocations.includes(prod.stockCurrentlyWith);
-    return matchesSearch && matchesCategory && matchesSubCategory && matchesBrand && matchesStock;
+    return matchesSearch && matchesCategory && matchesSubCategory && matchesBrand;
   });
 
   const displayedProducts = advancedSearchActive ? advancedSearchResults : filteredProducts;
@@ -127,10 +126,10 @@ export default function ViewerDashboard() {
         });
         setAdvancedSearchResults(res.data);
         setAdvancedSearchActive(true);
-        setIsAdvancedSearchLoading(false);
       } catch (error) {
         console.error("Error in advanced search:", error);
         alert("Image search failed");
+      } finally {
         setIsAdvancedSearchLoading(false);
       }
     }, [BACKEND_URL]),
@@ -144,10 +143,10 @@ export default function ViewerDashboard() {
   const handleNextImage = (prodId) => {
     setCarouselIndexMap((prev) => {
       const next = { ...prev };
-      const product = products.find((p) => p._id === prodId);
-      if (!product || !product.images || product.images.length === 0) return prev;
+      const p = products.find((x) => x._id === prodId);
+      if (!p || !p.images || p.images.length === 0) return prev;
       const currentIndex = prev[prodId] || 0;
-      next[prodId] = (currentIndex + 1) % product.images.length;
+      next[prodId] = (currentIndex + 1) % p.images.length;
       return next;
     });
   };
@@ -155,10 +154,10 @@ export default function ViewerDashboard() {
   const handlePrevImage = (prodId) => {
     setCarouselIndexMap((prev) => {
       const next = { ...prev };
-      const product = products.find((p) => p._id === prodId);
-      if (!product || !product.images || product.images.length === 0) return prev;
+      const p = products.find((x) => x._id === prodId);
+      if (!p || !p.images || p.images.length === 0) return prev;
       const currentIndex = prev[prodId] || 0;
-      next[prodId] = (currentIndex - 1 + product.images.length) % product.images.length;
+      next[prodId] = (currentIndex - 1 + p.images.length) % p.images.length;
       return next;
     });
   };
@@ -168,11 +167,11 @@ export default function ViewerDashboard() {
   };
 
   return (
-    <div className="p-4 md:p-6 bg-gray-900 text-gray-200 min-h-screen">
+    <div className="p-6 bg-white text-gray-900 min-h-screen">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Viewer Dashboard</h1>
-        <p className="text-sm text-gray-400">
-          Showing your accessible products with assigned attributes.
+        <h1 className="text-2xl font-bold text-purple-700">Viewer Dashboard</h1>
+        <p className="text-sm text-blue-600">
+          Accessible products displayed with your selected attributes.
         </p>
       </div>
 
@@ -185,7 +184,7 @@ export default function ViewerDashboard() {
         categories={categories}
         subCategories={subCategories}
         brands={brands}
-        stockLocations={stockLocations}
+        // For viewer, we’re not using stock currently; omit that filter if not needed.
         selectedCategories={selectedCategories}
         toggleCategory={toggleCategory}
         categoryOpen={categoryOpen}
@@ -198,30 +197,17 @@ export default function ViewerDashboard() {
         toggleBrand={toggleBrand}
         brandOpen={brandOpen}
         setBrandOpen={setBrandOpen}
-        selectedStockLocations={selectedStockLocations}
-        toggleStockLocation={toggleStockLocation}
-        stockOpen={stockOpen}
-        setStockOpen={setStockOpen}
       />
 
-      {/* <div className="mb-4 flex items-center gap-4">
-        <div
-          {...advGetRootProps()}
-          className="flex items-center px-3 py-2 bg-gray-700 rounded cursor-pointer hover:bg-gray-600"
+      {isAdvancedSearchLoading && <Loader />}
+      {advancedSearchActive && (
+        <button
+          onClick={handleClearAdvancedSearch}
+          className="bg-pink-600 px-3 py-2 rounded hover:bg-pink-700 text-sm text-white mb-4"
         >
-          <input {...advGetInputProps()} />
-          <span className="text-sm">Search by Image</span>
-        </div>
-        {isAdvancedSearchLoading && <Loader />}
-        {advancedSearchActive && (
-          <button
-            onClick={handleClearAdvancedSearch}
-            className="bg-red-600 px-3 py-2 rounded hover:bg-red-700 text-sm"
-          >
-            Clear Image Search
-          </button>
-        )}
-      </div> */}
+          Clear Image Search
+        </button>
+      )}
 
       {loading ? (
         <div className="flex justify-center items-center">
