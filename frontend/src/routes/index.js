@@ -21,6 +21,7 @@ import ViewerProductDetails from "../pages/ViewerProductDetails";
 import AdminProductDetails from "../pages/AdminProductDetails";
 import QuotationView from "../pages/QuotationView";
 import ReviewDashboard from "../pages/ReviewDashboard";
+import PrintQuotation from "../pages/PrintQuotation";
 
 const router = createBrowserRouter([
     {
@@ -114,6 +115,10 @@ const router = createBrowserRouter([
                     {
                         path:'review-catalog',
                         element:<ReviewDashboard/>
+                    },
+                    {
+                        path:'print-quotation/:id',
+                        element:<PrintQuotation/>
                     }
 
                     

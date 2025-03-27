@@ -1,10 +1,11 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
-import { PDFDocument } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
+import { useParams, useNavigate } from "react-router-dom";
 
 export default function QuotationView() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
   const [quotation, setQuotation] = useState(null);
@@ -24,7 +25,7 @@ export default function QuotationView() {
       setLoading(true);
       const token = localStorage.getItem("token");
       const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         throw new Error("Failed to fetch quotation");
@@ -44,7 +45,7 @@ export default function QuotationView() {
   function handleHeaderBlur(field, e) {
     setEditableQuotation((prev) => ({
       ...prev,
-      [field]: e.target.innerText
+      [field]: e.target.innerText,
     }));
   }
 
@@ -61,7 +62,7 @@ export default function QuotationView() {
     if (email) {
       setEditableQuotation((prev) => ({
         ...prev,
-        customerEmail: email
+        customerEmail: email,
       }));
     }
   }
@@ -76,9 +77,9 @@ export default function QuotationView() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         throw new Error("Update failed");
@@ -95,7 +96,7 @@ export default function QuotationView() {
     if (newTerm.heading && newTerm.content) {
       setEditableQuotation((prev) => ({
         ...prev,
-        terms: [...prev.terms, newTerm]
+        terms: [...prev.terms, newTerm],
       }));
       setNewTerm({ heading: "", content: "" });
       setTermModalOpen(false);
@@ -114,7 +115,7 @@ export default function QuotationView() {
     updatedTerms[editingTermIdx] = { heading: newTerm.heading, content: newTerm.content };
     setEditableQuotation((prev) => ({
       ...prev,
-      terms: updatedTerms
+      terms: updatedTerms,
     }));
     setTermModalOpen(false);
     setEditingTermIdx(null);
@@ -126,7 +127,7 @@ export default function QuotationView() {
       setEditableQuotation((prev) => ({
         ...prev,
         cgst: parseFloat(cgst),
-        cgstAdded: true
+        cgstAdded: true,
       }));
     }
   }
@@ -137,214 +138,31 @@ export default function QuotationView() {
       setEditableQuotation((prev) => ({
         ...prev,
         sgst: parseFloat(sgst),
-        sgstAdded: true
+        sgstAdded: true,
       }));
     }
   }
 
-  // PDF Export Function with table including image column after Sl. No.
-  const handleExportPDF = async () => {
-    try {
-      const pdfDoc = await PDFDocument.create();
-      pdfDoc.registerFontkit(fontkit);
-      // Embed DejaVuSans font to support the Rupee symbol
-      const fontUrl = "/fonts/DejaVuSans.ttf"; // Ensure this file exists in your public folder or update path accordingly.
-      const fontBytes = await fetch(fontUrl).then(res => {
-        if (!res.ok) throw new Error("Failed to load font");
-        return res.arrayBuffer();
-      });
-      const customFont = await pdfDoc.embedFont(fontBytes);
-      
-      const page = pdfDoc.addPage([600, 800]);
-      const fontSize = 10;
-      const margin = 40;
-      let yPosition = 750;
-
-      // Header
-      page.drawText(`Quotation No.: ${editableQuotation.quotationNumber}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-      page.drawText(`GSTIN: ${editableQuotation.gst || "29ABCFA9924A1ZL"}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-      page.drawText(`Date: ${new Date(quotation.createdAt).toLocaleDateString()}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 25;
-
-      // Customer Info
-      page.drawText(`Customer: ${editableQuotation.customerName}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-      page.drawText(`Email: ${editableQuotation.customerEmail || "N/A"}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 25;
-
-      // Table Header
-      // Columns: Sl. No., Image, Product, Quantity, Rate, Amount, GST, [CGST], [SGST], Total
-      let headerText = "Sl. No. | Image | Product | Qty | Rate | Amount | GST";
-      if (editableQuotation.cgst && editableQuotation.cgst !== 0) {
-        headerText += " | CGST";
-      }
-      if (editableQuotation.sgst && editableQuotation.sgst !== 0) {
-        headerText += " | SGST";
-      }
-      headerText += " | Total";
-      page.drawText(headerText, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-
-      // Table Data: Use a for-loop for asynchronous image embedding
-      for (let idx = 0; idx < editableQuotation.items.length; idx++) {
-        const item = editableQuotation.items[idx];
-        const baseRate = parseFloat(item.rate) || 0;
-        const quantity = parseInt(item.quantity) || 0;
-        const effRate = baseRate * (1 + ((parseFloat(editableQuotation.margin) || 0) / 100));
-        const amount = effRate * quantity;
-        const gstAmount = amount * 0.18;
-        const total = amount + gstAmount;
-        const cgst = editableQuotation.cgst && editableQuotation.cgst !== 0 ? editableQuotation.cgst : 0;
-        const sgst = editableQuotation.sgst && editableQuotation.sgst !== 0 ? editableQuotation.sgst : 0;
-
-        // For the image column, try to fetch the product image.
-        let imageDisplay = "No Image";
-        if (item.image) {
-          try {
-            const imgBytes = await fetch(item.image).then((res) => res.arrayBuffer());
-            const embeddedImage = await pdfDoc.embedPng(imgBytes);
-            const imgDims = embeddedImage.scale(0.15);
-            // Draw the image at a fixed location in the row.
-            page.drawImage(embeddedImage, {
-              x: margin + 50,
-              y: yPosition - imgDims.height + 10,
-              width: imgDims.width,
-              height: imgDims.height,
-            });
-            imageDisplay = ""; // We won't display text if image is drawn.
-          } catch (e) {
-            console.warn("Failed to embed product image", e);
-          }
-        }
-
-        const rowText = `${idx + 1} | ${imageDisplay} | ${item.product} | ${item.quantity} | ₹${item.rate} | ₹${amount.toFixed(2)} | ₹${gstAmount.toFixed(2)}` +
-          (cgst ? ` | ₹${cgst.toFixed(2)}` : "") +
-          (sgst ? ` | ₹${sgst.toFixed(2)}` : "") +
-          ` | ₹${total.toFixed(2)}`;
-
-        page.drawText(rowText, {
-          x: margin,
-          y: yPosition,
-          font: customFont,
-          size: fontSize,
-        });
-        yPosition -= 15;
-        // If yPosition is too low, add a new page
-        if (yPosition < 50 && idx < editableQuotation.items.length - 1) {
-          page.drawText("-- Continued on next page --", {
-            x: margin,
-            y: 30,
-            font: customFont,
-            size: fontSize,
-          });
-          page = pdfDoc.addPage([600, 800]);
-          yPosition = 750;
-        }
-      }
-
-      // Terms Section
-      yPosition -= 20;
-      page.drawText("Terms & Conditions:", {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-      editableQuotation.terms.forEach((term) => {
-        page.drawText(`${term.heading}: ${term.content}`, {
-          x: margin,
-          y: yPosition,
-          font: customFont,
-          size: fontSize,
-        });
-        yPosition -= 15;
-      });
-
-      // Footer: Totals
-      const totalAmount = editableQuotation.items.reduce(
-        (acc, item) => acc + ((parseFloat(item.rate) || 0) * (parseInt(item.quantity) || 0)),
-        0
-      );
-      const totalGST = totalAmount * ((editableQuotation.gst || 18) / 100);
-      const grandTotal = totalAmount + totalGST;
-      yPosition -= 20;
-      page.drawText(`Total Amount: ₹${totalAmount.toFixed(2)}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-      page.drawText(`GST (${editableQuotation.gst || 18}%): ₹${totalGST.toFixed(2)}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 15;
-      page.drawText(`Grand Total: ₹${grandTotal.toFixed(2)}`, {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize,
-      });
-      yPosition -= 30;
-      page.drawText("For Ace Print Pack", {
-        x: margin,
-        y: yPosition,
-        font: customFont,
-        size: fontSize + 2,
-      });
-      yPosition -= 15;
-      // Optionally, add signature image if available (not implemented here)
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Quotation-${editableQuotation.quotationNumber}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Failed to generate PDF. Please try again.");
-    }
+  // Instead of generating PDF with pdf-lib, redirect to the print-ready page.
+  const handleExportPDF = () => {
+    navigate(`/admin-dashboard/print-quotation/${id}`);
   };
+
+  // Helper functions to compute totals
+  function computedAmount(quotation) {
+    let sum = 0;
+    quotation.items.forEach((item) => {
+      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+      const baseRate = parseFloat(item.rate) || 0;
+      const quantity = parseFloat(item.quantity) || 0;
+      sum += baseRate * marginFactor * quantity;
+    });
+    return sum;
+  }
+
+  function computedTotal(quotation) {
+    return computedAmount(quotation) * 1.18;
+  }
 
   if (loading) {
     return <div className="p-6 text-gray-400">Loading quotation...</div>;
@@ -356,17 +174,18 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
+  // Compute margin factor and totals
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
-  let computedAmount = 0;
-  let computedTotal = 0;
+  let computedAmountVal = 0;
+  let computedTotalVal = 0;
   editableQuotation.items.forEach((item) => {
     const baseRate = parseFloat(item.rate) || 0;
     const quantity = parseFloat(item.quantity) || 0;
     const effRate = baseRate * marginFactor;
     const amount = effRate * quantity;
     const total = amount * 1.18;
-    computedAmount += amount;
-    computedTotal += total;
+    computedAmountVal += amount;
+    computedTotalVal += total;
   });
 
   return (
@@ -553,7 +372,7 @@ export default function QuotationView() {
         <tbody>
           {editableQuotation.items.map((item, index) => {
             const baseRate = parseFloat(item.rate) || 0;
-            const quantity = parseInt(item.quantity) || 0;
+            const quantity = parseFloat(item.quantity) || 0;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
             const gst = parseFloat((amount * 0.18).toFixed(2));
@@ -603,11 +422,26 @@ export default function QuotationView() {
       </table>
 
       <div className="mb-6 text-lg font-bold">
-        <p>Total Amount: ₹{computedAmount.toFixed(2)}</p>
-        <p>Grand Total (with GST): ₹{computedTotal.toFixed(2)}</p>
+        <p>Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}</p>
+        <p>Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}</p>
       </div>
     </div>
   );
+}
+
+export function computedAmount(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    sum += baseRate * marginFactor * quantity;
+  });
+  return sum;
+}
+
+export function computedTotal(quotation) {
+  return computedAmount(quotation) * 1.18;
 }
 
 function EditableCell({ value, onSave }) {

@@ -3,14 +3,11 @@
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import {
-  Bars3Icon,
-  XMarkIcon,
   UserIcon,
   UserGroupIcon,
   CubeIcon,
   BookOpenIcon,
   EyeIcon,
-  
   ArrowLeftOnRectangleIcon,
   PencilIcon
 } from "@heroicons/react/24/outline";
@@ -123,11 +120,13 @@ export default function AdminDashboard() {
         onMouseEnter={() => !sidebarOpen && setSidebarHover(true)}
         onMouseLeave={() => !sidebarOpen && setSidebarHover(false)}
       >
-        <div className="flex items-center justify-between p-4 lg:hidden">
+        <div className="flex items-center justify-between p-4">
           <h2 className="font-bold text-lg">Admin</h2>
-          <button onClick={() => setSidebarOpen(false)}>
-            <XMarkIcon className="h-6 w-6 text-white" />
-          </button>
+          {sidebarOpen && (
+            <button onClick={() => setSidebarOpen(false)}>
+              <ArrowLeftOnRectangleIcon className="h-6 w-6 text-white" />
+            </button>
+          )}
         </div>
 
         <nav className="mt-4 px-2">
@@ -163,28 +162,15 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      {/* Topbar for mobile */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 bg-white shadow-md z-30 flex items-center justify-between p-4">
-        <h1 className="text-lg font-semibold">Admin Panel</h1>
-        <button onClick={() => setSidebarOpen(!sidebarOpen)}>
-          <Bars3Icon className="h-6 w-6 text-gray-800" />
-        </button>
-      </header>
-
-      {/* Main content */}
+      {/* Removed the mobile topbar/hamburger menu */}
+      {/* Main Content */}
       <main
         className="flex-1 ml-0 lg:ml-16"
         style={{
-          marginLeft: sidebarOpen || sidebarHover ? 224 : 64, // match width
+          marginLeft: sidebarOpen || sidebarHover ? 224 : 64,
         }}
       >
-        <div
-          className="h-full overflow-y-auto p-4"
-          style={{
-            scrollbarWidth: "thin",
-            scrollbarColor: "#c084fc #f0f0f0",
-          }}
-        >
+        <div className="h-full overflow-y-auto p-4">
           <Outlet />
         </div>
       </main>
