@@ -19,7 +19,11 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerCompany,
       customerAddress,
       margin,
-      items
+      items,
+      gst,          // Extract GST from request body
+      cgst,         // CGST field
+      sgst,         // SGST field
+      terms         // Terms field: dynamic headings and content
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -33,7 +37,11 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerCompany,
       customerAddress,
       margin,
+      gst,
+      cgst,         // Save CGST value
+      sgst,         // Save SGST value
       items,
+      terms,        // Save terms with headings and content
       createdBy: req.user.email
     });
 
@@ -84,7 +92,11 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       customerCompany,
       customerAddress,
       margin,
-      items
+      items,
+      gst,          // Updated GST field
+      cgst,         // Updated CGST field
+      sgst,         // Updated SGST field
+      terms         // Updated dynamic terms (headings and content)
     } = req.body;
 
     const updatedData = {
@@ -94,7 +106,11 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       customerCompany,
       customerAddress,
       margin,
-      items
+      gst,
+      cgst,         // Update CGST field
+      sgst,         // Update SGST field
+      items,
+      terms         // Update terms field
     };
 
     const updatedQuotation = await Quotation.findByIdAndUpdate(
@@ -188,6 +204,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     const totalAmount = items.reduce((sum, i) => sum + parseFloat(i.amount), 0);
     const grandTotal = items.reduce((sum, i) => sum + parseFloat(i.total), 0);
 
+    // Include CGST, SGST, and Terms in the exported document
     const docData = {
       date: new Date(quotation.createdAt).toLocaleDateString("en-US", {
         weekday: "long", year: "numeric", month: "long", day: "numeric"
@@ -198,6 +215,9 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       state: quotation.customerAddress || "",
       catalogName: quotation.catalogName || "",
       items,
+      cgst: quotation.cgst || 0,
+      sgst: quotation.sgst || 0,
+      terms: quotation.terms || [],  // Add terms to the document
       grandTotalAmount: totalAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2)
     };
@@ -217,7 +237,6 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     res.status(500).json({ message: "Error generating Word document" });
   }
 });
-
 
 // 7) Approve a Quotation
 router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, res) => {

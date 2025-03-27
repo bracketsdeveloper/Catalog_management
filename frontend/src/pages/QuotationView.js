@@ -1,36 +1,7 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-
-// EditableCell for inline editing
-// function EditableCell({ value, onSave }) {
-//   const [editing, setEditing] = useState(false);
-//   const [currentValue, setCurrentValue] = useState(value);
-
-//   useEffect(() => {
-//     setCurrentValue(value);
-//   }, [value]);
-
-//   const handleDoubleClick = () => setEditing(true);
-//   const handleBlur = () => {
-//     setEditing(false);
-//     onSave(currentValue);
-//   };
-
-//   return editing ? (
-//     <input
-//       type="text"
-//       className="border p-1 rounded"
-//       autoFocus
-//       value={currentValue}
-//       onChange={(e) => setCurrentValue(e.target.value)}
-//       onBlur={handleBlur}
-//     />
-//   ) : (
-//     <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
-//   );
-// }
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 
 export default function QuotationView() {
   const { id } = useParams();
@@ -40,6 +11,9 @@ export default function QuotationView() {
   const [editableQuotation, setEditableQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [newTerm, setNewTerm] = useState({ heading: "", content: "" });
+  const [termModalOpen, setTermModalOpen] = useState(false);
+  const [editingTermIdx, setEditingTermIdx] = useState(null);
 
   useEffect(() => {
     fetchQuotation();
@@ -117,32 +91,241 @@ export default function QuotationView() {
     }
   }
 
-  async function handleExportWord() {
-    if (!editableQuotation) return;
+  function handleAddTerm() {
+    if (newTerm.heading && newTerm.content) {
+      setEditableQuotation((prev) => ({
+        ...prev,
+        terms: [...prev.terms, newTerm]
+      }));
+      setNewTerm({ heading: "", content: "" });
+      setTermModalOpen(false);
+    }
+  }
+
+  function handleEditTerm(idx) {
+    const term = editableQuotation.terms[idx];
+    setNewTerm({ heading: term.heading, content: term.content });
+    setEditingTermIdx(idx);
+    setTermModalOpen(true);
+  }
+
+  function handleUpdateTerm() {
+    const updatedTerms = [...editableQuotation.terms];
+    updatedTerms[editingTermIdx] = { heading: newTerm.heading, content: newTerm.content };
+    setEditableQuotation((prev) => ({
+      ...prev,
+      terms: updatedTerms
+    }));
+    setTermModalOpen(false);
+    setEditingTermIdx(null);
+  }
+
+  function handleAddCGST() {
+    const cgst = window.prompt("Enter CGST value:");
+    if (cgst && !isNaN(cgst)) {
+      setEditableQuotation((prev) => ({
+        ...prev,
+        cgst: parseFloat(cgst),
+        cgstAdded: true
+      }));
+    }
+  }
+
+  function handleAddSGST() {
+    const sgst = window.prompt("Enter SGST value:");
+    if (sgst && !isNaN(sgst)) {
+      setEditableQuotation((prev) => ({
+        ...prev,
+        sgst: parseFloat(sgst),
+        sgstAdded: true
+      }));
+    }
+  }
+
+  const handleExportPDF = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const url = `${BACKEND_URL}/api/admin/quotations/${editableQuotation._id}/export-word`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` }
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.registerFontkit(fontkit);
+
+      // Load a custom font that supports the Indian Rupee symbol
+      const fontUrl = '/fonts/DejaVuSans.ttf'; // Ensure this path is correct
+      const fontBytes = await fetch(fontUrl).then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to load font');
+        }
+        return res.arrayBuffer();
       });
-      if (!response.ok) {
-        throw new Error("Export doc request failed");
-      }
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const customFont = await pdfDoc.embedFont(fontBytes);
+
+      const page = pdfDoc.addPage([600, 800]);
+      const fontSize = 12;
+      const margin = 50;
+      let yPosition = 750;
+
+      // Header
+      page.drawText(`Quotation No.: ${editableQuotation.quotationNumber}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 20;
+      page.drawText(`GSTIN: ${editableQuotation.gst || '29ABCFA9924A1ZL'}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 40;
+      page.drawText(`Date: ${new Date(editableQuotation.createdAt).toLocaleDateString()}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 40;
+
+      // Customer Info
+      page.drawText(`Customer Name: ${editableQuotation.customerName}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 20;
+      page.drawText(`Email: ${editableQuotation.customerEmail || 'N/A'}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 40;
+
+      // Table Header
+      const tableHeader = "Sl. No. | Product | Quantity | Rate | Amount | GST | CGST | SGST | Total";
+      page.drawText(tableHeader, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 20;
+
+      // Table Data
+      editableQuotation.items.forEach((item, idx) => {
+        const amount = (parseFloat(item.rate) || 0) * (parseInt(item.quantity) || 0);
+        const gstRate = editableQuotation.gst || 18;
+        const gstAmount = amount * (gstRate / 100);
+        const cgst = editableQuotation.cgst || 0;
+        const sgst = editableQuotation.sgst || 0;
+        const total = amount + gstAmount;
+        
+        const row = `${idx + 1} | ${item.product} | ${item.quantity} | ₹${item.rate} | ₹${amount.toFixed(2)} | ₹${gstAmount.toFixed(2)} | ₹${cgst.toFixed(2)} | ₹${sgst.toFixed(2)} | ₹${total.toFixed(2)}`;
+        
+        if (yPosition < 50) {
+          page.drawText('-- Continued on next page --', {
+            x: margin,
+            y: 30,
+            font: customFont,
+            size: fontSize,
+          });
+          const newPage = pdfDoc.addPage([600, 800]);
+          yPosition = 750;
+          newPage.drawText(tableHeader, {
+            x: margin,
+            y: yPosition,
+            font: customFont,
+            size: fontSize,
+          });
+          yPosition -= 20;
+        }
+        
+        page.drawText(row, { 
+          x: margin, 
+          y: yPosition, 
+          font: customFont, 
+          size: fontSize 
+        });
+        yPosition -= 20;
+      });
+
+      // Terms Section
+      yPosition -= 20;
+      page.drawText("Terms & Conditions:", { 
+        x: margin, 
+        y: yPosition, 
+        font: customFont, 
+        size: fontSize 
+      });
+      yPosition -= 20;
+      
+      editableQuotation.terms.forEach((term) => {
+        if (yPosition < 50) {
+          page.drawText('-- Continued on next page --', {
+            x: margin,
+            y: 30,
+            font: customFont,
+            size: fontSize,
+          });
+          const newPage = pdfDoc.addPage([600, 800]);
+          yPosition = 750;
+        }
+        
+        page.drawText(`${term.heading}: ${term.content}`, {
+          x: margin,
+          y: yPosition,
+          font: customFont,
+          size: fontSize,
+        });
+        yPosition -= 20;
+      });
+
+      // Footer
+      const totalAmount = editableQuotation.items.reduce(
+        (acc, item) => acc + (parseFloat(item.rate) * (parseInt(item.quantity) || 0)),
+        0
+      );
+      const totalGST = totalAmount * ((editableQuotation.gst || 18) / 100);
+      const grandTotal = totalAmount + totalGST;
+      
+      yPosition -= 20;
+      page.drawText(`Total Amount: ₹${totalAmount.toFixed(2)}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 20;
+      page.drawText(`GST (${editableQuotation.gst || 18}%): ₹${totalGST.toFixed(2)}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+      yPosition -= 20;
+      page.drawText(`Grand Total: ₹${grandTotal.toFixed(2)}`, {
+        x: margin,
+        y: yPosition,
+        font: customFont,
+        size: fontSize,
+      });
+
+      // Download PDF
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = `Quotation-${editableQuotation.quotationNumber || "NoNumber"}.docx`;
+      link.href = url;
+      link.download = `Quotation-${editableQuotation.quotationNumber}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (err) {
-      console.error("Export error:", err);
-      alert("Failed to export .docx");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
     }
-  }
+  };
 
   if (loading) {
     return <div className="p-6 text-gray-400">Loading quotation...</div>;
@@ -154,10 +337,7 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
-
-  // Compute totals from items
   let computedAmount = 0;
   let computedTotal = 0;
   editableQuotation.items.forEach((item) => {
@@ -172,13 +352,12 @@ export default function QuotationView() {
 
   return (
     <div className="p-6 bg-white text-black min-h-screen">
-      {/* Top Buttons */}
       <div className="flex justify-between items-center mb-4">
         <button
-          onClick={handleExportWord}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+          onClick={handleExportPDF}
+          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
         >
-          Export to Word
+          Export to PDF
         </button>
         <button
           onClick={handleSaveQuotation}
@@ -188,36 +367,41 @@ export default function QuotationView() {
         </button>
       </div>
 
-      {/* Header: Date and GSTIN */}
-      <div className="mb-4 flex justify-between items-center text-sm">
-        <div>
-          {editableQuotation.createdAt
-            ? new Date(editableQuotation.createdAt).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric"
-              })
-            : new Date().toLocaleDateString()}
-        </div>
-        <div>GSTIN: 29ABCFA9924A1ZL</div>
+      <div className="flex justify-end space-x-4 mb-4">
+        {!editableQuotation.cgstAdded ? (
+          <button
+            onClick={handleAddCGST}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+          >
+            + Add CGST
+          </button>
+        ) : (
+          <button
+            onClick={handleAddCGST}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+          >
+            Update CGST
+          </button>
+        )}
+        {!editableQuotation.sgstAdded ? (
+          <button
+            onClick={handleAddSGST}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+          >
+            + Add SGST
+          </button>
+        ) : (
+          <button
+            onClick={handleAddSGST}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+          >
+            Update SGST
+          </button>
+        )}
       </div>
 
-      {/* Quotation Number */}
-      <div className="text-xl font-bold mb-2">
-        <span
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) => handleHeaderBlur("quotationNumber", e)}
-        >
-          Quotation No.: {editableQuotation.quotationNumber}
-        </span>
-      </div>
-
-      {/* Customer & Catalog Details */}
       <div className="mb-4 space-y-2">
         <div>
-          Mr/Mrs.{" "}
           <span
             contentEditable
             suppressContentEditableWarning
@@ -226,8 +410,7 @@ export default function QuotationView() {
             {editableQuotation.customerName}
           </span>
         </div>
-        <div className="flex items-center space-x-2">
-          <span>Email:</span>
+        <div>
           <span
             contentEditable
             suppressContentEditableWarning
@@ -235,39 +418,94 @@ export default function QuotationView() {
           >
             {editableQuotation.customerEmail}
           </span>
-          {!editableQuotation.customerEmail && (
-            <button
-              onClick={handleAddEmail}
-              className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
-            >
-              +
-            </button>
-          )}
         </div>
         <div>
-          Quotation:{" "}
           <span
             contentEditable
             suppressContentEditableWarning
-            onBlur={(e) => handleHeaderBlur("catalogName", e)}
+            onBlur={(e) => handleHeaderBlur("customerCompany", e)}
           >
-            {editableQuotation.catalogName}
+            {editableQuotation.customerCompany}
           </span>
         </div>
         <div>
-          Margin:{" "}
           <span
             contentEditable
             suppressContentEditableWarning
-            onBlur={(e) => handleHeaderBlur("margin", e)}
+            onBlur={(e) => handleHeaderBlur("gst", e)}
           >
-            {editableQuotation.margin}
+            GST: {editableQuotation.gst}
           </span>
-          %
         </div>
       </div>
 
-      {/* Items Table */}
+      <div className="mb-6">
+        <button
+          onClick={() => setTermModalOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4"
+        >
+          + Add Terms
+        </button>
+        {editableQuotation.terms.map((term, idx) => (
+          <div key={idx} className="mb-4">
+            <div className="font-semibold">{term.heading}</div>
+            <div>{term.content}</div>
+            <button
+              onClick={() => handleEditTerm(idx)}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded mt-2"
+            >
+              Edit
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {termModalOpen && (
+        <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50">
+          <div className="bg-white p-6 rounded w-1/3">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingTermIdx !== null ? "Edit Term" : "Add Term"}
+            </h2>
+            <div className="mb-4">
+              <input
+                type="text"
+                value={newTerm.heading}
+                placeholder="Term Heading"
+                onChange={(e) =>
+                  setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
+                }
+                className="border p-2 w-full"
+              />
+            </div>
+            <div className="mb-4">
+              <textarea
+                value={newTerm.content}
+                placeholder="Term Content"
+                onChange={(e) =>
+                  setNewTerm((prev) => ({ ...prev, content: e.target.value }))
+                }
+                className="border p-2 w-full"
+                rows="4"
+              ></textarea>
+            </div>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setTermModalOpen(false)}
+                className="bg-gray-500 text-white px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                {editingTermIdx !== null ? "Update Term" : "Add Term"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <table className="w-full border-collapse mb-6 text-sm">
         <thead>
           <tr className="border-b">
@@ -278,6 +516,12 @@ export default function QuotationView() {
             <th className="p-2 text-left">Rate (with margin)</th>
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (18%)</th>
+            {editableQuotation.cgst !== 0 && (
+              <th className="p-2 text-left">CGST</th>
+            )}
+            {editableQuotation.sgst !== 0 && (
+              <th className="p-2 text-left">SGST</th>
+            )}
             <th className="p-2 text-left">Total</th>
           </tr>
         </thead>
@@ -289,7 +533,6 @@ export default function QuotationView() {
             const amount = effRate * quantity;
             const gst = parseFloat((amount * 0.18).toFixed(2));
             const total = parseFloat((amount + gst).toFixed(2));
-            // Use item.image if available; otherwise try item.productId.images[0]
             const imageUrl =
               item.image ||
               (item.productId &&
@@ -299,12 +542,7 @@ export default function QuotationView() {
                 : "https://via.placeholder.com/150");
             return (
               <tr key={index} className="border-b">
-                <td className="p-2">
-                  <EditableCell
-                    value={item.slNo}
-                    onSave={(val) => updateItemField(index, "slNo", val)}
-                  />
-                </td>
+                <td className="p-2">{item.slNo}</td>
                 <td className="p-2">
                   {imageUrl !== "https://via.placeholder.com/150" ? (
                     <img
@@ -316,59 +554,32 @@ export default function QuotationView() {
                     "No Image"
                   )}
                 </td>
-                <td className="p-2">
-                  <EditableCell
-                    value={item.product}
-                    onSave={(val) => updateItemField(index, "product", val)}
-                  />
-                </td>
+                <td className="p-2">{item.product}</td>
                 <td className="p-2">
                   <EditableCell
                     value={item.quantity}
                     onSave={(val) => updateItemField(index, "quantity", val)}
                   />
                 </td>
-                <td className="p-2">
-                  <EditableCell
-                    value={effRate.toFixed(2)}
-                    onSave={(newVal) => {
-                      const newBaseRate = parseFloat(newVal) / marginFactor;
-                      updateItemField(index, "rate", newBaseRate.toFixed(2));
-                    }}
-                  />
-                </td>
-                <td className="p-2">₹{amount.toFixed(2)}</td>
-                <td className="p-2">₹{gst.toFixed(2)}</td>
-                <td className="p-2">₹{total.toFixed(2)}</td>
+                <td className="p-2">{effRate.toFixed(2)}</td>
+                <td className="p-2">{amount.toFixed(2)}</td>
+                <td className="p-2">{editableQuotation.gst || "0.00"}%</td>
+                {editableQuotation.cgst !== 0 && (
+                  <td className="p-2">{editableQuotation.cgst || "0.00"}%</td>
+                )}
+                {editableQuotation.sgst !== 0 && (
+                  <td className="p-2">{editableQuotation.sgst || "0.00"}%</td>
+                )}
+                <td className="p-2">{total.toFixed(2)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
 
-      {/* Display computed totals */}
       <div className="mb-6 text-lg font-bold">
         <p>Total Amount: ₹{computedAmount.toFixed(2)}</p>
         <p>Grand Total (with GST): ₹{computedTotal.toFixed(2)}</p>
-      </div>
-
-      {/* Additional Quotation Details */}
-      <div className="mb-6 text-sm space-y-2">
-        <p>
-          <strong>Delivery:</strong> 10 – 12 Working days upon order confirmation.
-          Single delivery to Hyderabad office included in the cost.
-        </p>
-        <p><strong>Branding:</strong> As mentioned above.</p>
-        <p><strong>Payment Terms:</strong> Within 30 days upon delivery.</p>
-        <p><strong>Quote Validity:</strong> The quote is valid only for 6 days from the date of quotation.</p>
-        <p>
-          <strong>Note:</strong> Rates may vary if specifications, quantity, or timelines change.
-        </p>
-      </div>
-
-      <div className="mt-8 text-sm">
-        <p>For Ace Print Pack</p>
-        <p className="mt-2">Neeraj Dinodia</p>
       </div>
     </div>
   );

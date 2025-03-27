@@ -29,10 +29,10 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       products,
       fieldsToDisplay,
       priceRange,
-      margin
+      margin,
+      gst  // NEW: GST field
     } = req.body;
 
-    // `products` is an array of objects: [ { productId, color, size, quantity }, ... ]
     const newCatalog = new Catalog({
       catalogName,
       customerName,
@@ -43,6 +43,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
       priceRange,
+      gst, // store GST
       createdBy: req.user ? req.user.email : ""
     });
 
@@ -53,6 +54,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error creating catalog" });
   }
 });
+
 
 // 3) Example AI Generate route
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {
@@ -142,7 +144,8 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       products,
       fieldsToDisplay,
       margin,
-      priceRange
+      priceRange,
+      gst  // NEW: GST field
     } = req.body;
 
     const updatedData = {
@@ -153,19 +156,15 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       customerAddress,
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
-      priceRange
+      priceRange,
+      gst  // update GST
     };
 
     if (products) {
-      // Expect an array of objects: [ { productId, color, size, quantity }, ... ]
       updatedData.products = products;
     }
 
-    const updatedCatalog = await Catalog.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true }
-    );
+    const updatedCatalog = await Catalog.findByIdAndUpdate(req.params.id, updatedData, { new: true });
     if (!updatedCatalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }

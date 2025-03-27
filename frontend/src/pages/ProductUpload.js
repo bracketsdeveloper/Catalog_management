@@ -795,6 +795,9 @@ export default function ProductManagementPage() {
           closeSingleProductModal={closeSingleProductModal}
           handleFileChange={handleFileChange}
           uploadProgress={uploadProgress}
+          categories={fullCategories}
+          subCategories={fullSubCategories}
+          brands={fullBrands}
         />
       )}
     </div>
@@ -920,12 +923,30 @@ function SingleProductModal({
   handleSingleProductSubmit,
   closeSingleProductModal,
   handleFileChange,
-  uploadProgress
+  uploadProgress,
+  categories,
+  subCategories,
+  brands
 }) {
+  const [categorySuggestions, setCategorySuggestions] = useState([]);
+  const [subCategorySuggestions, setSubCategorySuggestions] = useState([]);
+  const [brandSuggestions, setBrandSuggestions] = useState([]);
+
+  const filterSuggestions = (input, list, setSuggestions) => {
+    if (!input) {
+      setSuggestions([]);
+      return;
+    }
+    const filtered = list.filter((item) =>
+      item.toLowerCase().includes(input.toLowerCase())
+    );
+    setSuggestions(filtered);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
       <div className="flex items-center justify-center min-h-full py-8 px-4">
-        <div className="bg-white p-6 rounded w-full max-w-3xl relative overflow-y-auto max-h-[90vh] border border-gray-200 shadow-lg">
+        <div className="bg-white p-6 rounded w-full max-w-3xl relative overflow-y-auto max-h-[90vh] border border-gray-200 shadow-lg z-60">
           <h2 className="text-2xl font-bold mb-4 border-b border-gray-300 pb-2">
             {editProductId ? "Edit Product" : "Upload Single Product"}
           </h2>
@@ -988,14 +1009,32 @@ function SingleProductModal({
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.category}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setNewProductData((prev) => ({
                       ...prev,
                       category: e.target.value
-                    }))
-                  }
+                    }));
+                    filterSuggestions(e.target.value, categories, setCategorySuggestions);
+                  }}
                   required
                 />
+                <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
+                  {categorySuggestions.map((suggestion, index) => (
+                    <div
+                      key={index}
+                      className="p-2 cursor-pointer hover:bg-gray-200"
+                      onClick={() => {
+                        setNewProductData((prev) => ({
+                          ...prev,
+                          category: suggestion
+                        }));
+                        setCategorySuggestions([]);
+                      }}
+                    >
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block font-medium mb-1">Sub Category</label>
@@ -1003,13 +1042,31 @@ function SingleProductModal({
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.subCategory}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setNewProductData((prev) => ({
                       ...prev,
                       subCategory: e.target.value
-                    }))
-                  }
+                    }));
+                    filterSuggestions(e.target.value, subCategories, setSubCategorySuggestions);
+                  }}
                 />
+                <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
+                  {subCategorySuggestions.map((suggestion, index) => (
+                    <div
+                      key={index}
+                      className="p-2 cursor-pointer hover:bg-gray-200"
+                      onClick={() => {
+                        setNewProductData((prev) => ({
+                          ...prev,
+                          subCategory: suggestion
+                        }));
+                        setSubCategorySuggestions([]);
+                      }}
+                    >
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block font-medium mb-1">Variation Hinge</label>
@@ -1046,13 +1103,31 @@ function SingleProductModal({
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
                   value={newProductData.brandName}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setNewProductData((prev) => ({
                       ...prev,
                       brandName: e.target.value
-                    }))
-                  }
+                    }));
+                    filterSuggestions(e.target.value, brands, setBrandSuggestions);
+                  }}
                 />
+                <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
+                  {brandSuggestions.map((suggestion, index) => (
+                    <div
+                      key={index}
+                      className="p-2 cursor-pointer hover:bg-gray-200"
+                      onClick={() => {
+                        setNewProductData((prev) => ({
+                          ...prev,
+                          brandName: suggestion
+                        }));
+                        setBrandSuggestions([]);
+                      }}
+                    >
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Additional Fields */}
@@ -1341,16 +1416,31 @@ function SingleProductModal({
  *  DropdownFilter & FilterItem Components
  * ------------------------------------------------------------------*/
 function DropdownFilter({ label, isOpen, setIsOpen, children }) {
+  const dropdownRef = React.useRef();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [setIsOpen]);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="px-3 py-2 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
+        onClick={() => setIsOpen(!isOpen)}
+        className="px-4 py-2 bg-gray-200 rounded"
       >
         {label}
       </button>
       {isOpen && (
-        <div className="origin-top-left absolute mt-2 w-48 rounded-md shadow-lg bg-white border border-gray-200 z-20 p-2">
+        <div className="absolute z-10 mt-2 w-48 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
           {children}
         </div>
       )}

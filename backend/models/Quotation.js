@@ -9,6 +9,8 @@ const quotationItemSchema = new mongoose.Schema({
   rate: { type: Number, required: true },    // derived from productCost
   amount: { type: Number, required: true },
   gst: { type: Number, required: true },
+  cgst: { type: Number, default: 0 },    // CGST field
+  sgst: { type: Number, default: 0 },    // SGST field
   total: { type: Number, required: true }
 });
 
@@ -29,14 +31,24 @@ const quotationSchema = new mongoose.Schema({
   approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
   margin: { type: Number },
+  gst: { type: Number, required: true }, // GST field
+  cgst: { type: Number, default: 0 },    // CGST field
+  sgst: { type: Number, default: 0 },    // SGST field
   items: [quotationItemSchema],
   createdBy: { type: String },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  
+  // New terms field - dynamic array of headings and content
+  terms: [
+    {
+      heading: { type: String, required: true },
+      content: { type: String, required: true }
+    }
+  ]
 });
 
 quotationSchema.pre("save", async function (next) {
   if (this.isNew) {
-    // auto-generate a simple incremental quotationNumber
     const count = await this.constructor.countDocuments();
     const newNumber = (count + 1).toString().padStart(4, "0");
     this.quotationNumber = newNumber;
