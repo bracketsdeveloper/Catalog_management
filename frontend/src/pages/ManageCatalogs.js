@@ -5,6 +5,8 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 
 const limit = 100;
+const presetMarginOptions = [5, 10, 15, 20];
+const presetGstOptions = [18];
 
 // Optional bag icon
 const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
@@ -18,8 +20,6 @@ export default function CreateManualCatalog() {
   // ----------------------- States -----------------------
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -46,18 +46,12 @@ export default function CreateManualCatalog() {
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
   // Variation modal (multi-add)
-  const [variationModalOpen, setVariationModalOpen] = useState(false);
-  const [variationModalProduct, setVariationModalProduct] = useState(null);
-
-  // Define closeVariationSelector to close the variation modal
-  const closeVariationSelector = () => {
-    setVariationModalOpen(false);
-    setVariationModalProduct(null);
-  };
+  // const [variationModalOpen, setVariationModalOpen] = useState(false);
+  // const [variationModalProduct, setVariationModalProduct] = useState(null);
 
   // Editing a single item in cart
-  const [editIndex, setEditIndex] = useState(null);
-  const [editModalOpen, setEditModalOpen] = useState(false);
+  // const [editIndex, setEditIndex] = useState(null);
+  // const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Advanced Image Search
   const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
@@ -65,9 +59,9 @@ export default function CreateManualCatalog() {
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const imageInputRef = useRef(null);
 
-  // ----------------------- Catalog / Quotation -----------------------
+  // Catalog / Quotation fields
   const [selectedProducts, setSelectedProducts] = useState([]);
-  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
+  // const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const [catalogName, setCatalogName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -75,14 +69,12 @@ export default function CreateManualCatalog() {
   const [customerAddress, setCustomerAddress] = useState("");
 
   // Margin
-  const presetMarginOptions = [5, 10, 15, 20];
   const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
   const [marginOption, setMarginOption] = useState("preset");
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
   const [customMargin, setCustomMargin] = useState("");
 
-  // NEW: GST Field – Dropdown with preset 18% and custom entry
-  const presetGstOptions = [18]; // only 18% preset (can add more if needed)
+  // GST Field
   const [gstOption, setGstOption] = useState("preset");
   const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
   const [customGst, setCustomGst] = useState("");
@@ -91,6 +83,13 @@ export default function CreateManualCatalog() {
   // Cart panel open/close
   const [cartOpen, setCartOpen] = useState(false);
 
+  // Quotation and Catalog edit states
+  const [quotation, setQuotation] = useState(null);
+  const [editableQuotation, setEditableQuotation] = useState(null);
+  const [termModalOpen, setTermModalOpen] = useState(false);
+  const [newTerm, setNewTerm] = useState({ heading: "", content: "" });
+  const [editingTermIdx, setEditingTermIdx] = useState(null);
+
   // ----------------------- useEffects -----------------------
   useEffect(() => {
     fetchFilterOptions();
@@ -98,7 +97,6 @@ export default function CreateManualCatalog() {
 
   useEffect(() => {
     fetchProducts(1);
-    // eslint-disable-next-line
   }, [
     searchTerm,
     selectedCategories,
@@ -114,7 +112,6 @@ export default function CreateManualCatalog() {
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line
   }, [id]);
 
   // ----------------------- Fetch Filter Options -----------------------
@@ -185,7 +182,6 @@ export default function CreateManualCatalog() {
       setCustomerAddress(data.customerAddress || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
 
-      // Margin
       const existingMargin = data.margin || presetMarginOptions[0];
       if (presetMarginOptions.includes(existingMargin)) {
         setMarginOption("preset");
@@ -197,7 +193,6 @@ export default function CreateManualCatalog() {
         setSelectedMargin(existingMargin);
       }
 
-      // GST
       const existingGst = data.gst || presetGstOptions[0];
       if (presetGstOptions.includes(existingGst)) {
         setGstOption("preset");
@@ -281,9 +276,17 @@ export default function CreateManualCatalog() {
   };
 
   // ----------------------- Variation Modal Handlers -----------------------
+  const [variationModalProduct, setVariationModalProduct] = useState(null);
+  const [variationModalOpen, setVariationModalOpen] = useState(false);
+
   const openVariationSelector = (product) => {
     setVariationModalProduct(product);
     setVariationModalOpen(true);
+  };
+
+  const closeVariationSelector = () => {
+    setVariationModalOpen(false);
+    setVariationModalProduct(null);
   };
 
   // ----------------------- Add Items Without Duplicates -----------------------
@@ -296,7 +299,6 @@ export default function CreateManualCatalog() {
     );
   }
 
-  // Single color/size
   const handleAddSingle = (item) => {
     if (isDuplicate(item.productId, item.color, item.size)) {
       alert("This item with the same color & size is already added!");
@@ -305,9 +307,11 @@ export default function CreateManualCatalog() {
     setSelectedProducts((prev) => [...prev, item]);
   };
 
-  // Multi-add from VariationModal
+  // ----------------------- Variation Modal (Multi-Add) Handlers -----------------------
+  // Added handleAddVariations to resolve the undefined error.
   const handleAddVariations = (variations) => {
     if (!variationModalProduct) return;
+    // For each variation, create a new item.
     const newItems = variations.map((v) => {
       let effectiveCost = variationModalProduct.productCost || 0;
       if (selectedMargin > 0) {
@@ -325,22 +329,23 @@ export default function CreateManualCatalog() {
         weight: variationModalProduct.weight || "",
       };
     });
-
+    // Filter out duplicates
     const filtered = newItems.filter(
       (item) => !isDuplicate(item.productId, item.color, item.size)
     );
-
     if (filtered.length < newItems.length) {
       alert("Some variations were duplicates and were not added.");
     }
-
     if (filtered.length > 0) {
       setSelectedProducts((prev) => [...prev, ...filtered]);
     }
     closeVariationSelector();
   };
 
-  // ----------------------- Edit Selected Row -----------------------
+  // ----------------------- Variation Edit Modal Handlers -----------------------
+  const [editIndex, setEditIndex] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+
   const handleEditItem = (index) => {
     setEditIndex(index);
     setEditModalOpen(true);
@@ -349,34 +354,22 @@ export default function CreateManualCatalog() {
   const handleUpdateItem = (updatedItem) => {
     setSelectedProducts((prev) => {
       const newArr = [...prev];
-      const isDup = newArr.some((sp, i) => {
-        if (i === editIndex) return false;
-        return (
-          sp.productId === newArr[editIndex].productId &&
-          (sp.color || "") === (updatedItem.color || "") &&
-          (sp.size || "") === (updatedItem.size || "")
-        );
-      });
-      if (isDup) {
-        alert("This update creates a duplicate. Not updating.");
-        return newArr;
-      }
       newArr[editIndex] = { ...newArr[editIndex], ...updatedItem };
       return newArr;
     });
   };
 
-  // ----------------------- Remove Selected Row -----------------------
   const handleRemoveSelectedRow = (index) => {
     setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
   // ----------------------- Fields to Display -----------------------
+  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const toggleField = (field) => {
     if (fieldsToDisplay.includes(field)) {
-      setFieldsToDisplay((prev) => prev.filter((f) => f !== field));
+      setFieldsToDisplay(fieldsToDisplay.filter((f) => f !== field));
     } else {
-      setFieldsToDisplay((prev) => [...prev, field]);
+      setFieldsToDisplay([...fieldsToDisplay, field]);
     }
   };
 
@@ -407,7 +400,7 @@ export default function CreateManualCatalog() {
       products: productDocs,
       fieldsToDisplay,
       margin: selectedMargin,
-      gst: selectedGst, // Include GST value
+      gst: selectedGst,
     };
 
     try {
@@ -446,7 +439,6 @@ export default function CreateManualCatalog() {
       const baseRate = p.productCost || 0;
       const rate = parseFloat(baseRate.toFixed(2));
       const amount = rate * quantity;
-      // Use the selected GST percentage instead of a hardcoded 18%
       const gstVal = parseFloat((amount * (selectedGst / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
@@ -471,7 +463,7 @@ export default function CreateManualCatalog() {
         customerCompany,
         customerAddress,
         margin: selectedMargin,
-        gst: selectedGst, // Include GST for quotation as well
+        gst: selectedGst,
         items,
       };
       await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
@@ -499,19 +491,20 @@ export default function CreateManualCatalog() {
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
+  // ----------------------- Dropdown Style -----------------------
+  const dropdownStyle = "absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-40 overflow-y-auto";
+
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Top: Catalog name, Margin, GST & Quotation Buttons */}
+      {/* Top: Catalog Name, Margin, GST & Quotation Buttons */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
         <div className="flex flex-wrap items-center gap-4">
-          {/* Margin Selection */}
+          {/* Margin and GST Selections */}
           <div className="flex items-center space-x-2">
-            <label>
-              <b>Select Margin</b>
-            </label>
+            <label className="font-medium text-purple-700">Select Margin</label>
             <select
               value={marginOption === "preset" ? selectedPresetMargin : "custom"}
               onChange={(e) => {
@@ -551,11 +544,8 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
-          {/* GST Selection */}
           <div className="flex items-center space-x-2">
-            <label>
-              <b>Select GST</b>
-            </label>
+            <label className="font-medium text-purple-700">Select GST</label>
             <select
               value={gstOption === "preset" ? selectedPresetGst : "custom"}
               onChange={(e) => {
@@ -595,7 +585,6 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
-          {/* Create / Update Buttons */}
           <button
             onClick={handleSaveCatalog}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -611,99 +600,151 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Catalog Info Form */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Catalog Name *
-          </label>
-          <input
-            type="text"
-            className="border border-purple-300 rounded w-full p-2"
-            value={catalogName}
-            onChange={(e) => setCatalogName(e.target.value)}
-            required
-          />
+      {/* Filter Dropdowns */}
+      <div className="flex flex-wrap gap-4 mb-6">
+        <div className="relative">
+          <button
+            onClick={() => setCategoryOpen(!categoryOpen)}
+            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+          >
+            Categories ({selectedCategories.length})
+          </button>
+          {categoryOpen && (
+            <div className={dropdownStyle}>
+              {fullCategories.map((cat) => (
+                <label
+                  key={cat}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-500"
+                    checked={selectedCategories.includes(cat)}
+                    onChange={() =>
+                      toggleFilter(cat, selectedCategories, setSelectedCategories)
+                    }
+                  />
+                  <span className="truncate">{cat}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Name *
-          </label>
-          <input
-            type="text"
-            className="border border-purple-300 rounded w-full p-2"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            required
-          />
+        <div className="relative">
+          <button
+            onClick={() => setSubCategoryOpen(!subCategoryOpen)}
+            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+          >
+            SubCats ({selectedSubCategories.length})
+          </button>
+          {subCategoryOpen && (
+            <div className={dropdownStyle}>
+              {fullSubCategories.map((subCat) => (
+                <label
+                  key={subCat}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-500"
+                    checked={selectedSubCategories.includes(subCat)}
+                    onChange={() =>
+                      toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
+                    }
+                  />
+                  <span className="truncate">{subCat}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Email
-          </label>
-          <input
-            type="email"
-            className="border border-purple-300 rounded w-full p-2"
-            value={customerEmail}
-            onChange={(e) => setCustomerEmail(e.target.value)}
-          />
+        <div className="relative">
+          <button
+            onClick={() => setBrandOpen(!brandOpen)}
+            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+          >
+            Brands ({selectedBrands.length})
+          </button>
+          {brandOpen && (
+            <div className={dropdownStyle}>
+              {fullBrands.map((brand) => (
+                <label
+                  key={brand}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-500"
+                    checked={selectedBrands.includes(brand)}
+                    onChange={() =>
+                      toggleFilter(brand, selectedBrands, setSelectedBrands)
+                    }
+                  />
+                  <span className="truncate">{brand}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Company
-          </label>
-          <input
-            type="text"
-            className="border border-purple-300 rounded w-full p-2"
-            value={customerCompany}
-            onChange={(e) => setCustomerCompany(e.target.value)}
-          />
+        <div className="relative">
+          <button
+            onClick={() => setPriceRangeOpen(!priceRangeOpen)}
+            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+          >
+            Price Range ({selectedPriceRanges.length})
+          </button>
+          {priceRangeOpen && (
+            <div className={dropdownStyle}>
+              {fullPriceRanges.map((pr) => (
+                <label
+                  key={pr}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-500"
+                    checked={selectedPriceRanges.includes(pr)}
+                    onChange={() =>
+                      toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)
+                    }
+                  />
+                  <span className="truncate">{pr}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Address
-          </label>
-          <input
-            type="text"
-            className="border border-purple-300 rounded w-full p-2"
-            value={customerAddress}
-            onChange={(e) => setCustomerAddress(e.target.value)}
-          />
+        <div className="relative">
+          <button
+            onClick={() => setVariationHingeOpen(!variationHingeOpen)}
+            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+          >
+            Variation Hinge ({selectedVariationHinges.length})
+          </button>
+          {variationHingeOpen && (
+            <div className={dropdownStyle}>
+              {fullVariationHinges.map((vh) => (
+                <label
+                  key={vh}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-500"
+                    checked={selectedVariationHinges.includes(vh)}
+                    onChange={() =>
+                      toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)
+                    }
+                  />
+                  <span className="truncate">{vh}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Fields to Display */}
-      <div className="mb-6">
-        <label className="block mb-2 font-medium text-purple-700">
-          Fields to Display
-        </label>
-        <div className="flex flex-wrap gap-3">
-          {[
-            "images",
-            "name",
-            "category",
-            "subCategory",
-            "brandName",
-            "productCost",
-            "size",
-            "color",
-            "material",
-            "weight",
-          ].map((field) => (
-            <label key={field} className="flex items-center space-x-1 text-sm">
-              <input
-                type="checkbox"
-                checked={fieldsToDisplay.includes(field)}
-                onChange={() => toggleField(field)}
-                className="form-checkbox h-4 w-4 text-purple-600"
-              />
-              <span className="text-gray-900">{field}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Search + Advanced Image Search + Filters */}
+      {/* Search and Advanced Image Search Section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input
@@ -715,10 +756,10 @@ export default function CreateManualCatalog() {
           />
           <button
             onClick={handleImageSearchClick}
-            className="px-3 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 flex items-center"
+            className="ml-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 flex items-center"
           >
             {advancedSearchLoading && (
-              <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin mr-1"></div>
+              <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
             )}
             <span>Search by Image</span>
           </button>
@@ -737,38 +778,6 @@ export default function CreateManualCatalog() {
               Clear Image
             </button>
           )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* Category Filter */}
-          <div className="relative">
-            <button
-              onClick={() => setCategoryOpen(!categoryOpen)}
-              className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-            >
-              Cat ({selectedCategories.length})
-            </button>
-            {categoryOpen && (
-              <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20">
-                {fullCategories.map((cat) => (
-                  <label
-                    key={cat}
-                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                  >
-                    <input
-                      type="checkbox"
-                      className="form-checkbox h-4 w-4 text-purple-500"
-                      checked={selectedCategories.includes(cat)}
-                      onChange={() =>
-                        toggleFilter(cat, selectedCategories, setSelectedCategories)
-                      }
-                    />
-                    <span className="truncate">{cat}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* Additional filters (SubCategory, Brand, etc.) omitted for brevity */}
         </div>
       </div>
 
@@ -1115,7 +1124,9 @@ function VariationModal({ product, closeModal, onSave, selectedMargin }) {
           </button>
           <div className="mt-4 space-y-2">
             {variations.length === 0 && (
-              <p className="text-red-500 text-sm font-semibold">Add product to save</p>
+              <p className="text-gray-500 text-sm font-semibold">
+                No extra variations added.
+              </p>
             )}
             {variations.map((line, idx) => (
               <div key={idx} className="flex items-center justify-between border p-2 rounded">
@@ -1157,6 +1168,7 @@ function VariationModal({ product, closeModal, onSave, selectedMargin }) {
   );
 }
 
+// ----------------------- VARIATION EDIT MODAL -----------------------
 function VariationEditModal({ item, margin, onClose, onUpdate }) {
   const [color, setColor] = useState(item.color || "");
   const [size, setSize] = useState(item.size || "");
@@ -1231,5 +1243,34 @@ function VariationEditModal({ item, margin, onClose, onUpdate }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ----------------------- EDITABLE CELL -----------------------
+function EditableCell({ value, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [currentValue, setCurrentValue] = useState(value);
+
+  useEffect(() => {
+    setCurrentValue(value);
+  }, [value]);
+
+  const handleDoubleClick = () => setEditing(true);
+  const handleBlur = () => {
+    setEditing(false);
+    onSave(currentValue);
+  };
+
+  return editing ? (
+    <input
+      type="text"
+      className="border p-1 rounded"
+      autoFocus
+      value={currentValue}
+      onChange={(e) => setCurrentValue(e.target.value)}
+      onBlur={handleBlur}
+    />
+  ) : (
+    <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
   );
 }
