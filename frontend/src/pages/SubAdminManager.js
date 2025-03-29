@@ -33,6 +33,8 @@ export default function SubAdminManager() {
     "review-catalog",
     "manage-catalog",
     "viewers-manager",
+    "manage-jobsheets",
+    "manage-companies"
   ];
 
   useEffect(() => {
