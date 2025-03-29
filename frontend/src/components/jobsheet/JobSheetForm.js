@@ -4,7 +4,6 @@ import { format, parse } from "date-fns";
 import UserSuggestionInput from "./UserSuggestionInput";
 import PurchaseOrderSuggestionInput from "./PurchaseOrderSuggestionInput";
 import QuotationSuggestionInput from "./QuotationSuggestionInput";
-
 import "react-datepicker/dist/react-datepicker.css";
 
 const JobSheetForm = ({
@@ -54,12 +53,16 @@ const JobSheetForm = ({
   handleEditItem,
   brandingTypeOptions = ["Screen Printing", "Embroidery", "Heat Transfer", "Patch", "Digital Printing", "Other"]
 }) => {
+  // For delivery addresses
   const [addresses, setAddresses] = useState(
     deliveryAddress?.length ? [...deliveryAddress] : [""]
   );
 
-  // Delivery options
-  const deliveryModeOptions = ["Surface", "Air", "Other"];
+  // New states for custom delivery text inputs
+  const [customDeliveryType, setCustomDeliveryType] = useState("");
+  const [customDeliveryMode, setCustomDeliveryMode] = useState("");
+
+  // Delivery options arrays
   const deliveryTypeOptions = [
     "Single office delivery",
     "Multiple office delivery",
@@ -67,6 +70,7 @@ const JobSheetForm = ({
     "Mixed",
     "Others"
   ];
+  const deliveryModeOptions = ["Surface", "Air", "Other"];
   const deliveryChargesOptions = ["Included in cost", "Additional at actual"];
 
   // Convert string dates to Date objects for react-datepicker
@@ -323,7 +327,7 @@ const JobSheetForm = ({
         </div>
       )}
 
-      {/* Row 6: Delivery Type, Mode, Charges */}
+      {/* Row 6: Delivery Type, Delivery Mode, and Delivery Charges */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -342,6 +346,15 @@ const JobSheetForm = ({
               </option>
             ))}
           </select>
+          {deliveryType === "Others" && (
+            <input
+              type="text"
+              className="border border-purple-300 rounded w-full p-2 mt-2"
+              placeholder="Enter other delivery type"
+              value={customDeliveryType}
+              onChange={(e) => setCustomDeliveryType(e.target.value)}
+            />
+          )}
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -360,6 +373,15 @@ const JobSheetForm = ({
               </option>
             ))}
           </select>
+          {deliveryMode === "Other" && (
+            <input
+              type="text"
+              className="border border-purple-300 rounded w-full p-2 mt-2"
+              placeholder="Enter other delivery mode"
+              value={customDeliveryMode}
+              onChange={(e) => setCustomDeliveryMode(e.target.value)}
+            />
+          )}
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">
