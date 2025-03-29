@@ -54,7 +54,9 @@ const JobSheetForm = ({
   handleEditItem,
   brandingTypeOptions = ["Screen Printing", "Embroidery", "Heat Transfer", "Patch", "Digital Printing", "Other"]
 }) => {
-  const [addresses, setAddresses] = useState(deliveryAddress?.length ? [...deliveryAddress] : ['']);
+  const [addresses, setAddresses] = useState(
+    deliveryAddress?.length ? [...deliveryAddress] : [""]
+  );
 
   // Delivery options
   const deliveryModeOptions = ["Surface", "Air", "Other"];
@@ -82,20 +84,20 @@ const JobSheetForm = ({
   };
 
   const handleAddAddress = () => {
-    setAddresses([...addresses, '']);
+    setAddresses([...addresses, ""]);
   };
 
   const handleAddressChange = (index, value) => {
     const newAddresses = [...addresses];
     newAddresses[index] = value;
     setAddresses(newAddresses);
-    setDeliveryAddress(newAddresses.filter(addr => addr.trim() !== ''));
+    setDeliveryAddress(newAddresses.filter((addr) => addr.trim() !== ""));
   };
 
   const handleRemoveAddress = (index) => {
     const newAddresses = addresses.filter((_, i) => i !== index);
     setAddresses(newAddresses);
-    setDeliveryAddress(newAddresses.filter(addr => addr.trim() !== ''));
+    setDeliveryAddress(newAddresses.filter((addr) => addr.trim() !== ""));
   };
 
   const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
@@ -180,8 +182,8 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 3: Event Name and Order Date */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Row 3: Event Name, Order Date, and CRM Incharge */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Event Name *
@@ -205,6 +207,17 @@ const JobSheetForm = ({
             customInput={<CustomDateInput />}
             required
             placeholderText="DD/MM/YYYY"
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            CRM Incharge *
+          </label>
+          <UserSuggestionInput
+            value={crmIncharge}
+            onChange={setCrmIncharge}
+            placeholder="Select CRM Incharge"
+            required
           />
         </div>
       </div>
@@ -397,7 +410,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 8: Delivery Address (multiple) */}
+      {/* Row 8: Delivery Addresses */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Delivery Addresses
