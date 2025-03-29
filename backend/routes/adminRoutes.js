@@ -168,12 +168,19 @@ async function computeAllHashes(imageUrls) {
 
 // POST /api/admin/products - Create a single product (with hash computation)
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
-  console.log("Incoming request body:", req.body);
   try {
-    const images = req.body.images || [];
-    console.log("Images received:", images);
+    const { images = [] } = req.body;
+    
+    // Validate required fields
+    if (!req.body.productTag || !req.body.productId || !req.body.category || !req.body.name) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Missing required fields" 
+      });
+    }
 
-    const imageHashes = await computeAllHashes(images);
+    // Compute image hashes only if images are provided
+    const imageHashes = images.length > 0 ? await computeAllHashes(images) : [];
 
     const newProduct = new Product({
       productTag: req.body.productTag,
@@ -184,12 +191,12 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge || "",
       name: req.body.name,
       brandName: req.body.brandName || "",
-      images,
+      images: images.filter(img => typeof img === 'string' && img.trim() !== ''),
       imageHashes,
       productDetails: req.body.productDetails || "",
-      qty: req.body.qty || 0,
+      qty: Number(req.body.qty) || 0,
       MRP_Currency: req.body.MRP_Currency || "",
-      MRP: req.body.MRP || 0,
+      MRP: Number(req.body.MRP) || 0,
       MRP_Unit: req.body.MRP_Unit || "",
       deliveryTime: req.body.deliveryTime || "",
       size: req.body.size || "",
@@ -199,59 +206,103 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       weight: req.body.weight || "",
       hsnCode: req.body.hsnCode || "",
       productCost_Currency: req.body.productCost_Currency || "",
-      productCost: req.body.productCost || 0,
+      productCost: Number(req.body.productCost) || 0,
       productCost_Unit: req.body.productCost_Unit || ""
     });
+
     await newProduct.save();
-    res.status(201).json({ message: "Product created successfully", product: newProduct });
+    
+    res.status(201).json({ 
+      success: true,
+      message: "Product created successfully",
+      product: newProduct 
+    });
   } catch (error) {
     console.error("Error creating product:", error);
-    res.status(500).json({ message: "Server error creating product" });
+    if (error.code === 11000) {
+      res.status(400).json({ 
+        success: false,
+        message: "Product ID must be unique" 
+      });
+    } else {
+      res.status(500).json({ 
+        success: false,
+        message: "Server error creating product",
+        error: error.message 
+      });
+    }
   }
 });
+
 
 // PUT /api/admin/products/:id - Update a single product (with hash computation)
 router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
-  console.log("Incoming request body for update:", req.body);
   try {
-    const images = req.body.images || [];
-    const imageHashes = await computeAllHashes(images);
+    const { id } = req.params;
+    const { images = [] } = req.body;
+
+    // Find existing product
+    const existingProduct = await Product.findById(id);
+    if (!existingProduct) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Product not found" 
+      });
+    }
+
+    // Only compute hashes if images were changed
+    const imageHashes = JSON.stringify(images) !== JSON.stringify(existingProduct.images)
+      ? await computeAllHashes(images)
+      : existingProduct.imageHashes;
 
     const updatedData = {
-      productTag: req.body.productTag,
-      productId: req.body.productId,
-      variantId: req.body.variantId,
-      category: req.body.category,
-      subCategory: req.body.subCategory,
-      variationHinge: req.body.variationHinge,
-      name: req.body.name,
-      brandName: req.body.brandName,
-      images,
+      productTag: req.body.productTag || existingProduct.productTag,
+      productId: req.body.productId || existingProduct.productId,
+      variantId: req.body.variantId || existingProduct.variantId,
+      category: req.body.category || existingProduct.category,
+      subCategory: req.body.subCategory || existingProduct.subCategory,
+      variationHinge: req.body.variationHinge || existingProduct.variationHinge,
+      name: req.body.name || existingProduct.name,
+      brandName: req.body.brandName || existingProduct.brandName,
+      images: images.filter(img => typeof img === 'string' && img.trim() !== ''),
       imageHashes,
-      productDetails: req.body.productDetails,
-      qty: req.body.qty,
-      MRP_Currency: req.body.MRP_Currency,
-      MRP: req.body.MRP,
-      MRP_Unit: req.body.MRP_Unit,
-      deliveryTime: req.body.deliveryTime,
-      size: req.body.size,
-      color: req.body.color,
-      material: req.body.material,
-      priceRange: req.body.priceRange,
-      weight: req.body.weight,
-      hsnCode: req.body.hsnCode,
-      productCost_Currency: req.body.productCost_Currency,
-      productCost: req.body.productCost,
-      productCost_Unit: req.body.productCost_Unit
+      productDetails: req.body.productDetails || existingProduct.productDetails,
+      qty: Number(req.body.qty) || existingProduct.qty,
+      MRP_Currency: req.body.MRP_Currency || existingProduct.MRP_Currency,
+      MRP: Number(req.body.MRP) || existingProduct.MRP,
+      MRP_Unit: req.body.MRP_Unit || existingProduct.MRP_Unit,
+      deliveryTime: req.body.deliveryTime || existingProduct.deliveryTime,
+      size: req.body.size || existingProduct.size,
+      color: req.body.color || existingProduct.color,
+      material: req.body.material || existingProduct.material,
+      priceRange: req.body.priceRange || existingProduct.priceRange,
+      weight: req.body.weight || existingProduct.weight,
+      hsnCode: req.body.hsnCode || existingProduct.hsnCode,
+      productCost_Currency: req.body.productCost_Currency || existingProduct.productCost_Currency,
+      productCost: Number(req.body.productCost) || existingProduct.productCost,
+      productCost_Unit: req.body.productCost_Unit || existingProduct.productCost_Unit
     };
 
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updatedData, { new: true });
-    res.status(200).json({ message: "Product updated successfully", product: updatedProduct });
+    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { 
+      new: true,
+      runValidators: true 
+    });
+
+    res.status(200).json({ 
+      success: true,
+      message: "Product updated successfully",
+      product: updatedProduct 
+    });
   } catch (error) {
     console.error("Error updating product:", error);
-    res.status(500).json({ message: "Server error updating product" });
+    res.status(500).json({ 
+      success: false,
+      message: "Server error updating product",
+      error: error.message 
+    });
   }
 });
+
 
 // DELETE /api/admin/products/:id - Delete a product
 router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) => {

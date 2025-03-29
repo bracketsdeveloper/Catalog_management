@@ -271,38 +271,25 @@
     const handleFileChange = async (e) => {
       const files = Array.from(e.target.files);
       const newImages = [];
-      
-      try {
-        for (const file of files) {
-          const formData = new FormData();
-          formData.append('image', file);
-          
-          const response = await axios.post(`${BACKEND_URL}/api/upload`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            },
-            onUploadProgress: (progressEvent) => {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setUploadProgress(percentCompleted);
-            }
-          });
-    
-          if (response.data.url) {
-            newImages.push(response.data.url);
+      for (const file of files) {
+        try {
+          const uploadedImage = await uploadImage(file);
+          console.log("Uploaded image response:", uploadedImage);
+          if (uploadedImage && uploadedImage.secure_url) {
+            newImages.push(uploadedImage.secure_url);
+          } else {
+            console.error("Image upload failed:", uploadedImage);
           }
+        } catch (error) {
+          console.error("Error during image upload:", error);
         }
-    
-        setNewProductData(prev => ({
-          ...prev,
-          images: [...prev.images, ...newImages]
-        }));
-      } catch (error) {
-        console.error('Upload failed:', error);
-        alert('Image upload failed');
       }
+      // Update the product data state with the new image URLs
+      setNewProductData((prev) => {
+        const updatedImages = [...prev.images, ...newImages];
+        console.log("Updated images array:", updatedImages);
+        return { ...prev, images: updatedImages };
+      });
     };
     
     const handleDeleteProduct = async (id) => {
