@@ -1,8 +1,12 @@
-// ../components/jobsheet/JobSheetForm.js
-import React from "react";
+import React, { useState } from "react";
+import DatePicker from "react-datepicker";
+import { format, parse } from "date-fns";
 import UserSuggestionInput from "./UserSuggestionInput";
 import PurchaseOrderSuggestionInput from "./PurchaseOrderSuggestionInput";
 import QuotationSuggestionInput from "./QuotationSuggestionInput";
+
+// Import the date picker CSS
+import "react-datepicker/dist/react-datepicker.css";
 
 const JobSheetForm = ({
   orderDate,
@@ -27,7 +31,7 @@ const JobSheetForm = ({
   setDeliveryMode,
   deliveryCharges,
   setDeliveryCharges,
-  deliveryAddress,
+  deliveryAddress = [],
   setDeliveryAddress,
   giftBoxBagsDetails,
   setGiftBoxBagsDetails,
@@ -37,30 +41,68 @@ const JobSheetForm = ({
   setOtherDetails,
   referenceQuotation,
   setReferenceQuotation,
-  handleQuotationSelect, // NEW: callback when a quotation is selected
+  handleQuotationSelect,
+  eventName,
+  setEventName,
   companies,
   dropdownOpen,
   setDropdownOpen,
   handleCompanySelect,
-  handleOpenCompanyModal
+  handleOpenCompanyModal,
+  selectedItems,
+  handleInlineUpdate,
+  handleRemoveSelectedItem,
+  handleEditItem,
+  brandingTypeOptions = ["Screen Printing", "Embroidery", "Heat Transfer", "Patch", "Digital Printing", "Other"]
 }) => {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      {/* Order Date */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Order Date *
-        </label>
-        <input
-          type="date"
-          className="border border-purple-300 rounded w-full p-2"
-          value={orderDate}
-          onChange={(e) => setOrderDate(e.target.value)}
-          required
-        />
-      </div>
+  const [addresses, setAddresses] = useState(deliveryAddress?.length ? [...deliveryAddress] : ['']);
 
-      {/* Client Company */}
+  // Convert string dates to Date objects for react-datepicker
+  const orderDateObj = orderDate ? parse(orderDate, "yyyy-MM-dd", new Date()) : null;
+  const deliveryDateObj = deliveryDate ? parse(deliveryDate, "yyyy-MM-dd", new Date()) : null;
+
+  const handleOrderDateChange = (date) => {
+    const formattedDate = date ? format(date, "yyyy-MM-dd") : "";
+    setOrderDate(formattedDate);
+  };
+
+  const handleDeliveryDateChange = (date) => {
+    const formattedDate = date ? format(date, "yyyy-MM-dd") : "";
+    setDeliveryDate(formattedDate);
+  };
+
+  const handleAddAddress = () => {
+    setAddresses([...addresses, '']);
+  };
+
+  const handleAddressChange = (index, value) => {
+    const newAddresses = [...addresses];
+    newAddresses[index] = value;
+    setAddresses(newAddresses);
+    setDeliveryAddress(newAddresses.filter(addr => addr.trim() !== ''));
+  };
+
+  const handleRemoveAddress = (index) => {
+    const newAddresses = addresses.filter((_, i) => i !== index);
+    setAddresses(newAddresses);
+    setDeliveryAddress(newAddresses.filter(addr => addr.trim() !== ''));
+  };
+
+  // Custom input component to ensure proper styling
+  const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
+    <input
+      className="border border-purple-300 rounded w-full p-2"
+      onClick={onClick}
+      ref={ref}
+      value={value}
+      readOnly
+      placeholder="DD/MM/YYYY"
+    />
+  ));
+
+  return (
+    <div className="space-y-4 mb-6">
+      {/* Row 1: Client Company (full width) */}
       <div className="relative">
         <label className="block mb-1 font-medium text-purple-700">
           Client Company *
@@ -102,169 +144,289 @@ const JobSheetForm = ({
         )}
       </div>
 
-      {/* Client Name (auto-filled from company model) */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Client Name *
-        </label>
-        <input
-          type="text"
-          readOnly
-          className="border border-purple-300 rounded w-full p-2 bg-gray-100"
-          value={clientName}
-          placeholder="Auto-filled from company"
-        />
+      {/* Row 2: Client Name and Contact Number */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Client Name *
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Contact Number
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={contactNumber}
+            onChange={(e) => setContactNumber(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* Contact Number (auto-filled from company model) */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Contact Number
-        </label>
-        <input
-          type="text"
-          readOnly
-          className="border border-purple-300 rounded w-full p-2 bg-gray-100"
-          value={contactNumber}
-          placeholder="Auto-filled from company"
-        />
+      {/* Row 3: Event Name and Order Date */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Event Name *
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={eventName}
+            onChange={(e) => setEventName(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Order Date *
+          </label>
+          <DatePicker
+            selected={orderDateObj}
+            onChange={handleOrderDateChange}
+            dateFormat="dd/MM/yyyy"
+            customInput={<CustomDateInput />}
+            required
+            placeholderText="DD/MM/YYYY"
+          />
+        </div>
       </div>
 
-      {/* Delivery Date */}
-      <div>
+      {/* Row 4: Reference Quotation (30% width) */}
+      <div className="w-full md:w-1/3">
         <label className="block mb-1 font-medium text-purple-700">
-          Delivery Date *
+          Reference Quotation
         </label>
-        <input
-          type="date"
-          className="border border-purple-300 rounded w-full p-2"
-          value={deliveryDate}
-          onChange={(e) => setDeliveryDate(e.target.value)}
-          required
-        />
-      </div>
-
-      {/* Delivery Time */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Delivery Time
-        </label>
-        <input
-          type="text"
-          placeholder="e.g. 2:00 PM"
-          className="border border-purple-300 rounded w-full p-2"
-          value={deliveryTime}
-          onChange={(e) => setDeliveryTime(e.target.value)}
-        />
-      </div>
-
-      {/* CRM Incharge using ERP suggestion */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          CRM Incharge
-        </label>
-        <UserSuggestionInput
-          value={crmIncharge}
-          onChange={setCrmIncharge}
-          placeholder="Enter CRM Incharge"
+        <QuotationSuggestionInput
+          value={referenceQuotation}
+          onChange={setReferenceQuotation}
+          placeholder="Enter Reference Quotation"
           label=""
-          onUserSelect={() => {
-            // No extra action required.
-          }}
+          onSelect={handleQuotationSelect}
         />
       </div>
 
-      {/* PO Number using ERP suggestion for Purchase Orders */}
+      {/* Row 5: Products Table */}
+      {referenceQuotation && selectedItems.length > 0 && (
+        <div className="mt-4">
+          <h3 className="font-medium text-purple-700 mb-2">Products</h3>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sourcing From</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branding Type</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branding Vendor</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {selectedItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.product}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.color || "-"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.size || "-"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-16 border rounded p-1"
+                        value={item.quantity}
+                        onChange={(e) => handleInlineUpdate(idx, "quantity", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      <input
+                        type="text"
+                        className="border rounded p-1 w-full"
+                        value={item.sourcingFrom || ""}
+                        onChange={(e) => handleInlineUpdate(idx, "sourcingFrom", e.target.value)}
+                        placeholder="Enter sourcing"
+                      />
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      <select
+                        className="border rounded p-1 w-full"
+                        value={item.brandingType || ""}
+                        onChange={(e) => handleInlineUpdate(idx, "brandingType", e.target.value)}
+                      >
+                        <option value="">Select Branding Type</option>
+                        {brandingTypeOptions.map((option, index) => (
+                          <option key={index} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      <input
+                        type="text"
+                        className="border rounded p-1 w-full"
+                        value={item.brandingVendor || ""}
+                        onChange={(e) => handleInlineUpdate(idx, "brandingVendor", e.target.value)}
+                        placeholder="Enter Vendor"
+                      />
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      <button
+                        onClick={() => handleEditItem(idx)}
+                        className="text-blue-600 hover:text-blue-900 mr-2"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleRemoveSelectedItem(idx)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Row 6: Delivery Type, Mode, Charges */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Delivery Type
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. Standard, Express"
+            className="border border-purple-300 rounded w-full p-2"
+            value={deliveryType}
+            onChange={(e) => setDeliveryType(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Delivery Mode
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. Courier, Self-delivery"
+            className="border border-purple-300 rounded w-full p-2"
+            value={deliveryMode}
+            onChange={(e) => setDeliveryMode(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Delivery Charges
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={deliveryCharges}
+            onChange={(e) => setDeliveryCharges(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Row 7: Delivery Date and Time */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Delivery Date *
+          </label>
+          <DatePicker
+            selected={deliveryDateObj}
+            onChange={handleDeliveryDateChange}
+            dateFormat="dd/MM/yyyy"
+            customInput={<CustomDateInput />}
+            required
+            placeholderText="DD/MM/YYYY"
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Delivery Time
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={deliveryTime}
+            onChange={(e) => setDeliveryTime(e.target.value)}
+            placeholder="e.g. 10:00 AM"
+          />
+        </div>
+      </div>
+
+      {/* Row 8: Delivery Address (multiple) */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
-          PO Number
+          Delivery Addresses
         </label>
-        <PurchaseOrderSuggestionInput
-          value={poNumber}
-          onChange={setPoNumber}
-          placeholder="Enter PO Number"
-          label=""
-        />
+        {addresses.map((address, index) => (
+          <div key={index} className="flex items-center mb-2">
+            <textarea
+              className="border border-purple-300 rounded w-full p-2"
+              value={address}
+              onChange={(e) => handleAddressChange(index, e.target.value)}
+              placeholder={`Address ${index + 1}`}
+            />
+            {index > 0 && (
+              <button
+                type="button"
+                onClick={() => handleRemoveAddress(index)}
+                className="ml-2 text-red-600 hover:text-red-800"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={handleAddAddress}
+          className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+        >
+          + Add Another Address
+        </button>
       </div>
 
-      {/* Delivery Type */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Delivery Type
-        </label>
-        <input
-          type="text"
-          placeholder="e.g. Standard, Express"
-          className="border border-purple-300 rounded w-full p-2"
-          value={deliveryType}
-          onChange={(e) => setDeliveryType(e.target.value)}
-        />
+      {/* Row 9: Gift Box/Bags Details and Packaging Instructions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Gift Box/Bags Details
+          </label>
+          <textarea
+            className="border border-purple-300 rounded w-full p-2"
+            value={giftBoxBagsDetails}
+            onChange={(e) => setGiftBoxBagsDetails(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Packaging Instructions
+          </label>
+          <textarea
+            className="border border-purple-300 rounded w-full p-2"
+            value={packagingInstructions}
+            onChange={(e) => setPackagingInstructions(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* Delivery Mode */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Delivery Mode
-        </label>
-        <input
-          type="text"
-          placeholder="e.g. Courier, Self-delivery"
-          className="border border-purple-300 rounded w-full p-2"
-          value={deliveryMode}
-          onChange={(e) => setDeliveryMode(e.target.value)}
-        />
-      </div>
-
-      {/* Delivery Charges */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Delivery Charges
-        </label>
-        <input
-          type="text"
-          className="border border-purple-300 rounded w-full p-2"
-          value={deliveryCharges}
-          onChange={(e) => setDeliveryCharges(e.target.value)}
-        />
-      </div>
-
-      {/* Delivery Address */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Delivery Address
-        </label>
-        <textarea
-          className="border border-purple-300 rounded w-full p-2"
-          value={deliveryAddress}
-          onChange={(e) => setDeliveryAddress(e.target.value)}
-        />
-      </div>
-
-      {/* Gift Box/Bags Details */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Gift Box/Bags Details
-        </label>
-        <textarea
-          className="border border-purple-300 rounded w-full p-2"
-          value={giftBoxBagsDetails}
-          onChange={(e) => setGiftBoxBagsDetails(e.target.value)}
-        />
-      </div>
-
-      {/* Packaging Instructions */}
-      <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Packaging Instructions
-        </label>
-        <textarea
-          className="border border-purple-300 rounded w-full p-2"
-          value={packagingInstructions}
-          onChange={(e) => setPackagingInstructions(e.target.value)}
-        />
-      </div>
-
-      {/* Other Details */}
+      {/* Row 10: Other Details */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Other Details
@@ -275,8 +437,6 @@ const JobSheetForm = ({
           onChange={(e) => setOtherDetails(e.target.value)}
         />
       </div>
-
-      
     </div>
   );
 };

@@ -7,7 +7,7 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      eventName, // NEW: eventName field
+      eventName,
       orderDate,
       clientCompanyName,
       clientName,
@@ -20,7 +20,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryType,
       deliveryMode,
       deliveryCharges,
-      deliveryAddress,
+      deliveryAddress = [], // Now accepts array
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
@@ -31,8 +31,13 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(400).json({ message: "Missing required fields or no items provided" });
     }
 
+    // Filter out empty addresses if any
+    const filteredAddresses = Array.isArray(deliveryAddress) 
+      ? deliveryAddress.filter(addr => addr.trim() !== '')
+      : [];
+
     const newJobSheet = new JobSheet({
-      eventName, // NEW: include eventName
+      eventName,
       orderDate,
       clientCompanyName,
       clientName,
@@ -45,7 +50,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryType,
       deliveryMode,
       deliveryCharges,
-      deliveryAddress,
+      deliveryAddress: filteredAddresses, // Store as array
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
@@ -89,6 +94,11 @@ router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
 // Update a job sheet
 router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    // Filter out empty addresses if any
+    if (Array.isArray(req.body.deliveryAddress)) {
+      req.body.deliveryAddress = req.body.deliveryAddress.filter(addr => addr.trim() !== '');
+    }
+
     const updatedJobSheet = await JobSheet.findByIdAndUpdate(
       req.params.id,
       req.body,

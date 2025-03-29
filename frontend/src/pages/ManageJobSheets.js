@@ -4,6 +4,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import DatePicker from "react-datepicker";
+import { format, parse } from "date-fns";
+import "react-datepicker/dist/react-datepicker.css";
 
 export default function ManageJobSheets() {
   const navigate = useNavigate();
@@ -21,7 +24,7 @@ export default function ManageJobSheets() {
   const [referenceQuotation, setReferenceQuotation] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [createOption, setCreateOption] = useState(null); // "new" or "existing"
+  const [createOption, setCreateOption] = useState(null);
 
   useEffect(() => {
     fetchJobSheets();
@@ -50,7 +53,6 @@ export default function ManageJobSheets() {
       await axios.delete(`${BACKEND_URL}/api/admin/jobsheets/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Refresh the list after deletion
       fetchJobSheets();
     } catch (err) {
       console.error("Error deleting job sheet:", err);
@@ -58,12 +60,10 @@ export default function ManageJobSheets() {
     }
   }
 
-  // Filter job sheets based on filters.
   const filteredJobSheets = jobSheets.filter((js) => {
-    // Assume each job sheet has a createdAt, eventName, and referenceQuotation field.
     const createdAt = new Date(js.createdAt);
-    const from = fromDate ? new Date(fromDate) : null;
-    const to = toDate ? new Date(toDate) : null;
+    const from = fromDate ? parse(fromDate, "yyyy-MM-dd", new Date()) : null;
+    const to = toDate ? parse(toDate, "yyyy-MM-dd", new Date()) : null;
     const companyMatch = company
       ? js.clientCompanyName?.toLowerCase().includes(company.toLowerCase())
       : true;
@@ -80,21 +80,26 @@ export default function ManageJobSheets() {
     return companyMatch && eventMatch && refMatch && dateMatch;
   });
 
-  // Export filtered (or all) job sheets to Excel with the specified fields.
   const exportToExcel = () => {
     const exportData = [];
     let serial = 1;
     
     filteredJobSheets.forEach((js) => {
+      console.log("Job Sheet:", js); // Log the entire job sheet object
+      console.log("Delivery Date:", js.deliveryDate); // Log the delivery date
+
+      const deliveryDateFormatted = js.deliveryDate && isValidDate(new Date(js.deliveryDate)) 
+        ? format(new Date(js.deliveryDate), "dd/MM/yyyy") 
+        : 'Invalid date';
+
       if (js.items && js.items.length > 0) {
-        // Produce one row per item.
         js.items.forEach((item) => {
           exportData.push({
             "Sl. No": serial++,
             "Job Sheet Number": js.jobSheetNumber || "",
             "Opportunity Name": js.eventName || "",
             "Client Name": js.clientName || "",
-            "Client Delivery Date": js.deliveryDate ? new Date(js.deliveryDate).toLocaleDateString() : "",
+            "Client Delivery Date": deliveryDateFormatted,
             "CRM": js.crmIncharge || "",
             "Material Particulars": item.product || "",
             "Quantity": item.quantity || "",
@@ -116,13 +121,12 @@ export default function ManageJobSheets() {
           });
         });
       } else {
-        // If there are no items, produce a row with blank item fields.
         exportData.push({
           "Sl. No": serial++,
           "Job Sheet Number": js.jobSheetNumber || "",
           "Opportunity Name": js.eventName || "",
           "Client Name": js.clientName || "",
-          "Client Delivery Date": js.deliveryDate ? new Date(js.deliveryDate).toLocaleDateString() : "",
+          "Client Delivery Date": deliveryDateFormatted,
           "CRM": js.crmIncharge || "",
           "Material Particulars": "",
           "Quantity": "",
@@ -151,6 +155,10 @@ export default function ManageJobSheets() {
     XLSX.writeFile(workbook, "JobSheets.xlsx");
   };
 
+  const isValidDate = (date) => {
+    return date instanceof Date && !isNaN(date);
+  };
+
   return (
     <div className="p-6">
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-4 md:space-y-0">
@@ -171,26 +179,27 @@ export default function ManageJobSheets() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="mb-4 p-4 border rounded">
         <h2 className="font-bold mb-2">Filters</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium">From Date (Created At)</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+            <DatePicker
+              selected={fromDate ? parse(fromDate, "yyyy-MM-dd", new Date()) : null}
+              onChange={(date) => setFromDate(date ? format(date, "yyyy-MM-dd") : "")}
+              dateFormat="dd/MM/yyyy"
               className="border p-2 rounded w-full"
+              placeholderText="DD/MM/YYYY"
             />
           </div>
           <div>
             <label className="block text-sm font-medium">To Date (Created At)</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+            <DatePicker
+              selected={toDate ? parse(toDate, "yyyy-MM-dd", new Date()) : null}
+              onChange={(date) => setToDate(date ? format(date, "yyyy-MM-dd") : "")}
+              dateFormat="dd/MM/yyyy"
               className="border p-2 rounded w-full"
+              placeholderText="DD/MM/YYYY"
             />
           </div>
           <div>
@@ -262,8 +271,16 @@ export default function ManageJobSheets() {
                 <td className="p-2">{js.jobSheetNumber}</td>
                 <td className="p-2">{js.clientName}</td>
                 <td className="p-2">{js.clientCompanyName}</td>
-                <td className="p-2">{new Date(js.orderDate).toLocaleDateString()}</td>
-                <td className="p-2">{new Date(js.deliveryDate).toLocaleDateString()}</td>
+                <td className="p-2">
+                  {js.orderDate && isValidDate(new Date(js.orderDate)) 
+                    ? format(new Date(js.orderDate), "dd/MM/yyyy") 
+                    : 'Invalid date'}
+                </td>
+                <td className="p-2">
+                  {js.deliveryDate && isValidDate(new Date(js.deliveryDate)) 
+                    ? format(new Date(js.deliveryDate), "dd/MM/yyyy") 
+                    : 'Invalid date'}
+                </td>
                 <td className="p-2 space-x-2">
                   <button 
                     onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
@@ -309,7 +326,7 @@ export default function ManageJobSheets() {
 }
 
 function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BACKEND_URL }) {
-  const [option, setOption] = useState(null); // "new" or "existing"
+  const [option, setOption] = useState(null);
   const [formData, setFormData] = useState({
     orderDate: "",
     clientCompanyName: "",
@@ -333,7 +350,6 @@ function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BAC
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    // Validate required fields
     if (!formData.orderDate || !formData.clientCompanyName || !formData.clientName || !formData.deliveryDate) {
       setError("Please fill in all required fields.");
       return;
@@ -369,15 +385,7 @@ function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BAC
               >
                 Create a New Jobsheet
               </button>
-              <button
-                onClick={() => {
-                  onSelectOption("existing");
-                  navigate("/admin-dashboard/create-jobsheet-from-quotation");
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-              >
-                Create Jobsheet from Existing Quotation
-              </button>
+                
             </div>
             <div className="mt-4 flex justify-end">
               <button onClick={onClose} className="px-4 py-2 border rounded">
@@ -393,20 +401,22 @@ function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BAC
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium">Order Date *</label>
-                <input
-                  type="date"
-                  value={formData.orderDate}
-                  onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
+                <DatePicker
+                  selected={formData.orderDate ? parse(formData.orderDate, "yyyy-MM-dd", new Date()) : null}
+                  onChange={(date) => setFormData({ ...formData, orderDate: date ? format(date, "yyyy-MM-dd") : "" })}
+                  dateFormat="dd/MM/yyyy"
                   className="border p-2 rounded w-full"
+                  placeholderText="DD/MM/YYYY"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium">Delivery Date *</label>
-                <input
-                  type="date"
-                  value={formData.deliveryDate}
-                  onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
+                <DatePicker
+                  selected={formData.deliveryDate ? parse(formData.deliveryDate, "yyyy-MM-dd", new Date()) : null}
+                  onChange={(date) => setFormData({ ...formData, deliveryDate: date ? format(date, "yyyy-MM-dd") : "" })}
+                  dateFormat="dd/MM/yyyy"
                   className="border p-2 rounded w-full"
+                  placeholderText="DD/MM/YYYY"
                 />
               </div>
               <div>

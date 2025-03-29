@@ -8,8 +8,7 @@ import ProductGrid from "../components/jobsheet/ProductGrid";
 import JobSheetCart from "../components/jobsheet/JobSheetCart";
 import JobSheetItemEditModal from "../components/jobsheet/JobSheetItemEditModal";
 import VariationModal from "../components/jobsheet/VariationModal";
-import CompanyModal from "../components/CompanyModal"; // Existing component
-import QuotationSuggestionInput from "../components/jobsheet/QuotationSuggestionInput";
+import CompanyModal from "../components/CompanyModal";
 
 const limit = 100;
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -19,10 +18,8 @@ export default function CreateJobSheet() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // New state for event name
+  // Form state
   const [eventName, setEventName] = useState("");
-
-  // Product & filter state
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,23 +54,19 @@ export default function CreateJobSheet() {
   const [deliveryType, setDeliveryType] = useState("");
   const [deliveryMode, setDeliveryMode] = useState("");
   const [deliveryCharges, setDeliveryCharges] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState([]); // Now an array
   const [giftBoxBagsDetails, setGiftBoxBagsDetails] = useState("");
   const [packagingInstructions, setPackagingInstructions] = useState("");
   const [otherDetails, setOtherDetails] = useState("");
   const [referenceQuotation, setReferenceQuotation] = useState("");
 
-  // Selected job sheet items and modal state
+  // Selected items and modal state
   const [selectedItems, setSelectedItems] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-
-  // Variation modal state
   const [variationModalOpen, setVariationModalOpen] = useState(false);
   const [variationModalProduct, setVariationModalProduct] = useState(null);
-
-  // Company modal and list state
   const [companies, setCompanies] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
@@ -182,11 +175,12 @@ export default function CreateJobSheet() {
       setDeliveryType(data.deliveryType || "");
       setDeliveryMode(data.deliveryMode || "");
       setDeliveryCharges(data.deliveryCharges || "");
-      setDeliveryAddress(data.deliveryAddress || "");
+      setDeliveryAddress(Array.isArray(data.deliveryAddress) ? data.deliveryAddress : [data.deliveryAddress || ""]);
       setGiftBoxBagsDetails(data.giftBoxBagsDetails || "");
       setPackagingInstructions(data.packagingInstructions || "");
       setOtherDetails(data.otherDetails || "");
       setReferenceQuotation(data.referenceQuotation || "");
+      
       const items = data.items || [];
       const mappedItems = items.map((item) => ({
         product: item.product,
@@ -207,13 +201,29 @@ export default function CreateJobSheet() {
     }
   };
 
-  // Inline update handler for fields in selectedItems (Branding Type, Branding Vendor, Sourcing From)
   const handleInlineUpdate = (index, field, value) => {
     setSelectedItems(prev => {
       const newItems = [...prev];
       newItems[index] = { ...newItems[index], [field]: value };
       return newItems;
     });
+  };
+
+  // Address management functions
+  const handleAddAddress = () => {
+    setDeliveryAddress(prev => [...prev, '']);
+  };
+
+  const handleAddressChange = (index, value) => {
+    setDeliveryAddress(prev => {
+      const newAddresses = [...prev];
+      newAddresses[index] = value;
+      return newAddresses;
+    });
+  };
+
+  const handleRemoveAddress = (index) => {
+    setDeliveryAddress(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleImageSearchClick = () => {
@@ -255,7 +265,6 @@ export default function CreateJobSheet() {
     setAdvancedSearchResults([]);
   };
 
-  // When a company is selected, auto-fill client name and contact number from company.clients[0]
   const handleCompanySelect = (company) => {
     setClientCompanyName(company.companyName);
     if (company.clients && company.clients.length > 0) {
@@ -277,7 +286,6 @@ export default function CreateJobSheet() {
     fetchCompanies();
   };
 
-  // Helper to parse a product string into base product, color, and size.
   const parseProductString = (productStr) => {
     let color = "";
     let size = "";
@@ -295,7 +303,6 @@ export default function CreateJobSheet() {
     return { baseProduct: baseProduct.trim(), color, size };
   };
 
-  // Helper: check duplicate items.
   function isDuplicate(productName, color, size) {
     return selectedItems.some(
       (item) =>
@@ -363,7 +370,6 @@ export default function CreateJobSheet() {
     setSelectedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // When a quotation is selected, auto-fill referenceQuotation and populate selectedItems.
   const handleQuotationSelect = (quotation) => {
     setReferenceQuotation(quotation.quotationNumber);
     if (quotation.items && quotation.items.length > 0) {
@@ -394,21 +400,21 @@ export default function CreateJobSheet() {
       alert("Please select at least one product.");
       return;
     }
-    // Validate branding fields in each item
-    const invalidItem = selectedItems.find(
-      (item) => !item.brandingType || !item.brandingVendor
-    );
-    if (invalidItem) {
-      alert("Please fill in Branding Type and Branding Vendor for all items.");
+    
+    // Filter out empty addresses
+    const filteredAddresses = deliveryAddress.filter(addr => addr.trim() !== '');
+    if (filteredAddresses.length === 0) {
+      alert("Please enter at least one delivery address.");
       return;
     }
-    // Ensure each item has an slNo.
+
     const itemsWithSlNo = selectedItems.map((item, index) => ({
       ...item,
       slNo: item.slNo || index + 1,
     }));
+    
     const body = {
-      eventName, // include eventName
+      eventName,
       orderDate,
       clientCompanyName,
       clientName,
@@ -421,12 +427,13 @@ export default function CreateJobSheet() {
       deliveryType,
       deliveryMode,
       deliveryCharges,
-      deliveryAddress,
+      deliveryAddress: filteredAddresses,
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
       referenceQuotation,
     };
+
     try {
       const token = localStorage.getItem("token");
       if (isEditMode) {
@@ -460,21 +467,11 @@ export default function CreateJobSheet() {
           {isEditMode ? "Update Job Sheet" : "Create Job Sheet"}
         </button>
       </div>
-      {/* Include Event Name input in the form */}
-      <div className="mb-6">
-        <label className="block mb-1 font-medium text-purple-700 uppercase">
-          Event Name *
-        </label>
-        <input
-          type="text"
-          value={eventName}
-          onChange={(e) => setEventName(e.target.value)}
-          className="border border-purple-300 rounded w-full p-2"
-          required
-        />
-      </div>
+      
+      {/*  */}
+      
       <JobSheetForm
-        eventName={eventName} // pass eventName to JobSheetForm
+        eventName={eventName}
         setEventName={setEventName}
         orderDate={orderDate}
         setOrderDate={setOrderDate}
@@ -508,25 +505,21 @@ export default function CreateJobSheet() {
         setOtherDetails={setOtherDetails}
         referenceQuotation={referenceQuotation}
         setReferenceQuotation={setReferenceQuotation}
+        handleQuotationSelect={handleQuotationSelect}
         companies={companies}
         dropdownOpen={dropdownOpen}
         setDropdownOpen={setDropdownOpen}
         handleCompanySelect={handleCompanySelect}
         handleOpenCompanyModal={handleOpenCompanyModal}
+        selectedItems={selectedItems}
+        handleInlineUpdate={handleInlineUpdate}
+        handleRemoveSelectedItem={handleRemoveSelectedItem}
+        handleEditItem={handleEditItem}
+        handleAddAddress={handleAddAddress}
+        handleAddressChange={handleAddressChange}
+        handleRemoveAddress={handleRemoveAddress}
       />
-      {/* Reference Quotation using suggestion */}
-      <div className="mb-6">
-        <label className="block mb-1 font-medium text-purple-700 uppercase">
-          Reference Quotation
-        </label>
-        <QuotationSuggestionInput
-          value={referenceQuotation}
-          onChange={setReferenceQuotation}
-          placeholder="Enter Reference Quotation"
-          label=""
-          onSelect={handleQuotationSelect}
-        />
-      </div>
+
       <ProductGrid
         products={products}
         loading={loading}
@@ -549,7 +542,6 @@ export default function CreateJobSheet() {
         totalPages={totalPages}
         onAddSelected={handleAddSingle}
         onOpenVariationModal={openVariationModal}
-        // Pass filter props:
         fullCategories={fullCategories}
         selectedCategories={selectedCategories}
         setSelectedCategories={setSelectedCategories}
@@ -566,6 +558,7 @@ export default function CreateJobSheet() {
         selectedVariationHinges={selectedVariationHinges}
         setSelectedVariationHinges={setSelectedVariationHinges}
       />
+
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -578,13 +571,14 @@ export default function CreateJobSheet() {
           </span>
         )}
       </div>
+
       {cartOpen && (
         <JobSheetCart
           selectedItems={selectedItems}
           setCartOpen={setCartOpen}
           handleRemoveSelectedItem={handleRemoveSelectedItem}
           handleEditItem={handleEditItem}
-          handleInlineUpdate={handleInlineUpdate} // pass inline update function here
+          handleInlineUpdate={handleInlineUpdate}
         />
       )}
       {editModalOpen && editIndex != null && (
@@ -614,5 +608,3 @@ export default function CreateJobSheet() {
     </div>
   );
 }
-
-// // export default CreateJobSheet;

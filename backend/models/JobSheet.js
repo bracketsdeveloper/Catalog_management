@@ -6,14 +6,14 @@ const jobSheetItemSchema = new mongoose.Schema({
   color: { type: String },
   size: { type: String },
   quantity: { type: Number, required: true },
-  sourcingFrom: { type: String }, // NEW: sourcingFrom field
+  sourcingFrom: { type: String },
   brandingType: { type: String },
   brandingVendor: { type: String },
   remarks: { type: String },
 });
 
 const jobSheetSchema = new mongoose.Schema({
-  eventName: { type: String }, // NEW: eventName field for main form
+  eventName: { type: String },
   jobSheetNumber: { type: String, unique: true },
   referenceQuotation: { type: String },
   orderDate: { type: Date, required: true },
@@ -28,7 +28,7 @@ const jobSheetSchema = new mongoose.Schema({
   deliveryType: { type: String },
   deliveryMode: { type: String },
   deliveryCharges: { type: String },
-  deliveryAddress: { type: String },
+  deliveryAddress: { type: [String], default: [] }, // Changed to array of strings
   giftBoxBagsDetails: { type: String },
   packagingInstructions: { type: String },
   otherDetails: { type: String },
