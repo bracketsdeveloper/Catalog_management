@@ -5,7 +5,6 @@ import UserSuggestionInput from "./UserSuggestionInput";
 import PurchaseOrderSuggestionInput from "./PurchaseOrderSuggestionInput";
 import QuotationSuggestionInput from "./QuotationSuggestionInput";
 
-// Import the date picker CSS
 import "react-datepicker/dist/react-datepicker.css";
 
 const JobSheetForm = ({
@@ -57,6 +56,17 @@ const JobSheetForm = ({
 }) => {
   const [addresses, setAddresses] = useState(deliveryAddress?.length ? [...deliveryAddress] : ['']);
 
+  // Delivery options
+  const deliveryModeOptions = ["Surface", "Air", "Other"];
+  const deliveryTypeOptions = [
+    "Single office delivery",
+    "Multiple office delivery",
+    "Individual doorstep courier",
+    "Mixed",
+    "Others"
+  ];
+  const deliveryChargesOptions = ["Included in cost", "Additional at actual"];
+
   // Convert string dates to Date objects for react-datepicker
   const orderDateObj = orderDate ? parse(orderDate, "yyyy-MM-dd", new Date()) : null;
   const deliveryDateObj = deliveryDate ? parse(deliveryDate, "yyyy-MM-dd", new Date()) : null;
@@ -88,7 +98,6 @@ const JobSheetForm = ({
     setDeliveryAddress(newAddresses.filter(addr => addr.trim() !== ''));
   };
 
-  // Custom input component to ensure proper styling
   const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
     <input
       className="border border-purple-300 rounded w-full p-2"
@@ -305,38 +314,57 @@ const JobSheetForm = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
-            Delivery Type
+            Delivery Type *
           </label>
-          <input
-            type="text"
-            placeholder="e.g. Standard, Express"
+          <select
             className="border border-purple-300 rounded w-full p-2"
             value={deliveryType}
             onChange={(e) => setDeliveryType(e.target.value)}
-          />
+            required
+          >
+            <option value="">Select Delivery Type</option>
+            {deliveryTypeOptions.map((option, index) => (
+              <option key={`type-${index}`} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">
-            Delivery Mode
+            Delivery Mode *
           </label>
-          <input
-            type="text"
-            placeholder="e.g. Courier, Self-delivery"
+          <select
             className="border border-purple-300 rounded w-full p-2"
             value={deliveryMode}
             onChange={(e) => setDeliveryMode(e.target.value)}
-          />
+            required
+          >
+            <option value="">Select Delivery Mode</option>
+            {deliveryModeOptions.map((option, index) => (
+              <option key={`mode-${index}`} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">
-            Delivery Charges
+            Delivery Charges *
           </label>
-          <input
-            type="text"
+          <select
             className="border border-purple-300 rounded w-full p-2"
             value={deliveryCharges}
             onChange={(e) => setDeliveryCharges(e.target.value)}
-          />
+            required
+          >
+            <option value="">Select Delivery Charges</option>
+            {deliveryChargesOptions.map((option, index) => (
+              <option key={`charges-${index}`} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
