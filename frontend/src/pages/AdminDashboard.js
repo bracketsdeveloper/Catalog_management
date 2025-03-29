@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
+import { CgOrganisation } from "react-icons/cg";
 import {
   UserIcon,
   UserGroupIcon,
@@ -9,7 +10,8 @@ import {
   BookOpenIcon,
   EyeIcon,
   ArrowLeftOnRectangleIcon,
-  PencilIcon
+  PencilIcon,
+  BriefcaseIcon
 } from "@heroicons/react/24/outline";
 
 const adminPages = [
@@ -18,6 +20,12 @@ const adminPages = [
     path: "/admin-dashboard/manage-users",
     permission: "manage-users",
     icon: <UserIcon className="h-6 w-6" />,
+  },
+  {
+    name: "Manage Companies",
+    path: "/admin-dashboard/manage-companies",
+    permission: "manage-companies",
+    icon: <CgOrganisation className="h-6 w-6" />,
   },
   {
     name: "Manage Sub-Admins",
@@ -49,6 +57,12 @@ const adminPages = [
     permission: "viewers-manager",
     icon: <EyeIcon className="h-6 w-6" />,
   },
+  {
+    name:"Manage Jobsheets",
+    path:"/admin-dashboard/manage-jobsheets",
+    permission:"manage-jobsheets",
+    icon: <BriefcaseIcon className="h-6 w-6" />,
+  }
 ];
 
 export default function AdminDashboard() {
@@ -115,7 +129,7 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 z-40 h-full bg-gradient-to-b from-purple-500 via-pink-500 to-blue-500 text-white transition-all duration-300 ${
-          sidebarOpen || sidebarHover ? "w-56" : "w-16"
+          sidebarOpen || sidebarHover ? "w-56" : "w-20"
         }`}
         onMouseEnter={() => !sidebarOpen && setSidebarHover(true)}
         onMouseLeave={() => !sidebarOpen && setSidebarHover(false)}

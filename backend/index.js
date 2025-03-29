@@ -88,6 +88,11 @@ app.use("/api/admin",require("./routes/quotationRoutes.js"))
 const adminMeRoutes = require("./routes/adminMe");
 app.use("/api/admin", adminMeRoutes);
 
+app.use("/api/admin",require("./routes/jobsheetRoutes.js"))
+app.use("/api/admin",require("./routes/companyRoutes.js"))
+
+app.use("/api", require("./routes/erpRoutes.js"));
+
 // app.use("/api/reports" ,reportRoutes)
 
 // Start server (original)

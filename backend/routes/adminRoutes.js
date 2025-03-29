@@ -168,8 +168,11 @@ async function computeAllHashes(imageUrls) {
 
 // POST /api/admin/products - Create a single product (with hash computation)
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
+  console.log("Incoming request body:", req.body);
   try {
     const images = req.body.images || [];
+    console.log("Images received:", images);
+
     const imageHashes = await computeAllHashes(images);
 
     const newProduct = new Product({
@@ -209,6 +212,7 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
 
 // PUT /api/admin/products/:id - Update a single product (with hash computation)
 router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
+  console.log("Incoming request body for update:", req.body);
   try {
     const images = req.body.images || [];
     const imageHashes = await computeAllHashes(images);

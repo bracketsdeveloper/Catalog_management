@@ -29,6 +29,6 @@ const productSchema = new mongoose.Schema({
   productCost: { type: Number, default: 0 },
   productCost_Unit: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now }
-});
+},{ timestamps: true });
 
 module.exports = mongoose.model("Product", productSchema);

@@ -57,16 +57,7 @@ const templateConfig = {
     pdf2: "/templates/template1/pdf2.pdf",
     pdf3: "/templates/template1/pdf3.pdf",
   },
-  "2": {
-    pdf1: "/templates/template2/pdf1.pdf",
-    pdf2: "/templates/template2/pdf2.pdf",
-    pdf3: "/templates/template2/pdf3.pdf",
-  },
-  "3": {
-    pdf1: "/templates/template3/pdf1.pdf",
-    pdf2: "/templates/template3/pdf2.pdf",
-    pdf3: "/templates/template3/pdf3.pdf",
-  },
+  
 };
 
 /**

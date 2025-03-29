@@ -3,16 +3,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
+import CompanyModal from "../components/CompanyModal"; // Assuming you create this component
 
 const limit = 100;
-const presetMarginOptions = [5, 10, 15, 20];
-const presetGstOptions = [18];
 
 // Optional bag icon
 const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
 
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
 export default function CreateManualCatalog() {
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
@@ -20,6 +20,8 @@ export default function CreateManualCatalog() {
   // ----------------------- States -----------------------
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -46,12 +48,12 @@ export default function CreateManualCatalog() {
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
   // Variation modal (multi-add)
-  // const [variationModalOpen, setVariationModalOpen] = useState(false);
-  // const [variationModalProduct, setVariationModalProduct] = useState(null);
+  const [variationModalOpen, setVariationModalOpen] = useState(false);
+  const [variationModalProduct, setVariationModalProduct] = useState(null);
 
   // Editing a single item in cart
-  // const [editIndex, setEditIndex] = useState(null);
-  // const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Advanced Image Search
   const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
@@ -59,22 +61,23 @@ export default function CreateManualCatalog() {
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const imageInputRef = useRef(null);
 
-  // Catalog / Quotation fields
+  // ----------------------- Catalog / Quotation -----------------------
   const [selectedProducts, setSelectedProducts] = useState([]);
-  // const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
+  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const [catalogName, setCatalogName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  const [customerCompany, setCustomerCompany] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
 
   // Margin
+  const presetMarginOptions = [5, 10, 15, 20];
   const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
   const [marginOption, setMarginOption] = useState("preset");
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
   const [customMargin, setCustomMargin] = useState("");
 
-  // GST Field
+  // NEW: GST Field – Dropdown with preset 18% and custom entry
+  const presetGstOptions = [18]; // only 18% preset (can add more if needed)
   const [gstOption, setGstOption] = useState("preset");
   const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
   const [customGst, setCustomGst] = useState("");
@@ -83,12 +86,11 @@ export default function CreateManualCatalog() {
   // Cart panel open/close
   const [cartOpen, setCartOpen] = useState(false);
 
-  // Quotation and Catalog edit states
-  const [quotation, setQuotation] = useState(null);
-  const [editableQuotation, setEditableQuotation] = useState(null);
-  const [termModalOpen, setTermModalOpen] = useState(false);
-  const [newTerm, setNewTerm] = useState({ heading: "", content: "" });
-  const [editingTermIdx, setEditingTermIdx] = useState(null);
+  // New state for companies
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // ----------------------- useEffects -----------------------
   useEffect(() => {
@@ -97,6 +99,7 @@ export default function CreateManualCatalog() {
 
   useEffect(() => {
     fetchProducts(1);
+    // eslint-disable-next-line
   }, [
     searchTerm,
     selectedCategories,
@@ -112,7 +115,12 @@ export default function CreateManualCatalog() {
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line
   }, [id]);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
 
   // ----------------------- Fetch Filter Options -----------------------
   const fetchFilterOptions = async () => {
@@ -178,10 +186,10 @@ export default function CreateManualCatalog() {
       setCatalogName(data.catalogName);
       setCustomerName(data.customerName);
       setCustomerEmail(data.customerEmail || "");
-      setCustomerCompany(data.customerCompany || "");
       setCustomerAddress(data.customerAddress || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
 
+      // Margin
       const existingMargin = data.margin || presetMarginOptions[0];
       if (presetMarginOptions.includes(existingMargin)) {
         setMarginOption("preset");
@@ -193,6 +201,7 @@ export default function CreateManualCatalog() {
         setSelectedMargin(existingMargin);
       }
 
+      // GST
       const existingGst = data.gst || presetGstOptions[0];
       if (presetGstOptions.includes(existingGst)) {
         setGstOption("preset");
@@ -276,14 +285,12 @@ export default function CreateManualCatalog() {
   };
 
   // ----------------------- Variation Modal Handlers -----------------------
-  const [variationModalProduct, setVariationModalProduct] = useState(null);
-  const [variationModalOpen, setVariationModalOpen] = useState(false);
-
   const openVariationSelector = (product) => {
     setVariationModalProduct(product);
     setVariationModalOpen(true);
   };
 
+  // Function to close the variation selector
   const closeVariationSelector = () => {
     setVariationModalOpen(false);
     setVariationModalProduct(null);
@@ -299,6 +306,7 @@ export default function CreateManualCatalog() {
     );
   }
 
+  // Single color/size
   const handleAddSingle = (item) => {
     if (isDuplicate(item.productId, item.color, item.size)) {
       alert("This item with the same color & size is already added!");
@@ -307,11 +315,9 @@ export default function CreateManualCatalog() {
     setSelectedProducts((prev) => [...prev, item]);
   };
 
-  // ----------------------- Variation Modal (Multi-Add) Handlers -----------------------
-  // Added handleAddVariations to resolve the undefined error.
+  // Multi-add from VariationModal
   const handleAddVariations = (variations) => {
     if (!variationModalProduct) return;
-    // For each variation, create a new item.
     const newItems = variations.map((v) => {
       let effectiveCost = variationModalProduct.productCost || 0;
       if (selectedMargin > 0) {
@@ -329,23 +335,22 @@ export default function CreateManualCatalog() {
         weight: variationModalProduct.weight || "",
       };
     });
-    // Filter out duplicates
+
     const filtered = newItems.filter(
       (item) => !isDuplicate(item.productId, item.color, item.size)
     );
+
     if (filtered.length < newItems.length) {
       alert("Some variations were duplicates and were not added.");
     }
+
     if (filtered.length > 0) {
       setSelectedProducts((prev) => [...prev, ...filtered]);
     }
     closeVariationSelector();
   };
 
-  // ----------------------- Variation Edit Modal Handlers -----------------------
-  const [editIndex, setEditIndex] = useState(null);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-
+  // ----------------------- Edit Selected Row -----------------------
   const handleEditItem = (index) => {
     setEditIndex(index);
     setEditModalOpen(true);
@@ -354,22 +359,34 @@ export default function CreateManualCatalog() {
   const handleUpdateItem = (updatedItem) => {
     setSelectedProducts((prev) => {
       const newArr = [...prev];
+      const isDup = newArr.some((sp, i) => {
+        if (i === editIndex) return false;
+        return (
+          sp.productId === newArr[editIndex].productId &&
+          (sp.color || "") === (updatedItem.color || "") &&
+          (sp.size || "") === (updatedItem.size || "")
+        );
+      });
+      if (isDup) {
+        alert("This update creates a duplicate. Not updating.");
+        return newArr;
+      }
       newArr[editIndex] = { ...newArr[editIndex], ...updatedItem };
       return newArr;
     });
   };
 
+  // ----------------------- Remove Selected Row -----------------------
   const handleRemoveSelectedRow = (index) => {
     setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
   // ----------------------- Fields to Display -----------------------
-  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const toggleField = (field) => {
     if (fieldsToDisplay.includes(field)) {
-      setFieldsToDisplay(fieldsToDisplay.filter((f) => f !== field));
+      setFieldsToDisplay((prev) => prev.filter((f) => f !== field));
     } else {
-      setFieldsToDisplay([...fieldsToDisplay, field]);
+      setFieldsToDisplay((prev) => [...prev, field]);
     }
   };
 
@@ -395,12 +412,11 @@ export default function CreateManualCatalog() {
       catalogName,
       customerName,
       customerEmail,
-      customerCompany,
       customerAddress,
       products: productDocs,
       fieldsToDisplay,
       margin: selectedMargin,
-      gst: selectedGst,
+      gst: selectedGst, // Include GST value
     };
 
     try {
@@ -439,6 +455,7 @@ export default function CreateManualCatalog() {
       const baseRate = p.productCost || 0;
       const rate = parseFloat(baseRate.toFixed(2));
       const amount = rate * quantity;
+      // Use the selected GST percentage instead of a hardcoded 18%
       const gstVal = parseFloat((amount * (selectedGst / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
@@ -460,10 +477,9 @@ export default function CreateManualCatalog() {
         catalogName,
         customerName,
         customerEmail,
-        customerCompany,
         customerAddress,
         margin: selectedMargin,
-        gst: selectedGst,
+        gst: selectedGst, // Include GST for quotation as well
         items,
       };
       await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
@@ -491,20 +507,52 @@ export default function CreateManualCatalog() {
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
-  // ----------------------- Dropdown Style -----------------------
-  const dropdownStyle = "absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-40 overflow-y-auto";
+  // Fetch companies from the backend
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCompanies(res.data || []);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+    }
+  };
+
+  // Function to handle company selection
+  const handleCompanySelect = (company) => {
+    setSelectedCompany(company.companyName);
+    setCustomerName(company.clients[0]?.name || ""); // Assuming the first client is the one to use
+    setCustomerEmail(company.companyEmail);
+    setCustomerAddress(company.companyAddress);
+    setDropdownOpen(false);
+  };
+
+  // Function to open the company modal
+  const handleOpenCompanyModal = () => {
+    setShowCompanyModal(true);
+  };
+
+  // Function to close the company modal
+  const handleCloseCompanyModal = () => {
+    setShowCompanyModal(false);
+    fetchCompanies(); // Refresh the company list after adding a new company
+  };
 
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Top: Catalog Name, Margin, GST & Quotation Buttons */}
+      {/* Top: Catalog name, Margin, GST & Quotation Buttons */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
         <div className="flex flex-wrap items-center gap-4">
-          {/* Margin and GST Selections */}
+          {/* Margin Selection */}
           <div className="flex items-center space-x-2">
-            <label className="font-medium text-purple-700">Select Margin</label>
+            <label>
+              <b>Select Margin</b>
+            </label>
             <select
               value={marginOption === "preset" ? selectedPresetMargin : "custom"}
               onChange={(e) => {
@@ -544,8 +592,11 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
+          {/* GST Selection */}
           <div className="flex items-center space-x-2">
-            <label className="font-medium text-purple-700">Select GST</label>
+            <label>
+              <b>Select GST</b>
+            </label>
             <select
               value={gstOption === "preset" ? selectedPresetGst : "custom"}
               onChange={(e) => {
@@ -585,6 +636,7 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
+          {/* Create / Update Buttons */}
           <button
             onClick={handleSaveCatalog}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -600,8 +652,166 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Filter Dropdowns */}
-      <div className="flex flex-wrap gap-4 mb-6">
+      {/* Catalog Info Form */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Catalog Name *
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={catalogName}
+            onChange={(e) => setCatalogName(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Company *
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={selectedCompany}
+            onChange={(e) => {
+              setSelectedCompany(e.target.value);
+              setDropdownOpen(true);
+            }}
+            required
+          />
+          {/* Dropdown for company suggestions */}
+          {dropdownOpen && selectedCompany && (
+            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
+              {companies
+                .filter((company) =>
+                  company.companyName.toLowerCase().includes(selectedCompany.toLowerCase())
+                )
+                .map((company) => (
+                  <div
+                    key={company._id}
+                    className="p-2 cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleCompanySelect(company)}
+                  >
+                    {company.companyName}
+                  </div>
+                ))}
+              <div
+                className="p-2 cursor-pointer hover:bg-gray-100"
+                onClick={handleOpenCompanyModal}
+              >
+                + Create Company
+              </div>
+            </div>
+          )}
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Name *
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={customerName}
+            readOnly // Make it read-only since it will be filled automatically
+            required
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Email
+          </label>
+          <input
+            type="email"
+            className="border border-purple-300 rounded w-full p-2"
+            value={customerEmail}
+            readOnly // Make it read-only since it will be filled automatically
+          />
+        </div>
+        <div>
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Address
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2"
+            value={customerAddress}
+            readOnly // Make it read-only since it will be filled automatically
+          />
+        </div>
+      </div>
+
+      {/* Fields to Display */}
+      <div className="mb-6">
+        <label className="block mb-2 font-medium text-purple-700">
+          Fields to Display
+        </label>
+        <div className="flex flex-wrap gap-3">
+          {[
+            "images",
+            "name",
+            "category",
+            "subCategory",
+            "brandName",
+            "productCost",
+            "size",
+            "color",
+            "material",
+            "weight",
+          ].map((field) => (
+            <label key={field} className="flex items-center space-x-1 text-sm">
+              <input
+                type="checkbox"
+                checked={fieldsToDisplay.includes(field)}
+                onChange={() => toggleField(field)}
+                className="form-checkbox h-4 w-4 text-purple-600"
+              />
+              <span className="text-gray-900">{field}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Search + Advanced Image Search + Filters */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div className="flex items-center space-x-2 w-full md:w-1/2">
+          <input
+            type="text"
+            placeholder="Search products..."
+            className="flex-grow px-3 py-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button
+            onClick={handleImageSearchClick}
+            className="px-3 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 flex items-center"
+          >
+            {advancedSearchLoading && (
+              <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin mr-1"></div>
+            )}
+            <span>Search by Image</span>
+          </button>
+          <input
+            type="file"
+            ref={imageInputRef}
+            style={{ display: "none" }}
+            accept="image/*"
+            onChange={handleImageSearch}
+          />
+          {advancedSearchActive && (
+            <button
+              onClick={handleClearAdvancedSearch}
+              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+            >
+              Clear Image
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters Section */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {/* Category Filter */}
         <div className="relative">
           <button
             onClick={() => setCategoryOpen(!categoryOpen)}
@@ -610,7 +820,7 @@ export default function CreateManualCatalog() {
             Categories ({selectedCategories.length})
           </button>
           {categoryOpen && (
-            <div className={dropdownStyle}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
               {fullCategories.map((cat) => (
                 <label
                   key={cat}
@@ -630,6 +840,7 @@ export default function CreateManualCatalog() {
             </div>
           )}
         </div>
+        {/* SubCategory Filter */}
         <div className="relative">
           <button
             onClick={() => setSubCategoryOpen(!subCategoryOpen)}
@@ -638,7 +849,7 @@ export default function CreateManualCatalog() {
             SubCats ({selectedSubCategories.length})
           </button>
           {subCategoryOpen && (
-            <div className={dropdownStyle}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
               {fullSubCategories.map((subCat) => (
                 <label
                   key={subCat}
@@ -658,6 +869,7 @@ export default function CreateManualCatalog() {
             </div>
           )}
         </div>
+        {/* Brand Filter */}
         <div className="relative">
           <button
             onClick={() => setBrandOpen(!brandOpen)}
@@ -666,7 +878,7 @@ export default function CreateManualCatalog() {
             Brands ({selectedBrands.length})
           </button>
           {brandOpen && (
-            <div className={dropdownStyle}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
               {fullBrands.map((brand) => (
                 <label
                   key={brand}
@@ -686,6 +898,7 @@ export default function CreateManualCatalog() {
             </div>
           )}
         </div>
+        {/* Price Range Filter */}
         <div className="relative">
           <button
             onClick={() => setPriceRangeOpen(!priceRangeOpen)}
@@ -694,26 +907,27 @@ export default function CreateManualCatalog() {
             Price Range ({selectedPriceRanges.length})
           </button>
           {priceRangeOpen && (
-            <div className={dropdownStyle}>
-              {fullPriceRanges.map((pr) => (
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+              {fullPriceRanges.map((range) => (
                 <label
-                  key={pr}
+                  key={range}
                   className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                 >
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedPriceRanges.includes(pr)}
+                    checked={selectedPriceRanges.includes(range)}
                     onChange={() =>
-                      toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)
+                      toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
                     }
                   />
-                  <span className="truncate">{pr}</span>
+                  <span className="truncate">{range}</span>
                 </label>
               ))}
             </div>
           )}
         </div>
+        {/* Variation Hinge Filter */}
         <div className="relative">
           <button
             onClick={() => setVariationHingeOpen(!variationHingeOpen)}
@@ -722,61 +936,24 @@ export default function CreateManualCatalog() {
             Variation Hinge ({selectedVariationHinges.length})
           </button>
           {variationHingeOpen && (
-            <div className={dropdownStyle}>
-              {fullVariationHinges.map((vh) => (
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+              {fullVariationHinges.map((hinge) => (
                 <label
-                  key={vh}
+                  key={hinge}
                   className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
                 >
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedVariationHinges.includes(vh)}
+                    checked={selectedVariationHinges.includes(hinge)}
                     onChange={() =>
-                      toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)
+                      toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)
                     }
                   />
-                  <span className="truncate">{vh}</span>
+                  <span className="truncate">{hinge}</span>
                 </label>
               ))}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Search and Advanced Image Search Section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div className="flex items-center space-x-2 w-full md:w-1/2">
-          <input
-            type="text"
-            placeholder="Search products..."
-            className="flex-grow px-3 py-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button
-            onClick={handleImageSearchClick}
-            className="ml-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 flex items-center"
-          >
-            {advancedSearchLoading && (
-              <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-            )}
-            <span>Search by Image</span>
-          </button>
-          <input
-            type="file"
-            ref={imageInputRef}
-            style={{ display: "none" }}
-            accept="image/*"
-            onChange={handleImageSearch}
-          />
-          {advancedSearchActive && (
-            <button
-              onClick={handleClearAdvancedSearch}
-              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
-            >
-              Clear Image
-            </button>
           )}
         </div>
       </div>
@@ -923,6 +1100,11 @@ export default function CreateManualCatalog() {
             setEditModalOpen(false);
           }}
         />
+      )}
+
+      {/* Company Modal for adding new company */}
+      {showCompanyModal && (
+        <CompanyModal onClose={handleCloseCompanyModal} />
       )}
     </div>
   );
@@ -1124,9 +1306,7 @@ function VariationModal({ product, closeModal, onSave, selectedMargin }) {
           </button>
           <div className="mt-4 space-y-2">
             {variations.length === 0 && (
-              <p className="text-gray-500 text-sm font-semibold">
-                No extra variations added.
-              </p>
+              <p className="text-red-500 text-sm font-semibold">Add product to save</p>
             )}
             {variations.map((line, idx) => (
               <div key={idx} className="flex items-center justify-between border p-2 rounded">
@@ -1168,7 +1348,6 @@ function VariationModal({ product, closeModal, onSave, selectedMargin }) {
   );
 }
 
-// ----------------------- VARIATION EDIT MODAL -----------------------
 function VariationEditModal({ item, margin, onClose, onUpdate }) {
   const [color, setColor] = useState(item.color || "");
   const [size, setSize] = useState(item.size || "");
@@ -1243,34 +1422,5 @@ function VariationEditModal({ item, margin, onClose, onUpdate }) {
         </div>
       </div>
     </div>
-  );
-}
-
-// ----------------------- EDITABLE CELL -----------------------
-function EditableCell({ value, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [currentValue, setCurrentValue] = useState(value);
-
-  useEffect(() => {
-    setCurrentValue(value);
-  }, [value]);
-
-  const handleDoubleClick = () => setEditing(true);
-  const handleBlur = () => {
-    setEditing(false);
-    onSave(currentValue);
-  };
-
-  return editing ? (
-    <input
-      type="text"
-      className="border p-1 rounded"
-      autoFocus
-      value={currentValue}
-      onChange={(e) => setCurrentValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  ) : (
-    <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
   );
 }

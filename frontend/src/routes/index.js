@@ -22,6 +22,10 @@ import AdminProductDetails from "../pages/AdminProductDetails";
 import QuotationView from "../pages/QuotationView";
 import ReviewDashboard from "../pages/ReviewDashboard";
 import PrintQuotation from "../pages/PrintQuotation";
+import ManageJobSheets from "../pages/ManageJobSheets";
+import ManageCompanies from "../pages/ManageCompanies";
+import CreateJobSheet from "../pages/CreateJobSheet";
+import JobSheetView from "../pages/JobSheetView";
 
 const router = createBrowserRouter([
     {
@@ -119,6 +123,26 @@ const router = createBrowserRouter([
                     {
                         path:'print-quotation/:id',
                         element:<PrintQuotation/>
+                    },
+                    {
+                        path:'manage-jobsheets',
+                        element:<ManageJobSheets/>
+                    },
+                    {
+                        path:'manage-companies',
+                        element:<ManageCompanies/>
+                    },
+                    {
+                        path:'create-jobsheet',
+                        element:<CreateJobSheet/>
+                    },
+                    {
+                        path:'create-jobsheet/:id',
+                        element:<CreateJobSheet/>
+                    },
+                    {
+                        path:'jobsheet/:id',
+                        element:<JobSheetView/>
                     }
 
                     
