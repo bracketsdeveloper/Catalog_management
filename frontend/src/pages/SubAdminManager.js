@@ -34,7 +34,8 @@ export default function SubAdminManager() {
     "manage-catalog",
     "viewers-manager",
     "manage-jobsheets",
-    "manage-companies"
+    "manage-companies",
+    "opportunities",
   ];
 
   useEffect(() => {
