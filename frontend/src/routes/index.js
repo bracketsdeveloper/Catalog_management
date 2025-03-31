@@ -26,6 +26,8 @@ import ManageJobSheets from "../pages/ManageJobSheets";
 import ManageCompanies from "../pages/ManageCompanies";
 import CreateJobSheet from "../pages/CreateJobSheet";
 import JobSheetView from "../pages/JobSheetView";
+import ManageOpportunity from "../pages/ManageOpportunity";
+import CreateOpportunity from "../pages/CreateOpportunity";
 
 const router = createBrowserRouter([
     {
@@ -143,6 +145,18 @@ const router = createBrowserRouter([
                     {
                         path:'jobsheet/:id',
                         element:<JobSheetView/>
+                    },
+                    {
+                        path:'opportunities',
+                        element:<ManageOpportunity/>
+                    },
+                    {
+                        path:'create-opportunity',
+                        element:<CreateOpportunity/>
+                    },
+                    {
+                        path:'create-opportunity/:id',
+                        element:<CreateOpportunity/>
                     }
 
                     

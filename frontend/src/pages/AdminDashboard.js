@@ -46,6 +46,12 @@ const adminPages = [
     icon: <CubeIcon className="h-6 w-6" />,
   },
   {
+    name: "Manage Opportunities",
+    path: "/admin-dashboard/opportunities",
+    permission: "opportunities",
+    icon: <BookOpenIcon className="h-6 w-6" />,
+  },
+  {
     name: "Manage Catalogs",
     path: "/admin-dashboard/manage-catalogs",
     permission: "manage-catalog",

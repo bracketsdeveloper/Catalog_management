@@ -93,6 +93,11 @@ app.use("/api/admin",require("./routes/companyRoutes.js"))
 
 app.use("/api", require("./routes/erpRoutes.js"));
 
+// after other routes...
+const opportunityRoutes = require("./routes/opportunityRoutes");
+app.use("/api/admin", opportunityRoutes);
+
+
 // app.use("/api/reports" ,reportRoutes)
 
 // Start server (original)
