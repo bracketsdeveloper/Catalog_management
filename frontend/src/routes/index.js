@@ -28,6 +28,7 @@ import CreateJobSheet from "../pages/CreateJobSheet";
 import JobSheetView from "../pages/JobSheetView";
 import ManageOpportunity from "../pages/ManageOpportunity";
 import CreateOpportunity from "../pages/CreateOpportunity";
+import ForgotPassword from "../pages/ForgotPassword";
 
 const router = createBrowserRouter([
     {
@@ -70,6 +71,10 @@ const router = createBrowserRouter([
                 path:"CatalogPage",
                 element:<ViewersPage/>
 
+            },
+            {
+                path:"forgot-password",
+                element:<ForgotPassword/>
             },
             {
                 path: 'admin-dashboard',

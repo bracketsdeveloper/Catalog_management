@@ -10,7 +10,6 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  // 🔁 Redirect if already logged in
   useEffect(() => {
     const token = localStorage.getItem("token");
     const role = localStorage.getItem("role");
@@ -106,6 +105,32 @@ export default function SignIn() {
                   required
                 />
               </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="remember"
+                      aria-describedby="remember"
+                      type="checkbox"
+                      className="w-4 h-4 border border-gray-300 rounded bg-gray-50 focus:ring-3 focus:ring-primary-300 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-primary-600 dark:ring-offset-gray-800"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label
+                      htmlFor="remember"
+                      className="text-gray-500 dark:text-gray-300"
+                    >
+                      Remember me
+                    </label>
+                  </div>
+                </div>
+                <Link
+                  to="/forgot-password"
+                  className="text-sm font-medium text-pink-600 hover:underline dark:text-pink-500"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <button
                 type="submit"
                 className="w-full text-white bg-pink-600 hover:bg-pink-700 focus:ring-4 focus:outline-none focus:ring-pink-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-pink-400 dark:hover:bg-pink-600"
@@ -113,7 +138,7 @@ export default function SignIn() {
                 Login
               </button>
               <p className="text-sm font-light text-gray-500 dark:text-gray-400">
-                Don’t have an account yet?{" "}
+                Don't have an account yet?{" "}
                 <Link
                   to="/signup"
                   className="font-medium text-pink-400 hover:underline dark:text-pink-500"

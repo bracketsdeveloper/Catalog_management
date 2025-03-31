@@ -8,15 +8,13 @@ require("dotenv").config();
 
 // SIGNUP
 router.post("/signup", async (req, res) => {
-  const { name, email, phone, assessment, password, role } = req.body;
+  const { name, email, phone, password, role } = req.body;
   try {
-    // Check for existing user by email
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: "User already exists." });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
@@ -25,12 +23,11 @@ router.post("/signup", async (req, res) => {
       phone,
       password: hashedPassword,
       role: role || "GENERAL",
-      isVerified: false, // Unverified by default
+      isVerified: false,
     });
 
     await newUser.save();
 
-    // Generate a verification token valid for 24 hours
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
       expiresIn: "24h",
     });
@@ -38,20 +35,13 @@ router.post("/signup", async (req, res) => {
 
     const htmlContent = `
       <html>
-        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
-          <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
-            <h2 style="color: #333333; text-align: center;">Email Verification</h2>
-            <p style="color: #555555; font-size: 16px; line-height: 1.6;">Hello ${name},</p>
-            <p style="color: #555555; font-size: 16px; line-height: 1.6;">Thank you for registering with us. To complete your registration, please verify your email address by clicking the button below:</p>
-            <div style="text-align: center; margin: 20px 0;">
-              <a href="${verificationLink}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; border-radius: 5px; cursor: pointer;">
-                Verify Email
-              </a>
-            </div>
-            <p style="color: #555555; font-size: 16px; line-height: 1.6;">If you did not create an account with us, please ignore this email.</p>
-            <p style="color: #555555; font-size: 16px; line-height: 1.6;">This link is valid for 24 hours. After that, you will need to request a new verification email.</p>
-            <p style="color: #555555; font-size: 16px; line-height: 1.6;">Thank you,</p>
-            <p style="color: #555555; font-size: 16px; line-height: 1.6;">The ${process.env.APP_NAME || "App"} Team</p>
+        <body>
+          <div>
+            <h2>Email Verification</h2>
+            <p>Hello ${name},</p>
+            <p>Thank you for registering. Please verify your email:</p>
+            <a href="${verificationLink}">Verify Email</a>
+            <p>This link is valid for 24 hours.</p>
           </div>
         </body>
       </html>
@@ -74,32 +64,26 @@ router.post("/signup", async (req, res) => {
 });
 
 // LOGIN
-// LOGIN
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    // 1) Find user by email
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
 
-    // 2) Check if email is verified
     if (!user.isVerified) {
       return res.status(400).json({
         error: "Email not verified. Please verify your email before logging in.",
       });
     }
 
-    // 3) For VIEWER, check login limits
     if (user.role === "VIEWER") {
-      // If using single session logic:
       if (user.singleSession && user.loginCount >= 1) {
         return res.status(403).json({
           error: "Viewer already logged in. Single session allowed.",
         });
       }
-      // Otherwise, check against maxLogins limit
       if (user.loginCount >= user.maxLogins) {
         return res.status(403).json({
           error: "Maximum login limit reached for this viewer.",
@@ -107,19 +91,16 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    // 4) Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ error: "Invalid credentials." });
     }
 
-    // 5) For VIEWER, increment login count
     if (user.role === "VIEWER") {
       user.loginCount += 1;
       await user.save();
     }
 
-    // 6) Generate JWT token (set expiry as needed)
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -141,5 +122,103 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// FORGOT PASSWORD - SEND OTP
+router.post("/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.resetPasswordOtp = otp;
+    user.resetPasswordOtpExpires = otpExpires;
+    await user.save();
+
+    const htmlContent = `
+      <html>
+        <body>
+          <div>
+            <h2>Password Reset OTP</h2>
+            <p>Hello ${user.name},</p>
+            <p>Your OTP for password reset is: <strong>${otp}</strong></p>
+            <p>This OTP is valid for 10 minutes.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await sendMail({
+      to: email,
+      subject: "Password Reset OTP",
+      html: htmlContent,
+    });
+
+    return res.status(200).json({ message: "OTP sent to your email." });
+  } catch (error) {
+    console.error("Error in forgot password:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// VERIFY OTP
+router.post("/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+  try {
+    const user = await User.findOne({ 
+      email,
+      resetPasswordOtp: otp,
+      resetPasswordOtpExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired OTP." });
+    }
+
+    return res.status(200).json({ message: "OTP verified successfully." });
+  } catch (error) {
+    console.error("Error in OTP verification:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// RESET PASSWORD
+// RESET PASSWORD - Modified version
+router.post("/reset-password", async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  try {
+    const user = await User.findOne({ 
+      email,
+      resetPasswordOtp: otp,
+      resetPasswordOtpExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired OTP." });
+    }
+
+    // Hash the password only here
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Use updateOne to bypass the pre-save hook
+    await User.updateOne(
+      { _id: user._id },
+      { 
+        password: hashedPassword,
+        resetPasswordOtp: undefined,
+        resetPasswordOtpExpires: undefined 
+      }
+    );
+
+    return res.status(200).json({ message: "Password reset successfully." });
+  } catch (error) {
+    console.error("Error in reset password:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
 
 module.exports = router;

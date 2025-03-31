@@ -14,15 +14,14 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   isSuperAdmin: { type: Boolean, default: false },
   permissions: { type: [String], default: [] },
-  // For VIEWER role:
   accessibleProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
   visibleAttributes: { type: [String], default: [] },
-  // New fields for login limits:
-  maxLogins: { type: Number, default: 1 },   // e.g. 2 means user can log in twice
-  loginCount: { type: Number, default: 0 },    // how many logins have been used
-  // Retain these if needed (or remove if replacing entirely)
+  maxLogins: { type: Number, default: 1 },
+  loginCount: { type: Number, default: 0 },
   singleSession: { type: Boolean, default: false },
   sessionUsed: { type: Boolean, default: false },
+  resetPasswordOtp: { type: String },
+  resetPasswordOtpExpires: { type: Date },
 });
 
 userSchema.pre("save", async function (next) {
