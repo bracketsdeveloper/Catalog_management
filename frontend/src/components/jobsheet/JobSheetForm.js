@@ -117,6 +117,19 @@ const JobSheetForm = ({
 
   return (
     <div className="space-y-4 mb-6">
+      {/* Row 4: Reference Quotation (30% width) */}
+      <div className="w-full md:w-1/3">
+        <label className="block mb-1 font-medium text-purple-700">
+          Reference Quotation
+        </label>
+        <QuotationSuggestionInput
+          value={referenceQuotation}
+          onChange={setReferenceQuotation}
+          placeholder="Enter Reference Quotation"
+          label=""
+          onSelect={handleQuotationSelect}
+        />
+      </div>
       {/* Row 1: Client Company (full width) */}
       <div className="relative">
         <label className="block mb-1 font-medium text-purple-700">
@@ -226,19 +239,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 4: Reference Quotation (30% width) */}
-      <div className="w-full md:w-1/3">
-        <label className="block mb-1 font-medium text-purple-700">
-          Reference Quotation
-        </label>
-        <QuotationSuggestionInput
-          value={referenceQuotation}
-          onChange={setReferenceQuotation}
-          placeholder="Enter Reference Quotation"
-          label=""
-          onSelect={handleQuotationSelect}
-        />
-      </div>
+      
 
       {/* Row 5: Products Table */}
       {referenceQuotation && selectedItems.length > 0 && (
