@@ -90,6 +90,7 @@ router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
 });
 
 // Get all companies (if query param all=true, fetch all companies without pagination)
+// routes/companyRoutes.js
 router.get("/companies", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { all } = req.query;
@@ -100,22 +101,18 @@ router.get("/companies", authenticate, authorizeAdmin, async (req, res) => {
         .populate("updatedBy", "name email");
       return res.json(companies);
     }
-
+    // Paginated response
     let { page = 1, limit = 10 } = req.query;
     page = parseInt(page) || 1;
     limit = parseInt(limit) || 10;
-
     const filter = { deleted: { $ne: true } };
-
     const companies = await Company.find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip((page - 1) * limit)
       .populate("createdBy", "name email")
       .populate("updatedBy", "name email");
-
     const count = await Company.countDocuments(filter);
-
     res.json({
       companies,
       totalPages: Math.ceil(count / limit),

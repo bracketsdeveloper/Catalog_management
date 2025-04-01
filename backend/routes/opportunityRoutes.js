@@ -2,7 +2,9 @@
 
 const express = require("express");
 const router = express.Router();
+const { parse } = require("date-fns"); // Import date-fns parse function
 const Opportunity = require("../models/Opportunity");
+const Counter = require("../models/Counter"); // Import the Counter model
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 /**
@@ -29,20 +31,23 @@ function createLogEntry(req, action, field, oldValue, newValue) {
     field,
     oldValue,
     newValue,
-    performedBy: req.user._id,  // store user ID
+    performedBy: req.user._id,
     performedAt: new Date(),
     ipAddress: req.ip,
   };
 }
 
 /**
- * Utility to generate next opportunityCode.
- * NOTE: This is a naive approach that can suffer from race conditions in production.
+ * Utility to generate the next unique opportunityCode.
+ * This uses a dedicated counter collection to ensure uniqueness.
  */
 async function generateOpportunityCode() {
-  const count = await Opportunity.countDocuments();
-  const nextNum = count + 1;
-  return nextNum.toString().padStart(4, "0");
+  const counter = await Counter.findOneAndUpdate(
+    { id: "opportunityCode" },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq.toString().padStart(4, "0");
 }
 
 /**
@@ -50,6 +55,11 @@ async function generateOpportunityCode() {
  */
 router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    // Parse the closureDate from "dd/MM/yyyy" format to a Date object
+    if (req.body.closureDate) {
+      req.body.closureDate = parse(req.body.closureDate, "dd/MM/yyyy", new Date());
+    }
+    
     // Generate code if none provided
     const code = await generateOpportunityCode();
 
@@ -57,10 +67,7 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
       ...req.body,
       opportunityCode: req.body.opportunityCode || code,
       createdBy: req.user._id?.toString() || "System",
-      logs: [
-        // Single log entry for creation
-        createLogEntry(req, "create", null, null, null),
-      ],
+      logs: [createLogEntry(req, "create", null, null, null)],
     });
 
     await newOpportunity.save();
@@ -76,7 +83,6 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
  */
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // For demonstration, returning ALL. You can add query filters if needed.
     const opportunities = await Opportunity.find().sort({ createdAt: -1 });
     res.json(opportunities);
   } catch (error) {
@@ -103,7 +109,7 @@ router.get("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
 
 /**
  * UPDATE an Opportunity
- *  - Compare fields to log what changed
+ * - Compare fields to log what changed
  */
 router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -118,7 +124,11 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
       req.body.opportunityCode = newCode;
     }
 
-    // Fields to watch for changes
+    // Parse the closureDate from "dd/MM/yyyy" format to a Date object
+    if (req.body.closureDate) {
+      req.body.closureDate = parse(req.body.closureDate, "dd/MM/yyyy", new Date());
+    }
+
     const fieldsToCheck = [
       "opportunityName",
       "account",
@@ -140,10 +150,8 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
       "opportunityOwner",
       "opportunityCode",
       "isActive",
-      // etc. If you want to handle arrays like "products" individually, do so similarly
     ];
 
-    // Collect log entries for changed fields
     const logs = [];
     fieldsToCheck.forEach((field) => {
       if (req.body[field] !== undefined) {
@@ -151,20 +159,15 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
         const newVal = req.body[field];
         if (!isEqual(oldVal, newVal)) {
           logs.push(createLogEntry(req, "update", field, oldVal, newVal));
-          opportunity[field] = newVal; // update
+          opportunity[field] = newVal;
         }
       }
     });
 
-    // If nothing changed
     if (logs.length === 0) {
       return res.status(200).json({ message: "No changes detected", opportunity });
     }
 
-    // If array fields changed, you could log them similarly
-    // e.g. compare old products vs new products
-
-    // Append logs
     opportunity.logs.push(...logs);
     await opportunity.save();
 
@@ -185,13 +188,9 @@ router.delete("/opportunities/:id", authenticate, authorizeAdmin, async (req, re
       return res.status(404).json({ message: "Opportunity not found" });
     }
 
-    // Log the delete
-    opportunity.logs.push(
-      createLogEntry(req, "delete", null, opportunity.opportunityName, null)
-    );
+    opportunity.logs.push(createLogEntry(req, "delete", null, opportunity.opportunityName, null));
     await opportunity.save();
 
-    // Then truly remove from DB
     await Opportunity.findByIdAndDelete(req.params.id);
 
     res.json({ message: "Opportunity deleted" });
@@ -204,7 +203,6 @@ router.delete("/opportunities/:id", authenticate, authorizeAdmin, async (req, re
 /**
  * COMMON LOGS route (aggregates logs for ALL opportunities)
  */
-// Example aggregator route in your server (opportunityRoutes.js):
 router.get("/opportunities/logs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const allOpps = await Opportunity.find().select("opportunityName logs").lean();
@@ -214,7 +212,6 @@ router.get("/opportunities/logs", authenticate, authorizeAdmin, async (req, res)
         opportunityName: opp.opportunityName,
       }))
     );
-    // sort descending by performedAt
     allLogs.sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt));
     res.json({ logs: allLogs });
   } catch (error) {
@@ -222,6 +219,5 @@ router.get("/opportunities/logs", authenticate, authorizeAdmin, async (req, res)
     res.status(500).json({ message: "Failed to fetch logs" });
   }
 });
-
 
 module.exports = router;

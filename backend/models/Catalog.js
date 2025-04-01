@@ -16,8 +16,8 @@ const remarkSchema = new mongoose.Schema({
 });
 
 const catalogSchema = new mongoose.Schema({
-  catalogName: { type: String, required: true },
-  customerName: { type: String, required: true },
+  catalogName: { type: String },
+  customerName: { type: String },
   customerEmail: { type: String },
   customerCompany: { type: String },
   customerAddress: { type: String },

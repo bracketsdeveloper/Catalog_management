@@ -22,8 +22,8 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       catalogName,
-      customerName,
-      customerEmail,
+      customerName,     // Added missing field
+      customerEmail,    // Added missing field
       customerCompany,
       customerAddress,
       products,
@@ -54,7 +54,6 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error creating catalog" });
   }
 });
-
 
 // 3) Example AI Generate route
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {

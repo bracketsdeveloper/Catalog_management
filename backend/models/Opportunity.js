@@ -50,7 +50,7 @@ const opportunitySchema = new mongoose.Schema({
 
   // The user who owns the Opportunity
   opportunityOwner: { type: String, required: true },
-  opportunityCode: { type: String },
+  opportunityCode: { type: String, unique: true },
   isActive: { type: Boolean, default: true },
 
   // The user who created this record
@@ -116,5 +116,4 @@ const opportunitySchema = new mongoose.Schema({
   ],
 });
 
-// Export the model
 module.exports = mongoose.model("Opportunity", opportunitySchema);

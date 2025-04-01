@@ -28,7 +28,7 @@ const jobSheetSchema = new mongoose.Schema({
   deliveryType: { type: String },
   deliveryMode: { type: String },
   deliveryCharges: { type: String },
-  deliveryAddress: { type: [String], default: [] }, // Changed to array of strings
+  deliveryAddress: { type: [String], default: [] },
   giftBoxBagsDetails: { type: String },
   packagingInstructions: { type: String },
   otherDetails: { type: String },

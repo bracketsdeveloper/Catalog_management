@@ -1,5 +1,3 @@
-// src/pages/CreateOpportunity.jsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -15,13 +13,12 @@ import TeamTab from "../components/opportunities/TeamTab";
 import CompetitorTab from "../components/opportunities/CompetitorTab";
 import NoteTab from "../components/opportunities/NoteTab";
 
-// Use your own environment variable or local fallback
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
 export default function CreateOpportunity() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEditMode = Boolean(id); // If there's an :id param, we're editing
+  const isEditMode = Boolean(id);
 
   const [activeTab, setActiveTab] = useState("details");
 
@@ -46,7 +43,7 @@ export default function CreateOpportunity() {
     opportunityOwner: "",
     opportunityCode: "",
     isActive: true,
-    opportunityStatus: "", // "Won","Lost","Discontinued" if stage=Won/Lost/Discontinued
+    opportunityStatus: "",
   });
 
   // Tab data
@@ -74,12 +71,10 @@ export default function CreateOpportunity() {
         console.error("Error fetching companies:", err);
       }
     };
-    
 
     const fetchUsers = async () => {
       try {
         const token = localStorage.getItem("token");
-        // Example endpoint for users
         const res = await axios.get(`${BACKEND_URL}/api/user/users`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -109,14 +104,11 @@ export default function CreateOpportunity() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // The existing doc
       const opp = res.data;
-      // Convert closureDate => dd/mm/yyyy if it's a valid date
       let closureDateStr = "";
       if (opp.closureDate) {
         const dt = new Date(opp.closureDate);
         if (!isNaN(dt.getTime())) {
-          // e.g. "DD/MM/YYYY"
           const dd = String(dt.getDate()).padStart(2, "0");
           const mm = String(dt.getMonth() + 1).padStart(2, "0");
           const yyyy = dt.getFullYear();
@@ -143,7 +135,7 @@ export default function CreateOpportunity() {
         freeTextField: opp.freeTextField || "",
         opportunityOwner: opp.opportunityOwner || "",
         opportunityCode: opp.opportunityCode || "",
-        isActive: opp.isActive !== false, // default true
+        isActive: opp.isActive !== false,
         opportunityStatus: opp.opportunityStatus || "",
       });
 
@@ -174,17 +166,6 @@ export default function CreateOpportunity() {
     setOpportunityData((prev) => ({ ...prev, closureProbability: val }));
   };
 
-  /**
-   * If user picks a date from e.g. an <input type="date" />
-   * we get yyyy-mm-dd => convert to dd/mm/yyyy
-   */
-  const handleClosureDateChange = (e) => {
-    const [year, month, day] = e.target.value.split("-");
-    if (!year || !month || !day) return;
-    const formatted = `${day}/${month}/${year}`;
-    setOpportunityData((prev) => ({ ...prev, closureDate: formatted }));
-  };
-
   async function handleSaveOpportunity() {
     try {
       const token = localStorage.getItem("token");
@@ -202,19 +183,16 @@ export default function CreateOpportunity() {
       };
 
       if (isEditMode) {
-        // PUT => /opportunities/:id
         await axios.put(`${BACKEND_URL}/api/admin/opportunities/${id}`, body, {
           headers,
         });
         alert("Opportunity updated successfully!");
       } else {
-        // POST => /opportunities
         await axios.post(`${BACKEND_URL}/api/admin/opportunities`, body, {
           headers,
         });
         alert("Opportunity created successfully!");
       }
-      // Navigate back
       navigate("/admin-dashboard/opportunities");
     } catch (error) {
       console.error("Error saving opportunity:", error);
@@ -222,7 +200,6 @@ export default function CreateOpportunity() {
     }
   }
 
-  // Render
   return (
     <div className="min-h-screen bg-white text-gray-800 p-4">
       {/* Top bar */}
@@ -284,7 +261,6 @@ export default function CreateOpportunity() {
           setData={setOpportunityData}
           handleChange={handleChange}
           handleSliderChange={handleSliderChange}
-          handleClosureDateChange={handleClosureDateChange}
           companies={companies}
           users={users}
         />

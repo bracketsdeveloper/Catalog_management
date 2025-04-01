@@ -54,7 +54,7 @@ export default function CreateJobSheet() {
   const [deliveryType, setDeliveryType] = useState("");
   const [deliveryMode, setDeliveryMode] = useState("");
   const [deliveryCharges, setDeliveryCharges] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState([]); // Now an array
+  const [deliveryAddress, setDeliveryAddress] = useState([]);
   const [giftBoxBagsDetails, setGiftBoxBagsDetails] = useState("");
   const [packagingInstructions, setPackagingInstructions] = useState("");
   const [otherDetails, setOtherDetails] = useState("");
@@ -84,7 +84,7 @@ export default function CreateJobSheet() {
     selectedSubCategories,
     selectedBrands,
     selectedPriceRanges,
-    selectedVariationHinges
+    selectedVariationHinges,
   ]);
 
   useEffect(() => {
@@ -98,10 +98,9 @@ export default function CreateJobSheet() {
   const fetchFilterOptions = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/products/filters`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setFullCategories(res.data.categories || []);
       setFullSubCategories(res.data.subCategories || []);
       setFullBrands(res.data.brands || []);
@@ -130,10 +129,9 @@ export default function CreateJobSheet() {
         params.append("priceRanges", selectedPriceRanges.join(","));
       if (selectedVariationHinges.length > 0)
         params.append("variationHinges", selectedVariationHinges.join(","));
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/products?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setProducts(res.data.products || []);
       setCurrentPage(res.data.currentPage || 1);
       setTotalPages(res.data.totalPages || 1);
@@ -147,7 +145,8 @@ export default function CreateJobSheet() {
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+      // Append ?all=true so that an array is returned
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(res.data || []);
@@ -175,12 +174,16 @@ export default function CreateJobSheet() {
       setDeliveryType(data.deliveryType || "");
       setDeliveryMode(data.deliveryMode || "");
       setDeliveryCharges(data.deliveryCharges || "");
-      setDeliveryAddress(Array.isArray(data.deliveryAddress) ? data.deliveryAddress : [data.deliveryAddress || ""]);
+      setDeliveryAddress(
+        Array.isArray(data.deliveryAddress)
+          ? data.deliveryAddress
+          : [data.deliveryAddress || ""]
+      );
       setGiftBoxBagsDetails(data.giftBoxBagsDetails || "");
       setPackagingInstructions(data.packagingInstructions || "");
       setOtherDetails(data.otherDetails || "");
       setReferenceQuotation(data.referenceQuotation || "");
-      
+
       const items = data.items || [];
       const mappedItems = items.map((item) => ({
         product: item.product,
@@ -202,34 +205,32 @@ export default function CreateJobSheet() {
   };
 
   const handleInlineUpdate = (index, field, value) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const newItems = [...prev];
       newItems[index] = { ...newItems[index], [field]: value };
       return newItems;
     });
   };
 
-  // Address management functions
+  // Address management
   const handleAddAddress = () => {
-    setDeliveryAddress(prev => [...prev, '']);
+    setDeliveryAddress((prev) => [...prev, ""]);
   };
 
   const handleAddressChange = (index, value) => {
-    setDeliveryAddress(prev => {
+    setDeliveryAddress((prev) => {
       const newAddresses = [...prev];
       newAddresses[index] = value;
-      return newAddresses;
+      return newAddresses.filter((addr) => addr.trim() !== "");
     });
   };
 
   const handleRemoveAddress = (index) => {
-    setDeliveryAddress(prev => prev.filter((_, i) => i !== index));
+    setDeliveryAddress((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleImageSearchClick = () => {
-    if (imageInputRef.current) {
-      imageInputRef.current.click();
-    }
+    if (imageInputRef.current) imageInputRef.current.click();
   };
 
   const handleImageSearch = async (e) => {
@@ -240,16 +241,12 @@ export default function CreateJobSheet() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axios.post(
-        `${BACKEND_URL}/api/products/advanced-search`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
       setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
       setAdvancedSearchActive(true);
     } catch (error) {
@@ -286,23 +283,7 @@ export default function CreateJobSheet() {
     fetchCompanies();
   };
 
-  const parseProductString = (productStr) => {
-    let color = "";
-    let size = "";
-    let baseProduct = productStr;
-    const colorMatch = productStr.match(/\(([^)]+)\)/);
-    if (colorMatch) {
-      color = colorMatch[1];
-      baseProduct = baseProduct.replace(colorMatch[0], "");
-    }
-    const sizeMatch = productStr.match(/\[([^\]]+)\]/);
-    if (sizeMatch) {
-      size = sizeMatch[1];
-      baseProduct = baseProduct.replace(sizeMatch[0], "");
-    }
-    return { baseProduct: baseProduct.trim(), color, size };
-  };
-
+  // Check for duplicate product (by product name, color, and size)
   function isDuplicate(productName, color, size) {
     return selectedItems.some(
       (item) =>
@@ -370,6 +351,24 @@ export default function CreateJobSheet() {
     setSelectedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // For quotations (parse product string)
+  const parseProductString = (productStr) => {
+    let color = "";
+    let size = "";
+    let baseProduct = productStr;
+    const colorMatch = productStr.match(/\(([^)]+)\)/);
+    if (colorMatch) {
+      color = colorMatch[1];
+      baseProduct = baseProduct.replace(colorMatch[0], "");
+    }
+    const sizeMatch = productStr.match(/\[([^\]]+)\]/);
+    if (sizeMatch) {
+      size = sizeMatch[1];
+      baseProduct = baseProduct.replace(sizeMatch[0], "");
+    }
+    return { baseProduct: baseProduct.trim(), color, size };
+  };
+
   const handleQuotationSelect = (quotation) => {
     setReferenceQuotation(quotation.quotationNumber);
     if (quotation.items && quotation.items.length > 0) {
@@ -401,7 +400,6 @@ export default function CreateJobSheet() {
       return;
     }
     
-    // Filter out empty addresses
     const filteredAddresses = deliveryAddress.filter(addr => addr.trim() !== '');
     if (filteredAddresses.length === 0) {
       alert("Please enter at least one delivery address.");
@@ -468,8 +466,6 @@ export default function CreateJobSheet() {
         </button>
       </div>
       
-      {/*  */}
-      
       <JobSheetForm
         eventName={eventName}
         setEventName={setEventName}
@@ -515,9 +511,6 @@ export default function CreateJobSheet() {
         handleInlineUpdate={handleInlineUpdate}
         handleRemoveSelectedItem={handleRemoveSelectedItem}
         handleEditItem={handleEditItem}
-        handleAddAddress={handleAddAddress}
-        handleAddressChange={handleAddressChange}
-        handleRemoveAddress={handleRemoveAddress}
       />
 
       <ProductGrid
@@ -603,8 +596,10 @@ export default function CreateJobSheet() {
         />
       )}
       {showCompanyModal && (
-        <CompanyModal onClose={() => handleCloseCompanyModal()} />
+        <CompanyModal onClose={handleCloseCompanyModal} />
       )}
     </div>
   );
 }
+
+// export default CreateJobSheet;

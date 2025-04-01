@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const PROXY_API_URL = "http://localhost:5000/api/erp/users";
+const PROXY_API_URL = "http://localhost:5000/api/admin/users";
 
 const UserSuggestionInput = ({ value, onChange, placeholder, label, onUserSelect }) => {
   const [allUsers, setAllUsers] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Function to fetch all users (only the name field)
+  // Function to fetch all users without filtering fields
   const fetchUsers = async () => {
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.get(PROXY_API_URL, {
-        params: {
-          fields: '["name"]'
-        }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setAllUsers(res.data.data);
+      // Assuming the API returns an array of users
+      setAllUsers(res.data);
     } catch (error) {
-      console.error("Error fetching users from ERPNext:", error);
+      console.error("Error fetching users:", error);
     }
   };
 
@@ -66,10 +66,10 @@ const UserSuggestionInput = ({ value, onChange, placeholder, label, onUserSelect
         className="border border-purple-300 rounded w-full p-2"
       />
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute bg-white border border-gray-300 rounded shadow-lg mt-1 w-full z-10">
+        <div className="absolute bg-white border border-gray-300 rounded shadow-lg mt-1 w-full z-10 max-h-40 overflow-y-auto">
           {suggestions.map((user) => (
             <div
-              key={user.name}
+              key={user._id || user.name}
               className="p-2 cursor-pointer hover:bg-gray-100"
               onClick={() => handleSelect(user)}
             >

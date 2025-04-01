@@ -1,7 +1,6 @@
-// ../components/opportunities/OpportunityDetails.jsx
 import React, { useState } from "react";
 import DatePicker from "react-datepicker";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import FunnelGraphic from "./FunnelGraphic";
 import CreateCompanyModal from "./CreateCompanyModal";
 import CreateContactModal from "./CreateContactModal";
@@ -13,7 +12,6 @@ export default function OpportunityDetails({
   handleSliderChange,
   companies,
   users,
-  handleClosureDateChange, // Optional: if parent provides a handler
 }) {
   // Normalize companies prop to an array for suggestions
   const companiesArr = Array.isArray(companies)
@@ -41,9 +39,10 @@ export default function OpportunityDetails({
 
   // For the "Account" field, find the matching company so we can show its clients as options for "Contact"
   const selectedCompany = companiesArr.find((c) => c.companyName === data.account);
-  const contactOptions = selectedCompany && Array.isArray(selectedCompany.clients)
-    ? selectedCompany.clients
-    : [];
+  const contactOptions =
+    selectedCompany && Array.isArray(selectedCompany.clients)
+      ? selectedCompany.clients
+      : [];
 
   // Handle Account change with suggestion dropdown
   const handleAccountChange = (e) => {
@@ -87,11 +86,13 @@ export default function OpportunityDetails({
     setContactSuggestions([]);
   };
 
-  // Handle the closure date using DatePicker – store as a Date object.
+  // DatePicker handler
   const handleDateChange = (date) => {
-    setData((prev) => ({ ...prev, closureDate: date }));
-    if (handleClosureDateChange) {
-      handleClosureDateChange(date);
+    if (date) {
+      const formatted = format(date, "dd/MM/yyyy");
+      setData((prev) => ({ ...prev, closureDate: formatted }));
+    } else {
+      setData((prev) => ({ ...prev, closureDate: "" }));
     }
   };
 
@@ -289,14 +290,12 @@ export default function OpportunityDetails({
               className="border rounded w-full px-2 py-1 text-sm"
             >
               <option value="cold call">cold call</option>
-              <option value="existing client reference">
-                existing client reference
-              </option>
+              <option value="existing client reference">existing client reference</option>
               <option value="others">others</option>
             </select>
           </div>
 
-          {/* Closure Date using DatePicker */}
+          {/* Closure Date */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Closure Date <span className="text-red-500">*</span>
@@ -304,8 +303,12 @@ export default function OpportunityDetails({
             <DatePicker
               placeholderText="Select date"
               onChange={handleDateChange}
-              dateFormat="dd/MM/yy"
-              selected={data.closureDate || null}
+              dateFormat="dd/MM/yyyy"
+              selected={
+                data.closureDate
+                  ? parse(data.closureDate, "dd/MM/yyyy", new Date())
+                  : null
+              }
               className="border rounded w-full px-2 py-1 text-sm"
             />
           </div>
@@ -397,7 +400,7 @@ export default function OpportunityDetails({
           </div>
         </div>
 
-        {/* Free Text Field - typeable */}
+        {/* Free Text Field */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">

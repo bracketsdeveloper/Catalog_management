@@ -3,14 +3,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
-import CompanyModal from "../components/CompanyModal"; // Assuming you create this component
+import CompanyModal from "../components/CompanyModal";
+// Make sure to import ProductCard, VariationModal, and VariationEditModal
+// if they're stored in separate files
 
 const limit = 100;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Optional bag icon
 const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CreateManualCatalog() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export default function CreateManualCatalog() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filter Options (fetched from backend)
+  // Filter Options
   const [fullCategories, setFullCategories] = useState([]);
   const [fullSubCategories, setFullSubCategories] = useState([]);
   const [fullBrands, setFullBrands] = useState([]);
@@ -47,7 +48,7 @@ export default function CreateManualCatalog() {
   const [priceRangeOpen, setPriceRangeOpen] = useState(false);
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
-  // Variation modal (multi-add)
+  // Variation modal
   const [variationModalOpen, setVariationModalOpen] = useState(false);
   const [variationModalProduct, setVariationModalProduct] = useState(null);
 
@@ -61,7 +62,7 @@ export default function CreateManualCatalog() {
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const imageInputRef = useRef(null);
 
-  // ----------------------- Catalog / Quotation -----------------------
+  // Catalog / Quotation fields
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const [catalogName, setCatalogName] = useState("");
@@ -69,26 +70,26 @@ export default function CreateManualCatalog() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
 
-  // Margin
+  // Margin & GST
   const presetMarginOptions = [5, 10, 15, 20];
   const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
   const [marginOption, setMarginOption] = useState("preset");
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
   const [customMargin, setCustomMargin] = useState("");
 
-  // NEW: GST Field – Dropdown with preset 18% and custom entry
-  const presetGstOptions = [18]; // only 18% preset (can add more if needed)
+  const presetGstOptions = [18];
   const [gstOption, setGstOption] = useState("preset");
   const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
   const [customGst, setCustomGst] = useState("");
   const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
 
-  // Cart panel open/close
+  // Cart panel
   const [cartOpen, setCartOpen] = useState(false);
 
-  // New state for companies
+  // Company-related states
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedCompanyData, setSelectedCompanyData] = useState(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -100,14 +101,7 @@ export default function CreateManualCatalog() {
   useEffect(() => {
     fetchProducts(1);
     // eslint-disable-next-line
-  }, [
-    searchTerm,
-    selectedCategories,
-    selectedSubCategories,
-    selectedBrands,
-    selectedPriceRanges,
-    selectedVariationHinges
-  ]);
+  }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges, selectedVariationHinges]);
 
   useEffect(() => {
     if (isEditMode) {
@@ -139,7 +133,7 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // ----------------------- Fetch Products (Server-side Pagination) -----------------------
+  // ----------------------- Fetch Products -----------------------
   const fetchProducts = async (page = 1) => {
     setLoading(true);
     try {
@@ -147,7 +141,6 @@ export default function CreateManualCatalog() {
       const params = new URLSearchParams();
       params.append("page", page);
       params.append("limit", limit);
-
       if (searchTerm) params.append("search", searchTerm);
       if (selectedCategories.length > 0)
         params.append("categories", selectedCategories.join(","));
@@ -160,10 +153,9 @@ export default function CreateManualCatalog() {
       if (selectedVariationHinges.length > 0)
         params.append("variationHinges", selectedVariationHinges.join(","));
 
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/products?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setProducts(res.data.products || []);
       setCurrentPage(res.data.currentPage || 1);
@@ -290,8 +282,7 @@ export default function CreateManualCatalog() {
     setVariationModalOpen(true);
   };
 
-  // Function to close the variation selector
-  const closeVariationSelector = () => {
+  const closeVariationModal = () => {
     setVariationModalOpen(false);
     setVariationModalProduct(null);
   };
@@ -347,7 +338,7 @@ export default function CreateManualCatalog() {
     if (filtered.length > 0) {
       setSelectedProducts((prev) => [...prev, ...filtered]);
     }
-    closeVariationSelector();
+    closeVariationModal();
   };
 
   // ----------------------- Edit Selected Row -----------------------
@@ -390,9 +381,31 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ----------------------- Update Company Info -----------------------
+  // This function is called when customer name or email loses focus.
+  const updateCompanyInfo = async () => {
+    if (!selectedCompanyData || !selectedCompanyData._id) return;
+    try {
+      const token = localStorage.getItem("token");
+      const updatedData = {
+        companyEmail: customerEmail,
+        // Update the first client's name. If no client exists, add a new one.
+        clients:
+          selectedCompanyData.clients && selectedCompanyData.clients.length > 0
+            ? [{ name: customerName, contactNumber: selectedCompanyData.clients[0].contactNumber }, ...selectedCompanyData.clients.slice(1)]
+            : [{ name: customerName, contactNumber: "" }],
+      };
+      await axios.put(`${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`, updatedData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error("Error updating company info:", error);
+    }
+  };
+
   // ----------------------- Save / Update Catalog -----------------------
   const handleSaveCatalog = async () => {
-    if (!catalogName || !customerName) {
+    if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
       return;
     }
@@ -416,7 +429,7 @@ export default function CreateManualCatalog() {
       products: productDocs,
       fieldsToDisplay,
       margin: selectedMargin,
-      gst: selectedGst, // Include GST value
+      gst: selectedGst,
     };
 
     try {
@@ -441,7 +454,7 @@ export default function CreateManualCatalog() {
 
   // ----------------------- Create Quotation -----------------------
   const handleCreateQuotation = async () => {
-    if (!catalogName || !customerName) {
+    if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
       return;
     }
@@ -455,7 +468,6 @@ export default function CreateManualCatalog() {
       const baseRate = p.productCost || 0;
       const rate = parseFloat(baseRate.toFixed(2));
       const amount = rate * quantity;
-      // Use the selected GST percentage instead of a hardcoded 18%
       const gstVal = parseFloat((amount * (selectedGst / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
@@ -479,7 +491,7 @@ export default function CreateManualCatalog() {
         customerEmail,
         customerAddress,
         margin: selectedMargin,
-        gst: selectedGst, // Include GST for quotation as well
+        gst: selectedGst,
         items,
       };
       await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
@@ -507,11 +519,11 @@ export default function CreateManualCatalog() {
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
-  // Fetch companies from the backend
+  // ----------------------- Fetch Companies -----------------------
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(res.data || []);
@@ -520,24 +532,23 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // Function to handle company selection
+  // ----------------------- Company Handlers -----------------------
   const handleCompanySelect = (company) => {
     setSelectedCompany(company.companyName);
-    setCustomerName(company.clients[0]?.name || ""); // Assuming the first client is the one to use
+    setSelectedCompanyData(company);
+    setCustomerName(company.clients[0]?.name || "");
     setCustomerEmail(company.companyEmail);
     setCustomerAddress(company.companyAddress);
     setDropdownOpen(false);
   };
 
-  // Function to open the company modal
   const handleOpenCompanyModal = () => {
     setShowCompanyModal(true);
   };
 
-  // Function to close the company modal
   const handleCloseCompanyModal = () => {
     setShowCompanyModal(false);
-    fetchCompanies(); // Refresh the company list after adding a new company
+    fetchCompanies();
   };
 
   return (
@@ -709,11 +720,13 @@ export default function CreateManualCatalog() {
           <label className="block mb-1 font-medium text-purple-700">
             Customer Name *
           </label>
+          {/* Now editable and updates company info on blur */}
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
             value={customerName}
-            readOnly // Make it read-only since it will be filled automatically
+            onChange={(e) => setCustomerName(e.target.value)}
+            onBlur={updateCompanyInfo}
             required
           />
         </div>
@@ -721,11 +734,13 @@ export default function CreateManualCatalog() {
           <label className="block mb-1 font-medium text-purple-700">
             Customer Email
           </label>
+          {/* Now editable and updates company info on blur */}
           <input
             type="email"
             className="border border-purple-300 rounded w-full p-2"
             value={customerEmail}
-            readOnly // Make it read-only since it will be filled automatically
+            onChange={(e) => setCustomerEmail(e.target.value)}
+            onBlur={updateCompanyInfo}
           />
         </div>
         <div>
@@ -736,7 +751,7 @@ export default function CreateManualCatalog() {
             type="text"
             className="border border-purple-300 rounded w-full p-2"
             value={customerAddress}
-            readOnly // Make it read-only since it will be filled automatically
+            readOnly
           />
         </div>
       </div>
@@ -820,19 +835,14 @@ export default function CreateManualCatalog() {
             Categories ({selectedCategories.length})
           </button>
           {categoryOpen && (
-            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullCategories.map((cat) => (
-                <label
-                  key={cat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={cat} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedCategories.includes(cat)}
-                    onChange={() =>
-                      toggleFilter(cat, selectedCategories, setSelectedCategories)
-                    }
+                    onChange={() => toggleFilter(cat, selectedCategories, setSelectedCategories)}
                   />
                   <span className="truncate">{cat}</span>
                 </label>
@@ -849,19 +859,14 @@ export default function CreateManualCatalog() {
             SubCats ({selectedSubCategories.length})
           </button>
           {subCategoryOpen && (
-            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullSubCategories.map((subCat) => (
-                <label
-                  key={subCat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={subCat} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedSubCategories.includes(subCat)}
-                    onChange={() =>
-                      toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
-                    }
+                    onChange={() => toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)}
                   />
                   <span className="truncate">{subCat}</span>
                 </label>
@@ -878,19 +883,14 @@ export default function CreateManualCatalog() {
             Brands ({selectedBrands.length})
           </button>
           {brandOpen && (
-            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullBrands.map((brand) => (
-                <label
-                  key={brand}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={brand} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedBrands.includes(brand)}
-                    onChange={() =>
-                      toggleFilter(brand, selectedBrands, setSelectedBrands)
-                    }
+                    onChange={() => toggleFilter(brand, selectedBrands, setSelectedBrands)}
                   />
                   <span className="truncate">{brand}</span>
                 </label>
@@ -907,19 +907,14 @@ export default function CreateManualCatalog() {
             Price Range ({selectedPriceRanges.length})
           </button>
           {priceRangeOpen && (
-            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullPriceRanges.map((range) => (
-                <label
-                  key={range}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={range} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedPriceRanges.includes(range)}
-                    onChange={() =>
-                      toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
-                    }
+                    onChange={() => toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)}
                   />
                   <span className="truncate">{range}</span>
                 </label>
@@ -936,19 +931,14 @@ export default function CreateManualCatalog() {
             Variation Hinge ({selectedVariationHinges.length})
           </button>
           {variationHingeOpen && (
-            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullVariationHinges.map((hinge) => (
-                <label
-                  key={hinge}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={hinge} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedVariationHinges.includes(hinge)}
-                    onChange={() =>
-                      toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)
-                    }
+                    onChange={() => toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)}
                   />
                   <span className="truncate">{hinge}</span>
                 </label>
@@ -1079,7 +1069,7 @@ export default function CreateManualCatalog() {
       {variationModalOpen && variationModalProduct && (
         <VariationModal
           product={variationModalProduct}
-          closeModal={closeVariationSelector}
+          onClose={closeVariationModal}
           onSave={handleAddVariations}
           selectedMargin={selectedMargin}
         />
@@ -1188,7 +1178,7 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
 }
 
 // ----------------------- VARIATION MODAL (Multi-Add) -----------------------
-function VariationModal({ product, closeModal, onSave, selectedMargin }) {
+function VariationModal({ product, onClose, onSave, selectedMargin }) {
   const [variations, setVariations] = useState([]);
   const colorOptions = Array.isArray(product.color)
     ? product.color
@@ -1230,7 +1220,7 @@ function VariationModal({ product, closeModal, onSave, selectedMargin }) {
       <div className="flex items-center justify-center min-h-full py-8 px-4">
         <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
           <button
-            onClick={closeModal}
+            onClick={onClose}
             className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
           >
             <span className="text-xl font-bold">&times;</span>
@@ -1326,7 +1316,7 @@ function VariationModal({ product, closeModal, onSave, selectedMargin }) {
           </div>
           <div className="mt-4 flex justify-end space-x-2">
             <button
-              onClick={closeModal}
+              onClick={onClose}
               className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100"
             >
               Cancel
@@ -1424,3 +1414,5 @@ function VariationEditModal({ item, margin, onClose, onUpdate }) {
     </div>
   );
 }
+
+// export default CreateManualCatalog;
