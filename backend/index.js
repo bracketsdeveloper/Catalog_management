@@ -13,12 +13,16 @@ const app = express();
 app.use(express.json());
 
 // Configure CORS for frontend (localhost:3000)
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: function (origin, callback) {
+    // If there's no origin (e.g., same-origin requests), allow it.
+    // Otherwise, allow all origins.
+    callback(null, true);
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 const syncRoutes = require("./routes/syncRoutes");
 app.use("/api", syncRoutes);
