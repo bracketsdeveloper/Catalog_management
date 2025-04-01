@@ -18,6 +18,7 @@
     "dayjs": "^1.11.13",
     "docxtemplater": "^3.60.2",
     "dotenv": "^16.4.7",
+    "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.10.3",
     "install": "^0.13.0",
