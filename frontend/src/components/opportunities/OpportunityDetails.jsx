@@ -1,8 +1,10 @@
 // ../components/opportunities/OpportunityDetails.jsx
-import React from "react";
+import React, { useState } from "react";
 import DatePicker from "react-datepicker";
 import { format } from "date-fns";
 import FunnelGraphic from "./FunnelGraphic";
+import CreateCompanyModal from "./CreateCompanyModal";
+import CreateContactModal from "./CreateContactModal";
 
 export default function OpportunityDetails({
   data,
@@ -11,24 +13,86 @@ export default function OpportunityDetails({
   handleSliderChange,
   companies,
   users,
+  handleClosureDateChange, // Optional: if parent provides a handler
 }) {
+  // Normalize companies prop to an array for suggestions
+  const companiesArr = Array.isArray(companies)
+    ? companies
+    : companies && companies.companies
+    ? companies.companies
+    : [];
+
+  // Local state for modal visibility
+  const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
+  const [showCreateContactModal, setShowCreateContactModal] = useState(false);
+  // Local state for suggestion lists
+  const [accountSuggestions, setAccountSuggestions] = useState([]);
+  const [contactSuggestions, setContactSuggestions] = useState([]);
+
   // When user picks a stage from the funnel
   const handleStageSelect = (stage) => {
     setData((prev) => ({
       ...prev,
       opportunityStage: stage,
-      // Only keep status if stage is Won/Lost/Discontinued
+      // Only keep status if stage is "Won/Lost/Discontinued"
       opportunityStatus: stage === "Won/Lost/Discontinued" ? prev.opportunityStatus : "",
     }));
   };
 
   // For the "Account" field, find the matching company so we can show its clients as options for "Contact"
-  const selectedCompany = companies.find((c) => c.companyName === data.account);
-  const contactOptions = selectedCompany ? selectedCompany.clients : [];
+  const selectedCompany = companiesArr.find((c) => c.companyName === data.account);
+  const contactOptions = selectedCompany && Array.isArray(selectedCompany.clients)
+    ? selectedCompany.clients
+    : [];
 
-  // Handle the closure date using DatePicker – store as Date object
+  // Handle Account change with suggestion dropdown
+  const handleAccountChange = (e) => {
+    const value = e.target.value;
+    setData((prev) => ({ ...prev, account: value }));
+    // If input is empty, show all companies; otherwise, filter based on the input
+    const suggestions =
+      value.trim() === ""
+        ? companiesArr
+        : companiesArr.filter((c) =>
+            c.companyName.toLowerCase().includes(value.toLowerCase())
+          );
+    setAccountSuggestions(suggestions);
+  };
+
+  const handleSelectAccountSuggestion = (companyName) => {
+    setData((prev) => ({ ...prev, account: companyName }));
+    setAccountSuggestions([]);
+  };
+
+  // Handle Contact change with suggestion dropdown
+  const handleContactChange = (e) => {
+    const value = e.target.value;
+    setData((prev) => ({ ...prev, contact: value }));
+    if (data.account) {
+      const selectedComp = companiesArr.find((c) => c.companyName === data.account);
+      if (selectedComp && Array.isArray(selectedComp.clients)) {
+        const suggestions =
+          value.trim() === ""
+            ? selectedComp.clients
+            : selectedComp.clients.filter((client) =>
+                client.name.toLowerCase().includes(value.toLowerCase())
+              );
+        setContactSuggestions(suggestions);
+      }
+    }
+  };
+
+  const handleSelectContactSuggestion = (contactName) => {
+    setData((prev) => ({ ...prev, contact: contactName }));
+    setContactSuggestions([]);
+  };
+
+  // Handle the closure date using DatePicker – store as a Date object.
   const handleDateChange = (date) => {
     setData((prev) => ({ ...prev, closureDate: date }));
+    if (handleClosureDateChange) {
+      handleClosureDateChange(date);
+    }
   };
 
   return (
@@ -51,46 +115,79 @@ export default function OpportunityDetails({
               placeholder="Enter Opportunity Name"
             />
           </div>
-
-          {/* Account */}
-          <div>
+          {/* Account with suggestions and Create button */}
+          <div className="relative">
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Account <span className="text-red-500">*</span>
             </label>
-            <select
-              name="account"
-              value={data.account}
-              onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
-            >
-              <option value="">--Select Company--</option>
-              {companies.map((co) => (
-                <option key={co._id} value={co.companyName}>
-                  {co.companyName}
-                </option>
-              ))}
-            </select>
+            <div className="flex">
+              <input
+                type="text"
+                name="account"
+                value={data.account}
+                onChange={handleAccountChange}
+                className="border rounded-l w-full px-2 py-1 text-sm"
+                placeholder="Enter Company Name"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCreateCompanyModal(true)}
+                className="bg-blue-500 text-white px-2 py-1 rounded-r text-sm"
+              >
+                +
+              </button>
+            </div>
+            {accountSuggestions.length > 0 && (
+              <div className="absolute z-10 bg-white border border-gray-300 w-full mt-1 max-h-40 overflow-auto">
+                {accountSuggestions.map((company) => (
+                  <div
+                    key={company._id}
+                    className="px-2 py-1 hover:bg-gray-200 cursor-pointer"
+                    onClick={() => handleSelectAccountSuggestion(company.companyName)}
+                  >
+                    {company.companyName}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-
-          {/* Contact */}
-          <div>
+          {/* Contact with suggestions and Create button */}
+          <div className="relative">
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Contact
             </label>
-            <select
-              name="contact"
-              value={data.contact}
-              onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
-              disabled={!data.account}
-            >
-              <option value="">--Select Contact--</option>
-              {contactOptions.map((cl, idx) => (
-                <option key={idx} value={cl.name}>
-                  {cl.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex">
+              <input
+                type="text"
+                name="contact"
+                value={data.contact}
+                onChange={handleContactChange}
+                className="border rounded-l w-full px-2 py-1 text-sm"
+                placeholder="Enter Contact Name"
+                disabled={!data.account}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCreateContactModal(true)}
+                className="bg-blue-500 text-white px-2 py-1 rounded-r text-sm"
+                disabled={!data.account}
+              >
+                +
+              </button>
+            </div>
+            {contactSuggestions.length > 0 && (
+              <div className="absolute z-10 bg-white border border-gray-300 w-full mt-1 max-h-40 overflow-auto">
+                {contactSuggestions.map((client, idx) => (
+                  <div
+                    key={idx}
+                    className="px-2 py-1 hover:bg-gray-200 cursor-pointer"
+                    onClick={() => handleSelectContactSuggestion(client.name)}
+                  >
+                    {client.name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -162,7 +259,6 @@ export default function OpportunityDetails({
               className="border rounded w-full px-2 py-1 text-sm"
               placeholder="e.g., 10000"
             />
-
             <label className="block text-sm font-semibold text-gray-700 mb-1 mt-3">
               Currency <span className="text-red-500">*</span>
             </label>
@@ -193,7 +289,9 @@ export default function OpportunityDetails({
               className="border rounded w-full px-2 py-1 text-sm"
             >
               <option value="cold call">cold call</option>
-              <option value="existing client reference">existing client reference</option>
+              <option value="existing client reference">
+                existing client reference
+              </option>
               <option value="others">others</option>
             </select>
           </div>
@@ -267,8 +365,6 @@ export default function OpportunityDetails({
               <option value="High">High</option>
             </select>
           </div>
-
-          {/* isRecurring */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Is this a recurring opportunity
@@ -301,22 +397,20 @@ export default function OpportunityDetails({
           </div>
         </div>
 
-        {/* Free Text Field */}
+        {/* Free Text Field - typeable */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Free Text Field
             </label>
-            <select
+            <input
+              type="text"
               name="freeTextField"
               value={data.freeTextField}
               onChange={handleChange}
               className="border rounded w-full px-2 py-1 text-sm"
-            >
-              <option value="">Type or select an option</option>
-              <option value="Option1">Option1</option>
-              <option value="Option2">Option2</option>
-            </select>
+              placeholder="Type here..."
+            />
           </div>
         </div>
 
@@ -380,6 +474,28 @@ export default function OpportunityDetails({
           onStageSelect={handleStageSelect}
         />
       </div>
+
+      {/* Render Modals */}
+      {showCreateCompanyModal && (
+        <CreateCompanyModal
+          onClose={() => setShowCreateCompanyModal(false)}
+          onCompanyCreated={(newCompany) => {
+            setData((prev) => ({ ...prev, account: newCompany.companyName }));
+            setShowCreateCompanyModal(false);
+          }}
+        />
+      )}
+
+      {showCreateContactModal && (
+        <CreateContactModal
+          onClose={() => setShowCreateContactModal(false)}
+          onContactCreated={(newContact) => {
+            setData((prev) => ({ ...prev, contact: newContact.name }));
+            setShowCreateContactModal(false);
+          }}
+          companyName={data.account}
+        />
+      )}
     </div>
   );
 }

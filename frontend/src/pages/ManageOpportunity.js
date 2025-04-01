@@ -24,14 +24,30 @@ function formatClosureDate(dateStr) {
   return d.toLocaleDateString("en-GB");
 }
 
+// For color-coding logs by action
+function getDotColor(action) {
+  switch (action) {
+    case "create":
+      return "bg-green-500";
+    case "update":
+      return "bg-orange-500";
+    case "delete":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
+  }
+}
+
 export default function ManageOpportunity() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin ? "all-opportunities" : "my-opportunities"
   );
+
   const [myOpportunities, setMyOpportunities] = useState([]);
   const [teamOpportunities, setTeamOpportunities] = useState([]);
   const [allOpportunities, setAllOpportunities] = useState([]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [filterCriteria, setFilterCriteria] = useState({
@@ -41,6 +57,11 @@ export default function ManageOpportunity() {
     createdFilter: "All",
   });
   const [viewMode, setViewMode] = useState("list");
+
+  // Logs dropdown state
+  const [showLogsDropdown, setShowLogsDropdown] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [allLogs, setAllLogs] = useState([]);
 
   // Define stages for Kanban view & filtering
   const stages = [
@@ -52,19 +73,22 @@ export default function ManageOpportunity() {
     "Won/Lost/Discontinued",
   ];
 
+  // -----------------------------
   // Fetch opportunities on mount
+  // -----------------------------
   useEffect(() => {
     fetchMyOpportunities();
     fetchTeamOpportunities();
-    if (isSuperAdmin) fetchAllOpportunities();
+    if (isSuperAdmin) {
+      fetchAllOpportunities();
+    }
   }, [isSuperAdmin]);
 
   async function fetchMyOpportunities() {
     try {
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/opportunities?filter=my`,
-        { headers: getAuthHeaders() }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=my`, {
+        headers: getAuthHeaders(),
+      });
       setMyOpportunities(res.data || []);
     } catch (error) {
       console.error("Error fetching my opportunities:", error);
@@ -73,10 +97,9 @@ export default function ManageOpportunity() {
 
   async function fetchTeamOpportunities() {
     try {
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/opportunities?filter=team`,
-        { headers: getAuthHeaders() }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=team`, {
+        headers: getAuthHeaders(),
+      });
       setTeamOpportunities(res.data || []);
     } catch (error) {
       console.error("Error fetching team opportunities:", error);
@@ -94,6 +117,32 @@ export default function ManageOpportunity() {
     }
   }
 
+  // ----------------------------
+  // Fetch all logs (aggregated)
+  // ----------------------------
+  async function fetchAllLogs() {
+    try {
+      setLogsLoading(true);
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities/logs`, {
+        headers: getAuthHeaders(),
+      });
+      setAllLogs(res.data.logs || []);
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
+  const handleLogsMouseEnter = () => {
+    setShowLogsDropdown(true);
+    fetchAllLogs();
+  };
+
+  const handleLogsMouseLeave = () => {
+    setShowLogsDropdown(false);
+  };
+
   // Helper: return all opportunities based on active tab
   function getAllData() {
     if (activeTab === "my-opportunities") return myOpportunities;
@@ -102,12 +151,14 @@ export default function ManageOpportunity() {
     return [];
   }
 
-  // Filter data based on search term and filter criteria
+  // -----------------------------------
+  // Filter data based on search & forms
+  // -----------------------------------
   function getFilteredData() {
     const lowerTerm = searchTerm.toLowerCase();
     let data = getAllData();
 
-    // Apply search filter
+    // Search filter
     data = data.filter((op) => {
       const combined = [
         op.opportunityCode,
@@ -121,12 +172,12 @@ export default function ManageOpportunity() {
       return combined.includes(lowerTerm);
     });
 
-    // Apply Opportunity Stage filter if not "All"
+    // Opportunity Stage filter (if not "All")
     if (filterCriteria.opportunityStage && filterCriteria.opportunityStage !== "All") {
       data = data.filter((op) => op.opportunityStage === filterCriteria.opportunityStage);
     }
 
-    // Apply Closure Date filters
+    // Closure From/To
     if (filterCriteria.closureFromDate) {
       const fromDate = new Date(filterCriteria.closureFromDate);
       data = data.filter((op) => new Date(op.closureDate) >= fromDate);
@@ -136,7 +187,7 @@ export default function ManageOpportunity() {
       data = data.filter((op) => new Date(op.closureDate) <= toDate);
     }
 
-    // Apply Created Filter
+    // Created Filter
     if (filterCriteria.createdFilter && filterCriteria.createdFilter !== "All") {
       const now = new Date();
       let start, end;
@@ -189,6 +240,7 @@ export default function ManageOpportunity() {
         });
       }
     }
+
     return data;
   }
 
@@ -198,7 +250,7 @@ export default function ManageOpportunity() {
     setFilterCriteria((prev) => ({ ...prev, [name]: value }));
   }
 
-  // Render filter panel (using FilterPanel component)
+  // Render filter panel
   function renderFilterPanel() {
     return (
       <FilterPanel
@@ -210,7 +262,7 @@ export default function ManageOpportunity() {
     );
   }
 
-  // Kanban view: group by stage helper (defined in KanbanView)
+  // Kanban drag end
   async function handleDragEnd(result) {
     const { destination, source, draggableId } = result;
     if (!destination || destination.droppableId === source.droppableId) return;
@@ -237,13 +289,84 @@ export default function ManageOpportunity() {
   return (
     <div className="min-h-screen bg-white text-gray-800 p-4">
       <Breadcrumb />
+
       <div className="flex items-center justify-between mb-4">
         <OpportunityTabs
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isSuperAdmin={isSuperAdmin}
         />
+
         <div className="flex items-center space-x-2">
+          {/* Single Logs button with hover dropdown */}
+          <div
+            className="relative"
+            onMouseEnter={handleLogsMouseEnter}
+            onMouseLeave={handleLogsMouseLeave}
+          >
+            <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+              Logs
+            </button>
+            {showLogsDropdown && (
+              <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border border-gray-300 rounded shadow-md z-50 p-2">
+                {logsLoading ? (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : allLogs.length > 0 ? (
+                  allLogs.map((log, idx) => {
+                    const dotColor = getDotColor(log.action);
+                    return (
+                      <div
+                        key={idx}
+                        className="p-2 mb-2 border-b last:border-b-0 text-sm text-gray-700"
+                      >
+                        {/* Action + Dot + Field */}
+                        <div className="flex items-center space-x-2">
+                          <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`}></span>
+                          <span className="font-semibold capitalize">{log.action}</span>
+                          {log.field && (
+                            <span className="text-xs text-gray-400 ml-2">
+                              {log.field}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Date/Time + OpportunityName */}
+                        <div className="text-xs text-gray-500">
+                          {new Date(log.performedAt).toLocaleString()} 
+                          {" | "}
+                          Opportunity: {log.opportunityName || "N/A"}
+                        </div>
+
+                        {/* If you store performedBy as an ObjectId, you'll need to populate or store user name differently */}
+                        {/* Old/New Values */}
+                        {log.oldValue !== undefined && (
+                          <div className="mt-1 text-xs">
+                            <strong>Old:</strong>{" "}
+                            {typeof log.oldValue === "object"
+                              ? JSON.stringify(log.oldValue)
+                              : String(log.oldValue)}
+                          </div>
+                        )}
+                        {log.newValue !== undefined && (
+                          <div className="text-xs">
+                            <strong>New:</strong>{" "}
+                            {typeof log.newValue === "object"
+                              ? JSON.stringify(log.newValue)
+                              : String(log.newValue)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-gray-500 py-2">No logs found</div>
+                )}
+              </div>
+            )}
+          </div>
+
           <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
           <button
             onClick={() => setShowFilter((prev) => !prev)}
@@ -251,7 +374,9 @@ export default function ManageOpportunity() {
           >
             Add Filter
           </button>
+
           <ToggleButtons viewMode={viewMode} setViewMode={setViewMode} />
+
           <Link
             to="/admin-dashboard/create-opportunity"
             className="bg-purple-600 hover:bg-purple-700 text-white rounded-md p-2 focus:outline-none"
@@ -273,10 +398,7 @@ export default function ManageOpportunity() {
 
       <div className="border-t border-gray-300 mt-4">
         {viewMode === "list" ? (
-          <OpportunityTable
-            data={getFilteredData()}
-            formatClosureDate={formatClosureDate}
-          />
+          <OpportunityTable data={getFilteredData()} formatClosureDate={formatClosureDate} />
         ) : (
           <KanbanView
             data={getFilteredData()}

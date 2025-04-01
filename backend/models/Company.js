@@ -11,14 +11,14 @@ const logSchema = new mongoose.Schema({
   oldValue: { type: mongoose.Schema.Types.Mixed }, // Previous value
   newValue: { type: mongoose.Schema.Types.Mixed }, // New value
   performedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  performedAt: { type: Date, default: Date.now },
+  performedAt: { type: Date, default: Date.now }, // <-- FIXED (Renamed from timestamp to performedAt)
   ipAddress: { type: String },
 });
 
 const companySchema = new mongoose.Schema({
   companyName: { type: String, required: true, unique: true },
-  brandName: { type: String }, // New optional field
-  GSTIN: { type: String }, // New GSTIN field
+  brandName: { type: String },
+  GSTIN: { type: String },
   companyEmail: { type: String },
   clients: { type: [clientSchema], default: [] },
   companyAddress: { type: String },
@@ -26,10 +26,15 @@ const companySchema = new mongoose.Schema({
   updatedAt: { type: Date },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  logs: { type: [logSchema], default: [] }, // Audit logs
+  logs: { type: [logSchema], default: [] },
+
+  // For Soft Delete:
+  deleted: { type: Boolean, default: false }, // <-- FIXED
+  deletedAt: { type: Date },                 // <-- FIXED
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // <-- FIXED
 });
 
-// Add middleware to handle logging
+// Add middleware to handle timestamps
 companySchema.pre('save', function(next) {
   if (this.isNew) {
     this.createdAt = new Date();

@@ -3,34 +3,45 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
 
 export default function ManageCompanies() {
   const navigate = useNavigate();
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   
+  // State
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Modals for add & edit
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
-  const [logsModalOpen, setLogsModalOpen] = useState(false);
-  const [companyLogs, setCompanyLogs] = useState(null);
-  const [logsLoading, setLogsLoading] = useState(false);
+
+  // Bulk upload
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
+
+  // Pagination
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
     totalPages: 1
   });
 
+  // Logs dropdown
+  const [commonLogs, setCommonLogs] = useState([]);
+  const [showLogsDropdown, setShowLogsDropdown] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  // -----------------------
+  // Fetch companies
+  // -----------------------
   useEffect(() => {
     fetchCompanies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page]);
 
   async function fetchCompanies() {
@@ -58,6 +69,9 @@ export default function ManageCompanies() {
     }
   }
 
+  // -----------------------
+  // Soft delete
+  // -----------------------
   const handleDelete = async (companyId) => {
     if (window.confirm("Are you sure you want to delete this company?")) {
       try {
@@ -73,37 +87,44 @@ export default function ManageCompanies() {
     }
   };
 
+  // -----------------------
+  // Edit
+  // -----------------------
   const handleEdit = (company) => {
     setSelectedCompany(company);
     setEditModalOpen(true);
   };
 
-  const fetchCompanyLogs = async (companyId) => {
+  // -----------------------
+  // Download Template
+  // -----------------------
+  const downloadTemplate = async () => {
     try {
-      setLogsLoading(true);
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies/${companyId}/logs`, {
+      const response = await axios.get(`${BACKEND_URL}/api/admin/companies/template`, {
         headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob"
       });
-      setCompanyLogs(res.data);
-      setLogsModalOpen(true);
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", "companies_template.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     } catch (err) {
-      console.error("Error fetching company logs:", err);
-      alert(err.response?.data?.message || "Failed to fetch company logs");
-    } finally {
-      setLogsLoading(false);
+      console.error("Error downloading template:", err);
+      alert("Failed to download template. Check console for details.");
     }
   };
 
-  const downloadTemplate = () => {
-    const token = localStorage.getItem("token");
-    window.open(`${BACKEND_URL}/api/admin/companies/template?token=${token}`, '_blank');
-  };
-
+  // -----------------------
+  // Bulk Upload
+  // -----------------------
   const isValidFile = (file) => {
     const validTypes = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel'
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel"
     ];
     return file && validTypes.includes(file.type);
   };
@@ -114,7 +135,7 @@ export default function ManageCompanies() {
 
     if (!isValidFile(file)) {
       setUploadError("Invalid file type. Please upload an Excel file (.xlsx, .xls)");
-      e.target.value = '';
+      e.target.value = "";
       return;
     }
 
@@ -124,17 +145,15 @@ export default function ManageCompanies() {
       setUploadSuccess(null);
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
       const token = localStorage.getItem("token");
-      
-      // Ensure URL is properly formatted
-      const uploadUrl = `${BACKEND_URL}/api/admin/companies/bulk`.replace(/([^:]\/)\/+/g, '$1');
-      
+      const uploadUrl = `${BACKEND_URL}/api/admin/companies/bulk`.replace(/([^:]\/)\/+/g, "$1");
+
       const response = await axios.post(uploadUrl, formData, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -145,36 +164,164 @@ export default function ManageCompanies() {
       setUploadSuccess(`Successfully uploaded ${response.data.count} companies`);
       fetchCompanies();
     } catch (err) {
-      console.error('Error uploading file:', err);
-      const errorMessage = err.response?.data?.message || 
-                         err.response?.data?.error || 
-                         err.message || 
-                         'Error uploading file';
+      console.error("Error uploading file:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Error uploading file";
       setUploadError(errorMessage);
-      
+
       if (err.response?.data?.errors) {
-        setUploadError(prev => `${prev}: ${err.response.data.errors.join(', ')}`);
+        setUploadError(prev => `${prev}: ${err.response.data.errors.join(", ")}`);
       }
     } finally {
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
+  // -----------------------
+  // Common Logs (hover)
+  // -----------------------
+  const handleLogsMouseEnter = () => {
+    setShowLogsDropdown(true);
+    fetchAllLogs();
+  };
+
+  const handleLogsMouseLeave = () => {
+    setShowLogsDropdown(false);
+  };
+
+  async function fetchAllLogs() {
+    try {
+      setLogsLoading(true);
+      const token = localStorage.getItem("token");
+      // You need a backend route that returns all logs with companyName attached:
+      // GET /api/admin/logs => { logs: [ { action, field, performedAt, performedBy, companyName, ... }, ... ] }
+      const res = await axios.get(`${BACKEND_URL}/api/admin/logs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // If not pre-sorted, sort here:
+      const sorted = res.data.logs.sort(
+        (a, b) => new Date(b.performedAt) - new Date(a.performedAt)
+      );
+      setCommonLogs(sorted);
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
+  // -----------------------
+  // Pagination
+  // -----------------------
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
   };
 
+  // Helper: pick dot color based on action
+  const getDotColor = (action) => {
+    switch (action) {
+      case "create":
+        return "bg-green-500";
+      case "update":
+        return "bg-orange-500";
+      case "delete":
+        return "bg-red-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
   return (
     <div className="p-6">
+      {/* Header: Title, Logs (hover), Add, Bulk */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Manage Companies</h1>
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 items-center">
+          {/* Single Logs Button */}
+          <div
+            className="relative"
+            onMouseEnter={handleLogsMouseEnter}
+            onMouseLeave={handleLogsMouseLeave}
+          >
+            <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+              Logs
+            </button>
+            {/* Logs Dropdown */}
+            {showLogsDropdown && (
+              <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border border-gray-300 rounded shadow-md z-50 p-2">
+                {logsLoading ? (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : commonLogs.length > 0 ? (
+                  commonLogs.map((log, idx) => {
+                    const dotColor = getDotColor(log.action);
+                    return (
+                      <div
+                        key={idx}
+                        className="p-2 mb-2 border-b last:border-b-0 text-sm text-gray-700"
+                      >
+                        {/* Action + Dot + Field */}
+                        <div className="flex items-center space-x-2">
+                          <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`}></span>
+                          <span className="font-semibold capitalize">{log.action}</span>
+                          <span className="text-xs text-gray-400 ml-2">
+                            {log.field || "N/A"}
+                          </span>
+                        </div>
+
+                        {/* Date/Time + PerformedBy + IP */}
+                        <div className="text-xs text-gray-500">
+                          {new Date(log.performedAt).toLocaleString()} | Changed by{" "}
+                          {log.performedBy?.name || "System"} (IP: {log.ipAddress || "N/A"})
+                        </div>
+
+                        {/* Company Name */}
+                        <div className="text-xs mt-1">
+                          <strong>Company:</strong> {log.companyName || "N/A"}
+                        </div>
+
+                        {/* Old/New Values (optional) */}
+                        {log.oldValue && (
+                          <div className="mt-1 text-xs">
+                            <strong>Old:</strong>{" "}
+                            {typeof log.oldValue === "object"
+                              ? JSON.stringify(log.oldValue)
+                              : String(log.oldValue)}
+                          </div>
+                        )}
+                        {log.newValue && (
+                          <div className="text-xs">
+                            <strong>New:</strong>{" "}
+                            {typeof log.newValue === "object"
+                              ? JSON.stringify(log.newValue)
+                              : String(log.newValue)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-gray-500 py-2">
+                    No logs found
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Add Company */}
           <button
             onClick={() => setAddModalOpen(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
           >
             Add Company
           </button>
+
+          {/* Bulk Upload */}
           <button
             onClick={() => setUploadModalOpen(true)}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -183,7 +330,8 @@ export default function ManageCompanies() {
           </button>
         </div>
       </div>
-      
+
+      {/* Table or spinner/error */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -211,9 +359,9 @@ export default function ManageCompanies() {
                 {companies.map((company) => (
                   <tr key={company._id} className="border-b hover:bg-gray-50">
                     <td className="p-3">{company.companyName}</td>
-                    <td className="p-3">{company.brandName || '-'}</td>
-                    <td className="p-3">{company.GSTIN || '-'}</td>
-                    <td className="p-3">{company.companyEmail || '-'}</td>
+                    <td className="p-3">{company.brandName || "-"}</td>
+                    <td className="p-3">{company.GSTIN || "-"}</td>
+                    <td className="p-3">{company.companyEmail || "-"}</td>
                     <td className="p-3">
                       {company.clients?.length > 0 ? (
                         <div className="space-y-1">
@@ -227,7 +375,7 @@ export default function ManageCompanies() {
                         <span className="text-gray-400">No clients</span>
                       )}
                     </td>
-                    <td className="p-3">{company.companyAddress || '-'}</td>
+                    <td className="p-3">{company.companyAddress || "-"}</td>
                     <td className="p-3 space-x-1">
                       <button
                         onClick={() => handleEdit(company)}
@@ -235,13 +383,6 @@ export default function ManageCompanies() {
                         title="Edit"
                       >
                         Edit
-                      </button>
-                      <button
-                        onClick={() => fetchCompanyLogs(company._id)}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-sm"
-                        title="View Logs"
-                      >
-                        Logs
                       </button>
                       <button
                         onClick={() => handleDelete(company._id)}
@@ -262,15 +403,25 @@ export default function ManageCompanies() {
             <button
               onClick={() => handlePageChange(pagination.page - 1)}
               disabled={pagination.page === 1}
-              className={`px-4 py-2 rounded ${pagination.page === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              className={`px-4 py-2 rounded ${
+                pagination.page === 1
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              }`}
             >
               Previous
             </button>
-            <span>Page {pagination.page} of {pagination.totalPages}</span>
+            <span>
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
             <button
               onClick={() => handlePageChange(pagination.page + 1)}
               disabled={pagination.page === pagination.totalPages}
-              className={`px-4 py-2 rounded ${pagination.page === pagination.totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              className={`px-4 py-2 rounded ${
+                pagination.page === pagination.totalPages
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              }`}
             >
               Next
             </button>
@@ -306,17 +457,6 @@ export default function ManageCompanies() {
         />
       )}
 
-      {/* Audit Logs Modal */}
-      <LogsModal
-        isOpen={logsModalOpen}
-        logs={companyLogs}
-        isLoading={logsLoading}
-        onClose={() => {
-          setLogsModalOpen(false);
-          setCompanyLogs(null);
-        }}
-      />
-
       {/* Bulk Upload Modal */}
       <UploadModal
         isOpen={uploadModalOpen}
@@ -336,8 +476,9 @@ export default function ManageCompanies() {
   );
 }
 
-// Modal Components (Add these below the main component or in separate files)
-
+// ------------------
+// AddCompanyModal
+// ------------------
 function AddCompanyModal({ isOpen, onClose, onCreated, BACKEND_URL }) {
   const [formData, setFormData] = useState({
     companyName: "",
@@ -359,7 +500,7 @@ function AddCompanyModal({ isOpen, onClose, onCreated, BACKEND_URL }) {
     }
     setFormData(prev => ({
       ...prev,
-      clients: [...prev.clients, { name: clientName, contactNumber: clientContact }],
+      clients: [...prev.clients, { name: clientName, contactNumber: clientContact }]
     }));
     setClientName("");
     setClientContact("");
@@ -520,14 +661,18 @@ function AddCompanyModal({ isOpen, onClose, onCreated, BACKEND_URL }) {
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className={`px-4 py-2 rounded-md text-white ${saving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-4 py-2 rounded-md text-white ${
+              saving ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             {saving ? (
               <>
                 <span className="inline-block animate-spin mr-2">↻</span>
                 Saving...
               </>
-            ) : 'Save Company'}
+            ) : (
+              "Save Company"
+            )}
           </button>
         </div>
       </div>
@@ -535,6 +680,9 @@ function AddCompanyModal({ isOpen, onClose, onCreated, BACKEND_URL }) {
   );
 }
 
+// ----------------------
+// EditCompanyModal
+// ----------------------
 function EditCompanyModal({ company, onClose, onUpdated, BACKEND_URL }) {
   const [formData, setFormData] = useState({
     companyName: company.companyName,
@@ -556,7 +704,7 @@ function EditCompanyModal({ company, onClose, onUpdated, BACKEND_URL }) {
     }
     setFormData(prev => ({
       ...prev,
-      clients: [...prev.clients, { name: clientName, contactNumber: clientContact }],
+      clients: [...prev.clients, { name: clientName, contactNumber: clientContact }]
     }));
     setClientName("");
     setClientContact("");
@@ -589,6 +737,8 @@ function EditCompanyModal({ company, onClose, onUpdated, BACKEND_URL }) {
       setSaving(false);
     }
   };
+
+  if (!company) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -682,7 +832,9 @@ function EditCompanyModal({ company, onClose, onUpdated, BACKEND_URL }) {
               {formData.clients.length > 0 && (
                 <div className="border rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-4 py-2 border-b">
-                    <span className="font-medium">Current Clients ({formData.clients.length})</span>
+                    <span className="font-medium">
+                      Current Clients ({formData.clients.length})
+                    </span>
                   </div>
                   <ul className="divide-y">
                     {formData.clients.map((client, idx) => (
@@ -715,149 +867,18 @@ function EditCompanyModal({ company, onClose, onUpdated, BACKEND_URL }) {
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className={`px-4 py-2 rounded-md text-white ${saving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-4 py-2 rounded-md text-white ${
+              saving ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             {saving ? (
               <>
                 <span className="inline-block animate-spin mr-2">↻</span>
                 Saving...
               </>
-            ) : 'Update Company'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LogsModal({ isOpen, logs, isLoading, onClose }) {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-      <div className="bg-white p-6 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-auto">
-        <h2 className="text-2xl font-bold mb-4">Company Audit Logs</h2>
-        
-        {isLoading ? (
-          <div className="flex justify-center items-center h-32">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
-        ) : (
-          <>
-            {logs?.company && (
-              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-3">Company Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Company Name</p>
-                    <p>{logs.company.companyName}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Brand Name</p>
-                    <p>{logs.company.brandName || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">GSTIN</p>
-                    <p>{logs.company.GSTIN || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Created At</p>
-                    <p>{new Date(logs.company.createdAt).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Created By</p>
-                    <p>{logs.company.createdBy?.name || 'System'}</p>
-                  </div>
-                  {logs.company.updatedAt && (
-                    <>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Last Updated</p>
-                        <p>{new Date(logs.company.updatedAt).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Updated By</p>
-                        <p>{logs.company.updatedBy?.name || 'System'}</p>
-                      </div>
-                    </>
-                  )}
-                  {logs.company.deleted && (
-                    <>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Deleted At</p>
-                        <p>{new Date(logs.company.deletedAt).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Deleted By</p>
-                        <p>{logs.company.deletedBy?.name || 'System'}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+            ) : (
+              "Update Company"
             )}
-
-            <h3 className="text-lg font-semibold mb-3">Activity Log</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">Action</th>
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">Field</th>
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">Old Value</th>
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">New Value</th>
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">Performed By</th>
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">IP Address</th>
-                    <th className="p-3 text-left text-sm font-semibold text-gray-700">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs?.logs?.length > 0 ? (
-                    logs.logs.map((log, idx) => (
-                      <tr key={idx} className="border-b hover:bg-gray-50">
-                        <td className="p-3 capitalize">{log.action}</td>
-                        <td className="p-3">{log.field || 'N/A'}</td>
-                        <td className="p-3 max-w-xs truncate">
-                          {log.oldValue ? 
-                            (Array.isArray(log.oldValue) ? 
-                              log.oldValue.map(item => JSON.stringify(item)).join(', ') : 
-                              typeof log.oldValue === 'object' ? 
-                                JSON.stringify(log.oldValue) : 
-                                log.oldValue.toString()) : 
-                            'N/A'}
-                        </td>
-                        <td className="p-3 max-w-xs truncate">
-                          {log.newValue ? 
-                            (Array.isArray(log.newValue) ? 
-                              log.newValue.map(item => JSON.stringify(item)).join(', ') : 
-                              typeof log.newValue === 'object' ? 
-                                JSON.stringify(log.newValue) : 
-                                log.newValue.toString()) : 
-                            'N/A'}
-                        </td>
-                        <td className="p-3">{log.performedBy?.name || 'System'}</td>
-                        <td className="p-3">{log.ipAddress}</td>
-                        <td className="p-3">{new Date(log.timestamp).toLocaleString()}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="7" className="p-4 text-center text-gray-500">
-                        No activity logs found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        <div className="mt-6 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md"
-          >
-            Close
           </button>
         </div>
       </div>
@@ -865,7 +886,18 @@ function LogsModal({ isOpen, logs, isLoading, onClose }) {
   );
 }
 
-function UploadModal({ isOpen, progress, error, success, onDownloadTemplate, onFileUpload, onClose }) {
+// -----------------------
+// UploadModal
+// -----------------------
+function UploadModal({
+  isOpen,
+  progress,
+  error,
+  success,
+  onDownloadTemplate,
+  onFileUpload,
+  onClose
+}) {
   if (!isOpen) return null;
 
   return (
@@ -904,8 +936,18 @@ function UploadModal({ isOpen, progress, error, success, onDownloadTemplate, onF
               className="w-full block bg-gray-100 hover:bg-gray-200 border-2 border-dashed border-gray-300 rounded-md py-8 text-center cursor-pointer"
             >
               <div className="flex flex-col items-center justify-center">
-                <svg className="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                <svg
+                  className="w-12 h-12 text-gray-400 mb-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
                 </svg>
                 <span className="text-sm font-medium text-gray-700">
                   Click to select file or drag and drop
@@ -919,10 +961,10 @@ function UploadModal({ isOpen, progress, error, success, onDownloadTemplate, onF
             {progress > 0 && progress < 100 && (
               <div className="mt-3">
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
-                  <div 
-                    className="bg-blue-600 h-2.5 rounded-full" 
+                  <div
+                    className="bg-blue-600 h-2.5 rounded-full"
                     style={{ width: `${progress}%` }}
-                  ></div>
+                  />
                 </div>
                 <p className="text-xs text-gray-500 mt-1 text-right">
                   Uploading: {progress}%
@@ -935,14 +977,20 @@ function UploadModal({ isOpen, progress, error, success, onDownloadTemplate, onF
             <div className="bg-red-50 border-l-4 border-red-500 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  <svg
+                    className="h-5 w-5 text-red-500"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-red-700">
-                    {error}
-                  </p>
+                  <p className="text-sm text-red-700">{error}</p>
                 </div>
               </div>
             </div>
@@ -952,8 +1000,16 @@ function UploadModal({ isOpen, progress, error, success, onDownloadTemplate, onF
             <div className="bg-green-50 border-l-4 border-green-500 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  <svg
+                    className="h-5 w-5 text-green-500"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </div>
                 <div className="ml-3">

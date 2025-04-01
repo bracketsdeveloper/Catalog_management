@@ -66,7 +66,7 @@ export default function CreateOpportunity() {
     const fetchCompanies = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+        const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setCompanies(res.data || []);
@@ -74,6 +74,7 @@ export default function CreateOpportunity() {
         console.error("Error fetching companies:", err);
       }
     };
+    
 
     const fetchUsers = async () => {
       try {

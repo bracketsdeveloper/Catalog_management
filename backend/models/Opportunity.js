@@ -2,32 +2,45 @@
 const mongoose = require("mongoose");
 
 /**
- * Optional: a separate schema for logs,
- * which record who did what action and when.
+ * A more detailed Log Schema:
+ * - action: 'create', 'update', or 'delete'
+ * - field: which field changed (for updates)
+ * - oldValue: previous value
+ * - newValue: updated value
+ * - performedBy: user _id or name
+ * - performedAt: date/time
+ * - ipAddress: capture the IP if available
  */
 const logSchema = new mongoose.Schema({
-  userName: { type: String, default: "Unknown" },
-  action: { type: String, required: true },    // e.g. "Created", "Updated", "Deleted"
-  date: { type: Date, default: Date.now },
+  action: { type: String, required: true }, // 'create', 'update', 'delete'
+  field: { type: String },                  // which field was changed (for 'update')
+  oldValue: { type: mongoose.Schema.Types.Mixed },
+  newValue: { type: mongoose.Schema.Types.Mixed },
+  performedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  performedAt: { type: Date, default: Date.now },
+  ipAddress: { type: String },
 });
 
+/**
+ * Main Opportunity Schema
+ */
 const opportunitySchema = new mongoose.Schema({
   opportunityName: { type: String, required: true },
-  account: { type: String, required: true },       // e.g. store company name or _id
-  contact: { type: String },                       // e.g. store contact name from that company
+  account: { type: String, required: true },  // e.g. company name or ID
+  contact: { type: String },                  // contact name or ID
 
   // Opportunity Type, Stage, Status
-  opportunityType: { type: String },               // e.g. "Non-Tender", "Tender", etc.
-  opportunityStage: { type: String, required: true }, // e.g. "Commit", "Negotiation"
-  opportunityStatus: { type: String },             // e.g. "Won", "Lost", or "Discontinued"
+  opportunityType: { type: String },
+  opportunityStage: { type: String, required: true },
+  opportunityStatus: { type: String },
 
-  // Additional fields
+  // More fields
   opportunityDetail: { type: String },
   opportunityValue: { type: Number },
   currency: { type: String, default: "Indian Rupee" },
-  leadSource: { type: String, default: "others" }, // "cold call", "existing client reference", "others"
+  leadSource: { type: String, default: "others" },
   closureDate: { type: Date, required: true },
-  closureProbability: { type: Number },            // 0 - 100
+  closureProbability: { type: Number },
   grossProfit: { type: String },
 
   opportunityPriority: { type: String, default: "Low" },
@@ -35,35 +48,28 @@ const opportunitySchema = new mongoose.Schema({
   dealRegistrationNumber: { type: String },
   freeTextField: { type: String },
 
-  // The user who "owns" this Opportunity (storing just the name or email)
+  // The user who owns the Opportunity
   opportunityOwner: { type: String, required: true },
-
-  // Auto-generated or assigned code
   opportunityCode: { type: String },
-
-  // Active or not
   isActive: { type: Boolean, default: true },
 
   // The user who created this record
-  createdBy: { type: String },  // or store user ID with ref if you prefer
+  createdBy: { type: String }, // or store a user _id
 
-  // Timestamps
   createdAt: { type: Date, default: Date.now },
 
-  // Logs array for CRUD actions or other significant updates
+  // Enhanced logs array
   logs: [logSchema],
 
-  // Product Tab
+  // Products Tab
   products: [
     {
       productCode: String,
       productName: String,
       listPrice: String,
-      // Expand more if needed
     },
   ],
-
-  // Contact Tab
+  // Contacts Tab
   contacts: [
     {
       contactCode: String,
@@ -72,29 +78,25 @@ const opportunitySchema = new mongoose.Schema({
       isActive: Boolean,
     },
   ],
-
   // Media Tab
   mediaItems: [
     {
       mediaCode: String,
-      fileName: String,     // e.g. the stored or original name
-      mediaName: String,    // display name
+      fileName: String,
+      mediaName: String,
       contentType: String,
       description: String,
-      // If storing path or URL, you can add that too
     },
   ],
-
   // Team Tab
   teamMembers: [
     {
       teamMemberCode: String,
-      userName: String,     // or user ID
+      userName: String,
       description: String,
       isActive: Boolean,
     },
   ],
-
   // Competitor Tab
   competitors: [
     {
@@ -103,7 +105,6 @@ const opportunitySchema = new mongoose.Schema({
       competitorActivity: String,
     },
   ],
-
   // Note Tab
   notes: [
     {
@@ -115,4 +116,5 @@ const opportunitySchema = new mongoose.Schema({
   ],
 });
 
+// Export the model
 module.exports = mongoose.model("Opportunity", opportunitySchema);
