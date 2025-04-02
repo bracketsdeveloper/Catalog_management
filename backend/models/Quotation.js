@@ -3,14 +3,12 @@ const mongoose = require("mongoose");
 // Each item on the quotation references a specific product
 const quotationItemSchema = new mongoose.Schema({
   slNo: { type: Number, required: true },
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" }, // <-- NEW
-  product: { type: String, required: true }, // name or short label for display
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+  product: { type: String, required: true }, // Name or short label for display
   quantity: { type: Number, required: true },
-  rate: { type: Number, required: true },    // derived from productCost
+  rate: { type: Number, required: true },    // Derived from productCost
   amount: { type: Number, required: true },
-  gst: { type: Number, required: true },
-  cgst: { type: Number, default: 0 },    // CGST field
-  sgst: { type: Number, default: 0 },    // SGST field
+  productGST: { type: Number, required: true },  // GST stored per product
   total: { type: Number, required: true }
 });
 
@@ -21,6 +19,8 @@ const remarkSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
+// Quotation schema without a common (global) GST field.
+// The GST is stored individually for each quotation item.
 const quotationSchema = new mongoose.Schema({
   quotationNumber: { type: String, unique: true },
   catalogName: { type: String },
@@ -31,13 +31,10 @@ const quotationSchema = new mongoose.Schema({
   approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
   margin: { type: Number },
-  gst: { type: Number, required: true }, // GST field
-  cgst: { type: Number, default: 0 },    // CGST field
-  sgst: { type: Number, default: 0 },    // SGST field
+  // Removed global gst, cgst, sgst fields.
   items: [quotationItemSchema],
   createdBy: { type: String },
   createdAt: { type: Date, default: Date.now },
-  
   // New terms field - dynamic array of headings and content
   terms: [
     {
@@ -47,6 +44,7 @@ const quotationSchema = new mongoose.Schema({
   ]
 });
 
+// Pre-save hook to auto-generate a unique quotation number for new documents
 quotationSchema.pre("save", async function (next) {
   if (this.isNew) {
     const count = await this.constructor.countDocuments();

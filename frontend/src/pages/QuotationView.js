@@ -16,9 +16,42 @@ export default function QuotationView() {
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [editingTermIdx, setEditingTermIdx] = useState(null);
 
+  // Default terms to preset if none exist
+  const defaultTerms = [
+    {
+      heading: "Delivery",
+      content:
+        "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
+    },
+    {
+      heading: "Branding",
+      content: "As mentioned above",
+    },
+    {
+      heading: "Payment Terms",
+      content: "Within 30 days upon delivery",
+    },
+    {
+      heading: "Quote Validity",
+      content: "The quote is valid only for 6 days from the date of quotation",
+    },
+  ];
+
   useEffect(() => {
     fetchQuotation();
+    // eslint-disable-next-line
   }, [id]);
+
+  // Preset default terms if none exist
+  useEffect(() => {
+    if (editableQuotation && (!editableQuotation.terms || editableQuotation.terms.length === 0)) {
+      setEditableQuotation((prev) => ({
+        ...prev,
+        terms: defaultTerms,
+      }));
+    }
+    // eslint-disable-next-line
+  }, [editableQuotation?.terms]);
 
   async function fetchQuotation() {
     try {
@@ -39,6 +72,56 @@ export default function QuotationView() {
       setError("Failed to load quotation");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // NEW: When saving changes, create a new quotation rather than updating the current one.
+  async function handleSaveQuotation() {
+    if (!editableQuotation) return;
+    try {
+      const token = localStorage.getItem("token");
+      const updatedMargin = parseFloat(editableQuotation.margin) || 0;
+
+      // Prepare the data for the new quotation. Exclude fields like _id and quotationNumber.
+      const {
+        catalogName,
+        customerName,
+        customerEmail,
+        customerCompany,
+        customerAddress,
+        items,
+        terms,
+      } = editableQuotation;
+      
+      const body = {
+        catalogName,
+        customerName,
+        customerEmail,
+        customerCompany,
+        customerAddress,
+        margin: updatedMargin,
+        items,
+        terms,
+      };
+
+      const res = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error("Creation failed");
+      }
+      const data = await res.json();
+      alert("New Quotation created!");
+      // Redirect to the new quotation view page using its ID.
+      navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
+    } catch (error) {
+      console.error("Save error:", error);
+      alert("Failed to save changes");
     }
   }
 
@@ -64,31 +147,6 @@ export default function QuotationView() {
         ...prev,
         customerEmail: email,
       }));
-    }
-  }
-
-  async function handleSaveQuotation() {
-    if (!editableQuotation) return;
-    try {
-      const token = localStorage.getItem("token");
-      const updatedMargin = parseFloat(editableQuotation.margin) || 0;
-      const body = { ...editableQuotation, margin: updatedMargin };
-      const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        throw new Error("Update failed");
-      }
-      alert("Quotation updated!");
-      fetchQuotation();
-    } catch (error) {
-      console.error("Save error:", error);
-      alert("Failed to save changes");
     }
   }
 
@@ -148,7 +206,7 @@ export default function QuotationView() {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
-  // Helper functions to compute totals
+  // Helper functions to compute totals based on each item's productGST
   function computedAmount(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
@@ -161,7 +219,16 @@ export default function QuotationView() {
   }
 
   function computedTotal(quotation) {
-    return computedAmount(quotation) * 1.18;
+    let sum = 0;
+    quotation.items.forEach((item) => {
+      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+      const baseRate = parseFloat(item.rate) || 0;
+      const quantity = parseFloat(item.quantity) || 0;
+      const amount = baseRate * marginFactor * quantity;
+      const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+      sum += amount + gstVal;
+    });
+    return sum;
   }
 
   if (loading) {
@@ -174,7 +241,7 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor and totals
+  // Compute margin factor and totals for display
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
   let computedAmountVal = 0;
   let computedTotalVal = 0;
@@ -183,7 +250,8 @@ export default function QuotationView() {
     const quantity = parseFloat(item.quantity) || 0;
     const effRate = baseRate * marginFactor;
     const amount = effRate * quantity;
-    const total = amount * 1.18;
+    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+    const total = parseFloat((amount + gstVal).toFixed(2));
     computedAmountVal += amount;
     computedTotalVal += total;
   });
@@ -359,7 +427,7 @@ export default function QuotationView() {
             <th className="p-2 text-left">Quantity</th>
             <th className="p-2 text-left">Rate (with margin)</th>
             <th className="p-2 text-left">Amount</th>
-            <th className="p-2 text-left">GST (18%)</th>
+            <th className="p-2 text-left">GST (%)</th>
             {editableQuotation.cgst !== 0 && (
               <th className="p-2 text-left">CGST</th>
             )}
@@ -375,8 +443,9 @@ export default function QuotationView() {
             const quantity = parseFloat(item.quantity) || 0;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
-            const gst = parseFloat((amount * 0.18).toFixed(2));
-            const total = parseFloat((amount + gst).toFixed(2));
+            // Calculate GST based on the productGST field (assumed to be a percentage)
+            const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+            const total = parseFloat((amount + gstVal).toFixed(2));
             const imageUrl =
               item.image ||
               (item.productId &&
@@ -407,7 +476,7 @@ export default function QuotationView() {
                 </td>
                 <td className="p-2">{effRate.toFixed(2)}</td>
                 <td className="p-2">{amount.toFixed(2)}</td>
-                <td className="p-2">{editableQuotation.gst || "0.00"}%</td>
+                <td className="p-2">{parseFloat(item.productGST).toFixed(2)}%</td>
                 {editableQuotation.cgst !== 0 && (
                   <td className="p-2">{editableQuotation.cgst || "0.00"}%</td>
                 )}
@@ -425,23 +494,14 @@ export default function QuotationView() {
         <p>Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}</p>
         <p>Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}</p>
       </div>
+
+      {/* Additional Information Blocks */}
+      <div className="p-2 italic font-bold text-blue-600 border text-center">
+        Rates may vary in case there is a change in specifications / quantity / timelines
+      </div>
+      
     </div>
   );
-}
-
-export function computedAmount(quotation) {
-  let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    sum += baseRate * marginFactor * quantity;
-  });
-  return sum;
-}
-
-export function computedTotal(quotation) {
-  return computedAmount(quotation) * 1.18;
 }
 
 function EditableCell({ value, onSave }) {
@@ -470,4 +530,28 @@ function EditableCell({ value, onSave }) {
   ) : (
     <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
   );
+}
+
+export function computedAmount(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    sum += baseRate * marginFactor * quantity;
+  });
+  return sum;
+}
+
+export function computedTotal(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    const amount = baseRate * marginFactor * quantity;
+    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+    sum += amount + gstVal;
+  });
+  return sum;
 }

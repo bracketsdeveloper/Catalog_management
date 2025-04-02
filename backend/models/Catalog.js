@@ -1,11 +1,14 @@
 const mongoose = require("mongoose");
 
-// A sub-schema to store product references plus variation info
+// A sub-schema to store product references + variation info
 const productSubSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
   color: { type: String },
   size: { type: String },
-  quantity: { type: Number, default: 1 }
+  quantity: { type: Number, default: 1 },
+
+  // We keep each product's GST
+  productGST: { type: Number, default: 0 }
 });
 
 // A remark schema for chatting
@@ -23,8 +26,10 @@ const catalogSchema = new mongoose.Schema({
   customerAddress: { type: String },
   approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
-  margin: { type: Number, default: 0 },
-  gst: { type: Number, default: 18 },  // NEW: GST field with default 18%
+  margin: { type: Number, default: 0 }, // margin is still there
+
+  // REMOVED the catalog-level GST field
+
   products: [productSubSchema],
   fieldsToDisplay: [String],
   priceRange: {

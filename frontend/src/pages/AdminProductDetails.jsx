@@ -42,8 +42,10 @@ export default function AdminProductDetails() {
     hsnCode: "",
     productCost_Currency: "",
     productCost: 0,
-    productCost_Unit: ""
+    productCost_Unit: "",
+    productGST: 0 // <-- Added field for storing GST percentage
   });
+
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // ----------------- FETCH PRODUCT -----------------
@@ -51,6 +53,7 @@ export default function AdminProductDetails() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      // If you have an endpoint for single product details, e.g. GET /products/:id
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/${prodId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -82,7 +85,8 @@ export default function AdminProductDetails() {
         hsnCode: prod.hsnCode || "",
         productCost_Currency: prod.productCost_Currency || "",
         productCost: prod.productCost || 0,
-        productCost_Unit: prod.productCost_Unit || ""
+        productCost_Unit: prod.productCost_Unit || "",
+        productGST: prod.productGST || 0 // <-- Load existing GST
       });
       setError(null);
     } catch (err) {
@@ -164,7 +168,8 @@ export default function AdminProductDetails() {
         hsnCode: formData.hsnCode,
         productCost_Currency: formData.productCost_Currency,
         productCost: formData.productCost,
-        productCost_Unit: formData.productCost_Unit
+        productCost_Unit: formData.productCost_Unit,
+        productGST: Number(formData.productGST) // <-- Send updated GST
       };
 
       await axios.put(`${BACKEND_URL}/api/admin/products/${prodId}`, payload, {
@@ -253,8 +258,8 @@ export default function AdminProductDetails() {
                 {product.name}
               </h1>
               <div className="text-xl font-semibold text-purple-700">
-              ₹ {product.productCost}
-                {product.MRP_Unit ? ` / ${product.productCost_Unit}` : ""}
+                ₹ {product.productCost}
+                {product.productCost_Unit ? ` / ${product.productCost_Unit}` : ""}
               </div>
 
               {/* Key Fields */}
@@ -336,9 +341,13 @@ export default function AdminProductDetails() {
                   <p className="text-sm">
                     <span className="font-semibold">MRP:</span>{" "}
                     {product.productCost_Currency} {product.MRP}
-                    {product.productCost_Unit
-                      ? ` / ${product.productCost_Unit}`
-                      : ""}
+                    {product.productCost_Unit ? ` / ${product.productCost_Unit}` : ""}
+                  </p>
+                )}
+                {/* Display GST if applicable */}
+                {product.productGST > 0 && (
+                  <p className="text-sm">
+                    <span className="font-semibold">GST (%):</span> {product.productGST}
                   </p>
                 )}
               </div>
@@ -662,6 +671,21 @@ export default function AdminProductDetails() {
                   className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
                 />
               </div>
+
+              {/* Product GST */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  GST (%)
+                </label>
+                <input
+                  type="number"
+                  name="productGST"
+                  value={formData.productGST}
+                  onChange={handleChange}
+                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
+                />
+              </div>
+
               {/* Product Details */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700">

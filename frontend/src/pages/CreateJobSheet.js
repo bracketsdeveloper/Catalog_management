@@ -519,6 +519,7 @@ export default function CreateJobSheet() {
         advancedSearchActive={advancedSearchActive}
         advancedSearchResults={advancedSearchResults}
         searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
         handleImageSearchClick={handleImageSearchClick}
         imageInputRef={imageInputRef}
         handleImageSearch={handleImageSearch}

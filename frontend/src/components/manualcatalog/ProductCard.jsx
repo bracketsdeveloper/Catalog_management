@@ -1,41 +1,47 @@
-// ../components/jobsheet/ProductCard.js
 import React from "react";
 
-const ProductCard = ({ product, onAddSelected, openVariationModal }) => {
-  const colorOptions =
-    Array.isArray(product.color)
-      ? product.color
-      : typeof product.color === "string"
-      ? product.color.split(",").map((c) => c.trim())
-      : [];
-  const sizeOptions =
-    Array.isArray(product.size)
-      ? product.size
-      : typeof product.size === "string"
-      ? product.size.split(",").map((s) => s.trim())
-      : [];
+export default function ProductCard({
+  product,
+  selectedMargin,
+  onAddSelected,
+  openVariationSelector
+}) {
+  // productGST might come from Product model. If none, default to 0
+  const gst = product.productGST || 0;
+
+  // Convert product.color/size to arrays
+  const colorOptions = Array.isArray(product.color)
+    ? product.color
+    : typeof product.color === "string"
+    ? product.color.split(",").map((c) => c.trim())
+    : [];
+  const sizeOptions = Array.isArray(product.size)
+    ? product.size
+    : typeof product.size === "string"
+    ? product.size.split(",").map((s) => s.trim())
+    : [];
+
   const singleColor = colorOptions.length === 1;
   const singleSize = sizeOptions.length === 1;
 
   const handleSingleSelect = () => {
-    const selectedColor = singleColor ? colorOptions[0] : "";
-    const selectedSize = singleSize ? sizeOptions[0] : "";
+    let cost = product.productCost || 0;
+    if (selectedMargin > 0) {
+      cost *= 1 + selectedMargin / 100;
+      cost = parseFloat(cost.toFixed(2));
+    }
     const newItem = {
-      product: product.name,
-      color: selectedColor,
-      size: selectedSize,
+      productId: product._id,
+      name: product.name,
+      productCost: cost,
+      productGST: gst,
+      color: singleColor ? colorOptions[0] : "",
+      size: singleSize ? sizeOptions[0] : "",
       quantity: 1,
-      brandingType: "",
-      brandingVendor: "",
-      remarks: ""
+      material: product.material || "",
+      weight: product.weight || ""
     };
     onAddSelected(newItem);
-  };
-
-  const handleVariation = () => {
-    if (openVariationModal) {
-      openVariationModal(product);
-    }
   };
 
   return (
@@ -66,6 +72,7 @@ const ProductCard = ({ product, onAddSelected, openVariationModal }) => {
       <h3 className="font-semibold text-md text-red-600 mb-1 truncate">
         ₹{product.productCost}
       </h3>
+      {gst > 0 && <p className="text-xs text-gray-600 mb-1">GST: {gst}%</p>}
       <p className="text-xs text-gray-600 mb-2">
         {product.category}
         {product.subCategory ? ` / ${product.subCategory}` : ""}
@@ -79,7 +86,7 @@ const ProductCard = ({ product, onAddSelected, openVariationModal }) => {
         </button>
       ) : (
         <button
-          onClick={handleVariation}
+          onClick={() => openVariationSelector(product)}
           className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
         >
           Choose Variation
@@ -87,6 +94,4 @@ const ProductCard = ({ product, onAddSelected, openVariationModal }) => {
       )}
     </div>
   );
-};
-
-export default ProductCard;
+}
