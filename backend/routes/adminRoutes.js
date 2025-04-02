@@ -7,15 +7,17 @@ const imghash = require("imghash");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const Product = require("../models/Product");
 const User = require("../models/User");
+const Log = require("../models/Log"); // <-- NEW: Import Log model
 
 // ------------------------------
 // USER ENDPOINTS
 // ------------------------------
-
-// Fetch all users (only selected fields)
 router.get("/users", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const users = await User.find({}, "name dateOfBirth address phone email role");
+    const users = await User.find(
+      {},
+      "name dateOfBirth address phone email role"
+    );
     res.status(200).json(users);
   } catch (err) {
     console.error("Error fetching users:", err);
@@ -23,7 +25,6 @@ router.get("/users", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// Update user role
 router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
@@ -33,7 +34,11 @@ router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => 
   }
 
   try {
-    const user = await User.findByIdAndUpdate(id, { role }, { new: true, runValidators: true });
+    const user = await User.findByIdAndUpdate(
+      id,
+      { role },
+      { new: true, runValidators: true }
+    );
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -47,6 +52,43 @@ router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => 
 // ------------------------------
 // PRODUCT ENDPOINTS
 // ------------------------------
+
+// Utility function to record logs
+async function createLog(action, field, oldValue, newValue, performedBy, ip) {
+  try {
+    await Log.create({
+      action,
+      field,
+      oldValue,
+      newValue,
+      performedBy,
+      performedAt: new Date(),
+      ipAddress: ip
+    });
+  } catch (err) {
+    console.error("Error creating log:", err);
+    // No need to throw; logging errors shouldn't block main flow
+  }
+}
+
+// For granular field changes on update
+function getFieldDifferences(oldDoc, newDoc) {
+  // Compare each key in newDoc to oldDoc
+  const changes = [];
+  for (const key of Object.keys(newDoc)) {
+    // Convert both sides to string for safe comparison of arrays / objects / etc.
+    const oldVal = oldDoc[key] == null ? "" : String(oldDoc[key]);
+    const newVal = newDoc[key] == null ? "" : String(newDoc[key]);
+    if (oldVal !== newVal) {
+      changes.push({
+        field: key,
+        oldValue: oldDoc[key],
+        newValue: newDoc[key]
+      });
+    }
+  }
+  return changes;
+}
 
 // GET /api/admin/products - Filtered & Paginated Products with Search
 router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
@@ -170,12 +212,12 @@ async function computeAllHashes(imageUrls) {
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { images = [] } = req.body;
-    
+
     // Validate required fields
     if (!req.body.productTag || !req.body.productId || !req.body.category || !req.body.name) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Missing required fields" 
+        message: "Missing required fields"
       });
     }
 
@@ -191,7 +233,7 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge || "",
       name: req.body.name,
       brandName: req.body.brandName || "",
-      images: images.filter(img => typeof img === 'string' && img.trim() !== ''),
+      images: images.filter((img) => typeof img === "string" && img.trim() !== ""),
       imageHashes,
       productDetails: req.body.productDetails || "",
       qty: Number(req.body.qty) || 0,
@@ -207,33 +249,43 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       hsnCode: req.body.hsnCode || "",
       productCost_Currency: req.body.productCost_Currency || "",
       productCost: Number(req.body.productCost) || 0,
-      productCost_Unit: req.body.productCost_Unit || ""
+      productCost_Unit: req.body.productCost_Unit || "",
+      productGST: Number(req.body.productGST) || 0 // <-- read GST value
     });
 
     await newProduct.save();
-    
-    res.status(201).json({ 
+
+    // Create 'create' log (no field-by-field changes needed)
+    await createLog(
+      "create",
+      null,
+      null,
+      newProduct, // newValue
+      req.user ? req.user._id : null,
+      req.ip
+    );
+
+    res.status(201).json({
       success: true,
       message: "Product created successfully",
-      product: newProduct 
+      product: newProduct
     });
   } catch (error) {
     console.error("Error creating product:", error);
     if (error.code === 11000) {
-      res.status(400).json({ 
+      res.status(400).json({
         success: false,
-        message: "Product ID must be unique" 
+        message: "Product ID must be unique"
       });
     } else {
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: "Server error creating product",
-        error: error.message 
+        error: error.message
       });
     }
   }
 });
-
 
 // PUT /api/admin/products/:id - Update a single product (with hash computation)
 router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
@@ -244,17 +296,19 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
     // Find existing product
     const existingProduct = await Product.findById(id);
     if (!existingProduct) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Product not found" 
+        message: "Product not found"
       });
     }
 
     // Only compute hashes if images were changed
-    const imageHashes = JSON.stringify(images) !== JSON.stringify(existingProduct.images)
-      ? await computeAllHashes(images)
-      : existingProduct.imageHashes;
+    const imageHashes =
+      JSON.stringify(images) !== JSON.stringify(existingProduct.images)
+        ? await computeAllHashes(images)
+        : existingProduct.imageHashes;
 
+    // Prepare updated data
     const updatedData = {
       productTag: req.body.productTag || existingProduct.productTag,
       productId: req.body.productId || existingProduct.productId,
@@ -264,12 +318,12 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       variationHinge: req.body.variationHinge || existingProduct.variationHinge,
       name: req.body.name || existingProduct.name,
       brandName: req.body.brandName || existingProduct.brandName,
-      images: images.filter(img => typeof img === 'string' && img.trim() !== ''),
+      images: images.filter((img) => typeof img === "string" && img.trim() !== ""),
       imageHashes,
       productDetails: req.body.productDetails || existingProduct.productDetails,
-      qty: Number(req.body.qty) || existingProduct.qty,
+      qty: req.body.qty != null ? Number(req.body.qty) : existingProduct.qty,
       MRP_Currency: req.body.MRP_Currency || existingProduct.MRP_Currency,
-      MRP: Number(req.body.MRP) || existingProduct.MRP,
+      MRP: req.body.MRP != null ? Number(req.body.MRP) : existingProduct.MRP,
       MRP_Unit: req.body.MRP_Unit || existingProduct.MRP_Unit,
       deliveryTime: req.body.deliveryTime || existingProduct.deliveryTime,
       size: req.body.size || existingProduct.size,
@@ -278,36 +332,76 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       priceRange: req.body.priceRange || existingProduct.priceRange,
       weight: req.body.weight || existingProduct.weight,
       hsnCode: req.body.hsnCode || existingProduct.hsnCode,
-      productCost_Currency: req.body.productCost_Currency || existingProduct.productCost_Currency,
-      productCost: Number(req.body.productCost) || existingProduct.productCost,
-      productCost_Unit: req.body.productCost_Unit || existingProduct.productCost_Unit
+      productCost_Currency:
+        req.body.productCost_Currency || existingProduct.productCost_Currency,
+      productCost:
+        req.body.productCost != null
+          ? Number(req.body.productCost)
+          : existingProduct.productCost,
+      productCost_Unit: req.body.productCost_Unit || existingProduct.productCost_Unit,
+      // Update GST if passed
+      productGST:
+        req.body.productGST != null
+          ? Number(req.body.productGST)
+          : existingProduct.productGST
     };
 
-    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, { 
+    // Get field-level differences for logs
+    const fieldDiffs = getFieldDifferences(existingProduct.toObject(), updatedData);
+
+    // Update product
+    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
       new: true,
-      runValidators: true 
+      runValidators: true
     });
 
-    res.status(200).json({ 
+    // Create logs for each changed field
+    for (const diff of fieldDiffs) {
+      await createLog(
+        "update",
+        diff.field,
+        diff.oldValue,
+        diff.newValue,
+        req.user ? req.user._id : null,
+        req.ip
+      );
+    }
+
+    res.status(200).json({
       success: true,
       message: "Product updated successfully",
-      product: updatedProduct 
+      product: updatedProduct
     });
   } catch (error) {
     console.error("Error updating product:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: "Server error updating product",
-      error: error.message 
+      error: error.message
     });
   }
 });
 
-
 // DELETE /api/admin/products/:id - Delete a product
 router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const existingProduct = await Product.findById(req.params.id);
+    if (!existingProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
     await Product.findByIdAndDelete(req.params.id);
+
+    // Create 'delete' log
+    await createLog(
+      "delete",
+      null,
+      existingProduct, // oldValue
+      null,           // newValue
+      req.user ? req.user._id : null,
+      req.ip
+    );
+
     res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
     console.error("Error deleting product:", error);
@@ -342,7 +436,8 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       hsnCode: p.hsnCode || "",
       productCost_Currency: p.productCost_Currency || "",
       productCost: p.productCost || 0,
-      productCost_Unit: p.productCost_Unit || ""
+      productCost_Unit: p.productCost_Unit || "",
+      productGST: p.productGST != null ? Number(p.productGST) : 0
     }));
 
     // Compute and assign image hashes for each product
@@ -350,7 +445,20 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       prodData.imageHashes = await computeAllHashes(prodData.images || []);
     }
 
-    await Product.insertMany(productsData);
+    const insertedProducts = await Product.insertMany(productsData);
+
+    // Create logs for each inserted product
+    for (const prod of insertedProducts) {
+      await createLog(
+        "create",
+        null,
+        null,
+        prod,
+        req.user ? req.user._id : null,
+        req.ip
+      );
+    }
+
     res.status(201).json({ message: "Products created successfully" });
   } catch (error) {
     console.error("Error bulk uploading products:", error);
@@ -358,10 +466,7 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-// ------------------------------
-// Advanced Image Search Endpoint
-// ------------------------------
-// Accepts a single image, computes its hash, and returns products with similar images
+// (Optional) Advanced Image Search endpoint (unchanged or omitted if not needed)
 
-
+// Export the router
 module.exports = router;

@@ -2,14 +2,33 @@ const express = require("express");
 const router = express.Router();
 const Catalog = require("../models/Catalog");
 const Product = require("../models/Product");
+const Log = require("../models/Log"); // <-- Make sure you have a Log model and import it
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+
+// Helper to create logs
+async function createLog(action, oldValue, newValue, user, ip) {
+  try {
+    // user might be an object { _id, email, ... }
+    // action: 'create' | 'update' | 'delete'
+    await Log.create({
+      action,
+      field: "catalog", // a general field
+      oldValue,
+      newValue,
+      performedBy: user ? user._id : null,
+      performedAt: new Date(),
+      ipAddress: ip
+    });
+  } catch (error) {
+    console.error("Error creating catalog log:", error);
+    // Not throwing so it doesn't block main flow
+  }
+}
 
 // 1) Get all catalogs
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const catalogs = await Catalog.find()
-      .populate("products.productId")
-      .exec();
+    const catalogs = await Catalog.find().populate("products.productId").exec();
     res.json(catalogs);
   } catch (error) {
     console.error("Error fetching catalogs:", error);
@@ -22,16 +41,34 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       catalogName,
-      customerName,     // Added missing field
-      customerEmail,    // Added missing field
+      customerName,
+      customerEmail,
       customerCompany,
       customerAddress,
       products,
       fieldsToDisplay,
       priceRange,
-      margin,
-      gst  // NEW: GST field
+      margin
+      // REMOVE any 'gst' from body
     } = req.body;
+
+    // Build products array with productGST from Product model
+    const newProducts = [];
+    for (const p of products || []) {
+      const productDoc = await Product.findById(p.productId).lean();
+      if (!productDoc) {
+        console.warn(`Product not found: ${p.productId}`);
+        continue;
+      }
+      const productGST = productDoc.productGST || 0;
+      newProducts.push({
+        productId: p.productId,
+        color: p.color || "",
+        size: p.size || "",
+        quantity: p.quantity || 1,
+        productGST
+      });
+    }
 
     const newCatalog = new Catalog({
       catalogName,
@@ -39,15 +76,18 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       customerEmail,
       customerCompany,
       customerAddress,
-      products: products || [],
+      products: newProducts,
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
       priceRange,
-      gst, // store GST
       createdBy: req.user ? req.user.email : ""
     });
 
     await newCatalog.save();
+
+    // Log if needed
+    await createLog("create", null, newCatalog, req.user, req.ip);
+
     res.status(201).json({ message: "Catalog created", catalog: newCatalog });
   } catch (error) {
     console.error("Error creating catalog:", error);
@@ -55,7 +95,8 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// 3) Example AI Generate route
+
+// 3) Example AI Generate route (unchanged)
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { fromPrice, toPrice, filters } = req.body;
@@ -105,8 +146,7 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
 // 4) Get a single catalog
 router.get("/catalogs/:id", async (req, res) => {
   try {
-    const catalog = await Catalog.findById(req.params.id)
-      .populate("products.productId");
+    const catalog = await Catalog.findById(req.params.id).populate("products.productId");
     if (!catalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
@@ -120,10 +160,22 @@ router.get("/catalogs/:id", async (req, res) => {
 // 5) Delete a catalog
 router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const deletedCatalog = await Catalog.findByIdAndDelete(req.params.id);
-    if (!deletedCatalog) {
+    const catalogToDelete = await Catalog.findById(req.params.id);
+    if (!catalogToDelete) {
       return res.status(404).json({ message: "Catalog not found" });
     }
+
+    const deletedCatalog = await Catalog.findByIdAndDelete(req.params.id);
+
+    // Create 'delete' log
+    await createLog(
+      "delete",
+      catalogToDelete, // oldValue
+      null,           // newValue
+      req.user,
+      req.ip
+    );
+
     res.json({ message: "Catalog deleted" });
   } catch (error) {
     console.error("Error deleting catalog:", error);
@@ -143,9 +195,35 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       products,
       fieldsToDisplay,
       margin,
-      priceRange,
-      gst  // NEW: GST field
+      priceRange
+      // REMOVED any single 'gst'
     } = req.body;
+
+    const existingCatalog = await Catalog.findById(req.params.id);
+    if (!existingCatalog) {
+      return res.status(404).json({ message: "Catalog not found" });
+    }
+
+    // Build updated products array with productGST
+    let newProducts;
+    if (products) {
+      newProducts = [];
+      for (const p of products) {
+        const productDoc = await Product.findById(p.productId).lean();
+        if (!productDoc) {
+          console.warn(`Product not found: ${p.productId}`);
+          continue;
+        }
+        const productGST = productDoc.productGST || 0;
+        newProducts.push({
+          productId: p.productId,
+          color: p.color || "",
+          size: p.size || "",
+          quantity: p.quantity || 1,
+          productGST
+        });
+      }
+    }
 
     const updatedData = {
       catalogName,
@@ -155,18 +233,22 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       customerAddress,
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
-      priceRange,
-      gst  // update GST
+      priceRange
+      // no single gst stored
     };
 
-    if (products) {
-      updatedData.products = products;
+    if (newProducts) {
+      updatedData.products = newProducts;
     }
 
-    const updatedCatalog = await Catalog.findByIdAndUpdate(req.params.id, updatedData, { new: true });
-    if (!updatedCatalog) {
-      return res.status(404).json({ message: "Catalog not found" });
-    }
+    const updatedCatalog = await Catalog.findByIdAndUpdate(
+      req.params.id,
+      updatedData,
+      { new: true }
+    );
+
+    await createLog("update", existingCatalog, updatedCatalog, req.user, req.ip);
+
     res.json({ message: "Catalog updated", catalog: updatedCatalog });
   } catch (error) {
     console.error("Error updating catalog:", error);
@@ -177,14 +259,26 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
 // 7) Approve a catalog
 router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const existingCatalog = await Catalog.findById(req.params.id);
+    if (!existingCatalog) {
+      return res.status(404).json({ message: "Catalog not found" });
+    }
+
     const updatedCatalog = await Catalog.findByIdAndUpdate(
       req.params.id,
       { approveStatus: true },
       { new: true }
     );
-    if (!updatedCatalog) {
-      return res.status(404).json({ message: "Catalog not found" });
-    }
+
+    // Log the approval if desired
+    await createLog(
+      "update",
+      existingCatalog,
+      updatedCatalog,
+      req.user,
+      req.ip
+    );
+
     res.json({ message: "Catalog approved", catalog: updatedCatalog });
   } catch (error) {
     console.error("Error approving catalog:", error);
@@ -195,15 +289,27 @@ router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, re
 // 8) Update remarks for a catalog
 router.put("/catalogs/:id/remarks", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const existingCatalog = await Catalog.findById(req.params.id);
+    if (!existingCatalog) {
+      return res.status(404).json({ message: "Catalog not found" });
+    }
+
     const { remarks } = req.body;
     const updatedCatalog = await Catalog.findByIdAndUpdate(
       req.params.id,
       { remarks },
       { new: true }
     );
-    if (!updatedCatalog) {
-      return res.status(404).json({ message: "Catalog not found" });
-    }
+
+    // Log remarks update if needed
+    await createLog(
+      "update",
+      existingCatalog,
+      updatedCatalog,
+      req.user,
+      req.ip
+    );
+
     res.json({ message: "Remarks updated", catalog: updatedCatalog });
   } catch (error) {
     console.error("Error updating remarks for catalog:", error);

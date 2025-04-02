@@ -59,7 +59,7 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
     if (req.body.closureDate) {
       req.body.closureDate = parse(req.body.closureDate, "dd/MM/yyyy", new Date());
     }
-    
+
     // Generate code if none provided
     const code = await generateOpportunityCode();
 
@@ -83,13 +83,38 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
  */
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const opportunities = await Opportunity.find().sort({ createdAt: -1 });
+    const { filter } = req.query;
+    const userId = req.user._id.toString();
+    const userName = req.user.name; // Ensure req.user.name is available
+
+    let query = {};
+
+    switch (filter) {
+      case "my":
+        query.createdBy = userId;
+        break;
+      case "team":
+        // Match opportunities where the current user's ID or username is present in teamMembers
+        query.$or = [
+          { "teamMembers.teamMemberCode": userId },
+          { "teamMembers.userName": userName }
+        ];
+        break;
+      // 'all' handled by default empty query
+    }
+
+    const opportunities = await Opportunity.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
     res.json(opportunities);
   } catch (error) {
     console.error("Error fetching opportunities:", error);
     res.status(500).json({ message: "Server error fetching opportunities" });
   }
 });
+
+
 
 /**
  * GET single Opportunity
@@ -150,7 +175,14 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
       "opportunityOwner",
       "opportunityCode",
       "isActive",
+      "teamMembers",      // Add nested field here
+      "products",         // And so on for other nested data
+      "contacts",
+      "mediaItems",
+      "competitors",
+      "notes"
     ];
+
 
     const logs = [];
     fieldsToCheck.forEach((field) => {

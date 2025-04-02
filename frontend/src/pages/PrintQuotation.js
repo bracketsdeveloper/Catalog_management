@@ -41,38 +41,50 @@ export default function PrintQuotation() {
     }
   }
 
-  // Helper functions to compute totals
+  // Helper functions to compute totals based on each item's productGST
   function computedAmount(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
       const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
       const baseRate = parseFloat(item.rate) || 0;
       const quantity = parseFloat(item.quantity) || 0;
-      sum += baseRate * marginFactor * quantity;
+      const amount = baseRate * marginFactor * quantity;
+      sum += amount;
     });
     return sum;
   }
 
   function computedTotal(quotation) {
-    return computedAmount(quotation) * 1.18;
+    let sum = 0;
+    quotation.items.forEach((item) => {
+      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+      const baseRate = parseFloat(item.rate) || 0;
+      const quantity = parseFloat(item.quantity) || 0;
+      const amount = baseRate * marginFactor * quantity;
+      const gstPercent = parseFloat(item.productGST) || 0;
+      const gstVal = parseFloat((amount * (gstPercent / 100)).toFixed(2));
+      sum += amount + gstVal;
+    });
+    return sum;
   }
 
-  // Export to PDF: Clone the printable element, remove non‐printable parts, and generate PDF using html2pdf.js.
+  // Export to PDF using html2pdf.js
   const handleExportPDF = () => {
     const element = document.getElementById("printable");
     // Clone the element to remove non-print elements
     const clonedElement = element.cloneNode(true);
     clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
     const opt = {
-      margin: 0.2, // Reduced margin (0.2 inch)
+      margin: 0.2, // 0.2 inch margin
       filename: `Quotation-${editableQuotation.quotationNumber}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: { scale: 7, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
     };
     html2pdf().set(opt).from(clonedElement).save();
   };
 
+  // While loading or error
   if (loading) {
     return <div className="p-6 text-gray-400">Loading quotation...</div>;
   }
@@ -83,31 +95,12 @@ export default function PrintQuotation() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor and totals for display
+  // Compute margin factor for display
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
-  let computedAmountVal = 0;
-  let computedTotalVal = 0;
-  editableQuotation.items.forEach((item) => {
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    const effRate = baseRate * marginFactor;
-    const amount = effRate * quantity;
-    const total = amount * 1.18;
-    computedAmountVal += amount;
-    computedTotalVal += total;
-  });
-
-  // Helper to get the image URL for an item
-  const getImageUrl = (item) => {
-    if (item.image) return item.image;
-    if (item.productId && item.productId.images && item.productId.images.length > 0)
-      return item.productId.images[0];
-    return "https://via.placeholder.com/150";
-  };
 
   return (
     <div className="max-w-3xl mx-auto p-4 bg-white shadow-md" id="printable">
-      {/* Print CSS: Adjust margins and hide non-printable elements */}
+      {/* Print CSS */}
       <style>
         {`
           @page {
@@ -145,9 +138,7 @@ export default function PrintQuotation() {
             <div className="text-lg font-bold">
               Quotation No.: {editableQuotation.quotationNumber}
             </div>
-            <div className="text-xs">
-              GSTIN : 29ABCFA9924A1ZL
-            </div>
+            <div className="text-xs">GSTIN : 29ABCFA9924A1ZL</div>
           </div>
         </div>
         <div>
@@ -186,7 +177,7 @@ export default function PrintQuotation() {
               <th className="border px-1 py-1">Quantity</th>
               <th className="border px-1 py-1 text-right">Rate</th>
               <th className="border px-1 py-1 text-right">Amount</th>
-              <th className="border px-1 py-1 text-right">GST</th>
+              <th className="border px-1 py-1 text-right">GST (%)</th>
               <th className="border px-1 py-1 text-right">Total</th>
             </tr>
           </thead>
@@ -194,10 +185,11 @@ export default function PrintQuotation() {
             {editableQuotation.items.map((item, idx) => {
               const qty = Number(item.quantity) || 0;
               const rate = Number(item.rate) || 0;
-              const marginFactor = 1 + ((Number(editableQuotation.margin) || 0) / 100);
               const effRate = rate * marginFactor;
               const amount = effRate * qty;
-              const gstAmt = Number(editableQuotation.gst);
+              // Calculate GST using productGST value
+              const gstPercent = parseFloat(item.productGST) || 0;
+              const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
               const total = amount + gstAmt;
               const imageUrl = getImageUrl(item);
               return (
@@ -219,7 +211,7 @@ export default function PrintQuotation() {
                   <td className="border px-1 py-1 text-center">{qty}</td>
                   <td className="border px-1 py-1 text-right">₹{rate.toFixed(2)}</td>
                   <td className="border px-1 py-1 text-right">₹{amount.toFixed(2)}</td>
-                  <td className="border px-1 py-1 text-right">{gstAmt}%</td>
+                  <td className="border px-1 py-1 text-right">{gstPercent}%</td>
                   <td className="border px-1 py-1 text-right">₹{total.toFixed(2)}</td>
                 </tr>
               );
@@ -238,16 +230,22 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      {/* Terms & Conditions */}
+      {/* Additional Information Blocks */}
       <div className="mt-4 border-t pt-2">
+        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mb-2">
+          Rates may vary in case there is a change in specifications / quantity / timelines
+        </div>
         {editableQuotation.terms &&
           editableQuotation.terms.length > 0 &&
           editableQuotation.terms.map((term, idx) => (
             <div key={idx} className="mb-1">
-              <div className="font-semibold text-xs">{term.heading}:</div>
+              <div className="font-bold text-xs">{term.heading}:</div>
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
+        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
+          Product subject to availability at the time of order confirmation
+        </div>
       </div>
 
       {/* Footer: Two-column layout */}
@@ -279,17 +277,36 @@ export default function PrintQuotation() {
   );
 }
 
+// Helper to get the image URL for an item
+function getImageUrl(item) {
+  if (item.image) return item.image;
+  if (item.productId && item.productId.images && item.productId.images.length > 0)
+    return item.productId.images[0];
+  return "https://via.placeholder.com/150";
+}
+
 export function computedAmount(quotation) {
   let sum = 0;
   quotation.items.forEach((item) => {
     const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
     const baseRate = parseFloat(item.rate) || 0;
     const quantity = parseFloat(item.quantity) || 0;
-    sum += baseRate * marginFactor * quantity;
+    const amount = baseRate * marginFactor * quantity;
+    sum += amount;
   });
   return sum;
 }
 
 export function computedTotal(quotation) {
-  return computedAmount(quotation) * 1.18;
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    const amount = baseRate * marginFactor * quantity;
+    const gstPercent = parseFloat(item.productGST) || 0;
+    const gstVal = parseFloat((amount * (gstPercent / 100)).toFixed(2));
+    sum += amount + gstVal;
+  });
+  return sum;
 }

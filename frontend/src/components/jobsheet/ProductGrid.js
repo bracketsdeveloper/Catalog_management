@@ -205,6 +205,7 @@ const ProductGrid = ({
   advancedSearchActive,
   advancedSearchResults,
   searchTerm,
+  setSearchTerm, // Added setSearchTerm here
   handleImageSearchClick,
   imageInputRef,
   handleImageSearch,
@@ -244,7 +245,7 @@ const ProductGrid = ({
             placeholder="Search products..."
             className="flex-grow px-3 py-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
             value={searchTerm}
-            onChange={(e) => {}}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
           <button
             onClick={handleImageSearchClick}

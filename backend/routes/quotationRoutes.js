@@ -1,13 +1,35 @@
+
+
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
 const path = require("path");
-const request = require("sync-request"); // Add this at the top with other requires
+const request = require("sync-request"); // For fetching images synchronously
 const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 const ImageModule = require("docxtemplater-image-module-free");
 const Quotation = require("../models/Quotation");
+const Product = require("../models/Product");
+const Log = require("../models/Log"); // Ensure you have a Log model
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+
+// Helper to create logs
+async function createLog(action, oldValue, newValue, user, ip) {
+  try {
+    await Log.create({
+      action,
+      field: "quotation", // using a general field for quotation
+      oldValue,
+      newValue,
+      performedBy: user ? user._id : null,
+      performedAt: new Date(),
+      ipAddress: ip
+    });
+  } catch (error) {
+    console.error("Error creating quotation log:", error);
+    // Do not block main flow if logging fails
+  }
+}
 
 // 1) CREATE QUOTATION
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
@@ -19,15 +41,57 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerCompany,
       customerAddress,
       margin,
-      items,
-      gst,          // Extract GST from request body
-      cgst,         // CGST field
-      sgst,         // SGST field
-      terms         // Terms field: dynamic headings and content
+      items,      // Items array from request body
+      terms       // Dynamic terms field (headings & content)
     } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ message: "No items provided" });
+    }
+
+    // Define default terms
+    const defaultTerms = [
+      {
+        heading: "Delivery",
+        content:
+          "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost"
+      },
+      {
+        heading: "Branding",
+        content: "As mentioned above"
+      },
+      {
+        heading: "Payment Terms",
+        content: "Within 30 days upon delivery"
+      },
+      {
+        heading: "Quote Validity",
+        content: "The quote is valid only for 6 days from the date of quotation"
+      }
+    ];
+
+    // Use provided terms if available; otherwise, use default terms.
+    const quotationTerms = (terms && terms.length > 0) ? terms : defaultTerms;
+
+    // Build new items array with each product's productGST fetched from Product model
+    const newItems = [];
+    for (const item of items) {
+      const productDoc = await Product.findById(item.productId).lean();
+      if (!productDoc) {
+        console.warn(`Product not found: ${item.productId}`);
+        continue;
+      }
+      const productGST = productDoc.productGST || 0;
+      newItems.push({
+        slNo: item.slNo,
+        productId: item.productId,
+        product: item.product,
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.amount,
+        productGST, // Store each product's GST
+        total: item.total,
+      });
     }
 
     const newQuotation = new Quotation({
@@ -37,15 +101,16 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerCompany,
       customerAddress,
       margin,
-      gst,
-      cgst,         // Save CGST value
-      sgst,         // Save SGST value
-      items,
-      terms,        // Save terms with headings and content
-      createdBy: req.user.email
+      items: newItems,
+      terms: quotationTerms,
+      createdBy: req.user.email,
     });
 
     await newQuotation.save();
+
+    // Create log for quotation creation
+    await createLog("create", null, newQuotation, req.user, req.ip);
+
     res.status(201).json({ message: "Quotation created", quotation: newQuotation });
   } catch (error) {
     console.error("Error creating quotation:", error);
@@ -93,11 +158,31 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       customerAddress,
       margin,
       items,
-      gst,          // Updated GST field
-      cgst,         // Updated CGST field
-      sgst,         // Updated SGST field
-      terms         // Updated dynamic terms (headings and content)
+      terms
     } = req.body;
+
+    // Build updated items array with each product's productGST
+    let newItems = [];
+    if (items) {
+      for (const item of items) {
+        const productDoc = await Product.findById(item.productId).lean();
+        if (!productDoc) {
+          console.warn(`Product not found: ${item.productId}`);
+          continue;
+        }
+        const productGST = productDoc.productGST || 0;
+        newItems.push({
+          slNo: item.slNo,
+          productId: item.productId,
+          product: item.product,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+          productGST,
+          total: item.total,
+        });
+      }
+    }
 
     const updatedData = {
       catalogName,
@@ -106,21 +191,26 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       customerCompany,
       customerAddress,
       margin,
-      gst,
-      cgst,         // Update CGST field
-      sgst,         // Update SGST field
-      items,
-      terms         // Update terms field
+      terms,
     };
+
+    if (newItems.length) {
+      updatedData.items = newItems;
+    }
+
+    const existingQuotation = await Quotation.findById(req.params.id);
+    if (!existingQuotation) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
 
     const updatedQuotation = await Quotation.findByIdAndUpdate(
       req.params.id,
       updatedData,
       { new: true }
     );
-    if (!updatedQuotation) {
-      return res.status(404).json({ message: "Quotation not found" });
-    }
+
+    await createLog("update", existingQuotation, updatedQuotation, req.user, req.ip);
+
     res.json({ message: "Quotation updated", quotation: updatedQuotation });
   } catch (error) {
     console.error("Error updating quotation:", error);
@@ -131,10 +221,14 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
 // 5) DELETE A QUOTATION
 router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const deletedQuotation = await Quotation.findByIdAndDelete(req.params.id);
-    if (!deletedQuotation) {
+    const quotationToDelete = await Quotation.findById(req.params.id);
+    if (!quotationToDelete) {
       return res.status(404).json({ message: "Quotation not found" });
     }
+
+    const deletedQuotation = await Quotation.findByIdAndDelete(req.params.id);
+    await createLog("delete", quotationToDelete, null, req.user, req.ip);
+
     res.json({ message: "Quotation deleted" });
   } catch (error) {
     console.error("Error deleting quotation:", error);
@@ -185,6 +279,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       const quantity = parseFloat(item.quantity) || 0;
       const rate = parseFloat(item.rate) || 0;
       const amount = rate * quantity;
+      // For this export, using a fixed multiplier for example purposes
       const total = amount * 1.18;
 
       const image = item.image || 
@@ -204,7 +299,6 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     const totalAmount = items.reduce((sum, i) => sum + parseFloat(i.amount), 0);
     const grandTotal = items.reduce((sum, i) => sum + parseFloat(i.total), 0);
 
-    // Include CGST, SGST, and Terms in the exported document
     const docData = {
       date: new Date(quotation.createdAt).toLocaleDateString("en-US", {
         weekday: "long", year: "numeric", month: "long", day: "numeric"
@@ -215,9 +309,10 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       state: quotation.customerAddress || "",
       catalogName: quotation.catalogName || "",
       items,
+      // Removed global gst fields here
       cgst: quotation.cgst || 0,
       sgst: quotation.sgst || 0,
-      terms: quotation.terms || [],  // Add terms to the document
+      terms: quotation.terms || [],
       grandTotalAmount: totalAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2)
     };
@@ -274,5 +369,5 @@ router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, 
     res.status(500).json({ message: "Server error updating remarks for quotation" });
   }
 });
-
+  
 module.exports = router;
