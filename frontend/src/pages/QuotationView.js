@@ -443,7 +443,6 @@ export default function QuotationView() {
             const quantity = parseFloat(item.quantity) || 0;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
-            // Calculate GST based on the productGST field (assumed to be a percentage)
             const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
             const total = parseFloat((amount + gstVal).toFixed(2));
             const imageUrl =
@@ -469,14 +468,41 @@ export default function QuotationView() {
                 </td>
                 <td className="p-2">{item.product}</td>
                 <td className="p-2">
-                  <EditableCell
-                    value={item.quantity}
-                    onSave={(val) => updateItemField(index, "quantity", val)}
+                  <EditableField
+                    value={item.quantity.toString()}
+                    onSave={(newVal) => {
+                      const newQuantity = parseFloat(newVal);
+                      if (!isNaN(newQuantity)) {
+                        updateItemField(index, "quantity", newQuantity);
+                      }
+                    }}
                   />
                 </td>
-                <td className="p-2">{effRate.toFixed(2)}</td>
+                <td className="p-2">
+                  <EditableField
+                    value={effRate.toFixed(2)}
+                    onSave={(newVal) => {
+                      const newEffRate = parseFloat(newVal);
+                      if (!isNaN(newEffRate)) {
+                        // Update base rate accordingly
+                        const newBaseRate = newEffRate / marginFactor;
+                        updateItemField(index, "rate", parseFloat(newBaseRate.toFixed(2)));
+                      }
+                    }}
+                  />
+                </td>
                 <td className="p-2">{amount.toFixed(2)}</td>
-                <td className="p-2">{parseFloat(item.productGST).toFixed(2)}%</td>
+                <td className="p-2">
+                  <EditableField
+                    value={parseFloat(item.productGST).toFixed(2)}
+                    onSave={(newVal) => {
+                      const newGST = parseFloat(newVal);
+                      if (!isNaN(newGST)) {
+                        updateItemField(index, "productGST", newGST);
+                      }
+                    }}
+                  />%
+                </td>
                 {editableQuotation.cgst !== 0 && (
                   <td className="p-2">{editableQuotation.cgst || "0.00"}%</td>
                 )}
@@ -504,7 +530,8 @@ export default function QuotationView() {
   );
 }
 
-function EditableCell({ value, onSave }) {
+// A new reusable component to handle inline editing with an edit SVG icon.
+function EditableField({ value, onSave }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
 
@@ -512,46 +539,40 @@ function EditableCell({ value, onSave }) {
     setCurrentValue(value);
   }, [value]);
 
-  const handleDoubleClick = () => setEditing(true);
+  const handleIconClick = () => setEditing(true);
+
   const handleBlur = () => {
     setEditing(false);
     onSave(currentValue);
   };
 
-  return editing ? (
-    <input
-      type="text"
-      className="border p-1 rounded"
-      autoFocus
-      value={currentValue}
-      onChange={(e) => setCurrentValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  ) : (
-    <div onDoubleClick={handleDoubleClick}>{currentValue}</div>
+  if (editing) {
+    return (
+      <input
+        type="text"
+        className="border p-1 rounded"
+        autoFocus
+        value={currentValue}
+        onChange={(e) => setCurrentValue(e.target.value)}
+        onBlur={handleBlur}
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-center">
+      <span>{currentValue}</span>
+      <button onClick={handleIconClick} className="ml-2">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z" />
+        </svg>
+      </button>
+    </div>
   );
-}
-
-export function computedAmount(quotation) {
-  let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    sum += baseRate * marginFactor * quantity;
-  });
-  return sum;
-}
-
-export function computedTotal(quotation) {
-  let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    const amount = baseRate * marginFactor * quantity;
-    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
-    sum += amount + gstVal;
-  });
-  return sum;
 }

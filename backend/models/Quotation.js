@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const Counter = require("./Counter"); // Adjust the path if your Counter model is elsewhere
 
 // Each item on the quotation references a specific product
 const quotationItemSchema = new mongoose.Schema({
@@ -44,14 +45,35 @@ const quotationSchema = new mongoose.Schema({
   ]
 });
 
-// Pre-save hook to auto-generate a unique quotation number for new documents
+// Pre-save hook to auto-generate a unique quotation number for new documents,
+// ensuring the sequence starts from 9000.
 quotationSchema.pre("save", async function (next) {
-  if (this.isNew) {
-    const count = await this.constructor.countDocuments();
-    const newNumber = (count + 1).toString().padStart(4, "0");
-    this.quotationNumber = newNumber;
+  if (this.isNew && !this.quotationNumber) {
+    try {
+      // Ensure the counter is at least 9000
+      await Counter.findOneAndUpdate(
+        { id: "quotationNumber", seq: { $lt: 9000 } },
+        { $set: { seq: 9000 } },
+        { upsert: true }
+      );
+      
+      // Now, atomically increment the counter
+      const counter = await Counter.findOneAndUpdate(
+        { id: "quotationNumber" },
+        { $inc: { seq: 1 } },
+        { new: true }
+      );
+      
+      // Use the updated sequence as the quotation number
+      this.quotationNumber = counter.seq.toString().padStart(4, "0");
+      next();
+    } catch (err) {
+      next(err);
+    }
+  } else {
+    next();
   }
-  next();
 });
+
 
 module.exports = mongoose.model("Quotation", quotationSchema);

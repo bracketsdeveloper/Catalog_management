@@ -1,15 +1,10 @@
 import React from "react";
 
-export default function ProductCard({
-  product,
-  selectedMargin,
-  onAddSelected,
-  openVariationSelector
-}) {
-  // productGST might come from Product model. If none, default to 0
+const ProductCard = ({ product, onAddSelected, openVariationModal }) => {
+  // Retrieve GST value or default to 0
   const gst = product.productGST || 0;
 
-  // Convert product.color/size to arrays
+  // Get color and size options from product data
   const colorOptions = Array.isArray(product.color)
     ? product.color
     : typeof product.color === "string"
@@ -25,23 +20,30 @@ export default function ProductCard({
   const singleSize = sizeOptions.length === 1;
 
   const handleSingleSelect = () => {
-    let cost = product.productCost || 0;
-    if (selectedMargin > 0) {
-      cost *= 1 + selectedMargin / 100;
-      cost = parseFloat(cost.toFixed(2));
-    }
+    // Use the single available color/size or, if empty, set to "N/A"
+    const selectedColor =
+      singleColor && colorOptions[0].trim() !== "" ? colorOptions[0] : "N/A";
+    const selectedSize =
+      singleSize && sizeOptions[0].trim() !== "" ? sizeOptions[0] : "N/A";
+    // Construct new item with additional fields including productGST and productCost
     const newItem = {
-      productId: product._id,
-      name: product.name,
-      productCost: cost,
+      product: product.name,
+      productCost: product.productCost,
       productGST: gst,
-      color: singleColor ? colorOptions[0] : "",
-      size: singleSize ? sizeOptions[0] : "",
+      color: selectedColor,
+      size: selectedSize,
       quantity: 1,
-      material: product.material || "",
-      weight: product.weight || ""
+      brandingType: "",
+      brandingVendor: "",
+      remarks: ""
     };
     onAddSelected(newItem);
+  };
+
+  const handleVariation = () => {
+    if (openVariationModal) {
+      openVariationModal(product);
+    }
   };
 
   return (
@@ -86,7 +88,7 @@ export default function ProductCard({
         </button>
       ) : (
         <button
-          onClick={() => openVariationSelector(product)}
+          onClick={handleVariation}
           className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
         >
           Choose Variation
@@ -94,4 +96,6 @@ export default function ProductCard({
       )}
     </div>
   );
-}
+};
+
+export default ProductCard;

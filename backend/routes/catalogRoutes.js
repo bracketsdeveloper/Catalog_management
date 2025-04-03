@@ -184,6 +184,7 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 });
 
 // 6) Update a catalog
+// 6) Update a catalog
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -196,7 +197,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       fieldsToDisplay,
       margin,
       priceRange
-      // REMOVED any single 'gst'
+      // REMOVED any single 'gst' since it's now at item-level
     } = req.body;
 
     const existingCatalog = await Catalog.findById(req.params.id);
@@ -204,25 +205,17 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(404).json({ message: "Catalog not found" });
     }
 
-    // Build updated products array with productGST
+    // Build updated products array using the updated cost and GST from req.body.products
     let newProducts;
     if (products) {
-      newProducts = [];
-      for (const p of products) {
-        const productDoc = await Product.findById(p.productId).lean();
-        if (!productDoc) {
-          console.warn(`Product not found: ${p.productId}`);
-          continue;
-        }
-        const productGST = productDoc.productGST || 0;
-        newProducts.push({
-          productId: p.productId,
-          color: p.color || "",
-          size: p.size || "",
-          quantity: p.quantity || 1,
-          productGST
-        });
-      }
+      newProducts = products.map((p) => ({
+        productId: p.productId,
+        color: p.color || "",
+        size: p.size || "",
+        quantity: p.quantity || 1,
+        productCost: p.productCost,   // include updated product cost
+        productGST: p.productGST      // include updated product GST
+      }));
     }
 
     const updatedData = {
@@ -233,8 +226,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       customerAddress,
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
-      priceRange
-      // no single gst stored
+      priceRange,
     };
 
     if (newProducts) {
@@ -255,6 +247,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });
+
 
 // 7) Approve a catalog
 router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, res) => {

@@ -10,7 +10,6 @@ export default function VariationEditModal({ item, margin, onClose, onUpdate }) 
       color,
       size,
       quantity: parseInt(quantity) || 1
-      // We are not updating cost/GST here, but you could if needed
     };
     onUpdate(updatedItem);
   };

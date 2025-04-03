@@ -1,5 +1,5 @@
-// models/Opportunity.js
 const mongoose = require("mongoose");
+const Counter = require("./Counter"); // Adjust the path as needed
 
 /**
  * A more detailed Log Schema:
@@ -114,6 +114,35 @@ const opportunitySchema = new mongoose.Schema({
       isActive: Boolean,
     },
   ],
+});
+
+// Pre-save hook to auto-generate a unique opportunityCode for new documents,
+// ensuring the sequence starts from 5000.
+opportunitySchema.pre("save", async function (next) {
+  if (this.isNew && !this.opportunityCode) {
+    try {
+      // Atomically increment the counter for opportunityCode.
+      const counter = await Counter.findOneAndUpdate(
+        { id: "opportunityCode" },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      
+      // Ensure the sequence starts from 5000.
+      if (counter.seq < 5000) {
+        counter.seq = 5000;
+        await counter.save();
+      }
+      
+      // Assign the incremented sequence as the opportunityCode.
+      this.opportunityCode = counter.seq.toString().padStart(4, "0");
+      next();
+    } catch (err) {
+      next(err);
+    }
+  } else {
+    next();
+  }
 });
 
 module.exports = mongoose.model("Opportunity", opportunitySchema);

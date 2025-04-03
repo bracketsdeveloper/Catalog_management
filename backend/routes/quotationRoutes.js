@@ -1,5 +1,3 @@
-
-
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
@@ -73,7 +71,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     // Use provided terms if available; otherwise, use default terms.
     const quotationTerms = (terms && terms.length > 0) ? terms : defaultTerms;
 
-    // Build new items array with each product's productGST fetched from Product model
+    // Build new items array with each product's productGST fetched from the Product model
     const newItems = [];
     for (const item of items) {
       const productDoc = await Product.findById(item.productId).lean();
@@ -226,7 +224,7 @@ router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) 
       return res.status(404).json({ message: "Quotation not found" });
     }
 
-    const deletedQuotation = await Quotation.findByIdAndDelete(req.params.id);
+    await Quotation.findByIdAndDelete(req.params.id);
     await createLog("delete", quotationToDelete, null, req.user, req.ip);
 
     res.json({ message: "Quotation deleted" });
@@ -255,9 +253,9 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       getImage(value) {
         try {
           const imageUrl = value || "https://via.placeholder.com/150";
-          const res = request("GET", imageUrl);
-          if (res.statusCode !== 200) throw new Error("Image not accessible");
-          return res.getBody();
+          const response = request("GET", imageUrl);
+          if (response.statusCode !== 200) throw new Error("Image not accessible");
+          return response.getBody();
         } catch (e) {
           console.warn("Image fetch failed:", e.message);
           return fs.readFileSync(path.join(__dirname, "..", "templates", "placeholder.png"));
@@ -282,8 +280,8 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       // For this export, using a fixed multiplier for example purposes
       const total = amount * 1.18;
 
-      const image = item.image || 
-        (item.productId?.images?.length > 0 ? item.productId.images[0] : "https://via.placeholder.com/150");
+      // Use the first image from the product (if available) or fallback to placeholder
+      const image = item.productId?.images?.[0] || "https://via.placeholder.com/150";
 
       return {
         slNo: item.slNo?.toString() || (index + 1).toString(),
@@ -309,9 +307,6 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       state: quotation.customerAddress || "",
       catalogName: quotation.catalogName || "",
       items,
-      // Removed global gst fields here
-      cgst: quotation.cgst || 0,
-      sgst: quotation.sgst || 0,
       terms: quotation.terms || [],
       grandTotalAmount: totalAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2)
@@ -333,7 +328,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
   }
 });
 
-// 7) Approve a Quotation
+// 7) APPROVE A QUOTATION
 router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const updatedQuotation = await Quotation.findByIdAndUpdate(
@@ -351,7 +346,7 @@ router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, 
   }
 });
 
-// 8) Update Remarks for a Quotation
+// 8) UPDATE REMARKS FOR A QUOTATION
 router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { remarks } = req.body;
@@ -369,5 +364,5 @@ router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, 
     res.status(500).json({ message: "Server error updating remarks for quotation" });
   }
 });
-  
+
 module.exports = router;

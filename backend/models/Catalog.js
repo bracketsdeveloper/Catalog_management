@@ -1,13 +1,13 @@
 const mongoose = require("mongoose");
+const Counter = require("./Counter"); // Adjust the path as needed
 
 // A sub-schema to store product references + variation info
 const productSubSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
   color: { type: String },
   size: { type: String },
+  productCost: { type: Number, default: 0 },
   quantity: { type: Number, default: 1 },
-
-  // We keep each product's GST
   productGST: { type: Number, default: 0 }
 });
 
@@ -19,6 +19,7 @@ const remarkSchema = new mongoose.Schema({
 });
 
 const catalogSchema = new mongoose.Schema({
+  catalogNumber: { type: Number, unique: true }, // New catalog number field
   catalogName: { type: String },
   customerName: { type: String },
   customerEmail: { type: String },
@@ -26,10 +27,7 @@ const catalogSchema = new mongoose.Schema({
   customerAddress: { type: String },
   approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
-  margin: { type: Number, default: 0 }, // margin is still there
-
-  // REMOVED the catalog-level GST field
-
+  margin: { type: Number, default: 0 },
   products: [productSubSchema],
   fieldsToDisplay: [String],
   priceRange: {
@@ -38,6 +36,32 @@ const catalogSchema = new mongoose.Schema({
   },
   createdBy: { type: String },
   createdAt: { type: Date, default: Date.now }
+});
+
+// Pre-save hook to generate a sequential catalog number
+catalogSchema.pre("save", async function (next) {
+  if (this.isNew && this.catalogNumber == null) {
+    try {
+      // Find and update (or create) the counter document for catalog numbers
+      const counter = await Counter.findOneAndUpdate(
+        { id: "catalogNumber" },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+
+      // If the counter's sequence is less than 9000, adjust it to start from 9000
+      if (counter.seq < 9000) {
+        counter.seq = 9000;
+        await counter.save();
+      }
+      this.catalogNumber = counter.seq;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  } else {
+    next();
+  }
 });
 
 module.exports = mongoose.model("Catalog", catalogSchema);

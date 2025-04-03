@@ -1,15 +1,12 @@
-"use client"; // Remove if you're using Create React App
+"use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
-
-// Sub-components
-import ProductCard from "../components/manualcatalog/ProductCard";
-import VariationModal from "../components/manualcatalog/VariationModal";
-import VariationEditModal from "../components/manualcatalog/VariationEditModal";
-import BagIcon from "../components/manualcatalog/BagIcon";
 import CompanyModal from "../components/CompanyModal";
+
+// Optional bag icon
+const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
 
 const limit = 100;
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -71,12 +68,18 @@ export default function CreateManualCatalog() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
 
-  // Margin
+  // Margin & GST
   const presetMarginOptions = [5, 10, 15, 20];
   const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
   const [marginOption, setMarginOption] = useState("preset");
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
   const [customMargin, setCustomMargin] = useState("");
+
+  const presetGstOptions = [18];
+  const [gstOption, setGstOption] = useState("preset");
+  const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
+  const [customGst, setCustomGst] = useState("");
+  const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
 
   // Cart panel
   const [cartOpen, setCartOpen] = useState(false);
@@ -102,7 +105,7 @@ export default function CreateManualCatalog() {
     selectedSubCategories,
     selectedBrands,
     selectedPriceRanges,
-    selectedVariationHinges
+    selectedVariationHinges,
   ]);
 
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function CreateManualCatalog() {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setFullCategories(res.data.categories || []);
       setFullSubCategories(res.data.subCategories || []);
@@ -155,12 +158,9 @@ export default function CreateManualCatalog() {
       if (selectedVariationHinges.length > 0)
         params.append("variationHinges", selectedVariationHinges.join(","));
 
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/products?${params.toString()}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setProducts(res.data.products || []);
       setCurrentPage(res.data.currentPage || 1);
@@ -177,19 +177,16 @@ export default function CreateManualCatalog() {
     try {
       const token = localStorage.getItem("token");
       const { data } = await axios.get(`${BACKEND_URL}/api/admin/catalogs/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-  
+
       setCatalogName(data.catalogName);
       setCustomerName(data.customerName);
       setCustomerEmail(data.customerEmail || "");
       setCustomerAddress(data.customerAddress || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
-  
-      // Add this line to set the customer company:
-      setSelectedCompany(data.customerCompany || "");
-  
-      // Margin logic remains the same...
+
+      // Margin
       const existingMargin = data.margin || presetMarginOptions[0];
       if (presetMarginOptions.includes(existingMargin)) {
         setMarginOption("preset");
@@ -200,8 +197,19 @@ export default function CreateManualCatalog() {
         setCustomMargin(String(existingMargin));
         setSelectedMargin(existingMargin);
       }
-  
-      // Map the products
+
+      // GST
+      const existingGst = data.gst || presetGstOptions[0];
+      if (presetGstOptions.includes(existingGst)) {
+        setGstOption("preset");
+        setSelectedPresetGst(existingGst);
+        setSelectedGst(existingGst);
+      } else {
+        setGstOption("custom");
+        setCustomGst(String(existingGst));
+        setSelectedGst(existingGst);
+      }
+
       const productArray = data.products || [];
       const mappedRows = productArray
         .map((item) => {
@@ -211,16 +219,16 @@ export default function CreateManualCatalog() {
             productId: prodDoc._id,
             name: prodDoc.name,
             productCost: prodDoc.productCost,
-            productGST: item.productGST || 0,
+            productGST: prodDoc.productGST || 0,
             color: item.color || prodDoc.color || "",
             size: item.size || prodDoc.size || "",
             quantity: item.quantity || 1,
             material: prodDoc.material || "",
-            weight: prodDoc.weight || ""
+            weight: prodDoc.weight || "",
           };
         })
         .filter(Boolean);
-  
+
       setSelectedProducts(mappedRows);
     } catch (error) {
       console.error("Error fetching catalog for edit:", error);
@@ -228,13 +236,10 @@ export default function CreateManualCatalog() {
       setLoading(false);
     }
   };
-  
 
   // ----------------------- Advanced Image Search -----------------------
   const handleImageSearchClick = () => {
-    if (imageInputRef.current) {
-      imageInputRef.current.click();
-    }
+    imageInputRef.current?.click();
   };
 
   const handleImageSearch = async (e) => {
@@ -245,16 +250,12 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axios.post(
-        `${BACKEND_URL}/api/products/advanced-search`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data"
-          }
-        }
-      );
+      const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
       setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
       setAdvancedSearchActive(true);
     } catch (error) {
@@ -300,7 +301,7 @@ export default function CreateManualCatalog() {
     );
   }
 
-  // Single color/size
+  // Single color/size add handler
   const handleAddSingle = (item) => {
     if (isDuplicate(item.productId, item.color, item.size)) {
       alert("This item with the same color & size is already added!");
@@ -312,11 +313,8 @@ export default function CreateManualCatalog() {
   // Multi-add from VariationModal
   const handleAddVariations = (variations) => {
     if (!variationModalProduct) return;
-    let baseProductCost = variationModalProduct.productCost || 0;
-    let baseProductGST = variationModalProduct.productGST || 0;
-
     const newItems = variations.map((v) => {
-      let effectiveCost = baseProductCost;
+      let effectiveCost = variationModalProduct.productCost || 0;
       if (selectedMargin > 0) {
         effectiveCost *= 1 + selectedMargin / 100;
         effectiveCost = parseFloat(effectiveCost.toFixed(2));
@@ -325,12 +323,12 @@ export default function CreateManualCatalog() {
         productId: variationModalProduct._id,
         name: variationModalProduct.name,
         productCost: effectiveCost,
-        productGST: baseProductGST,
-        color: v.color || "",
-        size: v.size || "",
+        productGST: variationModalProduct.productGST || 0,
+        color: v.color && v.color.trim() !== "" ? v.color : "N/A",
+        size: v.size && v.size.trim() !== "" ? v.size : "N/A",
         quantity: v.quantity || 1,
         material: variationModalProduct.material || "",
-        weight: variationModalProduct.weight || ""
+        weight: variationModalProduct.weight || "",
       };
     });
 
@@ -395,25 +393,20 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const updatedData = {
         companyEmail: customerEmail,
-        // example: update the first client
         clients:
           selectedCompanyData.clients && selectedCompanyData.clients.length > 0
             ? [
                 {
                   name: customerName,
-                  contactNumber: selectedCompanyData.clients[0].contactNumber
+                  contactNumber: selectedCompanyData.clients[0].contactNumber,
                 },
-                ...selectedCompanyData.clients.slice(1)
+                ...selectedCompanyData.clients.slice(1),
               ]
-            : [{ name: customerName, contactNumber: "" }]
+            : [{ name: customerName, contactNumber: "" }],
       };
-      await axios.put(
-        `${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`,
-        updatedData,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      await axios.put(`${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`, updatedData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
     } catch (error) {
       console.error("Error updating company info:", error);
     }
@@ -430,128 +423,90 @@ export default function CreateManualCatalog() {
       return;
     }
 
-    const productDocs = selectedProducts.map((p) => ({
-      productId: p.productId,
-      color: p.color,
-      size: p.size,
-      quantity: p.quantity,
-      productGST: p.productGST
-    }));
-
-    const body = {
+    const updatedCatalogData = {
       catalogName,
       customerName,
       customerEmail,
       customerAddress,
-      customerCompany: selectedCompany, // <-- Add this line
-      products: productDocs,
-      fieldsToDisplay,
-      margin: selectedMargin
+      products: selectedProducts.map((p) => ({
+        productId: p.productId,
+        color: p.color,
+        size: p.size,
+        quantity: p.quantity,
+        productCost: p.productCost,  // include updated cost
+        productGST: p.productGST      // include updated GST
+      })),
     };
 
     try {
       const token = localStorage.getItem("token");
-      if (isEditMode) {
-        await axios.put(`${BACKEND_URL}/api/admin/catalogs/${id}`, body, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+      const response = await axios.put(`${BACKEND_URL}/api/admin/catalogs/${id}`, updatedCatalogData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 200) {
         alert("Catalog updated successfully!");
+        navigate(`/admin-dashboard/manage-catalogs`);
       } else {
-        await axios.post(`${BACKEND_URL}/api/admin/catalogs`, body, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        alert("Catalog created successfully!");
+        throw new Error("Failed to update catalog");
       }
-      navigate("/admin-dashboard/manage-catalogs");
     } catch (error) {
-      console.error("Error saving catalog:", error);
-      alert("Error saving catalog. Check console.");
+      console.error("Error updating catalog:", error);
+      alert("Failed to update catalog. Check console.");
     }
   };
 
   // ----------------------- Create Quotation -----------------------
-  // If you were previously using a single 'catalog-level' GST, you'd remove it here.
-  // Possibly you now just do item-level calculations if you want them.
   const handleCreateQuotation = async () => {
-    // Validate required fields first
-    if (!catalogName || !customerName) {
+    if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
       return;
     }
-    if (!selectedCompany) {
-      alert("Please select a Customer Company");
-      return;
-    }
     if (selectedProducts.length === 0) {
-      alert("Please select at least one product");
+      alert("Please select at least one product for the quotation");
       return;
     }
-  
-    try {
-      // Calculate line items with proper error handling
-      const items = selectedProducts.map((p, index) => {
-        try {
-          const quantity = Number(p.quantity) || 1;
-          const rate = parseFloat((p.productCost || 0).toFixed(2));
-          const amount = rate * quantity;
-          const productGST = parseFloat(p.productGST) || 0;
-          const gstVal = parseFloat((amount * (productGST / 100)).toFixed(2));
-          const total = parseFloat((amount + gstVal).toFixed(2));
-  
-          return {
-            slNo: index + 1,
-            productId: p.productId,
-            product: `${p.name}${p.color ? ` (${p.color})` : ""}${p.size ? ` [${p.size}]` : ""}`,
-            quantity,
-            rate,
-            amount,
-            productGST,
-            total
-          };
-        } catch (itemError) {
-          console.error("Error processing item:", p, itemError);
-          throw new Error(`Invalid product data for item ${index + 1}`);
-        }
-      });
-  
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Authentication token missing");
-        return;
-      }
-  
-      const body = {
-        catalogName: catalogName.trim(),
-        customerName: customerName.trim(),
-        customerEmail: customerEmail.trim(),
-        customerAddress: customerAddress.trim(),
-        customerCompany: selectedCompany.trim(), // Ensure trimmed value
-        margin: Number(selectedMargin) || 0,
-        items,
-        createdAt: new Date() // Explicitly set creation date
+
+    const items = selectedProducts.map((p, index) => {
+      const quantity = p.quantity || 1;
+      const baseRate = p.productCost || 0;
+      const rate = parseFloat(baseRate.toFixed(2));
+      const amount = rate * quantity;
+      // Use the cart item's productGST if set; otherwise, use the global selectedGst.
+      const itemGst = p.productGST !== undefined ? p.productGST : selectedGst;
+      const gstVal = parseFloat((amount * (itemGst / 100)).toFixed(2));
+      const total = parseFloat((amount + gstVal).toFixed(2));
+
+      return {
+        slNo: index + 1,
+        productId: p.productId,
+        product: p.name + (p.color ? `(${p.color})` : "") + (p.size ? `[${p.size}]` : ""),
+        quantity,
+        rate,
+        amount,
+        gst: gstVal,
+        total,
       };
-  
-      const response = await axios.post(
-        `${BACKEND_URL}/api/admin/quotations`,
-        body,
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          },
-          validateStatus: (status) => status < 500
-        }
-      );
-  
-      if (response.status === 201) {
-        alert("Quotation created successfully!");
-        // Optional: Reset form or redirect
-      } else {
-        throw new Error(response.data.message || "Failed to create quotation");
-      }
+    });
+
+    try {
+      const token = localStorage.getItem("token");
+      const body = {
+        catalogName,
+        customerName,
+        customerEmail,
+        customerAddress,
+        margin: selectedMargin,
+        gst: selectedGst,
+        items,
+      };
+      await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      alert("Quotation created successfully!");
     } catch (error) {
-      console.error("Quotation creation error:", error);
-      alert(error.response?.data?.message || error.message || "Error creating quotation");
+      console.error("Error creating quotation:", error);
+      alert("Error creating quotation. Check console.");
     }
   };
 
@@ -575,7 +530,7 @@ export default function CreateManualCatalog() {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(res.data || []);
     } catch (error) {
@@ -604,12 +559,11 @@ export default function CreateManualCatalog() {
 
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Top: Catalog name, Margin, Quotation Buttons */}
+      {/* Top: Catalog name, Margin, GST & Quotation Buttons */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
-
         <div className="flex flex-wrap items-center gap-4">
           {/* Margin Selection */}
           <div className="flex items-center space-x-2">
@@ -655,8 +609,51 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
-
-          {/* Buttons */}
+          {/* GST Selection */}
+          <div className="flex items-center space-x-2">
+            <label>
+              <b>Select GST</b>
+            </label>
+            <select
+              value={gstOption === "preset" ? selectedPresetGst : "custom"}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "custom") {
+                  setGstOption("custom");
+                } else {
+                  setGstOption("preset");
+                  setSelectedPresetGst(parseFloat(val));
+                  setSelectedGst(parseFloat(val));
+                }
+              }}
+              className="px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
+            >
+              {presetGstOptions.map((g) => (
+                <option key={g} value={g}>
+                  {g}%
+                </option>
+              ))}
+              <option value="custom">Custom</option>
+            </select>
+            {gstOption === "custom" && (
+              <input
+                type="number"
+                min="0"
+                placeholder="Enter GST %"
+                value={customGst}
+                onChange={(e) => {
+                  setCustomGst(e.target.value);
+                  const gstVal = parseFloat(e.target.value);
+                  if (!isNaN(gstVal)) {
+                    setSelectedGst(gstVal);
+                  }
+                }}
+                className="px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
+                style={{ width: 100 }}
+              />
+            )}
+          </div>
+          {/* Create / Update Buttons */}
           <button
             onClick={handleSaveCatalog}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -675,9 +672,7 @@ export default function CreateManualCatalog() {
       {/* Catalog Info Form */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Catalog Name *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Catalog Name *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -686,11 +681,8 @@ export default function CreateManualCatalog() {
             required
           />
         </div>
-
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Company *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Company *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -706,9 +698,7 @@ export default function CreateManualCatalog() {
             <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
               {companies
                 .filter((company) =>
-                  company.companyName
-                    .toLowerCase()
-                    .includes(selectedCompany.toLowerCase())
+                  company.companyName.toLowerCase().includes(selectedCompany.toLowerCase())
                 )
                 .map((company) => (
                   <div
@@ -719,20 +709,14 @@ export default function CreateManualCatalog() {
                     {company.companyName}
                   </div>
                 ))}
-              <div
-                className="p-2 cursor-pointer hover:bg-gray-100"
-                onClick={handleOpenCompanyModal}
-              >
+              <div className="p-2 cursor-pointer hover:bg-gray-100" onClick={handleOpenCompanyModal}>
                 + Create Company
               </div>
             </div>
           )}
         </div>
-
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Name *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Name *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -742,11 +726,8 @@ export default function CreateManualCatalog() {
             required
           />
         </div>
-
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Email
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Email</label>
           <input
             type="email"
             className="border border-purple-300 rounded w-full p-2"
@@ -755,11 +736,8 @@ export default function CreateManualCatalog() {
             onBlur={updateCompanyInfo}
           />
         </div>
-
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Address
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Address</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -771,9 +749,7 @@ export default function CreateManualCatalog() {
 
       {/* Fields to Display */}
       <div className="mb-6">
-        <label className="block mb-2 font-medium text-purple-700">
-          Fields to Display
-        </label>
+        <label className="block mb-2 font-medium text-purple-700">Fields to Display</label>
         <div className="flex flex-wrap gap-3">
           {[
             "images",
@@ -785,7 +761,7 @@ export default function CreateManualCatalog() {
             "size",
             "color",
             "material",
-            "weight"
+            "weight",
           ].map((field) => (
             <label key={field} className="flex items-center space-x-1 text-sm">
               <input
@@ -848,22 +824,14 @@ export default function CreateManualCatalog() {
             Categories ({selectedCategories.length})
           </button>
           {categoryOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullCategories.map((cat) => (
-                <label
-                  key={cat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={cat} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedCategories.includes(cat)}
-                    onChange={() =>
-                      toggleFilter(cat, selectedCategories, setSelectedCategories)
-                    }
+                    onChange={() => toggleFilter(cat, selectedCategories, setSelectedCategories)}
                   />
                   <span className="truncate">{cat}</span>
                 </label>
@@ -880,22 +848,14 @@ export default function CreateManualCatalog() {
             SubCats ({selectedSubCategories.length})
           </button>
           {subCategoryOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullSubCategories.map((subCat) => (
-                <label
-                  key={subCat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={subCat} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedSubCategories.includes(subCat)}
-                    onChange={() =>
-                      toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
-                    }
+                    onChange={() => toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)}
                   />
                   <span className="truncate">{subCat}</span>
                 </label>
@@ -912,22 +872,14 @@ export default function CreateManualCatalog() {
             Brands ({selectedBrands.length})
           </button>
           {brandOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullBrands.map((brand) => (
-                <label
-                  key={brand}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={brand} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedBrands.includes(brand)}
-                    onChange={() =>
-                      toggleFilter(brand, selectedBrands, setSelectedBrands)
-                    }
+                    onChange={() => toggleFilter(brand, selectedBrands, setSelectedBrands)}
                   />
                   <span className="truncate">{brand}</span>
                 </label>
@@ -944,22 +896,14 @@ export default function CreateManualCatalog() {
             Price Range ({selectedPriceRanges.length})
           </button>
           {priceRangeOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullPriceRanges.map((range) => (
-                <label
-                  key={range}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={range} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedPriceRanges.includes(range)}
-                    onChange={() =>
-                      toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
-                    }
+                    onChange={() => toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)}
                   />
                   <span className="truncate">{range}</span>
                 </label>
@@ -976,26 +920,14 @@ export default function CreateManualCatalog() {
             Variation Hinge ({selectedVariationHinges.length})
           </button>
           {variationHingeOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
+            <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20" style={{ maxHeight: "150px", overflowY: "auto" }}>
               {fullVariationHinges.map((hinge) => (
-                <label
-                  key={hinge}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
+                <label key={hinge} className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedVariationHinges.includes(hinge)}
-                    onChange={() =>
-                      toggleFilter(
-                        hinge,
-                        selectedVariationHinges,
-                        setSelectedVariationHinges
-                      )
-                    }
+                    onChange={() => toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)}
                   />
                   <span className="truncate">{hinge}</span>
                 </label>
@@ -1011,17 +943,13 @@ export default function CreateManualCatalog() {
       ) : (
         <>
           {advancedSearchActive && advancedSearchResults.length === 0 && (
-            <div className="text-gray-600 mb-2 text-sm">
-              No products found from image search.
-            </div>
+            <div className="text-gray-600 mb-2 text-sm">No products found from image search.</div>
           )}
           {!advancedSearchActive && searchTerm && (
-            <div className="text-gray-600 mb-2 text-sm">
-              Searching for "{searchTerm}"...
-            </div>
+            <div className="text-gray-600 mb-2 text-sm">Searching for "{searchTerm}"...</div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {(advancedSearchActive ? advancedSearchResults : products).map((prod) => (
+            {finalProducts.map((prod) => (
               <ProductCard
                 key={prod._id}
                 product={prod}
@@ -1087,18 +1015,11 @@ export default function CreateManualCatalog() {
                 <p className="text-gray-600">No products selected.</p>
               )}
               {selectedProducts.map((row, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col border border-purple-200 rounded p-2 mb-2"
-                >
+                <div key={idx} className="flex flex-col border border-purple-200 rounded p-2 mb-2">
                   <div className="flex justify-between items-center">
                     <div>
-                      <div className="font-bold text-sm text-purple-800">
-                        {row.name}
-                      </div>
-                      {row.color && (
-                        <div className="text-xs">Color: {row.color}</div>
-                      )}
+                      <div className="font-bold text-sm text-purple-800">{row.name}</div>
+                      {row.color && <div className="text-xs">Color: {row.color}</div>}
                       {row.size && <div className="text-xs">Size: {row.size}</div>}
                       <div className="text-xs">Cost: ₹{row.productCost}</div>
                       <div className="text-xs">GST: {row.productGST}%</div>
@@ -1144,7 +1065,6 @@ export default function CreateManualCatalog() {
       {editModalOpen && editIndex != null && (
         <VariationEditModal
           item={selectedProducts[editIndex]}
-          margin={selectedMargin}
           onClose={() => {
             setEditIndex(null);
             setEditModalOpen(false);
@@ -1159,6 +1079,370 @@ export default function CreateManualCatalog() {
 
       {/* Company Modal for adding new company */}
       {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
+    </div>
+  );
+}
+
+// ----------------------- PRODUCT CARD -----------------------
+function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
+  const colorOptions = Array.isArray(product.color)
+    ? product.color
+    : typeof product.color === "string"
+    ? product.color.split(",").map((c) => c.trim())
+    : [];
+  const sizeOptions = Array.isArray(product.size)
+    ? product.size
+    : typeof product.size === "string"
+    ? product.size.split(",").map((s) => s.trim())
+    : [];
+  const singleColor = colorOptions.length === 1;
+  const singleSize = sizeOptions.length === 1;
+
+  const handleSingleSelect = () => {
+    let cost = product.productCost || 0;
+    if (selectedMargin > 0) {
+      cost *= 1 + selectedMargin / 100;
+      cost = parseFloat(cost.toFixed(2));
+    }
+    const newItem = {
+      productId: product._id,
+      name: product.name,
+      productCost: cost,
+      productGST: product.productGST || 0,
+      color: singleColor ? (colorOptions[0].trim() !== "" ? colorOptions[0] : "N/A") : "",
+      size: singleSize ? (sizeOptions[0].trim() !== "" ? sizeOptions[0] : "N/A") : "",
+      quantity: 1,
+      material: product.material || "",
+      weight: product.weight || "",
+    };
+    onAddSelected(newItem);
+  };
+
+  return (
+    <div className="bg-white border border-purple-200 rounded shadow-md p-4 relative">
+      {product.stockInHand !== undefined && (
+        <span
+          className={`absolute top-2 right-2 text-white text-xs font-bold px-2 py-1 rounded ${
+            product.stockInHand > 0 ? "bg-green-500" : "bg-red-500"
+          }`}
+        >
+          {product.stockInHand > 0 ? "Available" : "Out of stock"}
+        </span>
+      )}
+      <div className="h-40 flex items-center justify-center bg-gray-50 overflow-hidden mb-4">
+        {product.images && product.images.length > 0 ? (
+          <img src={product.images[0]} alt={product.name} className="object-contain h-full" />
+        ) : (
+          <span className="text-gray-400 text-sm">No Image</span>
+        )}
+      </div>
+      <h2 className="font-semibold text-lg mb-1 truncate text-purple-700">{product.name}</h2>
+      <h3 className="font-semibold text-md text-red-600 mb-1 truncate">₹{product.productCost}</h3>
+      <p className="text-xs text-gray-600 mb-2">
+        {product.category}
+        {product.subCategory ? ` / ${product.subCategory}` : ""}
+      </p>
+      {singleColor && singleSize ? (
+        <button
+          onClick={handleSingleSelect}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+        >
+          Select
+        </button>
+      ) : (
+        <button
+          onClick={() => openVariationSelector(product)}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+        >
+          Choose Variation
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ----------------------- VARIATION MODAL (Multi-Add) -----------------------
+function VariationModal({ product, onClose, onSave, selectedMargin }) {
+  const [variations, setVariations] = useState([]);
+  const colorOptions = Array.isArray(product.color)
+    ? product.color
+    : typeof product.color === "string"
+    ? product.color.split(",").map((c) => c.trim())
+    : [];
+  const sizeOptions = Array.isArray(product.size)
+    ? product.size
+    : typeof product.size === "string"
+    ? product.size.split(",").map((s) => s.trim())
+    : [];
+  const [pickedColor, setPickedColor] = useState(colorOptions[0] || "");
+  const [pickedSize, setPickedSize] = useState(sizeOptions[0] || "");
+  const [pickedQuantity, setPickedQuantity] = useState(1);
+
+  const handleAddLine = () => {
+    const line = {
+      color: pickedColor || "",
+      size: pickedSize || "",
+      quantity: parseInt(pickedQuantity) || 1,
+    };
+    setVariations((prev) => [...prev, line]);
+  };
+
+  const handleRemoveLine = (index) => {
+    setVariations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveAndClose = () => {
+    if (variations.length === 0) {
+      alert("Add product to save");
+      return;
+    }
+    const itemsWithProductData = variations.map((variation) => {
+      let cost = product.productCost || 0;
+      if (selectedMargin > 0) {
+        cost *= 1 + selectedMargin / 100;
+        cost = parseFloat(cost.toFixed(2));
+      }
+      return {
+        productId: product._id,
+        name: product.name,
+        productCost: cost,
+        productGST: product.productGST || 0,
+        color: variation.color && variation.color.trim() !== "" ? variation.color : "N/A",
+        size: variation.size && variation.size.trim() !== "" ? variation.size : "N/A",
+        quantity: variation.quantity || 1,
+        material: product.material || "",
+        weight: product.weight || "",
+      };
+    });
+    onSave(itemsWithProductData);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-full py-8 px-4">
+        <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
+          <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900">
+            <span className="text-xl font-bold">&times;</span>
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-purple-700">Choose Variations for {product.name}</h2>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
+              {colorOptions.length ? (
+                <select
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedColor}
+                  onChange={(e) => setPickedColor(e.target.value)}
+                >
+                  {colorOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedColor}
+                  onChange={(e) => setPickedColor(e.target.value)}
+                  placeholder="No colors? Type custom"
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
+              {sizeOptions.length ? (
+                <select
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedSize}
+                  onChange={(e) => setPickedSize(e.target.value)}
+                >
+                  {sizeOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedSize}
+                  onChange={(e) => setPickedSize(e.target.value)}
+                  placeholder="No sizes? Type custom"
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Qty</label>
+              <input
+                type="number"
+                min="1"
+                className="border border-purple-300 rounded p-1 w-full"
+                value={pickedQuantity}
+                onChange={(e) => setPickedQuantity(e.target.value)}
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleAddLine}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+          >
+            + Add
+          </button>
+          <div className="mt-4 space-y-2">
+            {variations.length === 0 && (
+              <p className="text-red-500 text-sm font-semibold">Add product to save</p>
+            )}
+            {variations.map((line, idx) => (
+              <div key={idx} className="flex items-center justify-between border p-2 rounded">
+                <div>
+                  <span className="mr-2 font-semibold">{line.color}</span>
+                  <span className="mr-2 font-semibold">{line.size}</span>
+                  <span>Qty: {line.quantity}</span>
+                </div>
+                <button
+                  onClick={() => handleRemoveLine(idx)}
+                  className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+              Cancel
+            </button>
+            <button onClick={handleSaveAndClose} className={`px-4 py-2 rounded text-white ${variations.length > 0 ? "bg-green-600 hover:bg-green-700" : "bg-gray-300 cursor-not-allowed"}`}>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------- VARIATION EDIT MODAL (Cart Item Edit) -----------------------
+// Updated to allow editing all fields in the cart item (including cost and GST)
+function VariationEditModal({ item, onClose, onUpdate }) {
+  const [name, setName] = useState(item.name || "");
+  const [productCost, setProductCost] = useState(item.productCost || 0);
+  const [productGST, setProductGST] = useState(item.productGST || 0);
+  const [color, setColor] = useState(item.color || "");
+  const [size, setSize] = useState(item.size || "");
+  const [quantity, setQuantity] = useState(item.quantity || 1);
+  const [material, setMaterial] = useState(item.material || "");
+  const [weight, setWeight] = useState(item.weight || "");
+
+  const handleSave = () => {
+    const updatedItem = {
+      name,
+      productCost: parseFloat(productCost),
+      productGST: parseFloat(productGST),
+      color,
+      size,
+      quantity: parseInt(quantity) || 1,
+      material,
+      weight,
+    };
+    onUpdate(updatedItem);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-full py-8 px-4">
+        <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
+          <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900">
+            <span className="text-xl font-bold">&times;</span>
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-purple-700">Edit Cart Item</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Product Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Cost</label>
+              <input
+                type="number"
+                value={productCost}
+                onChange={(e) => setProductCost(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">GST (%)</label>
+              <input
+                type="number"
+                value={productGST}
+                onChange={(e) => setProductGST(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
+              <input
+                type="text"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
+              <input
+                type="text"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Quantity</label>
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Material</label>
+              <input
+                type="text"
+                value={material}
+                onChange={(e) => setMaterial(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Weight</label>
+              <input
+                type="text"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
+            </div>
+          </div>
+          <div className="mt-6 flex justify-end space-x-2">
+            <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+              Cancel
+            </button>
+            <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

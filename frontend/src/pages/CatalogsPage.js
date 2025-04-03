@@ -248,43 +248,62 @@ export default function CatalogManagementPage() {
   async function handleCreateQuotationFromCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
-      // Build quotation payload from catalog data
+      // Build the base quotation payload from catalog data.
       const newQuotationData = {
+        catalogNumber: catalog.catalogNumber,
         catalogName: catalog.catalogName,
         customerName: catalog.customerName,
         customerEmail: catalog.customerEmail,
         customerCompany: catalog.customerCompany,
         customerAddress: catalog.customerAddress,
         margin: catalog.margin,
-        // You could add default terms here if needed (or leave empty)
-        terms: [],
-        items: catalog.products.map((prod, idx) => {
-          const productDoc = prod.productId || {};
-          const rate = productDoc.productCost || 0;
-          const quantity = prod.quantity || 1;
-          const amount = rate * quantity;
-          const gst = prod.productGST || 0;
-          const gstAmount = parseFloat((amount * (gst / 100)).toFixed(2));
-          const total = parseFloat((amount + gstAmount).toFixed(2));
-          return {
-            slNo: idx + 1,
-            productId: prod.productId,
-            product: productDoc.name || "",
-            quantity,
-            rate,
-            amount,
-            productGST: gst,
-            total,
-          };
-        }),
+        // Use catalog terms if provided; otherwise, leave empty so that your server can apply defaults.
+        terms: catalog.terms && catalog.terms.length > 0 ? catalog.terms : [],
+        items: []
       };
-
+  
+      // Process each product in the catalog sequentially.
+      for (let idx = 0; idx < catalog.products.length; idx++) {
+        const prod = catalog.products[idx];
+        let productDoc = {};
+  
+        // Check if the product is already populated (i.e. an object with a 'name' property).
+        if (prod.productId && typeof prod.productId === "object" && prod.productId.name) {
+          productDoc = prod.productId;
+        } else {
+          // If not, fetch the product details from the backend.
+          const response = await axios.get(`${BACKEND_URL}/api/admin/products/${prod.productId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          productDoc = response.data;
+        }
+  
+        const rate = productDoc.productCost || 0;
+        const quantity = prod.quantity || 1;
+        const amount = rate * quantity;
+        const gst = prod.productGST || 0;
+        const gstAmount = parseFloat((amount * (gst / 100)).toFixed(2));
+        const total = parseFloat((amount + gstAmount).toFixed(2));
+  
+        newQuotationData.items.push({
+          slNo: idx + 1,
+          productId: prod.productId,
+          product: productDoc.name || "",
+          quantity,
+          rate,
+          amount,
+          productGST: gst,
+          total,
+        });
+      }
+  
+      // Post the payload to create the quotation.
       const res = await axios.post(`${BACKEND_URL}/api/admin/quotations`, newQuotationData, {
         headers: { Authorization: `Bearer ${token}` },
       });
+  
       if (res.status === 201) {
         alert("Quotation created successfully!");
-        // Navigate to the created quotation view page
         navigate(`/admin-dashboard/quotations/${res.data.quotation._id}`);
       } else {
         throw new Error("Quotation creation failed");
@@ -294,6 +313,7 @@ export default function CatalogManagementPage() {
       alert("Error creating quotation from catalog. Check console.");
     }
   }
+  
 
   // -------------- REMARKS MODAL --------------
   const openRemarksModal = (item, type) => {
@@ -808,13 +828,13 @@ export default function CatalogManagementPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Catalog Number
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         Company
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         Customer Name
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Email
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         Products
@@ -827,6 +847,7 @@ export default function CatalogManagementPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {items.map((cat) => (
                       <tr key={cat._id}>
+                        <td className="px-4 py-2">{cat.catalogNumber}</td>
                         <td
                           className="px-4 py-2 underline cursor-pointer"
                           onClick={() => handleVirtualLink(cat)}
@@ -834,7 +855,6 @@ export default function CatalogManagementPage() {
                           {cat.customerCompany || cat.catalogName}
                         </td>
                         <td className="px-4 py-2">{cat.customerName}</td>
-                        <td className="px-4 py-2">{cat.customerEmail}</td>
                         <td className="px-4 py-2">{cat.products?.length || 0}</td>
                         <td className="px-4 py-2 space-x-2">
                           <button
@@ -971,7 +991,6 @@ export default function CatalogManagementPage() {
       </div>
     );
   };
-  
   
   // -------------- MAIN RENDER --------------
   if (loading) {

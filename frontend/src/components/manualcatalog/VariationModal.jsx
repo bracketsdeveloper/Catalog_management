@@ -7,8 +7,6 @@ export default function VariationModal({
   selectedMargin
 }) {
   const [variations, setVariations] = useState([]);
-
-  // Convert product.color or product.size to arrays
   const colorOptions = Array.isArray(product.color)
     ? product.color
     : typeof product.color === "string"
@@ -42,9 +40,31 @@ export default function VariationModal({
       alert("Add product to save");
       return;
     }
-    // We'll pass only color/size/quantity. 
-    // The parent page merges productCost & productGST.
-    onSave(variations);
+    const itemsWithProductData = variations.map((variation) => {
+      let cost = product.productCost || 0;
+      if (selectedMargin > 0) {
+        cost *= 1 + selectedMargin / 100;
+        cost = parseFloat(cost.toFixed(2));
+      }
+      // If the user left color or size blank, assign "N/A"
+      const defaultColor =
+        variation.color && variation.color.trim() !== ""
+          ? variation.color
+          : "N/A";
+      const defaultSize =
+        variation.size && variation.size.trim() !== ""
+          ? variation.size
+          : "N/A";
+      return {
+        ...product,
+        ...variation,
+        color: defaultColor,
+        size: defaultSize,
+        productCost: cost,
+        productGST: product.productGST || 0
+      };
+    });
+    onSave(itemsWithProductData);
   };
 
   return (
