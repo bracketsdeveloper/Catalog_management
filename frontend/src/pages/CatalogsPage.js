@@ -11,10 +11,7 @@ import RemarksModal from "../components/CatalogManagement/RemarksModal";
 import PDFTemplateModal from "../components/CatalogManagement/PDFTemplateModal";
 
 // Utility modules
-import {
-  getBase64ImageFromUrl,
-  wrapText
-} from "../components/CatalogManagement/exportUtils";
+import { getBase64ImageFromUrl, wrapText } from "../components/CatalogManagement/exportUtils";
 import {
   groupItemsByDate,
   groupQuotationsByTimePeriod,
@@ -257,7 +254,6 @@ export default function CatalogManagementPage() {
         customerCompany: catalog.customerCompany,
         customerAddress: catalog.customerAddress,
         margin: catalog.margin,
-        // Use catalog terms if provided; otherwise, leave empty so that your server can apply defaults.
         terms: catalog.terms && catalog.terms.length > 0 ? catalog.terms : [],
         items: []
       };
@@ -267,18 +263,18 @@ export default function CatalogManagementPage() {
         const prod = catalog.products[idx];
         let productDoc = {};
   
-        // Check if the product is already populated (i.e. an object with a 'name' property).
+        // Use populated product data for image/details if available.
         if (prod.productId && typeof prod.productId === "object" && prod.productId.name) {
           productDoc = prod.productId;
         } else {
-          // If not, fetch the product details from the backend.
           const response = await axios.get(`${BACKEND_URL}/api/admin/products/${prod.productId}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           productDoc = response.data;
         }
   
-        const rate = productDoc.productCost || 0;
+        // For cost, GST, and quantity, always use the catalog subdocument (prod)
+        const rate = prod.productCost || 0;
         const quantity = prod.quantity || 1;
         const amount = rate * quantity;
         const gst = prod.productGST || 0;
@@ -297,7 +293,6 @@ export default function CatalogManagementPage() {
         });
       }
   
-      // Post the payload to create the quotation.
       const res = await axios.post(`${BACKEND_URL}/api/admin/quotations`, newQuotationData, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -314,7 +309,6 @@ export default function CatalogManagementPage() {
     }
   }
   
-
   // -------------- REMARKS MODAL --------------
   const openRemarksModal = (item, type) => {
     setSelectedItemForRemarks(item);
@@ -343,65 +337,59 @@ export default function CatalogManagementPage() {
   async function handleExportExcel(item) {
     try {
       const wb = XLSX.utils.book_new();
-      // Define common fields that should always be present
-      const commonFields = ["images", "productId", "name", "productDetails", "productGST(%)", "price"];
-      // Get extra fields specified in fieldsToDisplay that are not in commonFields
+      // Use common fields from the product subdocument.
+      const commonFields = ["images", "productId", "productName", "productDetails", "productGST", "productCost"];
       const extraFields = (item.fieldsToDisplay || []).filter(field => !commonFields.includes(field));
   
-      // Build the header: first the common fields (mapped using fieldMapping) then extra fields.
       const header = [
         ...commonFields.map(field => fieldMapping[field] || field),
         ...extraFields.map(field => fieldMapping[field] || field)
       ];
       const data = [header];
   
-      // Process each product in the catalog
+      // Process each product subdocument in the catalog.
       item.products?.forEach((prodObj) => {
-        // p is the actual product document (populated or as is)
-        const p = prodObj.productId || prodObj;
+        // Use sub for cost, GST, qty; use prod for image, name, details if available.
+        const sub = prodObj; // Catalog subdocument
+        const prod = (prodObj.productId && typeof prodObj.productId === "object")
+          ? prodObj.productId
+          : {};
         const row = [];
   
-        // --- Common Fields ---
-        // 1. Images (join multiple images with a comma)
-        row.push((p.images || []).join(", "));
+        // 1. Images (use prod.images if available, else sub.images)
+        row.push(((prod.images || sub.images) || []).join(", "));
   
-        // 2. Product ID: if productId is populated as an object, extract its _id; otherwise use it directly
-        let productIdVal = "N/A";
-        if (p.productId) {
-          productIdVal = typeof p.productId === "object" ? (p.productId._id || p.productId.id) : p.productId;
-        } else if (p._id) {
-          productIdVal = p._id;
-        }
-        row.push(productIdVal);
+        // 2. Product ID (from subdocument)
+        row.push(sub.productId ? sub.productId.toString() : "N/A");
   
-        // 3. Product Name
-        row.push(p.name || "");
+        // 3. Product Name (prefer prod.name; fallback to sub.productName)
+        row.push(prod.name || sub.productName || "");
   
-        // 4. Product Details
-        row.push(p.productDetails || "");
+        // 4. Product Details (from prod if available)
+        row.push(prod.productDetails || "");
   
-        // 5. Product GST
-        row.push(p.productGST !== undefined ? p.productGST : "");
+        // 5. Product GST from subdocument
+        row.push(sub.productGST !== undefined ? sub.productGST : "");
   
-        // 6. Price (calculate effective price if available)
-        if (p.price !== undefined) {
-          const effectivePrice = p.price * (1 + (item.margin || 0) / 100);
-          row.push(effectivePrice.toFixed(2));
+        // 6. Product Cost from subdocument (adjusted with margin)
+        if (sub.productCost !== undefined) {
+          const effectiveCost = sub.productCost * (1 + (item.margin || 0) / 100);
+          row.push(effectiveCost.toFixed(2));
         } else {
           row.push("");
         }
   
-        // --- Extra Fields ---
+        // Process extra fields if any
         extraFields.forEach(field => {
           if (field === "images") {
-            row.push((p.images || []).join(", "));
-          } else if (field === "price" && p.price !== undefined) {
-            const effectivePrice = p.price * (1 + (item.margin || 0) / 100);
-            row.push(effectivePrice.toFixed(2));
+            row.push(((prod.images || sub.images) || []).join(", "));
+          } else if (field === "productCost" && sub.productCost !== undefined) {
+            const effectiveCost = sub.productCost * (1 + (item.margin || 0) / 100);
+            row.push(effectiveCost.toFixed(2));
           } else if (field === "productGST") {
-            row.push(p.productGST !== undefined ? p.productGST : "");
+            row.push(sub.productGST !== undefined ? sub.productGST : "");
           } else {
-            row.push(p[field] !== undefined ? p[field] : "");
+            row.push((sub[field] !== undefined ? sub[field] : prod[field]) || "");
           }
         });
   
@@ -453,19 +441,18 @@ export default function CatalogManagementPage() {
       const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
       const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
   
-      // Loop over each product in the catalog
+      // Loop over each product subdocument in the catalog.
       for (let i = 0; i < (catalog.products || []).length; i++) {
-        const prodObj = catalog.products[i];
-        const p = prodObj.productId || prodObj;
+        const sub = catalog.products[i]; // catalog subdocument with cost, gst, qty
+        // For image, name, details, try to use populated product if available.
+        const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
+  
         const [page] = await newPdf.copyPages(pdf2Doc, [0]);
         const { width, height } = page.getSize();
   
         // Product image placement
-        const imageX = 250,
-          imageY = height - 850,
-          imageW = 600,
-          imageH = 700;
-        let mainImg = p.images && p.images[0] ? p.images[0] : "";
+        const imageX = 250, imageY = height - 850, imageW = 600, imageH = 700;
+        let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
         if (mainImg && mainImg.startsWith("http://")) {
           mainImg = mainImg.replace("http://", "https://");
         }
@@ -484,12 +471,7 @@ export default function CatalogManagementPage() {
           } else {
             embeddedImage = await newPdf.embedJpg(imageData);
           }
-          page.drawImage(embeddedImage, {
-            x: imageX,
-            y: imageY,
-            width: imageW,
-            height: imageH,
-          });
+          page.drawImage(embeddedImage, { x: imageX, y: imageY, width: imageW, height: imageH });
         } else {
           page.drawRectangle({
             x: imageX,
@@ -513,7 +495,8 @@ export default function CatalogManagementPage() {
         let yText = height - 200;
         const lineHeight = 44;
   
-        page.drawText(p.name || "", {
+        // Use productName from populated product if available, else from subdocument.
+        page.drawText(prod.name || sub.productName || "", {
           x: xText,
           y: yText,
           size: 39,
@@ -522,7 +505,7 @@ export default function CatalogManagementPage() {
         });
         yText -= lineHeight * 1.3;
         
-        if (p.brandName) {
+        if (prod.brandName || sub.brandName) {
           page.drawText("Brand Name: ", {
             x: xText,
             y: yText,
@@ -530,7 +513,7 @@ export default function CatalogManagementPage() {
             font: boldFont,
             color: rgb(0, 0, 0),
           });
-          page.drawText(p.brandName, {
+          page.drawText(prod.brandName || sub.brandName || "", {
             x: xText + 300,
             y: yText,
             size: 25,
@@ -540,7 +523,7 @@ export default function CatalogManagementPage() {
           yText -= lineHeight;
         }
         
-        if (p.productDetails) {
+        if (prod.productDetails) {
           page.drawText("Description:", {
             x: xText,
             y: yText,
@@ -549,7 +532,7 @@ export default function CatalogManagementPage() {
             color: rgb(0, 0, 0),
           });
           yText -= lineHeight;
-          const wrapped = wrapText(p.productDetails, 200, normalFont, 7);
+          const wrapped = wrapText(prod.productDetails, 200, normalFont, 7);
           wrapped.forEach((line) => {
             page.drawText(line, {
               x: xText,
@@ -563,7 +546,8 @@ export default function CatalogManagementPage() {
           yText -= lineHeight * 0.5;
         }
         
-        if (p.qty) {
+        // Use quantity from subdocument
+        if (sub.quantity) {
           page.drawText("Qty: ", {
             x: xText,
             y: yText,
@@ -571,7 +555,7 @@ export default function CatalogManagementPage() {
             font: boldFont,
             color: rgb(0, 0, 0),
           });
-          page.drawText(String(p.qty), {
+          page.drawText(String(sub.quantity), {
             x: xText + 300,
             y: yText,
             size: 25,
@@ -581,8 +565,9 @@ export default function CatalogManagementPage() {
           yText -= lineHeight;
         }
         
-        if (p.productCost !== undefined) {
-          const baseCost = p.productCost || 0;
+        // Use productCost from subdocument for Rate, adjusted with margin.
+        if (sub.productCost !== undefined) {
+          const baseCost = sub.productCost;
           const margin = catalog.margin || 0;
           const effPrice = baseCost * (1 + margin / 100);
           page.drawText("Rate in INR (per pc): ", {
@@ -602,8 +587,8 @@ export default function CatalogManagementPage() {
           yText -= lineHeight;
         }
         
-        // Updated block: Always check for productGST
-        if (p.productGST !== undefined) {
+        // Use productGST from subdocument
+        if (sub.productGST !== undefined) {
           page.drawText("GST: ", {
             x: xText,
             y: yText,
@@ -611,7 +596,7 @@ export default function CatalogManagementPage() {
             font: boldFont,
             color: rgb(0, 0, 0),
           });
-          page.drawText(String(p.productGST) + "%", {
+          page.drawText(String(sub.productGST) + "%", {
             x: xText + 300,
             y: yText,
             size: 25,
@@ -887,7 +872,6 @@ export default function CatalogManagementPage() {
                           >
                             Edit
                           </button>
-                          {/* New Create Quotation Button */}
                           <button
                             onClick={() => handleCreateQuotationFromCatalog(cat)}
                             className="px-2 py-1 bg-teal-600 text-white rounded text-xs hover:bg-teal-700"
@@ -962,9 +946,7 @@ export default function CatalogManagementPage() {
                       </td>
                       <td className="px-4 py-2">{quotation.customerName}</td>
                       <td className="px-4 py-2">{quotation.customerEmail}</td>
-                      <td className="px-4 py-2">
-                        {quotation.items?.length || 0}
-                      </td>
+                      <td className="px-4 py-2">{quotation.items?.length || 0}</td>
                       <td className="px-4 py-2 space-x-2">
                         <button
                           onClick={() =>

@@ -185,6 +185,7 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 });
 
 // 6) Update a catalog
+// 6) Update a catalog (with merging of products)
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -197,7 +198,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       fieldsToDisplay,
       margin,
       gst,
-      priceRange
+      priceRange,
     } = req.body;
 
     const catalog = await Catalog.findById(req.params.id);
@@ -205,7 +206,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(404).json({ message: "Catalog not found" });
     }
 
-    // Update basic catalog info
+    // Update basic fields
     catalog.catalogName = catalogName;
     catalog.customerName = customerName;
     catalog.customerEmail = customerEmail;
@@ -214,32 +215,34 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     catalog.fieldsToDisplay = fieldsToDisplay || [];
     catalog.margin = margin;
     catalog.priceRange = priceRange;
-    catalog.gst = gst || 18; // Default to 18% if not provided
+    catalog.gst = gst || 18;
 
-    // Update products array with cost, GST, and productName
-    if (products) {
-      catalog.products = await Promise.all(
-        products.map(async (p) => {
-          // Try to locate the existing subdocument
-          const existingProduct = catalog.products.id(p._id) || {};
-          const productDoc = await Product.findById(p.productId).lean();
-          const newProduct = {
-            productId: p.productId || existingProduct.productId,
-            productName: productDoc ? productDoc.name : existingProduct.productName,
-            color: p.color || existingProduct.color || "",
-            size: p.size || existingProduct.size || "",
-            quantity: p.quantity || existingProduct.quantity || 1,
-            productCost: p.productCost !== undefined ? p.productCost : existingProduct.productCost,
-            productGST: p.productGST !== undefined ? p.productGST : existingProduct.productGST
-          };
-          // Only include _id if it exists and is not the string "undefined"
-          if (p._id && p._id !== "undefined") {
-            newProduct._id = p._id;
-          }
-          return newProduct;
-        })
-      );
+    // Merge product updates: update existing subdocuments and add new ones
+    const updatedProducts = [];
+    for (let p of products) {
+      // Check if _id is present and valid (not the string "undefined")
+      if (p._id && p._id !== "undefined") {
+        const existingProduct = catalog.products.id(p._id);
+        if (existingProduct) {
+          // Update only the fields that changed
+          existingProduct.color = p.color || existingProduct.color;
+          existingProduct.size = p.size || existingProduct.size;
+          existingProduct.quantity = p.quantity || existingProduct.quantity;
+          existingProduct.productCost =
+            p.productCost !== undefined ? p.productCost : existingProduct.productCost;
+          existingProduct.productGST =
+            p.productGST !== undefined ? p.productGST : existingProduct.productGST;
+          updatedProducts.push(existingProduct);
+        } else {
+          // No matching subdocument found; add as new
+          updatedProducts.push(p);
+        }
+      } else {
+        // p._id is missing or "undefined": treat as new
+        updatedProducts.push(p);
+      }
     }
+    catalog.products = updatedProducts;
 
     const updatedCatalog = await catalog.save();
     res.json({ message: "Catalog updated", catalog: updatedCatalog });
@@ -248,6 +251,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });
+
 
 // 7) Approve a catalog
 router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, res) => {

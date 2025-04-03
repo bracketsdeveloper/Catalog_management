@@ -419,8 +419,8 @@ export default function CreateManualCatalog() {
       alert("Please select at least one product");
       return;
     }
-
-    const updatedCatalogData = {
+  
+    const catalogData = {
       catalogName,
       customerName,
       customerEmail,
@@ -429,7 +429,7 @@ export default function CreateManualCatalog() {
       margin: selectedMargin,
       gst: selectedGst,
       products: selectedProducts.map((p) => ({
-        _id: p._id, // Include this for existing items
+        _id: p._id, // may be undefined for new products
         productId: p.productId,
         color: p.color || "",
         size: p.size || "",
@@ -437,24 +437,40 @@ export default function CreateManualCatalog() {
         productCost: p.productCost,
         productGST: p.productGST,
       })),
+      fieldsToDisplay,
     };
-
-    console.log("Updated Catalog Data:", updatedCatalogData);
-
+  
+    console.log("Catalog Data:", catalogData);
+  
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.put(`${BACKEND_URL}/api/admin/catalogs/${id}`, updatedCatalogData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      let response;
+      if (isEditMode) {
+        // Update existing catalog
+        response = await axios.put(`${BACKEND_URL}/api/admin/catalogs/${id}`, catalogData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        alert("Catalog updated successfully!");
+      } else {
+        // Create new catalog
+        response = await axios.post(`${BACKEND_URL}/api/admin/catalogs`, catalogData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        alert("Catalog created successfully!");
+        // Optionally navigate to edit mode or catalog list after creation
+      }
       console.log("Response from server:", response.data);
-      await fetchExistingCatalog();
-      alert("Catalog updated successfully!");
-      navigate(`/admin-dashboard/manage-catalogs`);
+      // Refresh data if needed
+      if (isEditMode) {
+        await fetchExistingCatalog();
+        navigate(`/admin-dashboard/manage-catalogs`);
+      }
     } catch (error) {
-      console.error("Error updating catalog:", error);
-      alert("Failed to update catalog. Check console.");
+      console.error("Error saving catalog:", error);
+      alert("Failed to save catalog. Check console.");
     }
   };
+  
 
   // ----------------------- Create Quotation -----------------------
   const handleCreateQuotation = async () => {
@@ -997,61 +1013,63 @@ export default function CreateManualCatalog() {
       </div>
 
       {/* Cart Panel */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black bg-opacity-30">
-          <div className="bg-white w-full sm:w-96 h-full shadow-md p-4 flex flex-col relative">
-            <h2 className="text-lg font-bold text-purple-700 mb-4">
-              Selected Items ({selectedProducts.length})
-            </h2>
-            <button
-              onClick={() => setCartOpen(false)}
-              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
-            >
-              <span className="text-xl font-bold">&times;</span>
-            </button>
-            <div className="flex-grow overflow-auto">
-              {selectedProducts.length === 0 && (
-                <p className="text-gray-600">No products selected.</p>
-              )}
-              {selectedProducts.map((row, idx) => {
-                console.log("Row data:", row);
-                return (
-                  <div key={idx} className="flex flex-col border border-purple-200 rounded p-2 mb-2">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="font-bold text-sm text-purple-800">{row.productName || "No Product Name"}</div>
-                        {row.color && <div className="text-xs">Color: {row.color}</div>}
-                        {row.size && <div className="text-xs">Size: {row.size}</div>}
-                        <div className="text-xs">Cost: ₹{row.productCost.toFixed(2)}</div>
-                        <div className="text-xs">GST: {row.productGST}%</div>
-                        <div className="text-xs">Qty: {row.quantity}</div>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveSelectedRow(idx)}
-                        className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => handleEditItem(idx)}
-                      className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                );
-              })}
+      {/* Cart Panel */}
+{cartOpen && (
+  <div className="fixed inset-0 z-50 flex items-center justify-end bg-black bg-opacity-30">
+    <div className="bg-white w-full sm:w-96 h-full shadow-md p-4 flex flex-col relative">
+      <h2 className="text-lg font-bold text-purple-700 mb-4">
+        Selected Items ({selectedProducts.length})
+      </h2>
+      <button
+        onClick={() => setCartOpen(false)}
+        className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+      >
+        <span className="text-xl font-bold">&times;</span>
+      </button>
+      <div className="flex-grow overflow-auto">
+        {selectedProducts.length === 0 && (
+          <p className="text-gray-600">No products selected.</p>
+        )}
+        {selectedProducts.map((row, idx) => (
+          <div key={idx} className="flex flex-col border border-purple-200 rounded p-2 mb-2">
+            <div className="flex justify-between items-center">
+              <div>
+                {/* Updated line: using row.name if available */}
+                <div className="font-bold text-sm text-purple-800">
+                  {row.name || row.productName}
+                </div>
+                {row.color && <div className="text-xs">Color: {row.color}</div>}
+                {row.size && <div className="text-xs">Size: {row.size}</div>}
+                <div className="text-xs">Cost: ₹{row.productCost.toFixed(2)}</div>
+                <div className="text-xs">GST: {row.productGST}%</div>
+                <div className="text-xs">Qty: {row.quantity}</div>
+              </div>
+              <button
+                onClick={() => handleRemoveSelectedRow(idx)}
+                className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+              >
+                Remove
+              </button>
             </div>
             <button
-              onClick={() => setCartOpen(false)}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded self-end mt-2"
+              onClick={() => handleEditItem(idx)}
+              className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
             >
-              Save & Close
+              Edit
             </button>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
+      <button
+        onClick={() => setCartOpen(false)}
+        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded self-end mt-2"
+      >
+        Save & Close
+      </button>
+    </div>
+  </div>
+)}
+
 
       {/* Variation Modal (Multi-Add) */}
       {variationModalOpen && variationModalProduct && (
@@ -1329,7 +1347,8 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
 
 // ----------------------- VARIATION EDIT MODAL (Cart Item Edit) -----------------------
 function VariationEditModal({ item, onClose, onUpdate }) {
-  const [name, setName] = useState(item.name || "");
+  // Use item.name or fall back to item.productName if item.name is empty
+  const [name, setName] = useState(item.name || item.productName || "");
   const [productCost, setProductCost] = useState(item.productCost || 0);
   const [productGST, setProductGST] = useState(item.productGST || 0);
   const [color, setColor] = useState(item.color || "");
@@ -1340,7 +1359,7 @@ function VariationEditModal({ item, onClose, onUpdate }) {
 
   const handleSave = () => {
     const updatedItem = {
-      name,
+      name, // now will have a proper value from either name or productName
       productCost: parseFloat(productCost),
       productGST: parseFloat(productGST),
       color,
@@ -1447,3 +1466,4 @@ function VariationEditModal({ item, onClose, onUpdate }) {
     </div>
   );
 }
+
