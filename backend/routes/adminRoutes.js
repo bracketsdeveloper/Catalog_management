@@ -467,6 +467,19 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
 });
 
 // (Optional) Advanced Image Search endpoint (unchanged or omitted if not needed)
-
+// Assuming you have a Product model
+// Assuming you have a Product model
+router.get("/products/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    res.json(product);
+  } catch (error) {
+    console.error("Error fetching product:", error);
+    res.status(500).json({ message: "Server error fetching product" });
+  }
+});
 // Export the router
 module.exports = router;

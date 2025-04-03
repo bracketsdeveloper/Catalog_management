@@ -49,10 +49,8 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       fieldsToDisplay,
       priceRange,
       margin
-      // REMOVE any 'gst' from body
     } = req.body;
 
-    // Build products array with productGST from Product model
     const newProducts = [];
     for (const p of products || []) {
       const productDoc = await Product.findById(p.productId).lean();
@@ -63,9 +61,11 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       const productGST = productDoc.productGST || 0;
       newProducts.push({
         productId: p.productId,
+        productName: productDoc.name,
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity || 1,
+        productCost: productDoc.productCost || 0,
         productGST
       });
     }
@@ -94,7 +94,6 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error creating catalog" });
   }
 });
-
 
 // 3) Example AI Generate route (unchanged)
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {
@@ -173,7 +172,7 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
     await createLog(
       "delete",
       catalogToDelete, // oldValue
-      null,           // newValue
+      null,            // newValue
       req.user,
       req.ip
     );
@@ -197,7 +196,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       products,
       fieldsToDisplay,
       margin,
-      gst,  // Add this line to accept gst from request body
+      gst,
       priceRange
     } = req.body;
 
@@ -217,37 +216,38 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     catalog.priceRange = priceRange;
     catalog.gst = gst || 18; // Default to 18% if not provided
 
-    // Update products array with cost and GST
+    // Update products array with cost, GST, and productName
     if (products) {
-      catalog.products = await Promise.all(products.map(async (p) => {
-        // Get the current product to preserve existing values if not provided
-        const existingProduct = catalog.products.id(p._id) || {};
-        
-        return {
-          _id: p._id || existingProduct._id,
-          productId: p.productId || existingProduct.productId,
-          color: p.color || existingProduct.color || "",
-          size: p.size || existingProduct.size || "",
-          quantity: p.quantity || existingProduct.quantity || 1,
-          productCost: p.productCost !== undefined ? p.productCost : existingProduct.productCost,
-          productGST: p.productGST !== undefined ? p.productGST : existingProduct.productGST
-        };
-      }));
+      catalog.products = await Promise.all(
+        products.map(async (p) => {
+          // Try to locate the existing subdocument
+          const existingProduct = catalog.products.id(p._id) || {};
+          const productDoc = await Product.findById(p.productId).lean();
+          const newProduct = {
+            productId: p.productId || existingProduct.productId,
+            productName: productDoc ? productDoc.name : existingProduct.productName,
+            color: p.color || existingProduct.color || "",
+            size: p.size || existingProduct.size || "",
+            quantity: p.quantity || existingProduct.quantity || 1,
+            productCost: p.productCost !== undefined ? p.productCost : existingProduct.productCost,
+            productGST: p.productGST !== undefined ? p.productGST : existingProduct.productGST
+          };
+          // Only include _id if it exists and is not the string "undefined"
+          if (p._id && p._id !== "undefined") {
+            newProduct._id = p._id;
+          }
+          return newProduct;
+        })
+      );
     }
 
     const updatedCatalog = await catalog.save();
-
-    await createLog("update", catalog, updatedCatalog, req.user, req.ip);
-
     res.json({ message: "Catalog updated", catalog: updatedCatalog });
   } catch (error) {
     console.error("Error updating catalog:", error);
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });
-
-
-
 
 // 7) Approve a catalog
 router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, res) => {

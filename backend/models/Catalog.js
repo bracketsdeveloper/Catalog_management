@@ -4,6 +4,7 @@ const Counter = require("./Counter"); // Adjust the path as needed
 // A sub-schema to store product references + variation info
 const productSubSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+  productName: { type: String }, // Add this line to store the product name
   color: { type: String },
   size: { type: String },
   productCost: { type: Number, default: 0 },

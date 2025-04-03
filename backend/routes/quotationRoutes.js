@@ -71,24 +71,34 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     // Use provided terms if available; otherwise, use default terms.
     const quotationTerms = (terms && terms.length > 0) ? terms : defaultTerms;
 
-    // Build new items array with each product's productGST fetched from the Product model
+    // Build new items array with each product's details
     const newItems = [];
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       const productDoc = await Product.findById(item.productId).lean();
       if (!productDoc) {
         console.warn(`Product not found: ${item.productId}`);
         continue;
       }
+
+      // Map fields according to your specifications:
+      // Use the item.productCost if defined; otherwise, fall back to productDoc.productCost.
+      const productCost = item.productCost !== undefined ? item.productCost : productDoc.productCost;
+      const quantity = item.quantity || 1;
+      const amount = productCost * quantity;
       const productGST = productDoc.productGST || 0;
+      const total = amount + (amount * productGST / 100);
+
       newItems.push({
-        slNo: item.slNo,
+        slNo: i + 1,
         productId: item.productId,
-        product: item.product,
-        quantity: item.quantity,
-        rate: item.rate,
-        amount: item.amount,
-        productGST, // Store each product's GST
-        total: item.total,
+        // Use productName from catalog if available; otherwise, use productDoc.name.
+        product: item.productName || productDoc.name,
+        quantity: quantity,
+        rate: productCost,
+        amount: amount,
+        productGST: productGST,
+        total: total
       });
     }
 
@@ -159,7 +169,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       terms
     } = req.body;
 
-    // Build updated items array with each product's productGST
+    // Build updated items array with each product's productGST and recalculated totals
     let newItems = [];
     if (items) {
       for (const item of items) {
@@ -168,16 +178,21 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           console.warn(`Product not found: ${item.productId}`);
           continue;
         }
+        const productCost = item.productCost !== undefined ? item.productCost : productDoc.productCost;
+        const quantity = item.quantity || 1;
+        const amount = productCost * quantity;
         const productGST = productDoc.productGST || 0;
+        const total = amount + (amount * productGST / 100);
+
         newItems.push({
           slNo: item.slNo,
           productId: item.productId,
-          product: item.product,
-          quantity: item.quantity,
-          rate: item.rate,
-          amount: item.amount,
-          productGST,
-          total: item.total,
+          product: item.productName || productDoc.name,
+          quantity: quantity,
+          rate: productCost,
+          amount: amount,
+          productGST: productGST,
+          total: total,
         });
       }
     }

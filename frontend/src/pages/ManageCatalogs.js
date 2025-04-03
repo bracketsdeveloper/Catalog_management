@@ -186,6 +186,8 @@ export default function CreateManualCatalog() {
       setCustomerEmail(data.customerEmail || "");
       setCustomerAddress(data.customerAddress || "");
       setCustomerCompany(data.customerCompany || "");
+      // Set selectedCompany so the input field is populated.
+      setSelectedCompany(data.customerCompany || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
 
       // Margin
@@ -212,26 +214,17 @@ export default function CreateManualCatalog() {
         setSelectedGst(existingGst);
       }
 
-      const productArray = data.products || [];
-      const mappedRows = productArray
-  .map((item) => {
-    const prodDoc = item.productId;
-    if (!prodDoc) return null;
-    return {
-      _id: item._id, // include this line to preserve the subdocument _id
-      productId: prodDoc._id,
-      name: prodDoc.name,
-      productCost: prodDoc.productCost,
-      productGST: prodDoc.productGST || 0,
-      color: item.color || prodDoc.color || "",
-      size: item.size || prodDoc.size || "",
-      quantity: item.quantity || 1,
-      material: prodDoc.material || "",
-      weight: prodDoc.weight || "",
-    };
-  })
-  .filter(Boolean);
-
+      // Map products to include productName
+      const mappedRows = data.products.map((item) => ({
+        _id: item._id, // preserve the subdocument _id
+        productId: item.productId,
+        productName: item.productName, // from catalog
+        color: item.color || "N/A",
+        size: item.size || "N/A",
+        quantity: item.quantity || 1,
+        productCost: item.productCost,
+        productGST: item.productGST || 0,
+      }));
 
       setSelectedProducts(mappedRows);
     } catch (error) {
@@ -427,7 +420,6 @@ export default function CreateManualCatalog() {
       return;
     }
 
-    // Include margin and GST in the updated data so the backend can update those fields too.
     const updatedCatalogData = {
       catalogName,
       customerName,
@@ -435,30 +427,29 @@ export default function CreateManualCatalog() {
       customerAddress,
       customerCompany: selectedCompany,
       margin: selectedMargin,
-      gst: selectedGst, // Make sure this is included
+      gst: selectedGst,
       products: selectedProducts.map((p) => ({
         _id: p._id, // Include this for existing items
         productId: p.productId,
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity,
-        productCost: p.productCost, // Make sure this is included
-        productGST: p.productGST    // Make sure this is included
+        productCost: p.productCost,
+        productGST: p.productGST,
       })),
     };
+
+    console.log("Updated Catalog Data:", updatedCatalogData);
 
     try {
       const token = localStorage.getItem("token");
       const response = await axios.put(`${BACKEND_URL}/api/admin/catalogs/${id}`, updatedCatalogData, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (response.status === 200) {
-        alert("Catalog updated successfully!");
-        navigate(`/admin-dashboard/manage-catalogs`);
-      } else {
-        throw new Error("Failed to update catalog");
-      }
+      console.log("Response from server:", response.data);
+      await fetchExistingCatalog();
+      alert("Catalog updated successfully!");
+      navigate(`/admin-dashboard/manage-catalogs`);
     } catch (error) {
       console.error("Error updating catalog:", error);
       alert("Failed to update catalog. Check console.");
@@ -481,7 +472,6 @@ export default function CreateManualCatalog() {
       const baseRate = p.productCost || 0;
       const rate = parseFloat(baseRate.toFixed(2));
       const amount = rate * quantity;
-      // Use the cart item's productGST if set; otherwise, use the global selectedGst.
       const itemGst = p.productGST !== undefined ? p.productGST : selectedGst;
       const gstVal = parseFloat((amount * (itemGst / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
@@ -1023,32 +1013,35 @@ export default function CreateManualCatalog() {
               {selectedProducts.length === 0 && (
                 <p className="text-gray-600">No products selected.</p>
               )}
-              {selectedProducts.map((row, idx) => (
-                <div key={idx} className="flex flex-col border border-purple-200 rounded p-2 mb-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-sm text-purple-800">{row.name}</div>
-                      {row.color && <div className="text-xs">Color: {row.color}</div>}
-                      {row.size && <div className="text-xs">Size: {row.size}</div>}
-                      <div className="text-xs">Cost: ₹{row.productCost}</div>
-                      <div className="text-xs">GST: {row.productGST}%</div>
-                      <div className="text-xs">Qty: {row.quantity}</div>
+              {selectedProducts.map((row, idx) => {
+                console.log("Row data:", row);
+                return (
+                  <div key={idx} className="flex flex-col border border-purple-200 rounded p-2 mb-2">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-bold text-sm text-purple-800">{row.productName || "No Product Name"}</div>
+                        {row.color && <div className="text-xs">Color: {row.color}</div>}
+                        {row.size && <div className="text-xs">Size: {row.size}</div>}
+                        <div className="text-xs">Cost: ₹{row.productCost.toFixed(2)}</div>
+                        <div className="text-xs">GST: {row.productGST}%</div>
+                        <div className="text-xs">Qty: {row.quantity}</div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveSelectedRow(idx)}
+                        className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                      >
+                        Remove
+                      </button>
                     </div>
                     <button
-                      onClick={() => handleRemoveSelectedRow(idx)}
-                      className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                      onClick={() => handleEditItem(idx)}
+                      className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
                     >
-                      Remove
+                      Edit
                     </button>
                   </div>
-                  <button
-                    onClick={() => handleEditItem(idx)}
-                    className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
-                  >
-                    Edit
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <button
               onClick={() => setCartOpen(false)}
@@ -1335,7 +1328,6 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
 }
 
 // ----------------------- VARIATION EDIT MODAL (Cart Item Edit) -----------------------
-// Updated to allow editing all fields in the cart item (including cost and GST)
 function VariationEditModal({ item, onClose, onUpdate }) {
   const [name, setName] = useState(item.name || "");
   const [productCost, setProductCost] = useState(item.productCost || 0);

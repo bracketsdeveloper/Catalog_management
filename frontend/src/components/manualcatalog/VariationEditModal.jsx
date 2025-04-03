@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 
 export default function VariationEditModal({ item, margin, onClose, onUpdate }) {
+  const [name, setName] = useState(item.productName || ""); // Ensure productName is used
+  const [productCost, setProductCost] = useState(item.productCost || 0);
+  const [productGST, setProductGST] = useState(item.productGST || 0);
   const [color, setColor] = useState(item.color || "");
   const [size, setSize] = useState(item.size || "");
   const [quantity, setQuantity] = useState(item.quantity || 1);
