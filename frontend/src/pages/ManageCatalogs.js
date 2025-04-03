@@ -214,22 +214,24 @@ export default function CreateManualCatalog() {
 
       const productArray = data.products || [];
       const mappedRows = productArray
-        .map((item) => {
-          const prodDoc = item.productId;
-          if (!prodDoc) return null;
-          return {
-            productId: prodDoc._id,
-            name: prodDoc.name,
-            productCost: prodDoc.productCost,
-            productGST: prodDoc.productGST || 0,
-            color: item.color || prodDoc.color || "",
-            size: item.size || prodDoc.size || "",
-            quantity: item.quantity || 1,
-            material: prodDoc.material || "",
-            weight: prodDoc.weight || "",
-          };
-        })
-        .filter(Boolean);
+  .map((item) => {
+    const prodDoc = item.productId;
+    if (!prodDoc) return null;
+    return {
+      _id: item._id, // include this line to preserve the subdocument _id
+      productId: prodDoc._id,
+      name: prodDoc.name,
+      productCost: prodDoc.productCost,
+      productGST: prodDoc.productGST || 0,
+      color: item.color || prodDoc.color || "",
+      size: item.size || prodDoc.size || "",
+      quantity: item.quantity || 1,
+      material: prodDoc.material || "",
+      weight: prodDoc.weight || "",
+    };
+  })
+  .filter(Boolean);
+
 
       setSelectedProducts(mappedRows);
     } catch (error) {
@@ -433,14 +435,15 @@ export default function CreateManualCatalog() {
       customerAddress,
       customerCompany: selectedCompany,
       margin: selectedMargin,
-      gst: selectedGst,
+      gst: selectedGst, // Make sure this is included
       products: selectedProducts.map((p) => ({
+        _id: p._id, // Include this for existing items
         productId: p.productId,
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity,
-        productCost: p.productCost, // updated cost
-        productGST: p.productGST    // updated GST
+        productCost: p.productCost, // Make sure this is included
+        productGST: p.productGST    // Make sure this is included
       })),
     };
 

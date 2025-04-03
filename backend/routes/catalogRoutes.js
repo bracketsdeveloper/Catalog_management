@@ -197,6 +197,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       products,
       fieldsToDisplay,
       margin,
+      gst,  // Add this line to accept gst from request body
       priceRange
     } = req.body;
 
@@ -205,6 +206,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(404).json({ message: "Catalog not found" });
     }
 
+    // Update basic catalog info
     catalog.catalogName = catalogName;
     catalog.customerName = customerName;
     catalog.customerEmail = customerEmail;
@@ -213,16 +215,23 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     catalog.fieldsToDisplay = fieldsToDisplay || [];
     catalog.margin = margin;
     catalog.priceRange = priceRange;
+    catalog.gst = gst || 18; // Default to 18% if not provided
 
-    // Update the entire products array so that changes to productCost and productGST are captured.
+    // Update products array with cost and GST
     if (products) {
-      catalog.products = products.map((p) => ({
-        productId: p.productId,
-        color: p.color || "",
-        size: p.size || "",
-        quantity: p.quantity || 1,
-        productCost: p.productCost, // New value, e.g., 450
-        productGST: p.productGST    // New value, e.g., 10
+      catalog.products = await Promise.all(products.map(async (p) => {
+        // Get the current product to preserve existing values if not provided
+        const existingProduct = catalog.products.id(p._id) || {};
+        
+        return {
+          _id: p._id || existingProduct._id,
+          productId: p.productId || existingProduct.productId,
+          color: p.color || existingProduct.color || "",
+          size: p.size || existingProduct.size || "",
+          quantity: p.quantity || existingProduct.quantity || 1,
+          productCost: p.productCost !== undefined ? p.productCost : existingProduct.productCost,
+          productGST: p.productGST !== undefined ? p.productGST : existingProduct.productGST
+        };
       }));
     }
 
