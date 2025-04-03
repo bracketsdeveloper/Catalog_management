@@ -39,7 +39,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerCompany,
       customerAddress,
       margin,
-      items,      // Items array from request body
+      items,      // Items array from request body (from catalog)
       terms       // Dynamic terms field (headings & content)
     } = req.body;
 
@@ -71,29 +71,27 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     // Use provided terms if available; otherwise, use default terms.
     const quotationTerms = (terms && terms.length > 0) ? terms : defaultTerms;
 
-    // Build new items array with each product's details
+    // Build new items array using catalog values:
+    // Use the catalog's productCost as rate, its quantity, and its productGST.
     const newItems = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const productDoc = await Product.findById(item.productId).lean();
-      if (!productDoc) {
-        console.warn(`Product not found: ${item.productId}`);
-        continue;
+      // Use productName from item if available; otherwise, fetch from product document
+      let productName = item.productName;
+      if (!productName) {
+        const productDoc = await Product.findById(item.productId).lean();
+        productName = productDoc ? productDoc.name : "";
       }
-
-      // Map fields according to your specifications:
-      // Use the item.productCost if defined; otherwise, fall back to productDoc.productCost.
-      const productCost = item.productCost !== undefined ? item.productCost : productDoc.productCost;
+      const productCost = item.productCost; // use catalog value as rate
       const quantity = item.quantity || 1;
       const amount = productCost * quantity;
-      const productGST = productDoc.productGST || 0;
+      const productGST = item.productGST; // use catalog value for GST
       const total = amount + (amount * productGST / 100);
 
       newItems.push({
         slNo: i + 1,
         productId: item.productId,
-        // Use productName from catalog if available; otherwise, use productDoc.name.
-        product: item.productName || productDoc.name,
+        product: productName,
         quantity: quantity,
         rate: productCost,
         amount: amount,
@@ -169,25 +167,26 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       terms
     } = req.body;
 
-    // Build updated items array with each product's productGST and recalculated totals
+    // Build updated items array using catalog values
     let newItems = [];
     if (items) {
       for (const item of items) {
-        const productDoc = await Product.findById(item.productId).lean();
-        if (!productDoc) {
-          console.warn(`Product not found: ${item.productId}`);
-          continue;
+        // Use productName from item if available; otherwise, fetch from product document
+        let productName = item.productName;
+        if (!productName) {
+          const productDoc = await Product.findById(item.productId).lean();
+          productName = productDoc ? productDoc.name : "";
         }
-        const productCost = item.productCost !== undefined ? item.productCost : productDoc.productCost;
+        const productCost = item.productCost; // from catalog
         const quantity = item.quantity || 1;
         const amount = productCost * quantity;
-        const productGST = productDoc.productGST || 0;
+        const productGST = item.productGST; // from catalog
         const total = amount + (amount * productGST / 100);
 
         newItems.push({
           slNo: item.slNo,
           productId: item.productId,
-          product: item.productName || productDoc.name,
+          product: productName,
           quantity: quantity,
           rate: productCost,
           amount: amount,

@@ -1,3 +1,5 @@
+"use strict";
+
 const express = require("express");
 const router = express.Router();
 const Catalog = require("../models/Catalog");
@@ -58,15 +60,17 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
         console.warn(`Product not found: ${p.productId}`);
         continue;
       }
-      const productGST = productDoc.productGST || 0;
+      // Use user-provided values if available, otherwise fall back to product defaults.
       newProducts.push({
         productId: p.productId,
         productName: productDoc.name,
         color: p.color || "",
         size: p.size || "",
-        quantity: p.quantity || 1,
-        productCost: productDoc.productCost || 0,
-        productGST
+        quantity: p.quantity !== undefined ? p.quantity : 1,
+        productCost:
+          p.productCost !== undefined ? p.productCost : (productDoc.productCost || 0),
+        productGST:
+          p.productGST !== undefined ? p.productGST : (productDoc.productGST || 0)
       });
     }
 
@@ -184,7 +188,6 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
   }
 });
 
-// 6) Update a catalog
 // 6) Update a catalog (with merging of products)
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -251,7 +254,6 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });
-
 
 // 7) Approve a catalog
 router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, res) => {

@@ -70,7 +70,7 @@ export default function CreateManualCatalog() {
   const [customerCompany, setCustomerCompany] = useState("");
 
   // Margin & GST
-  const presetMarginOptions = [5, 10, 15, 20];
+  const presetMarginOptions = [0, 5, 10, 15, 20];
   const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
   const [marginOption, setMarginOption] = useState("preset");
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);

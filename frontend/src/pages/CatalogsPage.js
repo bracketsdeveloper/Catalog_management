@@ -11,7 +11,10 @@ import RemarksModal from "../components/CatalogManagement/RemarksModal";
 import PDFTemplateModal from "../components/CatalogManagement/PDFTemplateModal";
 
 // Utility modules
-import { getBase64ImageFromUrl, wrapText } from "../components/CatalogManagement/exportUtils";
+import {
+  getBase64ImageFromUrl,
+  wrapText
+} from "../components/CatalogManagement/exportUtils";
 import {
   groupItemsByDate,
   groupQuotationsByTimePeriod,
@@ -259,11 +262,12 @@ export default function CatalogManagementPage() {
       };
   
       // Process each product in the catalog sequentially.
+      // For cost, GST, and quantity, use the values from the catalog subdocument.
       for (let idx = 0; idx < catalog.products.length; idx++) {
         const prod = catalog.products[idx];
         let productDoc = {};
   
-        // Use populated product data for image/details if available.
+        // Use populated product data for image, name, and details if available.
         if (prod.productId && typeof prod.productId === "object" && prod.productId.name) {
           productDoc = prod.productId;
         } else {
@@ -273,7 +277,7 @@ export default function CatalogManagementPage() {
           productDoc = response.data;
         }
   
-        // For cost, GST, and quantity, always use the catalog subdocument (prod)
+        // Now use productCost, productGST, and quantity from the catalog subdocument.
         const rate = prod.productCost || 0;
         const quantity = prod.quantity || 1;
         const amount = rate * quantity;
@@ -349,31 +353,28 @@ export default function CatalogManagementPage() {
   
       // Process each product subdocument in the catalog.
       item.products?.forEach((prodObj) => {
-        // Use sub for cost, GST, qty; use prod for image, name, details if available.
-        const sub = prodObj; // Catalog subdocument
-        const prod = (prodObj.productId && typeof prodObj.productId === "object")
-          ? prodObj.productId
-          : {};
+        // prodObj is the subdocument containing cost, gst, qty, etc.
+        const p = prodObj;
         const row = [];
   
-        // 1. Images (use prod.images if available, else sub.images)
-        row.push(((prod.images || sub.images) || []).join(", "));
+        // 1. Images (use p.images)
+        row.push((p.images || []).join(", "));
   
-        // 2. Product ID (from subdocument)
-        row.push(sub.productId ? sub.productId.toString() : "N/A");
+        // 2. Product ID
+        row.push(p.productId ? p.productId.toString() : "N/A");
   
-        // 3. Product Name (prefer prod.name; fallback to sub.productName)
-        row.push(prod.name || sub.productName || "");
+        // 3. Product Name
+        row.push(p.productName || "");
   
-        // 4. Product Details (from prod if available)
-        row.push(prod.productDetails || "");
+        // 4. Product Details
+        row.push(p.productDetails || "");
   
         // 5. Product GST from subdocument
-        row.push(sub.productGST !== undefined ? sub.productGST : "");
+        row.push(p.productGST !== undefined ? p.productGST : "");
   
-        // 6. Product Cost from subdocument (adjusted with margin)
-        if (sub.productCost !== undefined) {
-          const effectiveCost = sub.productCost * (1 + (item.margin || 0) / 100);
+        // 6. Product Cost (adjusted with margin)
+        if (p.productCost !== undefined) {
+          const effectiveCost = p.productCost * (1 + (item.margin || 0) / 100);
           row.push(effectiveCost.toFixed(2));
         } else {
           row.push("");
@@ -382,14 +383,14 @@ export default function CatalogManagementPage() {
         // Process extra fields if any
         extraFields.forEach(field => {
           if (field === "images") {
-            row.push(((prod.images || sub.images) || []).join(", "));
-          } else if (field === "productCost" && sub.productCost !== undefined) {
-            const effectiveCost = sub.productCost * (1 + (item.margin || 0) / 100);
+            row.push((p.images || []).join(", "));
+          } else if (field === "productCost" && p.productCost !== undefined) {
+            const effectiveCost = p.productCost * (1 + (item.margin || 0) / 100);
             row.push(effectiveCost.toFixed(2));
           } else if (field === "productGST") {
-            row.push(sub.productGST !== undefined ? sub.productGST : "");
+            row.push(p.productGST !== undefined ? p.productGST : "");
           } else {
-            row.push((sub[field] !== undefined ? sub[field] : prod[field]) || "");
+            row.push(p[field] !== undefined ? p[field] : "");
           }
         });
   
@@ -443,8 +444,8 @@ export default function CatalogManagementPage() {
   
       // Loop over each product subdocument in the catalog.
       for (let i = 0; i < (catalog.products || []).length; i++) {
-        const sub = catalog.products[i]; // catalog subdocument with cost, gst, qty
-        // For image, name, details, try to use populated product if available.
+        const sub = catalog.products[i]; // subdocument containing cost, GST, qty, etc.
+        // Use populated product data for image, name, details if available.
         const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
   
         const [page] = await newPdf.copyPages(pdf2Doc, [0]);
@@ -495,7 +496,7 @@ export default function CatalogManagementPage() {
         let yText = height - 200;
         const lineHeight = 44;
   
-        // Use productName from populated product if available, else from subdocument.
+        // Use productName from prod if available, else from sub.
         page.drawText(prod.name || sub.productName || "", {
           x: xText,
           y: yText,
@@ -546,7 +547,7 @@ export default function CatalogManagementPage() {
           yText -= lineHeight * 0.5;
         }
         
-        // Use quantity from subdocument
+        // Use quantity from subdocument.
         if (sub.quantity) {
           page.drawText("Qty: ", {
             x: xText,
@@ -587,7 +588,7 @@ export default function CatalogManagementPage() {
           yText -= lineHeight;
         }
         
-        // Use productGST from subdocument
+        // Use productGST from subdocument.
         if (sub.productGST !== undefined) {
           page.drawText("GST: ", {
             x: xText,
