@@ -275,38 +275,7 @@ export default function QuotationView() {
       </div>
 
       {/* Add/Update CGST/SGST Buttons */}
-      <div className="flex justify-end space-x-4 mb-4">
-        {!editableQuotation.cgstAdded ? (
-          <button
-            onClick={handleAddCGST}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
-          >
-            + Add CGST
-          </button>
-        ) : (
-          <button
-            onClick={handleAddCGST}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
-          >
-            Update CGST
-          </button>
-        )}
-        {!editableQuotation.sgstAdded ? (
-          <button
-            onClick={handleAddSGST}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
-          >
-            + Add SGST
-          </button>
-        ) : (
-          <button
-            onClick={handleAddSGST}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
-          >
-            Update SGST
-          </button>
-        )}
-      </div>
+      
 
       {/* Editable Fields */}
       <div className="mb-4 space-y-2">
@@ -428,12 +397,7 @@ export default function QuotationView() {
             <th className="p-2 text-left">Rate (with margin)</th>
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (%)</th>
-            {editableQuotation.cgst !== 0 && (
-              <th className="p-2 text-left">CGST</th>
-            )}
-            {editableQuotation.sgst !== 0 && (
-              <th className="p-2 text-left">SGST</th>
-            )}
+            
             <th className="p-2 text-left">Total</th>
           </tr>
         </thead>
@@ -503,12 +467,7 @@ export default function QuotationView() {
                     }}
                   />%
                 </td>
-                {editableQuotation.cgst !== 0 && (
-                  <td className="p-2">{editableQuotation.cgst || "0.00"}%</td>
-                )}
-                {editableQuotation.sgst !== 0 && (
-                  <td className="p-2">{editableQuotation.sgst || "0.00"}%</td>
-                )}
+                
                 <td className="p-2">{total.toFixed(2)}</td>
               </tr>
             );

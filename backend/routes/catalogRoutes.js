@@ -146,7 +146,9 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
 // 4) Get a single catalog
 router.get("/catalogs/:id", async (req, res) => {
   try {
-    const catalog = await Catalog.findById(req.params.id).populate("products.productId");
+    const catalog = await Catalog.findById(req.params.id)
+      .populate("products.productId")
+      .populate("customerCompany");
     if (!catalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
@@ -184,7 +186,6 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 });
 
 // 6) Update a catalog
-// 6) Update a catalog
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -197,49 +198,37 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       fieldsToDisplay,
       margin,
       priceRange
-      // REMOVED any single 'gst' since it's now at item-level
     } = req.body;
 
-    const existingCatalog = await Catalog.findById(req.params.id);
-    if (!existingCatalog) {
+    const catalog = await Catalog.findById(req.params.id);
+    if (!catalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
 
-    // Build updated products array using the updated cost and GST from req.body.products
-    let newProducts;
+    catalog.catalogName = catalogName;
+    catalog.customerName = customerName;
+    catalog.customerEmail = customerEmail;
+    catalog.customerCompany = customerCompany;
+    catalog.customerAddress = customerAddress;
+    catalog.fieldsToDisplay = fieldsToDisplay || [];
+    catalog.margin = margin;
+    catalog.priceRange = priceRange;
+
+    // Update the entire products array so that changes to productCost and productGST are captured.
     if (products) {
-      newProducts = products.map((p) => ({
+      catalog.products = products.map((p) => ({
         productId: p.productId,
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity || 1,
-        productCost: p.productCost,   // include updated product cost
-        productGST: p.productGST      // include updated product GST
+        productCost: p.productCost, // New value, e.g., 450
+        productGST: p.productGST    // New value, e.g., 10
       }));
     }
 
-    const updatedData = {
-      catalogName,
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      fieldsToDisplay: fieldsToDisplay || [],
-      margin,
-      priceRange,
-    };
+    const updatedCatalog = await catalog.save();
 
-    if (newProducts) {
-      updatedData.products = newProducts;
-    }
-
-    const updatedCatalog = await Catalog.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true }
-    );
-
-    await createLog("update", existingCatalog, updatedCatalog, req.user, req.ip);
+    await createLog("update", catalog, updatedCatalog, req.user, req.ip);
 
     res.json({ message: "Catalog updated", catalog: updatedCatalog });
   } catch (error) {
@@ -247,6 +236,8 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });
+
+
 
 
 // 7) Approve a catalog

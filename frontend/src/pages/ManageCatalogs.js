@@ -67,6 +67,7 @@ export default function CreateManualCatalog() {
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [customerCompany, setCustomerCompany] = useState("");
 
   // Margin & GST
   const presetMarginOptions = [5, 10, 15, 20];
@@ -184,6 +185,7 @@ export default function CreateManualCatalog() {
       setCustomerName(data.customerName);
       setCustomerEmail(data.customerEmail || "");
       setCustomerAddress(data.customerAddress || "");
+      setCustomerCompany(data.customerCompany || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
 
       // Margin
@@ -423,18 +425,22 @@ export default function CreateManualCatalog() {
       return;
     }
 
+    // Include margin and GST in the updated data so the backend can update those fields too.
     const updatedCatalogData = {
       catalogName,
       customerName,
       customerEmail,
       customerAddress,
+      customerCompany: selectedCompany,
+      margin: selectedMargin,
+      gst: selectedGst,
       products: selectedProducts.map((p) => ({
         productId: p.productId,
-        color: p.color,
-        size: p.size,
+        color: p.color || "",
+        size: p.size || "",
         quantity: p.quantity,
-        productCost: p.productCost,  // include updated cost
-        productGST: p.productGST      // include updated GST
+        productCost: p.productCost, // updated cost
+        productGST: p.productGST    // updated GST
       })),
     };
 
