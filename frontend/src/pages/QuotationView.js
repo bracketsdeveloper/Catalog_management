@@ -16,7 +16,7 @@ export default function QuotationView() {
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [editingTermIdx, setEditingTermIdx] = useState(null);
 
-  // Default terms to preset if none exist
+  // Default terms preset
   const defaultTerms = [
     {
       heading: "Delivery",
@@ -75,14 +75,11 @@ export default function QuotationView() {
     }
   }
 
-  // NEW: When saving changes, create a new quotation rather than updating the current one.
   async function handleSaveQuotation() {
     if (!editableQuotation) return;
     try {
       const token = localStorage.getItem("token");
       const updatedMargin = parseFloat(editableQuotation.margin) || 0;
-
-      // Prepare the data for the new quotation. Exclude fields like _id and quotationNumber.
       const {
         catalogName,
         customerName,
@@ -104,6 +101,13 @@ export default function QuotationView() {
         terms,
       };
 
+      console.log("Before saving, updated quotation data:", body);
+      // Log each item's base rate and computed effective rate:
+      body.items.forEach((it, idx) => {
+        const effRate = it.rate * (1 + updatedMargin / 100);
+        console.log(`Item ${idx}: base rate = ${it.rate}, effective rate = ${effRate.toFixed(2)}`);
+      });
+
       const res = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
         method: "POST",
         headers: {
@@ -116,8 +120,8 @@ export default function QuotationView() {
         throw new Error("Creation failed");
       }
       const data = await res.json();
+      console.log("Response from server:", data);
       alert("New Quotation created!");
-      // Redirect to the new quotation view page using its ID.
       navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
     } catch (error) {
       console.error("Save error:", error);
@@ -136,6 +140,7 @@ export default function QuotationView() {
     setEditableQuotation((prev) => {
       const newItems = [...prev.items];
       newItems[index] = { ...newItems[index], [field]: newValue };
+      console.log(`After update, items:`, newItems);
       return { ...prev, items: newItems };
     });
   }
@@ -179,34 +184,10 @@ export default function QuotationView() {
     setEditingTermIdx(null);
   }
 
-  function handleAddCGST() {
-    const cgst = window.prompt("Enter CGST value:");
-    if (cgst && !isNaN(cgst)) {
-      setEditableQuotation((prev) => ({
-        ...prev,
-        cgst: parseFloat(cgst),
-        cgstAdded: true,
-      }));
-    }
-  }
-
-  function handleAddSGST() {
-    const sgst = window.prompt("Enter SGST value:");
-    if (sgst && !isNaN(sgst)) {
-      setEditableQuotation((prev) => ({
-        ...prev,
-        sgst: parseFloat(sgst),
-        sgstAdded: true,
-      }));
-    }
-  }
-
-  // Instead of generating PDF with pdf-lib, redirect to the print-ready page.
   const handleExportPDF = () => {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
-  // Helper functions to compute totals based on each item's productGST
   function computedAmount(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
@@ -241,20 +222,8 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor and totals for display
+  // Compute margin factor for display
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
-  let computedAmountVal = 0;
-  let computedTotalVal = 0;
-  editableQuotation.items.forEach((item) => {
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    const effRate = baseRate * marginFactor;
-    const amount = effRate * quantity;
-    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
-    const total = parseFloat((amount + gstVal).toFixed(2));
-    computedAmountVal += amount;
-    computedTotalVal += total;
-  });
 
   return (
     <div className="p-6 bg-white text-black min-h-screen">
@@ -274,10 +243,7 @@ export default function QuotationView() {
         </button>
       </div>
 
-      {/* Add/Update CGST/SGST Buttons */}
-      
-
-      {/* Editable Fields */}
+      {/* Editable Header Fields */}
       <div className="mb-4 space-y-2">
         <div>
           <span
@@ -317,7 +283,7 @@ export default function QuotationView() {
         </div>
       </div>
 
-      {/* Terms and Conditions Section */}
+      {/* Terms Section */}
       <div className="mb-6">
         <button
           onClick={() => setTermModalOpen(true)}
@@ -397,7 +363,6 @@ export default function QuotationView() {
             <th className="p-2 text-left">Rate (with margin)</th>
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (%)</th>
-            
             <th className="p-2 text-left">Total</th>
           </tr>
         </thead>
@@ -405,6 +370,7 @@ export default function QuotationView() {
           {editableQuotation.items.map((item, index) => {
             const baseRate = parseFloat(item.rate) || 0;
             const quantity = parseFloat(item.quantity) || 0;
+            // Effective rate = base rate * marginFactor
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
             const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
@@ -416,16 +382,14 @@ export default function QuotationView() {
                 item.productId.images.length > 0
                 ? item.productId.images[0]
                 : "https://via.placeholder.com/150");
+
+            console.log(`Rendering item ${index}: base rate = ${baseRate}, effective rate = ${effRate.toFixed(2)}`);
             return (
               <tr key={index} className="border-b">
                 <td className="p-2">{item.slNo}</td>
                 <td className="p-2">
                   {imageUrl !== "https://via.placeholder.com/150" ? (
-                    <img
-                      src={imageUrl}
-                      alt={item.product}
-                      className="w-16 h-16 object-cover"
-                    />
+                    <img src={imageUrl} alt={item.product} className="w-16 h-16 object-cover" />
                   ) : (
                     "No Image"
                   )}
@@ -448,9 +412,14 @@ export default function QuotationView() {
                     onSave={(newVal) => {
                       const newEffRate = parseFloat(newVal);
                       if (!isNaN(newEffRate)) {
-                        // Update base rate accordingly
+                        // Compute new base rate = new effective rate divided by margin factor
                         const newBaseRate = newEffRate / marginFactor;
+                        console.log(
+                          `Editing item ${index}: new effective rate = ${newEffRate}, computed new base rate = ${newBaseRate.toFixed(2)}`
+                        );
+                        // Update both rate and productprice to the new base rate
                         updateItemField(index, "rate", parseFloat(newBaseRate.toFixed(2)));
+                        updateItemField(index, "productprice", parseFloat(newBaseRate.toFixed(2)));
                       }
                     }}
                   />
@@ -458,7 +427,7 @@ export default function QuotationView() {
                 <td className="p-2">{amount.toFixed(2)}</td>
                 <td className="p-2">
                   <EditableField
-                    value={parseFloat(item.productGST).toFixed(2)}
+                    value={item.productGST.toString()}
                     onSave={(newVal) => {
                       const newGST = parseFloat(newVal);
                       if (!isNaN(newGST)) {
@@ -467,7 +436,6 @@ export default function QuotationView() {
                     }}
                   />%
                 </td>
-                
                 <td className="p-2">{total.toFixed(2)}</td>
               </tr>
             );
@@ -480,16 +448,14 @@ export default function QuotationView() {
         <p>Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}</p>
       </div>
 
-      {/* Additional Information Blocks */}
       <div className="p-2 italic font-bold text-blue-600 border text-center">
         Rates may vary in case there is a change in specifications / quantity / timelines
       </div>
-      
     </div>
   );
 }
 
-// A new reusable component to handle inline editing with an edit SVG icon.
+// Reusable inline editing component
 function EditableField({ value, onSave }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
@@ -534,4 +500,29 @@ function EditableField({ value, onSave }) {
       </button>
     </div>
   );
+}
+
+// Helper functions to compute totals
+function computedAmount(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    sum += baseRate * marginFactor * quantity;
+  });
+  return sum;
+}
+
+function computedTotal(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    const amount = baseRate * marginFactor * quantity;
+    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+    sum += amount + gstVal;
+  });
+  return sum;
 }

@@ -63,7 +63,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       // Use user-provided values if available, otherwise fall back to product defaults.
       newProducts.push({
         productId: p.productId,
-        productName: productDoc.name,
+        productName: p.productName ||productDoc.productName || productDoc.name, // Updated: using productDoc.name from the Product model
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity !== undefined ? p.quantity : 1,

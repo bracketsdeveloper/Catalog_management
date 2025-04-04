@@ -1,3 +1,4 @@
+// routes/quotations.js
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
@@ -7,7 +8,6 @@ const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 const ImageModule = require("docxtemplater-image-module-free");
 const Quotation = require("../models/Quotation");
-const Product = require("../models/Product");
 const Log = require("../models/Log"); // Ensure you have a Log model
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
@@ -25,13 +25,15 @@ async function createLog(action, oldValue, newValue, user, ip) {
     });
   } catch (error) {
     console.error("Error creating quotation log:", error);
-    // Do not block main flow if logging fails
   }
 }
 
 // 1) CREATE QUOTATION
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    console.log("Request body received for quotation creation:");
+    console.log(JSON.stringify(req.body, null, 2));
+
     const {
       catalogName,
       customerName,
@@ -39,66 +41,90 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerCompany,
       customerAddress,
       margin,
-      items,      // Items array from request body (from catalog)
+      items,      // Items array from manual catalog
       terms       // Dynamic terms field (headings & content)
     } = req.body;
 
+    console.log("Request body keys:", Object.keys(req.body));
+
     if (!items || items.length === 0) {
+      console.error("No items provided in the payload.");
       return res.status(400).json({ message: "No items provided" });
     }
 
-    // Define default terms
     const defaultTerms = [
       {
         heading: "Delivery",
         content:
           "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost"
       },
-      {
-        heading: "Branding",
-        content: "As mentioned above"
-      },
-      {
-        heading: "Payment Terms",
-        content: "Within 30 days upon delivery"
-      },
-      {
-        heading: "Quote Validity",
-        content: "The quote is valid only for 6 days from the date of quotation"
-      }
+      { heading: "Branding", content: "As mentioned above" },
+      { heading: "Payment Terms", content: "Within 30 days upon delivery" },
+      { heading: "Quote Validity", content: "The quote is valid only for 6 days from the date of quotation" }
     ];
 
-    // Use provided terms if available; otherwise, use default terms.
     const quotationTerms = (terms && terms.length > 0) ? terms : defaultTerms;
 
-    // Build new items array using catalog values:
-    // Use the catalog's productCost as rate, its quantity, and its productGST.
     const newItems = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      // Use productName from item if available; otherwise, fetch from product document
-      let productName = item.productName;
-      if (!productName) {
-        const productDoc = await Product.findById(item.productId).lean();
-        productName = productDoc ? productDoc.name : "";
-      }
-      const productCost = item.productCost; // use catalog value as rate
-      const quantity = item.quantity || 1;
-      const amount = productCost * quantity;
-      const productGST = item.productGST; // use catalog value for GST
-      const total = amount + (amount * productGST / 100);
+      console.log(`Processing item ${i + 1}:`, item);
+      console.log("Item keys:", Object.keys(item));
 
-      newItems.push({
+      // Use productName (or fallback to product) for display
+      const productName = item.productName || item.product;
+      if (!productName) {
+        console.error(`Missing product name for item ${i + 1}`);
+        return res.status(400).json({ message: `Product name is required for item ${i + 1}` });
+      }
+
+      // Use productCost if present; otherwise, fallback to productprice
+      const baseRate = parseFloat(item.productCost || item.productprice);
+      if (isNaN(baseRate)) {
+        console.error(`Invalid product cost for item ${i + 1}:`, item.productCost);
+        return res.status(400).json({ message: `Invalid product cost for item ${i + 1}` });
+      }
+      const updatedPrice = parseFloat(item.productprice);
+      if (isNaN(updatedPrice)) {
+        console.error(`Invalid updated product price for item ${i + 1}:`, item.productprice);
+        return res.status(400).json({ message: `Invalid updated product price for item ${i + 1}` });
+      }
+      const productGST = parseFloat(item.productGST);
+      if (isNaN(productGST)) {
+        console.error(`Invalid product GST for item ${i + 1}:`, item.productGST);
+        return res.status(400).json({ message: `Invalid product GST for item ${i + 1}` });
+      }
+      let quantity = parseInt(item.quantity);
+      if (isNaN(quantity)) {
+        quantity = 1;
+      }
+
+      const amount = updatedPrice * quantity;
+      const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
+      const total = parseFloat((amount + gstValue).toFixed(2));
+
+      // If productId is an object, extract its _id
+      const productId =
+        typeof item.productId === "object" && item.productId._id
+          ? item.productId._id
+          : item.productId;
+
+      const newItem = {
         slNo: i + 1,
-        productId: item.productId,
+        productId,
         product: productName,
-        quantity: quantity,
-        rate: productCost,
-        amount: amount,
-        productGST: productGST,
-        total: total
-      });
+        quantity,
+        rate: baseRate,
+        productprice: updatedPrice,
+        amount,
+        productGST,
+        total,
+      };
+      console.log(`Pushing item ${i + 1}:`, newItem);
+      newItems.push(newItem);
     }
+
+    console.log("Final newItems array:", newItems);
 
     const newQuotation = new Quotation({
       catalogName,
@@ -113,8 +139,6 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     });
 
     await newQuotation.save();
-
-    // Create log for quotation creation
     await createLog("create", null, newQuotation, req.user, req.ip);
 
     res.status(201).json({ message: "Quotation created", quotation: newQuotation });
@@ -123,6 +147,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error creating quotation" });
   }
 });
+
 
 // 2) GET ALL QUOTATIONS
 router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
@@ -167,31 +192,44 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       terms
     } = req.body;
 
-    // Build updated items array using catalog values
     let newItems = [];
     if (items) {
       for (const item of items) {
-        // Use productName from item if available; otherwise, fetch from product document
-        let productName = item.productName;
+        const productName = item.productName || item.product;
         if (!productName) {
-          const productDoc = await Product.findById(item.productId).lean();
-          productName = productDoc ? productDoc.name : "";
+          return res.status(400).json({ message: "Product name is required for each item" });
         }
-        const productCost = item.productCost; // from catalog
-        const quantity = item.quantity || 1;
-        const amount = productCost * quantity;
-        const productGST = item.productGST; // from catalog
-        const total = amount + (amount * productGST / 100);
+        const baseRate = parseFloat(item.productCost);
+        if (isNaN(baseRate)) {
+          return res.status(400).json({ message: "Invalid product cost for an item" });
+        }
+        const updatedPrice = parseFloat(item.productprice);
+        if (isNaN(updatedPrice)) {
+          return res.status(400).json({ message: "Invalid updated product price for an item" });
+        }
+        const productGST = parseFloat(item.productGST);
+        if (isNaN(productGST)) {
+          return res.status(400).json({ message: "Invalid product GST for an item" });
+        }
+        let quantity = parseInt(item.quantity);
+        if (isNaN(quantity)) {
+          quantity = 1;
+        }
+        
+        const amount = updatedPrice * quantity;
+        const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
+        const total = parseFloat((amount + gstValue).toFixed(2));
 
         newItems.push({
           slNo: item.slNo,
           productId: item.productId,
           product: productName,
-          quantity: quantity,
-          rate: productCost,
-          amount: amount,
-          productGST: productGST,
-          total: total,
+          quantity,
+          rate: baseRate,
+          productprice: updatedPrice,
+          amount,
+          productGST,
+          total,
         });
       }
     }
@@ -237,10 +275,8 @@ router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) 
     if (!quotationToDelete) {
       return res.status(404).json({ message: "Quotation not found" });
     }
-
     await Quotation.findByIdAndDelete(req.params.id);
     await createLog("delete", quotationToDelete, null, req.user, req.ip);
-
     res.json({ message: "Quotation deleted" });
   } catch (error) {
     console.error("Error deleting quotation:", error);
@@ -254,11 +290,9 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     const quotation = await Quotation.findById(req.params.id)
       .populate("items.productId", "images name productCost category subCategory")
       .exec();
-
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
     }
-
     const templatePath = path.join(__dirname, "..", "templates", "template.docx");
     const content = fs.readFileSync(templatePath, "binary");
 
@@ -276,7 +310,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
         }
       },
       getSize() {
-        return [150, 150]; // width, height in px
+        return [150, 150];
       }
     });
 
@@ -287,16 +321,12 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       modules: [imageModule]
     });
 
-    const items = quotation.items.map((item, index) => {
+    const itemsData = quotation.items.map((item, index) => {
       const quantity = parseFloat(item.quantity) || 0;
       const rate = parseFloat(item.rate) || 0;
       const amount = rate * quantity;
-      // For this export, using a fixed multiplier for example purposes
-      const total = amount * 1.18;
-
-      // Use the first image from the product (if available) or fallback to placeholder
+      const total = amount + (amount * item.productGST / 100);
       const image = item.productId?.images?.[0] || "https://via.placeholder.com/150";
-
       return {
         slNo: item.slNo?.toString() || (index + 1).toString(),
         image,
@@ -308,8 +338,8 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       };
     });
 
-    const totalAmount = items.reduce((sum, i) => sum + parseFloat(i.amount), 0);
-    const grandTotal = items.reduce((sum, i) => sum + parseFloat(i.total), 0);
+    const totalAmount = itemsData.reduce((sum, i) => sum + parseFloat(i.amount), 0);
+    const grandTotal = itemsData.reduce((sum, i) => sum + parseFloat(i.total), 0);
 
     const docData = {
       date: new Date(quotation.createdAt).toLocaleDateString("en-US", {
@@ -320,7 +350,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       companyName: quotation.customerCompany || "",
       state: quotation.customerAddress || "",
       catalogName: quotation.catalogName || "",
-      items,
+      items: itemsData,
       terms: quotation.terms || [],
       grandTotalAmount: totalAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2)

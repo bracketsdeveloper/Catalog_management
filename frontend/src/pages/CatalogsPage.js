@@ -1,4 +1,4 @@
-"use client"; // Remove if you're using Create React App
+"use client";
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
@@ -137,8 +137,6 @@ export default function CatalogManagementPage() {
             : res.data.filter((cat) =>
                 approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
               );
-
-        // Additional client-side filtering
         if (fromDateFilter) {
           const from = new Date(fromDateFilter);
           data = data.filter((item) => new Date(item.createdAt) >= from);
@@ -165,7 +163,6 @@ export default function CatalogManagementPage() {
             : res.data.filter((q) =>
                 approvalFilter === "approved" ? q.approveStatus : !q.approveStatus
               );
-        // Additional filters
         if (fromDateFilter) {
           const from = new Date(fromDateFilter);
           data = data.filter((item) => new Date(item.createdAt) >= from);
@@ -192,7 +189,7 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- CREATE CATALOG DROPDOWN --------------
+  // -------------- CATALOG DROPDOWN --------------
   function handleToggleDropdown() {
     setDropdownOpen((prev) => !prev);
   }
@@ -260,14 +257,13 @@ export default function CatalogManagementPage() {
         terms: catalog.terms && catalog.terms.length > 0 ? catalog.terms : [],
         items: []
       };
-  
-      // Process each product in the catalog sequentially.
-      // For cost, GST, and quantity, use the values from the catalog subdocument.
+
+      // Process each product in the catalog.
       for (let idx = 0; idx < catalog.products.length; idx++) {
         const prod = catalog.products[idx];
         let productDoc = {};
-  
-        // Use populated product data for image, name, and details if available.
+
+        // Use populated product data if available.
         if (prod.productId && typeof prod.productId === "object" && prod.productId.name) {
           productDoc = prod.productId;
         } else {
@@ -276,15 +272,19 @@ export default function CatalogManagementPage() {
           });
           productDoc = response.data;
         }
-  
-        // Now use productCost, productGST, and quantity from the catalog subdocument.
-        const rate = prod.productCost || 0;
+
+        // New changes: 
+        // - productprice is taken as the catalog's productCost.
+        // - rate is calculated as productCost multiplied by (1 + margin/100)
+        const baseCost = prod.productCost || 0;
+        const marginFactor = 1 + ((catalog.margin || 0) / 100);
+        const rate = baseCost * marginFactor;
         const quantity = prod.quantity || 1;
         const amount = rate * quantity;
         const gst = prod.productGST || 0;
         const gstAmount = parseFloat((amount * (gst / 100)).toFixed(2));
         const total = parseFloat((amount + gstAmount).toFixed(2));
-  
+
         newQuotationData.items.push({
           slNo: idx + 1,
           productId: prod.productId,
@@ -294,13 +294,15 @@ export default function CatalogManagementPage() {
           amount,
           productGST: gst,
           total,
+          productprice: baseCost,
         });
       }
-  
+
+      console.log("Quotation data being sent from catalog:", newQuotationData);
       const res = await axios.post(`${BACKEND_URL}/api/admin/quotations`, newQuotationData, {
         headers: { Authorization: `Bearer ${token}` },
       });
-  
+
       if (res.status === 201) {
         alert("Quotation created successfully!");
         navigate(`/admin-dashboard/quotations/${res.data.quotation._id}`);
@@ -312,7 +314,7 @@ export default function CatalogManagementPage() {
       alert("Error creating quotation from catalog. Check console.");
     }
   }
-  
+
   // -------------- REMARKS MODAL --------------
   const openRemarksModal = (item, type) => {
     setSelectedItemForRemarks(item);
@@ -341,46 +343,27 @@ export default function CatalogManagementPage() {
   async function handleExportExcel(item) {
     try {
       const wb = XLSX.utils.book_new();
-      // Use common fields from the product subdocument.
       const commonFields = ["images", "productId", "productName", "productDetails", "productGST", "productCost"];
       const extraFields = (item.fieldsToDisplay || []).filter(field => !commonFields.includes(field));
-  
       const header = [
         ...commonFields.map(field => fieldMapping[field] || field),
         ...extraFields.map(field => fieldMapping[field] || field)
       ];
       const data = [header];
-  
-      // Process each product subdocument in the catalog.
       item.products?.forEach((prodObj) => {
-        // prodObj is the subdocument containing cost, gst, qty, etc.
         const p = prodObj;
         const row = [];
-  
-        // 1. Images (use p.images)
         row.push((p.images || []).join(", "));
-  
-        // 2. Product ID
         row.push(p.productId ? p.productId.toString() : "N/A");
-  
-        // 3. Product Name
         row.push(p.productName || "");
-  
-        // 4. Product Details
         row.push(p.productDetails || "");
-  
-        // 5. Product GST from subdocument
         row.push(p.productGST !== undefined ? p.productGST : "");
-  
-        // 6. Product Cost (adjusted with margin)
         if (p.productCost !== undefined) {
           const effectiveCost = p.productCost * (1 + (item.margin || 0) / 100);
           row.push(effectiveCost.toFixed(2));
         } else {
           row.push("");
         }
-  
-        // Process extra fields if any
         extraFields.forEach(field => {
           if (field === "images") {
             row.push((p.images || []).join(", "));
@@ -393,10 +376,8 @@ export default function CatalogManagementPage() {
             row.push(p[field] !== undefined ? p[field] : "");
           }
         });
-  
         data.push(row);
       });
-  
       const ws = XLSX.utils.aoa_to_sheet(data);
       XLSX.utils.book_append_sheet(wb, ws, "Catalog");
       const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -413,13 +394,13 @@ export default function CatalogManagementPage() {
       alert("Excel export failed");
     }
   }
-  
+
   // -------------- PDF EXPORT --------------
   function openPDFTemplateModal(item) {
     setSelectedItemForPDF(item);
     setPdfTemplateModalOpen(true);
   }
-  
+
   async function handleExportCombinedPDF(catalog, templateId = "1") {
     try {
       const tmpl = templateConfig[templateId];
@@ -430,28 +411,25 @@ export default function CatalogManagementPage() {
       const pdf1Bytes = await fetch(tmpl.pdf1).then((res) => res.arrayBuffer());
       const pdf2Bytes = await fetch(tmpl.pdf2).then((res) => res.arrayBuffer());
       const pdf3Bytes = await fetch(tmpl.pdf3).then((res) => res.arrayBuffer());
-  
+
       const pdf1Doc = await PDFDocument.load(pdf1Bytes);
       const pdf2Doc = await PDFDocument.load(pdf2Bytes);
       const pdf3Doc = await PDFDocument.load(pdf3Bytes);
-  
+
       const newPdf = await PDFDocument.create();
       const pdf1Pages = await newPdf.copyPages(pdf1Doc, pdf1Doc.getPageIndices());
       pdf1Pages.forEach((page) => newPdf.addPage(page));
-  
+
       const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
       const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
-  
-      // Loop over each product subdocument in the catalog.
+
+      // Process each product subdocument in the catalog.
       for (let i = 0; i < (catalog.products || []).length; i++) {
-        const sub = catalog.products[i]; // subdocument containing cost, GST, qty, etc.
-        // Use populated product data for image, name, details if available.
+        const sub = catalog.products[i];
         const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
-  
+
         const [page] = await newPdf.copyPages(pdf2Doc, [0]);
         const { width, height } = page.getSize();
-  
-        // Product image placement
         const imageX = 250, imageY = height - 850, imageW = 600, imageH = 700;
         let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
         if (mainImg && mainImg.startsWith("http://")) {
@@ -462,7 +440,7 @@ export default function CatalogManagementPage() {
           try {
             imageData = await getBase64ImageFromUrl(mainImg);
           } catch (err) {
-            console.error("Error loading product image:", err);
+            console.error("Error fetching product image:", err);
           }
         }
         if (imageData) {
@@ -490,13 +468,9 @@ export default function CatalogManagementPage() {
             color: rgb(0.5, 0.5, 0.5),
           });
         }
-  
-        // Right-side overlay for product details
         let xText = 1000;
         let yText = height - 200;
         const lineHeight = 44;
-  
-        // Use productName from prod if available, else from sub.
         page.drawText(prod.name || sub.productName || "", {
           x: xText,
           y: yText,
@@ -505,7 +479,6 @@ export default function CatalogManagementPage() {
           color: rgb(0, 0, 0),
         });
         yText -= lineHeight * 1.3;
-        
         if (prod.brandName || sub.brandName) {
           page.drawText("Brand Name: ", {
             x: xText,
@@ -523,7 +496,6 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
-        
         if (prod.productDetails) {
           page.drawText("Description:", {
             x: xText,
@@ -546,8 +518,6 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight * 0.5;
         }
-        
-        // Use quantity from subdocument.
         if (sub.quantity) {
           page.drawText("Qty: ", {
             x: xText,
@@ -565,8 +535,6 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
-        
-        // Use productCost from subdocument for Rate, adjusted with margin.
         if (sub.productCost !== undefined) {
           const baseCost = sub.productCost;
           const margin = catalog.margin || 0;
@@ -587,8 +555,6 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
-        
-        // Use productGST from subdocument.
         if (sub.productGST !== undefined) {
           page.drawText("GST: ", {
             x: xText,
@@ -608,10 +574,10 @@ export default function CatalogManagementPage() {
         }
         newPdf.addPage(page);
       }
-  
+
       const pdf3Pages = await newPdf.copyPages(pdf3Doc, pdf3Doc.getPageIndices());
       pdf3Pages.forEach((page) => newPdf.addPage(page));
-  
+
       const finalPdfBytes = await newPdf.save();
       const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -626,13 +592,13 @@ export default function CatalogManagementPage() {
       alert("Combined PDF export failed");
     }
   }
-  
+
   // -------------- VIRTUAL LINK --------------
   function handleVirtualLink(item) {
     const link = `${window.location.origin}/catalog/${item._id}`;
     window.open(link, "_blank");
   }
-  
+
   function handleCopyLink(item) {
     const link = `${window.location.origin}/catalog/${item._id}`;
     navigator.clipboard
@@ -643,8 +609,7 @@ export default function CatalogManagementPage() {
         alert("Failed to copy link");
       });
   }
-  
-  // -------------- SEARCH + SUGGESTIONS --------------
+
   const getUniqueCompanyNames = () => {
     const companySet = new Set();
     catalogs.forEach((c) => {
@@ -656,7 +621,7 @@ export default function CatalogManagementPage() {
     return Array.from(companySet);
   };
   const companyNames = getUniqueCompanyNames();
-  
+
   const filterSuggestions = (input) => {
     if (!input) {
       setSuggestions([]);
@@ -667,13 +632,12 @@ export default function CatalogManagementPage() {
     );
     setSuggestions(filtered);
   };
-  
+
   const handleSearch = () => {
     setCompanyFilter(searchTerm);
     setSuggestions([]);
   };
-  
-  // -------------- FILTERS UI --------------
+
   const renderFilterButtons = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
       <div className="flex space-x-4 mb-2 sm:mb-0">
@@ -722,7 +686,7 @@ export default function CatalogManagementPage() {
       </div>
     </div>
   );
-  
+
   const renderFilterControls = () => (
     <div className="flex flex-wrap gap-4 items-center mb-4">
       <div className="flex flex-col">
@@ -786,8 +750,7 @@ export default function CatalogManagementPage() {
       </div>
     </div>
   );
-  
-  // -------------- RENDER DATA --------------
+
   const filterData = (data) => {
     if (!companyFilter) return data;
     return data.filter((item) =>
@@ -796,7 +759,7 @@ export default function CatalogManagementPage() {
         .includes(companyFilter.toLowerCase())
     );
   };
-  
+
   const renderCatalogList = () => {
     const filteredCatalogs = filterData(catalogs);
     if (filteredCatalogs.length === 0) {
@@ -903,7 +866,7 @@ export default function CatalogManagementPage() {
       </div>
     );
   };
-  
+
   const renderQuotationList = () => {
     if (quotations.length === 0) {
       return <div className="text-gray-600">Nothing to display.</div>;
@@ -942,17 +905,13 @@ export default function CatalogManagementPage() {
                   {all.map((quotation) => (
                     <tr key={quotation._id}>
                       <td className="px-4 py-2">{quotation.quotationNumber}</td>
-                      <td className="px-4 py-2">
-                        {quotation.customerCompany || "N/A"}
-                      </td>
+                      <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
                       <td className="px-4 py-2">{quotation.customerName}</td>
                       <td className="px-4 py-2">{quotation.customerEmail}</td>
                       <td className="px-4 py-2">{quotation.items?.length || 0}</td>
                       <td className="px-4 py-2 space-x-2">
                         <button
-                          onClick={() =>
-                            navigate(`/admin-dashboard/quotations/${quotation._id}`)
-                          }
+                          onClick={() => navigate(`/admin-dashboard/quotations/${quotation._id}`)}
                           className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
                         >
                           View
@@ -974,20 +933,19 @@ export default function CatalogManagementPage() {
       </div>
     );
   };
-  
-  // -------------- MAIN RENDER --------------
+
   if (loading) {
     return <div className="p-6 text-gray-500">Loading...</div>;
   }
   if (error) {
     return <div className="p-6 text-red-400">{error}</div>;
   }
-  
+
   return (
     <div className="min-h-screen bg-white text-gray-900 p-6">
       {renderFilterButtons()}
       {renderFilterControls()}
-  
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">
           {filterType === "catalogs" ? "Manage Catalogs" : "Manage Quotations"}
@@ -1019,9 +977,9 @@ export default function CatalogManagementPage() {
           </div>
         )}
       </div>
-  
+
       {filterType === "catalogs" ? renderCatalogList() : renderQuotationList()}
-  
+
       {remarksModalOpen && selectedItemForRemarks && (
         <RemarksModal
           item={selectedItemForRemarks}
@@ -1031,7 +989,7 @@ export default function CatalogManagementPage() {
           userEmail={userEmail}
         />
       )}
-  
+
       {pdfTemplateModalOpen && selectedItemForPDF && (
         <PDFTemplateModal
           onSelect={(templateId) => {
@@ -1041,6 +999,159 @@ export default function CatalogManagementPage() {
           onClose={() => setPdfTemplateModalOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ----------------------- Reusable Inline Editing Component -----------------------
+function EditableField({ value, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [currentValue, setCurrentValue] = useState(value);
+
+  useEffect(() => {
+    setCurrentValue(value);
+  }, [value]);
+
+  const handleIconClick = () => setEditing(true);
+  const handleBlur = () => {
+    setEditing(false);
+    onSave(currentValue);
+  };
+
+  if (editing) {
+    return (
+      <input
+        type="text"
+        className="border p-1 rounded"
+        autoFocus
+        value={currentValue}
+        onChange={(e) => setCurrentValue(e.target.value)}
+        onBlur={handleBlur}
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-center">
+      <span>{currentValue}</span>
+      <button onClick={handleIconClick} className="ml-2">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+// ----------------------- Helper Functions to Compute Totals -----------------------
+function computedAmount(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    sum += baseRate * marginFactor * quantity;
+  });
+  return sum;
+}
+
+function computedTotal(quotation) {
+  let sum = 0;
+  quotation.items.forEach((item) => {
+    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const baseRate = parseFloat(item.rate) || 0;
+    const quantity = parseFloat(item.quantity) || 0;
+    const amount = baseRate * marginFactor * quantity;
+    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+    sum += amount + gstVal;
+  });
+  return sum;
+}
+
+// ----------------------- VARIATION EDIT MODAL -----------------------
+function VariationEditModal({ item, onClose, onUpdate }) {
+  const [name, setName] = useState(item.productName || item.name || "");
+  const [productCost, setProductCost] = useState(item.productCost || 0);
+  const [productGST, setProductGST] = useState(item.productGST || 0);
+  const [color, setColor] = useState(item.color || "");
+  const [size, setSize] = useState(item.size || "");
+  const [quantity, setQuantity] = useState(item.quantity || 1);
+  const [material, setMaterial] = useState(item.material || "");
+  const [weight, setWeight] = useState(item.weight || "");
+
+  const handleSave = () => {
+    const parsedCost = parseFloat(productCost);
+    // If new cost is invalid, fall back to original productprice
+    const finalCost = isNaN(parsedCost) || parsedCost === 0 ? item.productprice : parsedCost;
+    const parsedGST = parseFloat(productGST);
+    const finalGST = isNaN(parsedGST) ? item.productGST : parsedGST;
+    const updatedItem = {
+      name: item.productName || name,
+      productCost: finalCost,
+      productprice: finalCost,
+      productGST: finalGST,
+      color,
+      size,
+      quantity: parseInt(quantity) || item.quantity || 1,
+      material,
+      weight,
+    };
+    console.log("Updated item from VariationEditModal:", updatedItem);
+    onUpdate(updatedItem);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-full py-8 px-4">
+        <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
+          <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900">
+            <span className="text-xl font-bold">&times;</span>
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-purple-700">Edit Cart Item</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Product Name</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Cost</label>
+              <input type="number" value={productCost} onChange={(e) => setProductCost(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">GST (%)</label>
+              <input type="number" value={productGST} onChange={(e) => setProductGST(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
+              <input type="text" value={color} onChange={(e) => setColor(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
+              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Quantity</label>
+              <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Material</label>
+              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Weight</label>
+              <input type="text" value={weight} onChange={(e) => setWeight(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+          </div>
+          <div className="mt-6 flex justify-end space-x-2">
+            <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+              Cancel
+            </button>
+            <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

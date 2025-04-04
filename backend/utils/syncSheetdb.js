@@ -16,7 +16,7 @@ async function syncSheetdbData() {
       const productId = record["Product ID (required)"];
       if (!productId) continue; // Skip records without a product ID
 
-      // Map SheetDB fields to your product model fields
+      // Map SheetDB fields to your product model fields, including GST updated to productGST
       const productData = {
         productTag: record["Product Tag (required)"] || "",
         variantId: record["Variant ID (optional)"] || "",
@@ -39,6 +39,8 @@ async function syncSheetdbData() {
         productCost_Currency: record["Product Cost_Currency"] || "",
         productCost: Number(record["Product Cost"]) || 0,
         productCost_Unit: record["Product Cost_Unit"] || "",
+        // Map the GST field from the sheet to productGST in your model
+        productGST: Number(record["GST"]) || 0,
         productDetails: record["Product_Details (optional)"] || "",
         images: [
           record["Main_Image_URL (optional)"],
@@ -56,10 +58,12 @@ async function syncSheetdbData() {
         { upsert: true }
       );
 
-      // If a new document was inserted, upsertedCount will be 1.
+      // Log and count the result for each product update or insert.
       if (updateResult.upsertedCount && updateResult.upsertedCount === 1) {
+        console.log(`Inserted new product: ${productId}`);
         newProductsCount++;
       } else if (updateResult.modifiedCount && updateResult.modifiedCount === 1) {
+        console.log(`Updated product: ${productId}`);
         updatedProductsCount++;
       }
     }
