@@ -40,6 +40,7 @@ const JobSheetForm = ({
   referenceQuotation,
   setReferenceQuotation,
   handleQuotationSelect,
+  fetchQuotation,
   eventName,
   setEventName,
   companies,
@@ -51,7 +52,14 @@ const JobSheetForm = ({
   handleInlineUpdate,
   handleRemoveSelectedItem,
   handleEditItem,
-  brandingTypeOptions = ["Screen Printing", "Embroidery", "Heat Transfer", "Patch", "Digital Printing", "Other"]
+  brandingTypeOptions = [
+    "Screen Printing",
+    "Embroidery",
+    "Heat Transfer",
+    "Patch",
+    "Digital Printing",
+    "Other"
+  ]
 }) => {
   // For delivery addresses
   const [addresses, setAddresses] = useState(
@@ -117,19 +125,29 @@ const JobSheetForm = ({
 
   return (
     <div className="space-y-4 mb-6">
-      {/* Row 4: Reference Quotation (30% width) */}
+      {/* Row 4: Reference Quotation with Fetch Button */}
       <div className="w-full md:w-1/3">
         <label className="block mb-1 font-medium text-purple-700">
           Reference Quotation
         </label>
-        <QuotationSuggestionInput
-          value={referenceQuotation}
-          onChange={setReferenceQuotation}
-          placeholder="Enter Reference Quotation"
-          label=""
-          onSelect={handleQuotationSelect}
-        />
+        <div className="flex">
+          <QuotationSuggestionInput
+            value={referenceQuotation}
+            onChange={setReferenceQuotation}
+            placeholder="Enter Reference Quotation"
+            label=""
+            onSelect={handleQuotationSelect}
+          />
+          <button
+            type="button"
+            onClick={fetchQuotation}
+            className="ml-2 bg-blue-500 text-white px-3 py-2 rounded"
+          >
+            Fetch
+          </button>
+        </div>
       </div>
+
       {/* Row 1: Client Company (full width) */}
       <div className="relative">
         <label className="block mb-1 font-medium text-purple-700">
@@ -239,8 +257,6 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      
-
       {/* Row 5: Products Table */}
       {referenceQuotation && selectedItems.length > 0 && (
         <div className="mt-4">
@@ -249,29 +265,53 @@ const JobSheetForm = ({
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sourcing From</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branding Type</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branding Vendor</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Product
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Color
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Size
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Qty
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Sourcing From
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Branding Type
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Branding Vendor
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {selectedItems.map((item, idx) => (
                   <tr key={idx}>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.product}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.color || "-"}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.size || "-"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {item.product}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {item.color || "-"}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {item.size || "-"}
+                    </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                       <input
                         type="number"
                         min="1"
                         className="w-16 border rounded p-1"
                         value={item.quantity}
-                        onChange={(e) => handleInlineUpdate(idx, "quantity", e.target.value)}
+                        onChange={(e) =>
+                          handleInlineUpdate(idx, "quantity", e.target.value)
+                        }
                       />
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -279,7 +319,9 @@ const JobSheetForm = ({
                         type="text"
                         className="border rounded p-1 w-full"
                         value={item.sourcingFrom || ""}
-                        onChange={(e) => handleInlineUpdate(idx, "sourcingFrom", e.target.value)}
+                        onChange={(e) =>
+                          handleInlineUpdate(idx, "sourcingFrom", e.target.value)
+                        }
                         placeholder="Enter sourcing"
                       />
                     </td>
@@ -287,7 +329,9 @@ const JobSheetForm = ({
                       <select
                         className="border rounded p-1 w-full"
                         value={item.brandingType || ""}
-                        onChange={(e) => handleInlineUpdate(idx, "brandingType", e.target.value)}
+                        onChange={(e) =>
+                          handleInlineUpdate(idx, "brandingType", e.target.value)
+                        }
                       >
                         <option value="">Select Branding Type</option>
                         {brandingTypeOptions.map((option, index) => (
@@ -302,7 +346,9 @@ const JobSheetForm = ({
                         type="text"
                         className="border rounded p-1 w-full"
                         value={item.brandingVendor || ""}
-                        onChange={(e) => handleInlineUpdate(idx, "brandingVendor", e.target.value)}
+                        onChange={(e) =>
+                          handleInlineUpdate(idx, "brandingVendor", e.target.value)
+                        }
                         placeholder="Enter Vendor"
                       />
                     </td>

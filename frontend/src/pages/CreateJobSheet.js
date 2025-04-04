@@ -9,7 +9,7 @@ import JobSheetCart from "../components/jobsheet/JobSheetCart";
 import JobSheetItemEditModal from "../components/jobsheet/JobSheetItemEditModal";
 import VariationModal from "../components/jobsheet/VariationModal";
 import CompanyModal from "../components/CompanyModal";
-//this is a comment
+
 const limit = 100;
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -60,6 +60,9 @@ export default function CreateJobSheet() {
   const [otherDetails, setOtherDetails] = useState("");
   const [referenceQuotation, setReferenceQuotation] = useState("");
 
+  // Quotation suggestions state
+  const [quotationSuggestions, setQuotationSuggestions] = useState([]);
+
   // Selected items and modal state
   const [selectedItems, setSelectedItems] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
@@ -95,6 +98,33 @@ export default function CreateJobSheet() {
     }
   }, [id]);
 
+  // --- QUOTATION SUGGESTIONS ---
+  useEffect(() => {
+    if (referenceQuotation.trim().length > 0) {
+      const delayDebounceFn = setTimeout(() => {
+        fetchQuotationSuggestions(referenceQuotation.trim());
+      }, 300);
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setQuotationSuggestions([]);
+    }
+  }, [referenceQuotation]);
+
+  const fetchQuotationSuggestions = async (query) => {
+    try {
+      const token = localStorage.getItem("token");
+      // Assumes your quotations endpoint supports a search query parameter.
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/quotations?search=${query}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setQuotationSuggestions(res.data || []);
+    } catch (error) {
+      console.error("Error fetching quotation suggestions:", error);
+    }
+  };
+  // --- END QUOTATION SUGGESTIONS ---
+
   const fetchFilterOptions = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -129,9 +159,10 @@ export default function CreateJobSheet() {
         params.append("priceRanges", selectedPriceRanges.join(","));
       if (selectedVariationHinges.length > 0)
         params.append("variationHinges", selectedVariationHinges.join(","));
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/products?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       setProducts(res.data.products || []);
       setCurrentPage(res.data.currentPage || 1);
       setTotalPages(res.data.totalPages || 1);
@@ -146,9 +177,10 @@ export default function CreateJobSheet() {
     try {
       const token = localStorage.getItem("token");
       // Append ?all=true so that an array is returned
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/companies?all=true`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       setCompanies(res.data || []);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -241,12 +273,16 @@ export default function CreateJobSheet() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const res = await axios.post(
+        `${BACKEND_URL}/api/products/advanced-search`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
       setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
       setAdvancedSearchActive(true);
     } catch (error) {
@@ -262,6 +298,7 @@ export default function CreateJobSheet() {
     setAdvancedSearchResults([]);
   };
 
+  // Company selection for manual entry (with suggestion dropdown)
   const handleCompanySelect = (company) => {
     setClientCompanyName(company.companyName);
     if (company.clients && company.clients.length > 0) {
@@ -351,7 +388,7 @@ export default function CreateJobSheet() {
     setSelectedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // For quotations (parse product string)
+  // Utility to parse product string
   const parseProductString = (productStr) => {
     let color = "";
     let size = "";
@@ -369,8 +406,17 @@ export default function CreateJobSheet() {
     return { baseProduct: baseProduct.trim(), color, size };
   };
 
+  // Handle quotation selection: auto-populate client details and map items.
   const handleQuotationSelect = (quotation) => {
+    // Set the reference quotation number
     setReferenceQuotation(quotation.quotationNumber);
+
+    // Auto-populate client details from the quotation
+    setClientCompanyName(quotation.customerCompany || "");
+    setClientName(quotation.customerName || "");
+    setContactNumber(quotation.contactNumber || "");
+
+    // Map quotation items to job sheet items if available
     if (quotation.items && quotation.items.length > 0) {
       const newItems = quotation.items.map((item, index) => {
         const { baseProduct, color, size } = parseProductString(item.product);
@@ -390,17 +436,63 @@ export default function CreateJobSheet() {
     }
   };
 
+  // --- FETCH BUTTON HANDLER ---
+  // This function is triggered when the Fetch button is clicked next to the reference quotation textbox.
+  const handleFetchQuotation = async () => {
+    if (!referenceQuotation.trim()) {
+      alert("Please enter a reference quotation number");
+      return;
+    }
+    // First try to find an exact match from suggestions.
+    const match = quotationSuggestions.find(
+      (q) => q.quotationNumber === referenceQuotation.trim()
+    );
+    if (match) {
+      handleQuotationSelect(match);
+    } else {
+      // If no suggestion match, try a secondary fetch (assuming the API supports it)
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `${BACKEND_URL}/api/admin/quotations?quotationNumber=${referenceQuotation.trim()}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        let fetchedQuotation;
+        if (Array.isArray(res.data)) {
+          fetchedQuotation = res.data.find(
+            (q) => q.quotationNumber === referenceQuotation.trim()
+          );
+        } else {
+          fetchedQuotation = res.data;
+        }
+        if (fetchedQuotation) {
+          handleQuotationSelect(fetchedQuotation);
+        } else {
+          alert("No quotations found");
+        }
+      } catch (error) {
+        console.error("Error fetching quotation:", error);
+        alert("No quotations found");
+      }
+    }
+  };
+  // --- END FETCH BUTTON HANDLER ---
+
   const handleSaveJobSheet = async () => {
     if (!orderDate || !clientCompanyName || !clientName || !deliveryDate) {
-      alert("Please enter Order Date, Client Company, Client Name and Delivery Date.");
+      alert(
+        "Please enter Order Date, Client Company, Client Name and Delivery Date."
+      );
       return;
     }
     if (selectedItems.length === 0) {
       alert("Please select at least one product.");
       return;
     }
-    
-    const filteredAddresses = deliveryAddress.filter(addr => addr.trim() !== '');
+
+    const filteredAddresses = deliveryAddress.filter(
+      (addr) => addr.trim() !== ""
+    );
     if (filteredAddresses.length === 0) {
       alert("Please enter at least one delivery address.");
       return;
@@ -410,7 +502,7 @@ export default function CreateJobSheet() {
       ...item,
       slNo: item.slNo || index + 1,
     }));
-    
+
     const body = {
       eventName,
       orderDate,
@@ -435,9 +527,11 @@ export default function CreateJobSheet() {
     try {
       const token = localStorage.getItem("token");
       if (isEditMode) {
-        await axios.put(`${BACKEND_URL}/api/admin/jobsheets/${id}`, body, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await axios.put(
+          `${BACKEND_URL}/api/admin/jobsheets/${id}`,
+          body,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
         alert("Job sheet updated successfully!");
       } else {
         await axios.post(`${BACKEND_URL}/api/admin/jobsheets`, body, {
@@ -465,7 +559,8 @@ export default function CreateJobSheet() {
           {isEditMode ? "Update Job Sheet" : "Create Job Sheet"}
         </button>
       </div>
-      
+
+      {/* Pass additional props for quotation suggestions and fetch button */}
       <JobSheetForm
         eventName={eventName}
         setEventName={setEventName}
@@ -501,6 +596,8 @@ export default function CreateJobSheet() {
         setOtherDetails={setOtherDetails}
         referenceQuotation={referenceQuotation}
         setReferenceQuotation={setReferenceQuotation}
+        fetchQuotation={handleFetchQuotation}
+        quotationSuggestions={quotationSuggestions}
         handleQuotationSelect={handleQuotationSelect}
         companies={companies}
         dropdownOpen={dropdownOpen}
@@ -602,5 +699,3 @@ export default function CreateJobSheet() {
     </div>
   );
 }
-
-// export default CreateJobSheet;
