@@ -16,7 +16,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryTime,
       crmIncharge,
       items,
-      poNumber,
+      poNumber,              // <-- PO Number is read here
       deliveryType,
       deliveryMode,
       deliveryCharges,
@@ -27,6 +27,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       referenceQuotation,
     } = req.body;
 
+    // Validate required fields
     if (!orderDate || !clientCompanyName || !clientName || !deliveryDate || !items || items.length === 0) {
       return res.status(400).json({ message: "Missing required fields or no items provided" });
     }
@@ -36,6 +37,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       ? deliveryAddress.filter(addr => addr.trim() !== '')
       : [];
 
+    // Create the new job sheet with PO Number included
     const newJobSheet = new JobSheet({
       eventName,
       orderDate,
@@ -46,7 +48,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryTime,
       crmIncharge,
       items,
-      poNumber,
+      poNumber,              // <-- PO Number is saved
       deliveryType,
       deliveryMode,
       deliveryCharges,
@@ -94,6 +96,7 @@ router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
 // Update a job sheet
 router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    // Filter out empty addresses if provided
     if (Array.isArray(req.body.deliveryAddress)) {
       req.body.deliveryAddress = req.body.deliveryAddress.filter(addr => addr.trim() !== '');
     }

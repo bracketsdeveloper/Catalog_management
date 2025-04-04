@@ -125,28 +125,43 @@ const JobSheetForm = ({
 
   return (
     <div className="space-y-4 mb-6">
-      {/* Row 4: Reference Quotation with Fetch Button */}
-      <div className="w-full md:w-1/3">
-        <label className="block mb-1 font-medium text-purple-700">
-          Reference Quotation
-        </label>
-        <div className="flex">
-          <QuotationSuggestionInput
-            value={referenceQuotation}
-            onChange={setReferenceQuotation}
-            placeholder="Enter Reference Quotation"
-            label=""
-            onSelect={handleQuotationSelect}
-          />
-          <button
-            type="button"
-            onClick={fetchQuotation}
-            className="ml-2 bg-blue-500 text-white px-3 py-2 rounded"
-          >
-            Fetch
-          </button>
-        </div>
-      </div>
+      {/* Row 4: Reference Quotation with Fetch Button and PO Number */}
+      <div className="flex w-full justify-between">
+  <div className="w-1/2 space-x-2">
+    <label className="block mb-1 font-medium text-purple-700">
+      Reference Quotation
+    </label>
+    <div className="flex space-x-3 ">
+      <QuotationSuggestionInput
+        value={referenceQuotation}
+        onChange={setReferenceQuotation}
+        placeholder="Enter Reference Quotation"
+        label=""
+        onSelect={handleQuotationSelect}
+      />
+      <button
+        type="button"
+        onClick={fetchQuotation}
+        className="bg-blue-500 text-white px-3 py-2 rounded"
+      >
+        Fetch
+      </button>
+    </div>
+  </div>
+  <div className="w-1/2 space-x-2">
+    <label className="block mb-1 font-medium text-purple-700">
+      PO Number
+    </label>
+    <input
+      type="text"
+      className="border border-purple-300 rounded p-2"
+      placeholder="PO Number"
+      value={poNumber}
+      onChange={(e) => setPoNumber(e.target.value)}
+    />
+  </div>
+</div>
+
 
       {/* Row 1: Client Company (full width) */}
       <div className="relative">

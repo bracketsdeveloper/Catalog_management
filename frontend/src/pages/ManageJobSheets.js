@@ -294,12 +294,7 @@ export default function ManageJobSheets() {
                   >
                     Edit
                   </button>
-                  <button 
-                    onClick={() => deleteJobSheet(js._id)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
-                  >
-                    Delete
-                  </button>
+                  
                 </td>
               </tr>
             ))}

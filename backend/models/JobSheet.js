@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const Counter = require("./Counter"); // Ensure this path is correct
 
 const jobSheetItemSchema = new mongoose.Schema({
   slNo: { type: Number, required: true },
@@ -38,11 +39,21 @@ const jobSheetSchema = new mongoose.Schema({
 
 jobSheetSchema.pre("save", async function (next) {
   if (this.isNew) {
-    const count = await this.constructor.countDocuments();
-    const newNumber = (count + 1).toString().padStart(4, "0");
-    this.jobSheetNumber = newNumber;
+    try {
+      const counter = await Counter.findOneAndUpdate(
+        { id: "jobSheetNumber" },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      // Pad the sequence to 4 digits (e.g., "0000", "0001", etc.)
+      this.jobSheetNumber = counter.seq.toString().padStart(4, "0");
+      next();
+    } catch (error) {
+      next(error);
+    }
+  } else {
+    next();
   }
-  next();
 });
 
 module.exports = mongoose.model("JobSheet", jobSheetSchema);
