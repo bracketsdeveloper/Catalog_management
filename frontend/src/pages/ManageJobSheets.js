@@ -11,11 +11,11 @@ import "react-datepicker/dist/react-datepicker.css";
 export default function ManageJobSheets() {
   const navigate = useNavigate();
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-  
+
   const [jobSheets, setJobSheets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Filter state values
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -73,9 +73,8 @@ export default function ManageJobSheets() {
     const refMatch = referenceQuotation
       ? js.referenceQuotation?.toLowerCase().includes(referenceQuotation.toLowerCase())
       : true;
-    
-    const dateMatch =
-      (!from || createdAt >= from) && (!to || createdAt <= to);
+
+    const dateMatch = (!from || createdAt >= from) && (!to || createdAt <= to);
 
     return companyMatch && eventMatch && refMatch && dateMatch;
   });
@@ -83,14 +82,12 @@ export default function ManageJobSheets() {
   const exportToExcel = () => {
     const exportData = [];
     let serial = 1;
-    
-    filteredJobSheets.forEach((js) => {
-      console.log("Job Sheet:", js); // Log the entire job sheet object
-      console.log("Delivery Date:", js.deliveryDate); // Log the delivery date
 
-      const deliveryDateFormatted = js.deliveryDate && isValidDate(new Date(js.deliveryDate)) 
-        ? format(new Date(js.deliveryDate), "dd/MM/yyyy") 
-        : 'Invalid date';
+    filteredJobSheets.forEach((js) => {
+      const deliveryDateFormatted =
+        js.deliveryDate && isValidDate(new Date(js.deliveryDate))
+          ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
+          : "Invalid date";
 
       if (js.items && js.items.length > 0) {
         js.items.forEach((item) => {
@@ -116,7 +113,7 @@ export default function ManageJobSheets() {
             "QC Done By": "",
             "Delivered By": "",
             "Delivered On": "",
-            "PO Status": "",
+            "PO Status": js.poStatus || "",
             "Invoice Submission": ""
           });
         });
@@ -143,12 +140,12 @@ export default function ManageJobSheets() {
           "QC Done By": "",
           "Delivered By": "",
           "Delivered On": "",
-          "PO Status": "",
+          "PO Status": js.poStatus || "",
           "Invoice Submission": ""
         });
       }
     });
-    
+
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
@@ -272,14 +269,14 @@ export default function ManageJobSheets() {
                 <td className="p-2">{js.clientName}</td>
                 <td className="p-2">{js.clientCompanyName}</td>
                 <td className="p-2">
-                  {js.orderDate && isValidDate(new Date(js.orderDate)) 
-                    ? format(new Date(js.orderDate), "dd/MM/yyyy") 
-                    : 'Invalid date'}
+                  {js.orderDate && isValidDate(new Date(js.orderDate))
+                    ? format(new Date(js.orderDate), "dd/MM/yyyy")
+                    : "Invalid date"}
                 </td>
                 <td className="p-2">
-                  {js.deliveryDate && isValidDate(new Date(js.deliveryDate)) 
-                    ? format(new Date(js.deliveryDate), "dd/MM/yyyy") 
-                    : 'Invalid date'}
+                  {js.deliveryDate && isValidDate(new Date(js.deliveryDate))
+                    ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
+                    : "Invalid date"}
                 </td>
                 <td className="p-2 space-x-2">
                   <button 
@@ -294,7 +291,6 @@ export default function ManageJobSheets() {
                   >
                     Edit
                   </button>
-                  
                 </td>
               </tr>
             ))}
@@ -380,7 +376,6 @@ function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BAC
               >
                 Create a New Jobsheet
               </button>
-                
             </div>
             <div className="mt-4 flex justify-end">
               <button onClick={onClose} className="px-4 py-2 border rounded">
@@ -468,69 +463,7 @@ function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BAC
                   className="border p-2 rounded w-full"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium">Delivery Type</label>
-                <input
-                  type="text"
-                  value={formData.deliveryType}
-                  onChange={(e) => setFormData({ ...formData, deliveryType: e.target.value })}
-                  className="border p-2 rounded w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Delivery Mode</label>
-                <input
-                  type="text"
-                  value={formData.deliveryMode}
-                  onChange={(e) => setFormData({ ...formData, deliveryMode: e.target.value })}
-                  className="border p-2 rounded w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Delivery Charges</label>
-                <input
-                  type="text"
-                  value={formData.deliveryCharges}
-                  onChange={(e) => setFormData({ ...formData, deliveryCharges: e.target.value })}
-                  className="border p-2 rounded w-full"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium">Delivery Address</label>
-                <textarea
-                  value={formData.deliveryAddress}
-                  onChange={(e) => setFormData({ ...formData, deliveryAddress: e.target.value })}
-                  className="border p-2 rounded w-full"
-                  rows="2"
-                ></textarea>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium">Gift Box / Bags Details</label>
-                <textarea
-                  value={formData.giftBoxBagsDetails}
-                  onChange={(e) => setFormData({ ...formData, giftBoxBagsDetails: e.target.value })}
-                  className="border p-2 rounded w-full"
-                  rows="2"
-                ></textarea>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium">Packaging Instructions</label>
-                <textarea
-                  value={formData.packagingInstructions}
-                  onChange={(e) => setFormData({ ...formData, packagingInstructions: e.target.value })}
-                  className="border p-2 rounded w-full"
-                  rows="2"
-                ></textarea>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium">Any Other Details</label>
-                <textarea
-                  value={formData.otherDetails}
-                  onChange={(e) => setFormData({ ...formData, otherDetails: e.target.value })}
-                  className="border p-2 rounded w-full"
-                  rows="2"
-                ></textarea>
-              </div>
+              {/* Additional fields can be added similarly */}
             </div>
             <div className="mt-4 flex justify-end space-x-4">
               <button onClick={onClose} className="px-4 py-2 border rounded">
@@ -551,4 +484,8 @@ function CreateJobsheetModal({ onClose, onSelectOption, onCreated, navigate, BAC
       </div>
     </div>
   );
+}
+
+function isValidDate(date) {
+  return date instanceof Date && !isNaN(date);
 }

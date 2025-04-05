@@ -51,6 +51,8 @@ export default function CreateJobSheet() {
   const [deliveryTime, setDeliveryTime] = useState("");
   const [crmIncharge, setCrmIncharge] = useState("");
   const [poNumber, setPoNumber] = useState("");
+  const [poStatus, setPoStatus] = useState("");
+  const [customPoStatus, setCustomPoStatus] = useState("");
   const [deliveryType, setDeliveryType] = useState("");
   const [deliveryMode, setDeliveryMode] = useState("");
   const [deliveryCharges, setDeliveryCharges] = useState("");
@@ -176,7 +178,6 @@ export default function CreateJobSheet() {
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      // Append ?all=true so that an array is returned
       const res = await axios.get(
         `${BACKEND_URL}/api/admin/companies?all=true`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -203,6 +204,12 @@ export default function CreateJobSheet() {
       setDeliveryTime(data.deliveryTime || "");
       setCrmIncharge(data.crmIncharge || "");
       setPoNumber(data.poNumber || "");
+      setPoStatus(data.poStatus || "");
+      // If the stored poStatus is not "PO sent" or "No PO", treat it as custom:
+      if (data.poStatus && data.poStatus !== "PO sent" && data.poStatus !== "No PO") {
+        setPoStatus("Custom");
+        setCustomPoStatus(data.poStatus);
+      }
       setDeliveryType(data.deliveryType || "");
       setDeliveryMode(data.deliveryMode || "");
       setDeliveryCharges(data.deliveryCharges || "");
@@ -408,15 +415,10 @@ export default function CreateJobSheet() {
 
   // Handle quotation selection: auto-populate client details and map items.
   const handleQuotationSelect = (quotation) => {
-    // Set the reference quotation number
     setReferenceQuotation(quotation.quotationNumber);
-
-    // Auto-populate client details from the quotation
     setClientCompanyName(quotation.customerCompany || "");
     setClientName(quotation.customerName || "");
     setContactNumber(quotation.contactNumber || "");
-
-    // Map quotation items to job sheet items if available
     if (quotation.items && quotation.items.length > 0) {
       const newItems = quotation.items.map((item, index) => {
         const { baseProduct, color, size } = parseProductString(item.product);
@@ -437,20 +439,17 @@ export default function CreateJobSheet() {
   };
 
   // --- FETCH BUTTON HANDLER ---
-  // This function is triggered when the Fetch button is clicked next to the reference quotation textbox.
   const handleFetchQuotation = async () => {
     if (!referenceQuotation.trim()) {
       alert("Please enter a reference quotation number");
       return;
     }
-    // First try to find an exact match from suggestions.
     const match = quotationSuggestions.find(
       (q) => q.quotationNumber === referenceQuotation.trim()
     );
     if (match) {
       handleQuotationSelect(match);
     } else {
-      // If no suggestion match, try a secondary fetch (assuming the API supports it)
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(
@@ -480,29 +479,23 @@ export default function CreateJobSheet() {
 
   const handleSaveJobSheet = async () => {
     if (!orderDate || !clientCompanyName || !clientName || !deliveryDate) {
-      alert(
-        "Please enter Order Date, Client Company, Client Name and Delivery Date."
-      );
+      alert("Please enter Order Date, Client Company, Client Name and Delivery Date.");
       return;
     }
     if (selectedItems.length === 0) {
       alert("Please select at least one product.");
       return;
     }
-
-    const filteredAddresses = deliveryAddress.filter(
-      (addr) => addr.trim() !== ""
-    );
+    const filteredAddresses = deliveryAddress.filter((addr) => addr.trim() !== "");
     if (filteredAddresses.length === 0) {
       alert("Please enter at least one delivery address.");
       return;
     }
-
     const itemsWithSlNo = selectedItems.map((item, index) => ({
       ...item,
       slNo: item.slNo || index + 1,
     }));
-
+    const finalPoStatus = poStatus === "Custom" ? customPoStatus : poStatus;
     const body = {
       eventName,
       orderDate,
@@ -514,6 +507,7 @@ export default function CreateJobSheet() {
       crmIncharge,
       items: itemsWithSlNo,
       poNumber,
+      poStatus: finalPoStatus,
       deliveryType,
       deliveryMode,
       deliveryCharges,
@@ -527,11 +521,9 @@ export default function CreateJobSheet() {
     try {
       const token = localStorage.getItem("token");
       if (isEditMode) {
-        await axios.put(
-          `${BACKEND_URL}/api/admin/jobsheets/${id}`,
-          body,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await axios.put(`${BACKEND_URL}/api/admin/jobsheets/${id}`, body, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         alert("Job sheet updated successfully!");
       } else {
         await axios.post(`${BACKEND_URL}/api/admin/jobsheets`, body, {
@@ -560,7 +552,6 @@ export default function CreateJobSheet() {
         </button>
       </div>
 
-      {/* Pass additional props for quotation suggestions and fetch button */}
       <JobSheetForm
         eventName={eventName}
         setEventName={setEventName}
@@ -580,6 +571,10 @@ export default function CreateJobSheet() {
         setCrmIncharge={setCrmIncharge}
         poNumber={poNumber}
         setPoNumber={setPoNumber}
+        poStatus={poStatus}
+        setPoStatus={setPoStatus}
+        customPoStatus={customPoStatus}
+        setCustomPoStatus={setCustomPoStatus}
         deliveryType={deliveryType}
         setDeliveryType={setDeliveryType}
         deliveryMode={deliveryMode}

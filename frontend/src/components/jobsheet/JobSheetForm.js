@@ -23,6 +23,10 @@ const JobSheetForm = ({
   setCrmIncharge,
   poNumber,
   setPoNumber,
+  poStatus,
+  setPoStatus,
+  customPoStatus,
+  setCustomPoStatus,
   deliveryType,
   setDeliveryType,
   deliveryMode,
@@ -125,45 +129,72 @@ const JobSheetForm = ({
 
   return (
     <div className="space-y-4 mb-6">
-      {/* Row 4: Reference Quotation with Fetch Button and PO Number */}
-      <div className="flex w-full justify-between">
-  <div className="w-1/2 space-x-2">
-    <label className="block mb-1 font-medium text-purple-700">
-      Reference Quotation
-    </label>
-    <div className="flex space-x-3 ">
-      <QuotationSuggestionInput
-        value={referenceQuotation}
-        onChange={setReferenceQuotation}
-        placeholder="Enter Reference Quotation"
-        label=""
-        onSelect={handleQuotationSelect}
-      />
-      <button
-        type="button"
-        onClick={fetchQuotation}
-        className="bg-blue-500 text-white px-3 py-2 rounded"
-      >
-        Fetch
-      </button>
-    </div>
-  </div>
-  <div className="w-1/2 space-x-2">
-    <label className="block mb-1 font-medium text-purple-700">
-      PO Number
-    </label>
-    <input
-      type="text"
-      className="border border-purple-300 rounded p-2"
-      placeholder="PO Number"
-      value={poNumber}
-      onChange={(e) => setPoNumber(e.target.value)}
-    />
-  </div>
-</div>
+      {/* Row: Reference Quotation with Fetch button */}
+      <div className="flex w-full justify-between space-x-4">
+        <div className="w-1/2">
+          <label className="block mb-1 font-medium text-purple-700">
+            Reference Quotation
+          </label>
+          <div className="flex space-x-3">
+            <QuotationSuggestionInput
+              value={referenceQuotation}
+              onChange={setReferenceQuotation}
+              placeholder="Enter Reference Quotation"
+              label=""
+              onSelect={handleQuotationSelect}
+            />
+            <button
+              type="button"
+              onClick={fetchQuotation}
+              className="bg-blue-500 text-white px-3 py-2 rounded"
+            >
+              Fetch
+            </button>
+          </div>
+        </div>
+        <div className="w-1/2 space-y-2">
+          <div>
+            <label className="block mb-1 font-medium text-purple-700">
+              PO Number
+            </label>
+            <input
+              type="text"
+              className="border border-purple-300 rounded w-full p-2"
+              placeholder="PO Number"
+              value={poNumber}
+              onChange={(e) => setPoNumber(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block mb-1 font-medium text-purple-700">
+              PO Status
+            </label>
+            <div className="flex items-center space-x-2">
+              <select
+                className="border border-purple-300 rounded p-2 w-full"
+                value={poStatus}
+                onChange={(e) => setPoStatus(e.target.value)}
+              >
+                <option value="">Select PO Status</option>
+                <option value="PO sent">PO sent</option>
+                <option value="No PO">No PO</option>
+                <option value="Custom">Custom</option>
+              </select>
+              {poStatus === "Custom" && (
+                <input
+                  type="text"
+                  className="border border-purple-300 rounded p-2"
+                  placeholder="Enter custom PO status"
+                  value={customPoStatus}
+                  onChange={(e) => setCustomPoStatus(e.target.value)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
-
-      {/* Row 1: Client Company (full width) */}
+      {/* Row: Client Company */}
       <div className="relative">
         <label className="block mb-1 font-medium text-purple-700">
           Client Company *
@@ -205,7 +236,7 @@ const JobSheetForm = ({
         )}
       </div>
 
-      {/* Row 2: Client Name and Contact Number */}
+      {/* Row: Client Name and Contact Number */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -232,7 +263,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 3: Event Name, Order Date, and CRM Incharge */}
+      {/* Row: Event Name, Order Date, CRM Incharge */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -272,7 +303,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 5: Products Table */}
+      {/* Row: Products Table */}
       {referenceQuotation && selectedItems.length > 0 && (
         <div className="mt-4">
           <h3 className="font-medium text-purple-700 mb-2">Products</h3>
@@ -389,7 +420,7 @@ const JobSheetForm = ({
         </div>
       )}
 
-      {/* Row 6: Delivery Type, Delivery Mode, and Delivery Charges */}
+      {/* Row: Delivery Type, Delivery Mode, Delivery Charges */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -465,7 +496,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 7: Delivery Date and Time */}
+      {/* Row: Delivery Date and Time */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -494,7 +525,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 8: Delivery Addresses */}
+      {/* Row: Delivery Addresses */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Delivery Addresses
@@ -527,7 +558,7 @@ const JobSheetForm = ({
         </button>
       </div>
 
-      {/* Row 9: Gift Box/Bags Details and Packaging Instructions */}
+      {/* Row: Gift Box/Bags Details and Packaging Instructions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -551,7 +582,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row 10: Other Details */}
+      {/* Row: Other Details */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Other Details

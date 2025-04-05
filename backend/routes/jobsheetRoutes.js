@@ -1,3 +1,4 @@
+// routes/jobsheets.js
 const express = require("express");
 const router = express.Router();
 const JobSheet = require("../models/JobSheet");
@@ -16,7 +17,8 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryTime,
       crmIncharge,
       items,
-      poNumber,              // <-- PO Number is read here
+      poNumber,
+      poStatus,            // <-- New field
       deliveryType,
       deliveryMode,
       deliveryCharges,
@@ -27,9 +29,17 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       referenceQuotation,
     } = req.body;
 
-    // Validate required fields
-    if (!orderDate || !clientCompanyName || !clientName || !deliveryDate || !items || items.length === 0) {
-      return res.status(400).json({ message: "Missing required fields or no items provided" });
+    if (
+      !orderDate ||
+      !clientCompanyName ||
+      !clientName ||
+      !deliveryDate ||
+      !items ||
+      items.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields or no items provided" });
     }
 
     // Filter out empty addresses
@@ -37,7 +47,6 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       ? deliveryAddress.filter(addr => addr.trim() !== '')
       : [];
 
-    // Create the new job sheet with PO Number included
     const newJobSheet = new JobSheet({
       eventName,
       orderDate,
@@ -48,7 +57,8 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryTime,
       crmIncharge,
       items,
-      poNumber,              // <-- PO Number is saved
+      poNumber,
+      poStatus, // Save PO Status here
       deliveryType,
       deliveryMode,
       deliveryCharges,
@@ -96,7 +106,6 @@ router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
 // Update a job sheet
 router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Filter out empty addresses if provided
     if (Array.isArray(req.body.deliveryAddress)) {
       req.body.deliveryAddress = req.body.deliveryAddress.filter(addr => addr.trim() !== '');
     }

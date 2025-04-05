@@ -1,3 +1,4 @@
+// models/JobSheet.js
 const mongoose = require("mongoose");
 const Counter = require("./Counter"); // Ensure this path is correct
 
@@ -26,6 +27,7 @@ const jobSheetSchema = new mongoose.Schema({
   crmIncharge: { type: String },
   items: [jobSheetItemSchema],
   poNumber: { type: String },
+  poStatus: { type: String }, // New field for PO Status
   deliveryType: { type: String },
   deliveryMode: { type: String },
   deliveryCharges: { type: String },
@@ -45,7 +47,6 @@ jobSheetSchema.pre("save", async function (next) {
         { $inc: { seq: 1 } },
         { new: true, upsert: true }
       );
-      // Pad the sequence to 4 digits (e.g., "0000", "0001", etc.)
       this.jobSheetNumber = counter.seq.toString().padStart(4, "0");
       next();
     } catch (error) {

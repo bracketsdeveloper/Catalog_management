@@ -2,14 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { format, parse } from "date-fns";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function JobSheetView() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [jobSheet, setJobSheet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,7 +51,7 @@ export default function JobSheetView() {
   const exportToPDF = () => {
     const input = document.getElementById("job-sheet-content");
     // Increase scale to boost the resolution.
-    html2canvas(input, { scale: 5 }).then((canvas) => {
+    html2canvas(input, { scale: 3 }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
 
       // Set a margin (in pt) for the PDF pages.
@@ -76,7 +78,7 @@ export default function JobSheetView() {
         pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
         heightLeft -= usableHeight;
       }
-      pdf.save(`job-sheet-${id}.pdf`);
+      pdf.save(`job-sheet-${jobSheet.clientCompanyName}.pdf`);
     });
   };
 
@@ -116,7 +118,7 @@ export default function JobSheetView() {
           </div>
         </div>
 
-        {/* 3×3 Grid Header (Left aligned with separated title and value) */}
+        {/* 3×3 Grid Header */}
         <div className="grid grid-cols-3 gap-0">
           {/* Row 1 */}
           <div className="border border-black flex items-center justify-start">
@@ -203,22 +205,12 @@ export default function JobSheetView() {
                 <th className="p-1 border border-black uppercase">SL NO.</th>
                 <th className="p-1 border border-black uppercase">PRODUCTS</th>
                 <th className="p-1 border border-black uppercase">COLOR</th>
-                <th className="p-1 border border-black uppercase">
-                  SIZE/CAPACITY
-                </th>
+                <th className="p-1 border border-black uppercase">SIZE/CAPACITY</th>
                 <th className="p-1 border border-black uppercase">QTY</th>
-                <th className="p-1 border border-black uppercase">
-                  SOURCING FROM
-                </th>
-                <th className="p-1 border border-black uppercase">
-                  BRANDING TYPE
-                </th>
-                <th className="p-1 border border-black uppercase">
-                  BRANDING VENDOR
-                </th>
-                <th className="p-1 border border-black uppercase">
-                  REMARKS
-                </th>
+                <th className="p-1 border border-black uppercase">SOURCING FROM</th>
+                <th className="p-1 border border-black uppercase">BRANDING TYPE</th>
+                <th className="p-1 border border-black uppercase">BRANDING VENDOR</th>
+                <th className="p-1 border border-black uppercase">REMARKS</th>
               </tr>
             </thead>
             <tbody>
@@ -251,9 +243,15 @@ export default function JobSheetView() {
 
         {/* Additional Details */}
         <div className="border border-black">
-          <div className="border-b border-black p-1">
-            <span className="font-bold uppercase">PO NUMBER:</span>
-            <span className="ml-1">{jobSheet.poNumber || "N/A"}</span>
+          <div className="grid grid-cols-2 gap-0 border-b border-black">
+            <div className="p-1 border border-black">
+              <span className="font-bold uppercase">PO NUMBER:</span>
+              <span className="ml-1">{jobSheet.poNumber || "N/A"}</span>
+            </div>
+            <div className="p-1 border border-black">
+              <span className="font-bold uppercase">PO STATUS:</span>
+              <span className="ml-1">{jobSheet.poStatus || "N/A"}</span>
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-0 border-b border-black">
             <div className="p-1 border-r border-black ">
