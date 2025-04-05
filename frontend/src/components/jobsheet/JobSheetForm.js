@@ -176,8 +176,10 @@ const JobSheetForm = ({
                 onChange={(e) => setPoStatus(e.target.value)}
               >
                 <option value="">Select PO Status</option>
-                <option value="PO sent">PO sent</option>
-                <option value="No PO">No PO</option>
+                <option value="PO Awaited, Wait for Invoice">PO Awaited, Wait for Invoice</option>
+                <option value="PO Received, Generate Invoice">PO Received, Generate Invoice</option>
+                <option value="No PO, No Invoice">No PO, No Invoice</option>
+                <option value="No PO, Direct Invoice">No PO, Direct Invoice</option>
                 <option value="Custom">Custom</option>
               </select>
               {poStatus === "Custom" && (
