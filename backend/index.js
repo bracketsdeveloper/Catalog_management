@@ -50,37 +50,17 @@ mongoose
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminRoutes = require("./routes/adminRoutes");
-// const timeslotRoutes = require("./routes/timeslotRoutes");
-// const therapyRoutes = require("./routes/therapyRoutes");
-// const bookingRoutes = require("./routes/bookingRoutes");
-// const therapistRoutes = require("./routes/therapistRoutes");
-// const cartRoutes = require("./routes/cart.js"); // Import cart routes
-// const paymentRoutes = require("./routes/paymentRoutes.js");
-// const refundRoutes = require("./routes/refundRoutes");
+
 const emailVerificationRoutes = require("./routes/emailVerification");
-// const reportRoutes = require("./routes/reportRoutes.js");
-// Use routes
+
 app.use("/api/auth", authRoutes);
 
 app.use("/api/user", userRoutes);
 app.use("/api/admin", adminRoutes);
-// app.use("/api", timeslotRoutes);
-// app.use("/api/bookings", bookingRoutes);
-// app.use("/api/therapies", therapyRoutes);
-// app.use("/api", therapistRoutes);
-// app.use("/api/cart", cartRoutes); // Use cart routes
-// app.use("/api/payments", paymentRoutes);
-// app.use("/api/bookings", refundRoutes);
-// const adminBookingRoutes = require("./routes/adminBookingRoutes");
-// app.use("/api/bookings", adminBookingRoutes);
+
 
 app.use("/api/auth", emailVerificationRoutes);
-// const expertProfileRoutes = require("./routes/expertProfileRoutes.js"); // Import expert profile routes
-// app.use("/api", expertProfileRoutes); 
-// const expertAvailabilityRoutes = require("./routes/expertAvailabilityRoutes");
-// app.use("/api", expertAvailabilityRoutes);
-// const expertBookingRoutes = require('./routes/expertBookingRoutes');
-// app.use('/api', expertBookingRoutes);
+
 const subAdminRoutes = require('./routes/subAdminRoutes');
 app.use('/api', subAdminRoutes);
 

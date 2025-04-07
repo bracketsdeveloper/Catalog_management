@@ -141,9 +141,8 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Here we select the fields explicitly, including productDetails and brandName.
+    // Removed .select() to fetch all fields for editing
     const products = await Product.find(query)
-      .select("name productDetails brandName category subCategory images productCost productGST")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
@@ -160,6 +159,7 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching products" });
   }
 });
+
 
 
 // GET /api/admin/products/filters - Returns distinct filter values
