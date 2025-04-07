@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
@@ -53,8 +54,15 @@ export default function CatalogManagementPage() {
   const [toDateFilter, setToDateFilter] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
 
-  // For "create catalog" dropdown
+  // For "create catalog" dropdown (old version for Create Catalog button)
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // New state: track which catalog’s three dots dropdown is open.
+  const [openDropdownForCatalog, setOpenDropdownForCatalog] = useState(null);
+  const [selectedCatalogForDropdown, setSelectedCatalogForDropdown] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  // Use a ref for the button that triggers the dropdown.
+  const dropdownButtonRef = useRef(null);
 
   // Remarks modal states
   const [remarksModalOpen, setRemarksModalOpen] = useState(false);
@@ -76,6 +84,45 @@ export default function CatalogManagementPage() {
   useEffect(() => {
     localStorage.setItem("catalogManagementFilterType", filterType);
   }, [filterType]);
+
+  // Close the dropdown if clicking anywhere outside
+  useEffect(() => {
+    function handleDocumentClick() {
+      setOpenDropdownForCatalog(null);
+      setSelectedCatalogForDropdown(null);
+      dropdownButtonRef.current = null;
+    }
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, []);
+
+  // Update dropdown position on scroll/resize using a layout effect
+  useLayoutEffect(() => {
+    function updatePosition() {
+      if (!dropdownButtonRef.current) return;
+      const rect = dropdownButtonRef.current.getBoundingClientRect();
+      // Assume an approximate dropdown height of 200px
+      const dropdownHeight = 200;
+      let top;
+      if (window.innerHeight - rect.bottom < dropdownHeight) {
+        // Not enough space below, position above the button
+        top = rect.top + window.pageYOffset - dropdownHeight;
+      } else {
+        top = rect.bottom + window.pageYOffset;
+      }
+      setDropdownPosition({
+        top,
+        left: rect.left + window.pageXOffset,
+      });
+    }
+    updatePosition();
+    window.addEventListener("scroll", updatePosition);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, []);
 
   // -------------- LIFECYCLE --------------
   useEffect(() => {
@@ -189,7 +236,7 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- CATALOG DROPDOWN --------------
+  // -------------- CATALOG DROPDOWN (Create Catalog) --------------
   function handleToggleDropdown() {
     setDropdownOpen((prev) => !prev);
   }
@@ -245,7 +292,6 @@ export default function CatalogManagementPage() {
   async function handleCreateQuotationFromCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
-      // Build the base quotation payload from catalog data.
       const newQuotationData = {
         catalogNumber: catalog.catalogNumber,
         catalogName: catalog.catalogName,
@@ -258,12 +304,10 @@ export default function CatalogManagementPage() {
         items: []
       };
 
-      // Process each product in the catalog.
       for (let idx = 0; idx < catalog.products.length; idx++) {
         const prod = catalog.products[idx];
         let productDoc = {};
 
-        // Use populated product data if available.
         if (prod.productId && typeof prod.productId === "object" && prod.productId.name) {
           productDoc = prod.productId;
         } else {
@@ -273,9 +317,6 @@ export default function CatalogManagementPage() {
           productDoc = response.data;
         }
 
-        // New changes: 
-        // - productprice is taken as the catalog's productCost.
-        // - rate is calculated as productCost multiplied by (1 + margin/100)
         const baseCost = prod.productCost || 0;
         const marginFactor = 1 + ((catalog.margin || 0) / 100);
         const rate = baseCost * marginFactor;
@@ -343,7 +384,15 @@ export default function CatalogManagementPage() {
   async function handleExportExcel(item) {
     try {
       const wb = XLSX.utils.book_new();
-      const commonFields = ["images", "productId", "productName", "productDetails", "productGST", "productCost"];
+      const commonFields = [
+        "images",
+        "productId",
+        "productName",
+        "ProductDescription",
+        "ProductBrand",
+        "productGST",
+        "productCost"
+      ];
       const extraFields = (item.fieldsToDisplay || []).filter(field => !commonFields.includes(field));
       const header = [
         ...commonFields.map(field => fieldMapping[field] || field),
@@ -356,7 +405,8 @@ export default function CatalogManagementPage() {
         row.push((p.images || []).join(", "));
         row.push(p.productId ? p.productId.toString() : "N/A");
         row.push(p.productName || "");
-        row.push(p.productDetails || "");
+        row.push(p.ProductDescription || "");
+        row.push(p.ProductBrand || "");
         row.push(p.productGST !== undefined ? p.productGST : "");
         if (p.productCost !== undefined) {
           const effectiveCost = p.productCost * (1 + (item.margin || 0) / 100);
@@ -423,14 +473,16 @@ export default function CatalogManagementPage() {
       const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
       const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
 
-      // Process each product subdocument in the catalog.
+      // Adjusted right text section: start at x=600 with a wider maxWidth.
       for (let i = 0; i < (catalog.products || []).length; i++) {
         const sub = catalog.products[i];
         const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
 
         const [page] = await newPdf.copyPages(pdf2Doc, [0]);
         const { width, height } = page.getSize();
-        const imageX = 250, imageY = height - 850, imageW = 600, imageH = 700;
+        const fixedHeight = 550;
+        const imageX = 100;
+        const imageY = height - 780;
         let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
         if (mainImg && mainImg.startsWith("http://")) {
           mainImg = mainImg.replace("http://", "https://");
@@ -450,13 +502,14 @@ export default function CatalogManagementPage() {
           } else {
             embeddedImage = await newPdf.embedJpg(imageData);
           }
-          page.drawImage(embeddedImage, { x: imageX, y: imageY, width: imageW, height: imageH });
+          const autoWidth = (embeddedImage.width / embeddedImage.height) * fixedHeight;
+          page.drawImage(embeddedImage, { x: imageX, y: imageY, width: autoWidth, height: fixedHeight });
         } else {
           page.drawRectangle({
             x: imageX,
             y: imageY,
-            width: imageW,
-            height: imageH,
+            width: 600,
+            height: fixedHeight,
             borderColor: rgb(0.8, 0.8, 0.8),
             borderWidth: 1,
           });
@@ -468,7 +521,7 @@ export default function CatalogManagementPage() {
             color: rgb(0.5, 0.5, 0.5),
           });
         }
-        let xText = 1000;
+        let xText = 1000; // Updated from 1000 to 600 for more width
         let yText = height - 200;
         const lineHeight = 44;
         page.drawText(prod.name || sub.productName || "", {
@@ -477,42 +530,48 @@ export default function CatalogManagementPage() {
           size: 39,
           font: boldFont,
           color: rgb(0, 0, 0),
+          maxWidth: 800,
         });
         yText -= lineHeight * 1.3;
-        if (prod.brandName || sub.brandName) {
+        if (prod.ProductBrand || sub.ProductBrand) {
           page.drawText("Brand Name: ", {
             x: xText,
             y: yText,
             size: 25,
             font: boldFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
-          page.drawText(prod.brandName || sub.brandName || "", {
-            x: xText + 300,
+          page.drawText(prod.ProductBrand || sub.ProductBrand || "", {
+            x: xText + 210,
             y: yText,
             size: 25,
             font: normalFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           yText -= lineHeight;
         }
-        if (prod.productDetails) {
+        if (prod.ProductDescription || sub.ProductDescription) {
           page.drawText("Description:", {
             x: xText,
             y: yText,
             size: 25,
             font: boldFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           yText -= lineHeight;
-          const wrapped = wrapText(prod.productDetails, 200, normalFont, 7);
+          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
+          const wrapped = wrapText(descriptionText, 500, normalFont, 7);
           wrapped.forEach((line) => {
             page.drawText(line, {
               x: xText,
               y: yText,
-              size: 25,
+              size: 20,
               font: normalFont,
               color: rgb(0, 0, 0),
+              maxWidth: 800,
             });
             yText -= lineHeight;
           });
@@ -525,13 +584,15 @@ export default function CatalogManagementPage() {
             size: 25,
             font: boldFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           page.drawText(String(sub.quantity), {
-            x: xText + 300,
+            x: xText + 110,
             y: yText,
             size: 25,
             font: normalFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           yText -= lineHeight;
         }
@@ -545,13 +606,15 @@ export default function CatalogManagementPage() {
             size: 25,
             font: boldFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           page.drawText(`${effPrice.toFixed(2)}/-`, {
-            x: xText + 300,
+            x: xText + 310,
             y: yText,
             size: 25,
             font: normalFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           yText -= lineHeight;
         }
@@ -562,13 +625,15 @@ export default function CatalogManagementPage() {
             size: 25,
             font: boldFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           page.drawText(String(sub.productGST) + "%", {
-            x: xText + 300,
+            x: xText + 110,
             y: yText,
             size: 25,
             font: normalFont,
             color: rgb(0, 0, 0),
+            maxWidth: 800,
           });
           yText -= lineHeight;
         }
@@ -608,6 +673,53 @@ export default function CatalogManagementPage() {
         console.error("Error copying link:", err);
         alert("Failed to copy link");
       });
+  }
+
+  // ------------------ NEW: Three Dots Dropdown via Portal ------------------
+  function toggleCatalogDropdown(id, e) {
+    e.stopPropagation();
+    // Save the button element using the ref
+    dropdownButtonRef.current = e.currentTarget;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dropdownHeight = 200; // approximate dropdown height
+    let top;
+    if (window.innerHeight - rect.bottom < dropdownHeight) {
+      top = rect.top + window.pageYOffset - dropdownHeight;
+    } else {
+      top = rect.bottom + window.pageYOffset;
+    }
+    setDropdownPosition({
+      top,
+      left: rect.left + window.pageXOffset,
+    });
+    setSelectedCatalogForDropdown(
+      catalogs.find((cat) => cat._id === id)
+    );
+    setOpenDropdownForCatalog(id === openDropdownForCatalog ? null : id);
+  }
+
+  // New: Duplicate catalog – creates a new catalog with similar details and a new catalog number.
+  async function handleDuplicateCatalog(catalog) {
+    try {
+      const token = localStorage.getItem("token");
+      const duplicatedCatalog = { ...catalog };
+      delete duplicatedCatalog._id;
+      delete duplicatedCatalog.createdAt;
+      duplicatedCatalog.catalogNumber = `${duplicatedCatalog.catalogNumber}-copy-${Date.now()}`;
+
+      const res = await axios.post(`${BACKEND_URL}/api/admin/catalogs`, duplicatedCatalog, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 201) {
+        alert("Catalog duplicated successfully!");
+        fetchData();
+      } else {
+        throw new Error("Failed to duplicate catalog");
+      }
+    } catch (error) {
+      console.error("Error duplicating catalog:", error);
+      alert("Failed to duplicate catalog.");
+    }
   }
 
   const getUniqueCompanyNames = () => {
@@ -780,7 +892,7 @@ export default function CatalogManagementPage() {
                         Catalog Number
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Company
+                        Event Name
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         Customer Name
@@ -801,58 +913,22 @@ export default function CatalogManagementPage() {
                           className="px-4 py-2 underline cursor-pointer"
                           onClick={() => handleVirtualLink(cat)}
                         >
-                          {cat.customerCompany || cat.catalogName}
+                          {cat.catalogName}
                         </td>
                         <td className="px-4 py-2">{cat.customerName}</td>
                         <td className="px-4 py-2">{cat.products?.length || 0}</td>
-                        <td className="px-4 py-2 space-x-2">
+                        <td className="px-4 py-2">
                           <button
-                            onClick={() => handleExportExcel(cat)}
-                            className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCatalogForDropdown(cat);
+                              toggleCatalogDropdown(cat._id, e);
+                            }}
+                            className="px-2 py-1 hover:bg-gray-200 rounded"
                           >
-                            Excel
-                          </button>
-                          <button
-                            onClick={() => openPDFTemplateModal(cat)}
-                            className="px-2 py-1 bg-pink-600 text-white rounded text-xs hover:bg-pink-700"
-                          >
-                            PDF
-                          </button>
-                          <button
-                            onClick={() => handleVirtualLink(cat)}
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                          >
-                            Virtual
-                          </button>
-                          <button
-                            onClick={() => handleCopyLink(cat)}
-                            className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
-                          >
-                            Copy
-                          </button>
-                          <button
-                            onClick={() => handleEditCatalog(cat)}
-                            className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleCreateQuotationFromCatalog(cat)}
-                            className="px-2 py-1 bg-teal-600 text-white rounded text-xs hover:bg-teal-700"
-                          >
-                            Create Quotation
-                          </button>
-                          <button
-                            onClick={() => openRemarksModal(cat, "catalog")}
-                            className="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
-                          >
-                            Remarks
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCatalog(cat)}
-                            className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                          >
-                            Delete
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v.01M12 12v.01M12 18v.01" />
+                            </svg>
                           </button>
                         </td>
                       </tr>
@@ -999,6 +1075,132 @@ export default function CatalogManagementPage() {
           onClose={() => setPdfTemplateModalOpen(false)}
         />
       )}
+
+      {/* Render the catalog actions dropdown via a portal */}
+      {openDropdownForCatalog && selectedCatalogForDropdown &&
+        createPortal(
+          <div
+            style={{
+              top: dropdownPosition.top,
+              left: dropdownPosition.left,
+              position: "absolute",
+              zIndex: 9999,
+            }}
+            className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExportExcel(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Excel
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openPDFTemplateModal(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              PDF
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleVirtualLink(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Virtual
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyLink(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Copy
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditCatalog(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Edit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCreateQuotationFromCatalog(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Create Quotation
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openRemarksModal(selectedCatalogForDropdown, "catalog");
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Remarks
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteCatalog(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Delete
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDuplicateCatalog(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Duplicate
+            </button>
+          </div>,
+          document.body
+        )
+      }
     </div>
   );
 }
@@ -1081,7 +1283,6 @@ function VariationEditModal({ item, onClose, onUpdate }) {
 
   const handleSave = () => {
     const parsedCost = parseFloat(productCost);
-    // If new cost is invalid, fall back to original productprice
     const finalCost = isNaN(parsedCost) || parsedCost === 0 ? item.productprice : parsedCost;
     const parsedGST = parseFloat(productGST);
     const finalGST = isNaN(parsedGST) ? item.productGST : parsedGST;

@@ -4,7 +4,10 @@ const Counter = require("./Counter"); // Adjust the path as needed
 // A sub-schema to store product references + variation info
 const productSubSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
-  productName: { type: String }, // To store the product name
+  productName: { type: String },
+  // New fields added:
+  ProductDescription: { type: String },
+  ProductBrand: { type: String },
   color: { type: String },
   size: { type: String },
   productCost: { type: Number, default: 0 },
@@ -20,7 +23,7 @@ const remarkSchema = new mongoose.Schema({
 });
 
 const catalogSchema = new mongoose.Schema({
-  catalogNumber: { type: Number, unique: true }, // Sequential catalog number
+  catalogNumber: { type: Number, unique: true },
   catalogName: { type: String },
   customerName: { type: String },
   customerEmail: { type: String },

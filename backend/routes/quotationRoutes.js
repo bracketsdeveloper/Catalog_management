@@ -1,4 +1,3 @@
-// routes/quotations.js
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
@@ -148,12 +147,11 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-
 // 2) GET ALL QUOTATIONS
 router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotations = await Quotation.find()
-      .populate("items.productId", "images name productCost category subCategory")
+      .populate("items.productId", "images name productCost category subCategory hsnCode")
       .sort({ createdAt: -1 });
     res.json(quotations);
   } catch (error) {
@@ -166,7 +164,7 @@ router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
 router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotation = await Quotation.findById(req.params.id)
-      .populate("items.productId", "images name productCost category subCategory")
+      .populate("items.productId", "images name productCost category subCategory hsnCode")
       .exec();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });
@@ -288,7 +286,7 @@ router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) 
 router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotation = await Quotation.findById(req.params.id)
-      .populate("items.productId", "images name productCost category subCategory")
+      .populate("items.productId", "images name productCost category subCategory hsnCode")
       .exec();
     if (!quotation) {
       return res.status(404).json({ message: "Quotation not found" });

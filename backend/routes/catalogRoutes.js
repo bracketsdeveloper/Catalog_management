@@ -63,14 +63,26 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       // Use user-provided values if available, otherwise fall back to product defaults.
       newProducts.push({
         productId: p.productId,
-        productName: p.productName ||productDoc.productName || productDoc.name, // Updated: using productDoc.name from the Product model
+        productName: p.productName || productDoc.productName || productDoc.name,
+        ProductDescription:
+          p.ProductDescription !== undefined
+            ? p.ProductDescription
+            : (productDoc.productDetails || ""),
+        ProductBrand:
+          p.ProductBrand !== undefined
+            ? p.ProductBrand
+            : (productDoc.brandName || ""),
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity !== undefined ? p.quantity : 1,
         productCost:
-          p.productCost !== undefined ? p.productCost : (productDoc.productCost || 0),
+          p.productCost !== undefined
+            ? p.productCost
+            : (productDoc.productCost || 0),
         productGST:
-          p.productGST !== undefined ? p.productGST : (productDoc.productGST || 0)
+          p.productGST !== undefined
+            ? p.productGST
+            : (productDoc.productGST || 0)
       });
     }
 
@@ -173,13 +185,7 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
     const deletedCatalog = await Catalog.findByIdAndDelete(req.params.id);
 
     // Create 'delete' log
-    await createLog(
-      "delete",
-      catalogToDelete, // oldValue
-      null,            // newValue
-      req.user,
-      req.ip
-    );
+    await createLog("delete", catalogToDelete, null, req.user, req.ip);
 
     res.json({ message: "Catalog deleted" });
   } catch (error) {
@@ -235,6 +241,11 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
             p.productCost !== undefined ? p.productCost : existingProduct.productCost;
           existingProduct.productGST =
             p.productGST !== undefined ? p.productGST : existingProduct.productGST;
+          // Update the new fields as well:
+          existingProduct.ProductDescription =
+            p.ProductDescription !== undefined ? p.ProductDescription : existingProduct.ProductDescription;
+          existingProduct.ProductBrand =
+            p.ProductBrand !== undefined ? p.ProductBrand : existingProduct.ProductBrand;
           updatedProducts.push(existingProduct);
         } else {
           // No matching subdocument found; add as new
@@ -270,13 +281,7 @@ router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, re
     );
 
     // Log the approval if desired
-    await createLog(
-      "update",
-      existingCatalog,
-      updatedCatalog,
-      req.user,
-      req.ip
-    );
+    await createLog("update", existingCatalog, updatedCatalog, req.user, req.ip);
 
     res.json({ message: "Catalog approved", catalog: updatedCatalog });
   } catch (error) {
@@ -301,13 +306,7 @@ router.put("/catalogs/:id/remarks", authenticate, authorizeAdmin, async (req, re
     );
 
     // Log remarks update if needed
-    await createLog(
-      "update",
-      existingCatalog,
-      updatedCatalog,
-      req.user,
-      req.ip
-    );
+    await createLog("update", existingCatalog, updatedCatalog, req.user, req.ip);
 
     res.json({ message: "Remarks updated", catalog: updatedCatalog });
   } catch (error) {

@@ -105,7 +105,6 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     } = req.query;
     const query = {};
 
-    // Global search using regex on multiple fields
     if (search) {
       const regex = { $regex: search, $options: "i" };
       query.$or = [
@@ -132,8 +131,6 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
         { images: { $elemMatch: regex } }
       ];
     }
-
-    // Additional filtering using $in operator on comma-separated values
     if (categories) query.category = { $in: categories.split(",") };
     if (subCategories) query.subCategory = { $in: subCategories.split(",") };
     if (brands) query.brandName = { $in: brands.split(",") };
@@ -144,10 +141,13 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
+    // Here we select the fields explicitly, including productDetails and brandName.
     const products = await Product.find(query)
+      .select("name productDetails brandName category subCategory images productCost productGST")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
     const totalProducts = await Product.countDocuments(query);
 
     res.status(200).json({
@@ -160,6 +160,7 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching products" });
   }
 });
+
 
 // GET /api/admin/products/filters - Returns distinct filter values
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
@@ -471,7 +472,10 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
 // Assuming you have a Product model
 router.get("/products/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    // Explicitly select the fields you want to return
+    const product = await Product.findById(req.params.id)
+      .select("name productDetails brandName category subCategory images productCost productGST")
+      .lean();
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
@@ -481,5 +485,6 @@ router.get("/products/:id", async (req, res) => {
     res.status(500).json({ message: "Server error fetching product" });
   }
 });
+
 // Export the router
 module.exports = router;

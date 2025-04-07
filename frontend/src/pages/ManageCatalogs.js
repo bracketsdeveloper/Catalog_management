@@ -163,10 +163,13 @@ export default function CreateManualCatalog() {
         setCustomGst(String(existingGst));
         setSelectedGst(existingGst);
       }
+      // Map products using only productDetails and brandName for the new fields.
       const mappedRows = data.products.map((item) => ({
         _id: item._id,
         productId: item.productId,
         productName: item.productName,
+        ProductDescription: item.ProductDescription || item.productDetails || "",
+        ProductBrand: item.ProductBrand || item.brandName || "",
         color: item.color || "N/A",
         size: item.size || "N/A",
         quantity: item.quantity || 1,
@@ -247,7 +250,11 @@ export default function CreateManualCatalog() {
       alert("This item with the same color & size is already added!");
       return;
     }
-    const newItem = { ...item, productprice: item.productCost, name: item.productName || item.name };
+    const newItem = {
+      ...item,
+      productprice: item.productCost,
+      name: item.productName || item.name,
+    };
     console.log("Adding single item:", newItem);
     setSelectedProducts((prev) => [...prev, newItem]);
   };
@@ -267,6 +274,9 @@ export default function CreateManualCatalog() {
         quantity: v.quantity || 1,
         material: variationModalProduct.material || "",
         weight: variationModalProduct.weight || "",
+        // Use only productDetails and brandName; if empty they remain empty.
+        ProductDescription: variationModalProduct.productDetails || "",
+        ProductBrand: variationModalProduct.brandName || "",
       };
     });
 
@@ -369,6 +379,8 @@ export default function CreateManualCatalog() {
         _id: p._id,
         productId: p.productId,
         productName: p.productName || p.name,
+        ProductDescription: p.ProductDescription,
+        ProductBrand: p.ProductBrand,
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity,
@@ -389,11 +401,14 @@ export default function CreateManualCatalog() {
           headers: { Authorization: `Bearer ${token}` },
         });
         alert("Catalog updated successfully!");
+        navigate(`/admin-dashboard/manage-catalogs`);
       } else {
         response = await axios.post(`${BACKEND_URL}/api/admin/catalogs`, catalogData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         alert("Catalog created successfully!");
+        
+        
       }
       console.log("Response from server:", response.data);
       if (isEditMode) {
@@ -416,7 +431,6 @@ export default function CreateManualCatalog() {
       return;
     }
 
-    // IMPORTANT: Include customerCompany in the payload
     const items = selectedProducts.map((p, index) => {
       const quantity = p.quantity || 1;
       const baseCost = p.productprice || p.productCost || 0;
@@ -448,7 +462,7 @@ export default function CreateManualCatalog() {
         customerName,
         customerEmail,
         customerAddress,
-        customerCompany, // <-- Now included!
+        customerCompany,
         margin: selectedMargin,
         gst: selectedGst,
         items,
@@ -491,13 +505,14 @@ export default function CreateManualCatalog() {
   };
 
   const handleCompanySelect = (company) => {
-    setSelectedCompany(company.companyName);
+    setCustomerCompany(company.companyName); // This updates the input field
     setSelectedCompanyData(company);
     setCustomerName(company.clients[0]?.name || "");
     setCustomerEmail(company.companyEmail);
     setCustomerAddress(company.companyAddress);
     setDropdownOpen(false);
   };
+  
 
   const handleOpenCompanyModal = () => {
     setShowCompanyModal(true);
@@ -510,13 +525,11 @@ export default function CreateManualCatalog() {
 
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Top: Catalog name, Margin, GST & Quotation Buttons */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
         <div className="flex flex-wrap items-center gap-4">
-          {/* Margin Selection */}
           <div className="flex items-center space-x-2">
             <label><b>Select Margin</b></label>
             <select
@@ -556,7 +569,6 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
-          {/* GST Selection */}
           <div className="flex items-center space-x-2">
             <label><b>Select GST</b></label>
             <select
@@ -596,7 +608,6 @@ export default function CreateManualCatalog() {
               />
             )}
           </div>
-          {/* Create / Update Buttons */}
           <button onClick={handleSaveCatalog} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
             {isEditMode ? "Update Catalog" : "Create Catalog"}
           </button>
@@ -606,7 +617,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Catalog Info Form */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div>
           <label className="block mb-1 font-medium text-purple-700">Catalog Name *</label>
@@ -614,21 +624,40 @@ export default function CreateManualCatalog() {
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">Customer Company *</label>
-          <input type="text" className="border border-purple-300 rounded w-full p-2" value={customerCompany} onChange={(e) => setCustomerCompany(e.target.value)} required />
-          {dropdownOpen && customerCompany && (
-            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
-              {companies
-                .filter((company) => company.companyName.toLowerCase().includes(customerCompany.toLowerCase()))
-                .map((company) => (
-                  <div key={company._id} className="p-2 cursor-pointer hover:bg-gray-100" onClick={() => handleCompanySelect(company)}>
-                    {company.companyName}
-                  </div>
-                ))}
-              <div className="p-2 cursor-pointer hover:bg-gray-100" onClick={handleOpenCompanyModal}>
-                + Create Company
-              </div>
-            </div>
-          )}
+          <input
+  type="text"
+  className="border border-purple-300 rounded w-full p-2"
+  value={customerCompany}
+  onChange={(e) => setCustomerCompany(e.target.value)}
+  onFocus={() => setDropdownOpen(true)}
+  onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+  required
+/>
+{dropdownOpen && customerCompany && (
+  <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
+    {companies
+      .filter((company) =>
+        company.companyName.toLowerCase().includes(customerCompany.toLowerCase())
+      )
+      .map((company) => (
+        <div
+          key={company._id}
+          className="p-2 cursor-pointer hover:bg-gray-100"
+          onMouseDown={() => handleCompanySelect(company)}
+        >
+          {company.companyName}
+        </div>
+      ))}
+    <div
+      className="p-2 cursor-pointer hover:bg-gray-100"
+      onMouseDown={handleOpenCompanyModal}
+    >
+      + Create Company
+    </div>
+  </div>
+)}
+
+
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">Customer Name *</label>
@@ -644,7 +673,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Fields to Display */}
       <div className="mb-6">
         <label className="block mb-2 font-medium text-purple-700">Fields to Display</label>
         <div className="flex flex-wrap gap-3">
@@ -657,7 +685,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Search + Advanced Image Search + Filters */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input type="text" placeholder="Search products..." className="flex-grow px-3 py-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
@@ -674,7 +701,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Filters Section */}
       <div className="flex flex-wrap gap-2 mb-6">
         <div className="relative">
           <button onClick={() => setCategoryOpen(!categoryOpen)} className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100">
@@ -738,7 +764,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Product Grid */}
       {loading ? (
         <div>Loading products...</div>
       ) : (
@@ -751,7 +776,13 @@ export default function CreateManualCatalog() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {finalProducts.map((prod) => (
-              <ProductCard key={prod._id} product={prod} selectedMargin={selectedMargin} onAddSelected={handleAddSingle} openVariationSelector={openVariationSelector} />
+              <ProductCard
+                key={prod._id}
+                product={prod}
+                selectedMargin={selectedMargin}
+                onAddSelected={handleAddSingle}
+                openVariationSelector={openVariationSelector}
+              />
             ))}
           </div>
           {!advancedSearchActive && (
@@ -768,7 +799,6 @@ export default function CreateManualCatalog() {
         </>
       )}
 
-      {/* Floating Bag Icon */}
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -782,7 +812,6 @@ export default function CreateManualCatalog() {
         )}
       </div>
 
-      {/* Cart Panel */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black bg-opacity-30">
           <div className="bg-white w-full sm:w-96 h-full shadow-md p-4 flex flex-col relative">
@@ -822,7 +851,6 @@ export default function CreateManualCatalog() {
         </div>
       )}
 
-      {/* Variation Modal (Multi-Add) */}
       {variationModalOpen && variationModalProduct && (
         <VariationModal
           product={variationModalProduct}
@@ -832,7 +860,6 @@ export default function CreateManualCatalog() {
         />
       )}
 
-      {/* Variation Edit Modal (Single Item) */}
       {editModalOpen && editIndex != null && (
         <VariationEditModal
           item={selectedProducts[editIndex]}
@@ -848,27 +875,27 @@ export default function CreateManualCatalog() {
         />
       )}
 
-      {/* Company Modal for adding new company */}
       {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
     </div>
   );
 }
 
-// ----------------------- PRODUCT CARD -----------------------
 function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
+  // Split color and size values (if string) into an array
   const colorOptions = Array.isArray(product.color)
     ? product.color
     : typeof product.color === "string"
-    ? product.color.split(",").map((c) => c.trim())
+    ? product.color.split(",").map((c) => c.trim()).filter(Boolean)
     : [];
   const sizeOptions = Array.isArray(product.size)
     ? product.size
     : typeof product.size === "string"
-    ? product.size.split(",").map((s) => s.trim())
+    ? product.size.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
-  const singleColor = colorOptions.length === 1;
-  const singleSize = sizeOptions.length === 1;
-
+  
+  // Determine if the product has variations
+  const hasVariations = colorOptions.length > 1 || sizeOptions.length > 1;
+  
   const handleSingleSelect = () => {
     let cost = product.productCost || 0;
     const newItem = {
@@ -877,11 +904,15 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
       productCost: cost,
       productprice: cost,
       productGST: product.productGST || 0,
-      color: singleColor ? (colorOptions[0].trim() !== "" ? colorOptions[0] : "N/A") : "",
-      size: singleSize ? (sizeOptions[0].trim() !== "" ? sizeOptions[0] : "N/A") : "",
+      // Use first value or "N/A" if empty
+      color: colorOptions.length > 0 ? (colorOptions[0].trim() !== "" ? colorOptions[0] : "N/A") : "N/A",
+      size: sizeOptions.length > 0 ? (sizeOptions[0].trim() !== "" ? sizeOptions[0] : "N/A") : "N/A",
       quantity: 1,
       material: product.material || "",
       weight: product.weight || "",
+      // Use only productDetails and brandName (without fallback)
+      ProductDescription: product.productDetails || "",
+      ProductBrand: product.brandName || "",
     };
     onAddSelected(newItem);
   };
@@ -906,31 +937,30 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
         {product.category}
         {product.subCategory ? ` / ${product.subCategory}` : ""}
       </p>
-      {singleColor && singleSize ? (
-        <button onClick={handleSingleSelect} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
-          Select
-        </button>
-      ) : (
+      {hasVariations ? (
         <button onClick={() => openVariationSelector(product)} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
           Choose Variation
+        </button>
+      ) : (
+        <button onClick={handleSingleSelect} className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+          Select
         </button>
       )}
     </div>
   );
 }
 
-// ----------------------- VARIATION MODAL (Multi-Add) -----------------------
 function VariationModal({ product, onClose, onSave, selectedMargin }) {
   const [variations, setVariations] = useState([]);
   const colorOptions = Array.isArray(product.color)
     ? product.color
     : typeof product.color === "string"
-    ? product.color.split(",").map((c) => c.trim())
+    ? product.color.split(",").map((c) => c.trim()).filter(Boolean)
     : [];
   const sizeOptions = Array.isArray(product.size)
     ? product.size
     : typeof product.size === "string"
-    ? product.size.split(",").map((s) => s.trim())
+    ? product.size.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
   const [pickedColor, setPickedColor] = useState(colorOptions[0] || "");
   const [pickedSize, setPickedSize] = useState(sizeOptions[0] || "");
@@ -967,6 +997,9 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
         quantity: variation.quantity || 1,
         material: product.material || "",
         weight: product.weight || "",
+        // Use only productDetails and brandName (without fallback)
+        ProductDescription: product.productDetails || "",
+        ProductBrand: product.brandName || "",
       };
     });
     onSave(itemsWithProductData);
@@ -979,7 +1012,9 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
           <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900">
             <span className="text-xl font-bold">&times;</span>
           </button>
-          <h2 className="text-xl font-bold mb-4 text-purple-700">Choose Variations for {product.productName || product.name}</h2>
+          <h2 className="text-xl font-bold mb-4 text-purple-700">
+            Choose Variations for {product.productName || product.name}
+          </h2>
           <div className="grid grid-cols-3 gap-2 mb-4">
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
@@ -990,7 +1025,13 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
                   ))}
                 </select>
               ) : (
-                <input type="text" className="border border-purple-300 rounded p-1 w-full" value={pickedColor} onChange={(e) => setPickedColor(e.target.value)} placeholder="No colors? Type custom" />
+                <input
+                  type="text"
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedColor}
+                  onChange={(e) => setPickedColor(e.target.value)}
+                  placeholder="No colors? Type custom"
+                />
               )}
             </div>
             <div>
@@ -1002,7 +1043,13 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
                   ))}
                 </select>
               ) : (
-                <input type="text" className="border border-purple-300 rounded p-1 w-full" value={pickedSize} onChange={(e) => setPickedSize(e.target.value)} placeholder="No sizes? Type custom" />
+                <input
+                  type="text"
+                  className="border border-purple-300 rounded p-1 w-full"
+                  value={pickedSize}
+                  onChange={(e) => setPickedSize(e.target.value)}
+                  placeholder="No sizes? Type custom"
+                />
               )}
             </div>
             <div>
@@ -1042,8 +1089,8 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
   );
 }
 
-// ----------------------- VARIATION EDIT MODAL (Cart Item Edit) -----------------------
 function VariationEditModal({ item, onClose, onUpdate }) {
+  // Initialize state with what was passed in
   const [name, setName] = useState(item.productName || item.name || "");
   const [productCost, setProductCost] = useState(item.productCost || 0);
   const [productGST, setProductGST] = useState(item.productGST || 0);
@@ -1052,23 +1099,45 @@ function VariationEditModal({ item, onClose, onUpdate }) {
   const [quantity, setQuantity] = useState(item.quantity || 1);
   const [material, setMaterial] = useState(item.material || "");
   const [weight, setWeight] = useState(item.weight || "");
+  // Initialize description and brand from the passed item.
+  const [productDescription, setProductDescription] = useState(item.ProductDescription || "");
+  const [productBrand, setProductBrand] = useState(item.ProductBrand || "");
+
+  // If productDescription or productBrand is empty, fetch from product route
+  useEffect(() => {
+    if ((!productDescription || !productBrand) && item.productId) {
+      axios
+        .get(`${BACKEND_URL}/api/admin/products/${item.productId}`)
+        .then((res) => {
+          const prod = res.data;
+          if (!productDescription) {
+            setProductDescription(prod.productDetails || "");
+          }
+          if (!productBrand) {
+            setProductBrand(prod.brandName || "");
+          }
+        })
+        .catch((err) => console.error("Error fetching product details:", err));
+    }
+  }, [item.productId, productDescription, productBrand]);
 
   const handleSave = () => {
     const parsedCost = parseFloat(productCost);
-    // If new cost is invalid, fall back to original productprice
     const finalCost = isNaN(parsedCost) || parsedCost === 0 ? item.productprice : parsedCost;
     const parsedGST = parseFloat(productGST);
     const finalGST = isNaN(parsedGST) ? item.productGST : parsedGST;
     const updatedItem = {
       name: item.productName || name,
       productCost: finalCost,
-      productprice: finalCost, // update quotation's productprice with new cost
+      productprice: finalCost,
       productGST: finalGST,
       color,
       size,
       quantity: parseInt(quantity) || item.quantity || 1,
       material,
       weight,
+      ProductDescription: productDescription,
+      ProductBrand: productBrand,
     };
     console.log("Updated item from VariationEditModal:", updatedItem);
     onUpdate(updatedItem);
@@ -1114,6 +1183,14 @@ function VariationEditModal({ item, onClose, onUpdate }) {
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Weight</label>
               <input type="text" value={weight} onChange={(e) => setWeight(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Product Description</label>
+              <textarea type="text" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} className="border border-purple-300 rounded p-2 w-full h-40" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Product Brand</label>
+              <input type="text" value={productBrand} onChange={(e) => setProductBrand(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
             </div>
           </div>
           <div className="mt-6 flex justify-end space-x-2">

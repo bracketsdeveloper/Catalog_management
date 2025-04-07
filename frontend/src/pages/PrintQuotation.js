@@ -174,6 +174,7 @@ export default function PrintQuotation() {
               <th className="border px-1 py-1">Sl. No.</th>
               <th className="border px-1 py-1">Image</th>
               <th className="border px-1 py-1">Product</th>
+              {/* <th className="border px-1 py-1">HSN Code.</th> */}
               <th className="border px-1 py-1">Quantity</th>
               <th className="border px-1 py-1 text-right">Rate</th>
               <th className="border px-1 py-1 text-right">Amount</th>
@@ -208,6 +209,7 @@ export default function PrintQuotation() {
                     )}
                   </td>
                   <td className="border px-1 py-1">{item.product}</td>
+                  {/* <td className="border px-1 py-1">{item.productId?.hsnCode || "N/A"}                  </td> */}
                   <td className="border px-1 py-1 text-center">{qty}</td>
                   <td className="border px-1 py-1 text-right">₹{rate.toFixed(2)}</td>
                   <td className="border px-1 py-1 text-right">₹{amount.toFixed(2)}</td>
