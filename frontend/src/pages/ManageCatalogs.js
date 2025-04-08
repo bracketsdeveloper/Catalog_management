@@ -16,7 +16,12 @@ export default function CreateManualCatalog() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // State declarations
+  // -- Opportunity Number states + dropdown
+  const [opportunityNumber, setOpportunityNumber] = useState("");
+  const [opportunityCodes, setOpportunityCodes] = useState([]);
+  const [opportunityDropdownOpen, setOpportunityDropdownOpen] = useState(false);
+
+  // -- General states
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,7 +53,7 @@ export default function CreateManualCatalog() {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
   const [catalogName, setCatalogName] = useState("");
-  const [salutation, setSalutation] = useState("Mr."); // <-- NEW SALUTATION STATE
+  const [salutation, setSalutation] = useState("Mr."); // e.g. "Mr." or "Ms."
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -64,37 +69,43 @@ export default function CreateManualCatalog() {
   const [customGst, setCustomGst] = useState("");
   const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
   const [cartOpen, setCartOpen] = useState(false);
+
+  // -- Company suggestions
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
+  // ============================================
+  // 1) Fetch full list of Opportunity codes for suggestion
+  // ============================================
   useEffect(() => {
-    fetchFilterOptions();
+    fetchOpportunityCodes();
   }, []);
 
-  useEffect(() => {
-    fetchProducts(1);
-  }, [
-    searchTerm,
-    selectedCategories,
-    selectedSubCategories,
-    selectedBrands,
-    selectedPriceRanges,
-    selectedVariationHinges,
-  ]);
-
-  useEffect(() => {
-    if (isEditMode) {
-      fetchExistingCatalog();
-    } else {
-      setLoading(false);
+  const fetchOpportunityCodes = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOpportunityCodes(res.data || []);
+    } catch (error) {
+      console.error("Error fetching opportunities for suggestion:", error);
     }
-  }, [id]);
+  };
 
+  // Filter list for typed text
+  const filteredOppCodes = opportunityCodes.filter((opp) =>
+    opp.opportunityCode.toLowerCase().includes(opportunityNumber.toLowerCase())
+  );
+
+  // ============================================
+  // 2) Fetch product filter options
+  // ============================================
   useEffect(() => {
-    fetchCompanies();
+    fetchFilterOptions();
   }, []);
 
   const fetchFilterOptions = async () => {
@@ -113,6 +124,21 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ============================================
+  // 3) Fetch product list
+  // ============================================
+  useEffect(() => {
+    fetchProducts(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchTerm,
+    selectedCategories,
+    selectedSubCategories,
+    selectedBrands,
+    selectedPriceRanges,
+    selectedVariationHinges,
+  ]);
+
   const fetchProducts = async (page = 1) => {
     setLoading(true);
     try {
@@ -121,11 +147,21 @@ export default function CreateManualCatalog() {
       params.append("page", page);
       params.append("limit", limit);
       if (searchTerm) params.append("search", searchTerm);
-      if (selectedCategories.length > 0) params.append("categories", selectedCategories.join(","));
-      if (selectedSubCategories.length > 0) params.append("subCategories", selectedSubCategories.join(","));
-      if (selectedBrands.length > 0) params.append("brands", selectedBrands.join(","));
-      if (selectedPriceRanges.length > 0) params.append("priceRanges", selectedPriceRanges.join(","));
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
+      if (selectedCategories.length > 0) {
+        params.append("categories", selectedCategories.join(","));
+      }
+      if (selectedSubCategories.length > 0) {
+        params.append("subCategories", selectedSubCategories.join(","));
+      }
+      if (selectedBrands.length > 0) {
+        params.append("brands", selectedBrands.join(","));
+      }
+      if (selectedPriceRanges.length > 0) {
+        params.append("priceRanges", selectedPriceRanges.join(","));
+      }
+
+      const url = `${BACKEND_URL}/api/admin/products?${params.toString()}`;
+      const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setProducts(res.data.products || []);
@@ -138,20 +174,35 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ============================================
+  // 4) If editing an existing catalog, load it
+  // ============================================
+  useEffect(() => {
+    if (isEditMode) {
+      fetchExistingCatalog();
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const fetchExistingCatalog = async () => {
     try {
       const token = localStorage.getItem("token");
       const { data } = await axios.get(`${BACKEND_URL}/api/admin/catalogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      // Opportunity
+      setOpportunityNumber(data.opportunityNumber || "");
+      // Basic Catalog details
       setCatalogName(data.catalogName);
-      setCustomerName(data.customerName);
+      setCustomerName(data.customerName || "");
       setCustomerEmail(data.customerEmail || "");
       setCustomerAddress(data.customerAddress || "");
       setCustomerCompany(data.customerCompany || "");
       setSelectedCompany(data.customerCompany || "");
       setFieldsToDisplay(data.fieldsToDisplay || []);
-      // NEW: Set salutation if it exists; default to "Mr." otherwise
       setSalutation(data.salutation || "Mr.");
 
       // Margin
@@ -165,6 +216,7 @@ export default function CreateManualCatalog() {
         setCustomMargin(String(existingMargin));
         setSelectedMargin(existingMargin);
       }
+
       // GST
       const existingGst = data.gst || presetGstOptions[0];
       if (presetGstOptions.includes(existingGst)) {
@@ -176,7 +228,8 @@ export default function CreateManualCatalog() {
         setCustomGst(String(existingGst));
         setSelectedGst(existingGst);
       }
-      // Map products
+
+      // Products
       const mappedRows = data.products.map((item) => ({
         _id: item._id,
         productId: item.productId,
@@ -198,6 +251,28 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ============================================
+  // 5) Fetch companies for suggestion
+  // ============================================
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
+
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCompanies(res.data || []);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+    }
+  };
+
+  // ============================================
+  // 6) Handlers for advanced image search
+  // ============================================
   const handleImageSearchClick = () => {
     imageInputRef.current?.click();
   };
@@ -231,6 +306,9 @@ export default function CreateManualCatalog() {
     setAdvancedSearchResults([]);
   };
 
+  // ============================================
+  // 7) Handlers for product selection + variations
+  // ============================================
   const toggleFilter = (value, list, setList) => {
     if (list.includes(value)) {
       setList(list.filter((x) => x !== value));
@@ -333,6 +411,9 @@ export default function CreateManualCatalog() {
     setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ============================================
+  // 8) Handlers for toggling fields
+  // ============================================
   const toggleField = (field) => {
     if (fieldsToDisplay.includes(field)) {
       setFieldsToDisplay((prev) => prev.filter((f) => f !== field));
@@ -341,6 +422,9 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ============================================
+  // 9) Updating company info
+  // ============================================
   const updateCompanyInfo = async () => {
     if (!selectedCompanyData || !selectedCompanyData._id) return;
     try {
@@ -370,7 +454,14 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ============================================
+  // 10) Save Catalog
+  // ============================================
   const handleSaveCatalog = async () => {
+    if (!opportunityNumber) {
+      alert("Please enter an opportunity number (or confirm it's valid).");
+      return;
+    }
     if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
       return;
@@ -381,8 +472,8 @@ export default function CreateManualCatalog() {
     }
 
     const catalogData = {
+      opportunityNumber,
       catalogName,
-      // Pass the new salutation field
       salutation,
       customerName,
       customerEmail,
@@ -400,7 +491,6 @@ export default function CreateManualCatalog() {
         size: p.size || "",
         quantity: p.quantity,
         productCost: p.productCost,
-        productprice: p.productprice || p.productCost,
         productGST: p.productGST,
       })),
       fieldsToDisplay,
@@ -427,10 +517,17 @@ export default function CreateManualCatalog() {
       }
     } catch (error) {
       console.error("Error saving catalog:", error);
-      alert("Failed to save catalog. Check console.");
+      if (error.response && error.response.status === 400) {
+        alert(error.response.data.message || "Invalid opportunity number");
+      } else {
+        alert("Failed to save catalog. Check console.");
+      }
     }
   };
 
+  // ============================================
+  // 11) Create Quotation from the selected items
+  // ============================================
   const handleCreateQuotation = async () => {
     if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
@@ -443,7 +540,7 @@ export default function CreateManualCatalog() {
 
     const items = selectedProducts.map((p, index) => {
       const quantity = p.quantity || 1;
-      const baseCost = p.productprice || p.productCost || 0;
+      const baseCost = p.productCost || 0;
       const rate = parseFloat((baseCost * (1 + selectedMargin / 100)).toFixed(2));
       const amount = rate * quantity;
       const itemGst = p.productGST !== undefined ? p.productGST : selectedGst;
@@ -470,7 +567,6 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const body = {
         catalogName,
-        // If you want to pass salutation into the quotation, you can add it here as well:
         salutation,
         customerName,
         customerEmail,
@@ -490,6 +586,9 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // ============================================
+  // 12) Pagination
+  // ============================================
   const handlePrevPage = () => {
     if (currentPage > 1) {
       fetchProducts(currentPage - 1);
@@ -504,18 +603,9 @@ export default function CreateManualCatalog() {
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
-  const fetchCompanies = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCompanies(res.data || []);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-    }
-  };
-
+  // ============================================
+  // 13) Company selection
+  // ============================================
   const handleCompanySelect = (company) => {
     setCustomerCompany(company.companyName);
     setSelectedCompanyData(company);
@@ -534,14 +624,17 @@ export default function CreateManualCatalog() {
     fetchCompanies();
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
         </h1>
         <div className="flex flex-wrap items-center gap-4">
-          {/* Margin / GST / Save / Quotation buttons, etc. */}
           <button
             onClick={handleSaveCatalog}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -557,9 +650,48 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
+      {/* Form Fields */}
       <div className="grid grid-cols-3 gap-4 mb-6">
+        {/* Opportunity Number */}
+        <div className="relative">
+          <label className="block mb-1 font-medium text-purple-700">
+            Opportunity Number *
+          </label>
+          <input
+            type="text"
+            className="border border-purple-300 rounded w-full p-2 bg-white text-black font-bold"
+            value={opportunityNumber}
+            onChange={(e) => {
+              setOpportunityNumber(e.target.value);
+              setOpportunityDropdownOpen(true);
+            }}
+            onBlur={() => setTimeout(() => setOpportunityDropdownOpen(false), 200)}
+            placeholder="e.g. 5001"
+            required
+          />
+          {opportunityDropdownOpen && opportunityNumber && filteredOppCodes.length > 0 && (
+            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto min-h-10">
+              {filteredOppCodes.map((opp) => (
+                <div
+                  key={opp._id}
+                  className="p-2 cursor-pointer hover:bg-gray-100"
+                  onMouseDown={() => {
+                    setOpportunityNumber(opp.opportunityCode);
+                    setOpportunityDropdownOpen(false);
+                  }}
+                >
+                  {opp.opportunityCode} - {opp.opportunityName}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Catalog Name */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">Catalog Name *</label>
+          <label className="block mb-1 font-medium text-purple-700">
+            Catalog Name *
+          </label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -568,8 +700,12 @@ export default function CreateManualCatalog() {
             required
           />
         </div>
+
+        {/* Customer Company */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">Customer Company *</label>
+          <label className="block mb-1 font-medium text-purple-700">
+            Customer Company *
+          </label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -605,7 +741,8 @@ export default function CreateManualCatalog() {
             </div>
           )}
         </div>
-        {/* NEW Salutation + Customer Name in same column */}
+
+        {/* Customer Name + Salutation */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Customer Name *
@@ -629,6 +766,8 @@ export default function CreateManualCatalog() {
             />
           </div>
         </div>
+
+        {/* Customer Email */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Customer Email
@@ -641,6 +780,8 @@ export default function CreateManualCatalog() {
             onBlur={updateCompanyInfo}
           />
         </div>
+
+        {/* Customer Address (Read-Only) */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Customer Address
@@ -654,6 +795,7 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
+      {/* Fields to Display */}
       <div className="mb-6">
         <label className="block mb-2 font-medium text-purple-700">
           Fields to Display
@@ -671,10 +813,7 @@ export default function CreateManualCatalog() {
             "material",
             "weight",
           ].map((field) => (
-            <label
-              key={field}
-              className="flex items-center space-x-1 text-sm"
-            >
+            <label key={field} className="flex items-center space-x-1 text-sm">
               <input
                 type="checkbox"
                 checked={fieldsToDisplay.includes(field)}
@@ -687,6 +826,7 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
+      {/* Search & Image Search */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input
@@ -723,6 +863,7 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
+      {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
         <div className="relative">
           <button
@@ -850,6 +991,7 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
+      {/* Product Grid */}
       {loading ? (
         <div>Loading products...</div>
       ) : (
@@ -864,6 +1006,7 @@ export default function CreateManualCatalog() {
               Searching for "{searchTerm}"...
             </div>
           )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {finalProducts.map((prod) => (
               <ProductCard
@@ -875,6 +1018,8 @@ export default function CreateManualCatalog() {
               />
             ))}
           </div>
+
+          {/* Pagination */}
           {!advancedSearchActive && (
             <div className="flex justify-center items-center mt-6 space-x-4">
               <button
@@ -942,7 +1087,9 @@ export default function CreateManualCatalog() {
                       </div>
                       {row.color && <div className="text-xs">Color: {row.color}</div>}
                       {row.size && <div className="text-xs">Size: {row.size}</div>}
-                      <div className="text-xs">Cost: ₹{row.productCost.toFixed(2)}</div>
+                      <div className="text-xs">
+                        Cost: ₹{Number(row.productCost).toFixed(2)}
+                      </div>
                       <div className="text-xs">GST: {row.productGST}%</div>
                       <div className="text-xs">Qty: {row.quantity}</div>
                     </div>
@@ -972,7 +1119,7 @@ export default function CreateManualCatalog() {
         </div>
       )}
 
-      {/* Variation Modal for selecting color/size combos */}
+      {/* Variation Modal */}
       {variationModalOpen && variationModalProduct && (
         <VariationModal
           product={variationModalProduct}
@@ -982,7 +1129,7 @@ export default function CreateManualCatalog() {
         />
       )}
 
-      {/* Edit Modal for line items in the cart */}
+      {/* Edit Modal */}
       {editModalOpen && editIndex != null && (
         <VariationEditModal
           item={selectedProducts[editIndex]}
@@ -998,11 +1145,15 @@ export default function CreateManualCatalog() {
         />
       )}
 
+      {/* Company Creation Modal */}
       {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
     </div>
   );
 }
 
+/**
+ * ProductCard Component
+ */
 function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
   const colorOptions = Array.isArray(product.color)
     ? product.color
@@ -1015,11 +1166,10 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
     ? product.size.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
 
-  // Determine if the product has variations
   const hasVariations = colorOptions.length > 1 || sizeOptions.length > 1;
 
   const handleSingleSelect = () => {
-    let cost = product.productCost || 0;
+    const cost = product.productCost || 0;
     const newItem = {
       productId: product._id,
       name: product.productName || product.name,
@@ -1098,6 +1248,9 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
   );
 }
 
+/**
+ * VariationModal Component
+ */
 function VariationModal({ product, onClose, onSave }) {
   const [variations, setVariations] = useState([]);
   const colorOptions = Array.isArray(product.color)
@@ -1133,7 +1286,7 @@ function VariationModal({ product, onClose, onSave }) {
       return;
     }
     const itemsWithProductData = variations.map((variation) => {
-      let cost = product.productCost || 0;
+      const cost = product.productCost || 0;
       return {
         productId: product._id,
         name: product.productName || product.name,
@@ -1284,6 +1437,9 @@ function VariationModal({ product, onClose, onSave }) {
   );
 }
 
+/**
+ * VariationEditModal Component
+ */
 function VariationEditModal({ item, onClose, onUpdate }) {
   const [name, setName] = useState(item.productName || item.name || "");
   const [productCost, setProductCost] = useState(item.productCost || 0);
@@ -1314,7 +1470,8 @@ function VariationEditModal({ item, onClose, onUpdate }) {
         })
         .catch((err) => console.error("Error fetching product details:", err));
     }
-  }, [item.productId, productDescription, productBrand]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.productId]);
 
   const handleSave = () => {
     const parsedCost = parseFloat(productCost);
@@ -1444,7 +1601,6 @@ function VariationEditModal({ item, onClose, onUpdate }) {
                 Product Description
               </label>
               <textarea
-                type="text"
                 value={productDescription}
                 onChange={(e) => setProductDescription(e.target.value)}
                 className="border border-purple-300 rounded p-2 w-full h-40"

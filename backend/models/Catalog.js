@@ -24,6 +24,9 @@ const remarkSchema = new mongoose.Schema({
 
 const catalogSchema = new mongoose.Schema({
   catalogNumber: { type: Number, unique: true },
+  // The new opportunityNumber field:
+  opportunityNumber: { type: String, default: "" },
+
   catalogName: { type: String },
   // NEW: Salutation field
   salutation: { type: String, default: "Mr." },

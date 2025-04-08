@@ -4,6 +4,7 @@ const express = require("express");
 const router = express.Router();
 const Catalog = require("../models/Catalog");
 const Product = require("../models/Product");
+const Opportunity = require("../models/Opportunity"); // <-- Import Opportunity model
 const Log = require("../models/Log"); // <-- Make sure you have a Log model and import it
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
@@ -42,6 +43,7 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
+      opportunityNumber, // <-- NEW
       catalogName,
       salutation, // <-- NEW FIELD
       customerName,
@@ -55,6 +57,15 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       gst,
     } = req.body;
 
+    // 1) Validate the opportunityNumber (if provided)
+    if (opportunityNumber) {
+      const validOpp = await Opportunity.findOne({ opportunityCode: opportunityNumber }).lean();
+      if (!validOpp) {
+        return res.status(400).json({ message: "Invalid opportunity number" });
+      }
+    }
+
+    // 2) Build the products sub-doc array
     const newProducts = [];
     for (const p of products || []) {
       const productDoc = await Product.findById(p.productId).lean();
@@ -84,6 +95,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     const newCatalog = new Catalog({
+      opportunityNumber, // store the new opportunityNumber
       catalogName,
       salutation, // store salutation
       customerName,
@@ -192,6 +204,7 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
+      opportunityNumber, // <-- NEW
       catalogName,
       salutation, // <-- NEW FIELD
       customerName,
@@ -205,12 +218,24 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       priceRange,
     } = req.body;
 
+    // Validate the opportunityNumber (if provided)
+    if (opportunityNumber) {
+      const validOpp = await Opportunity.findOne({ opportunityCode: opportunityNumber }).lean();
+      if (!validOpp) {
+        return res.status(400).json({ message: "Invalid opportunity number" });
+      }
+    }
+
     const catalog = await Catalog.findById(req.params.id);
     if (!catalog) {
       return res.status(404).json({ message: "Catalog not found" });
     }
 
+    // Before updating, store old state for logging
+    const oldCatalog = catalog.toObject();
+
     // Update basic fields
+    catalog.opportunityNumber = opportunityNumber || "";
     catalog.catalogName = catalogName;
     catalog.salutation = salutation;
     catalog.customerName = customerName;
@@ -224,7 +249,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // Merge product updates
     const updatedProducts = [];
-    for (let p of products) {
+    for (let p of products || []) {
       if (p._id && p._id !== "undefined") {
         const existingProduct = catalog.products.id(p._id);
         if (existingProduct) {
@@ -256,6 +281,8 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     catalog.products = updatedProducts;
 
     const updatedCatalog = await catalog.save();
+    await createLog("update", oldCatalog, updatedCatalog, req.user, req.ip);
+
     res.json({ message: "Catalog updated", catalog: updatedCatalog });
   } catch (error) {
     console.error("Error updating catalog:", error);
