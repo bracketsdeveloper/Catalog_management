@@ -9,9 +9,11 @@ import FilterPanel from "../components/manageopportunities/FilterPanel";
 import OpportunityTable from "../components/manageopportunities/OpportunityTable";
 import KanbanView from "../components/manageopportunities/KanbanView";
 
+// ADDED FOR EXCEL EXPORT
+import * as XLSX from "xlsx";
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-// Helper functions
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
   return { Authorization: `Bearer ${token}` };
@@ -25,11 +27,52 @@ function formatClosureDate(dateStr) {
 
 function getDotColor(action) {
   switch (action) {
-    case "create": return "bg-green-500";
-    case "update": return "bg-orange-500";
-    case "delete": return "bg-red-500";
-    default: return "bg-gray-500";
+    case "create":
+      return "bg-green-500";
+    case "update":
+      return "bg-orange-500";
+    case "delete":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
   }
+}
+
+// ADDED FOR EXCEL EXPORT
+function exportToExcel(data, fileName = "OpportunitiesData.xlsx") {
+  // Convert each Opportunity into a flat JSON object you want in your spreadsheet
+  const exportData = data.map((opportunity) => ({
+    opportunityCode: opportunity.opportunityCode,
+    opportunityName: opportunity.opportunityName,
+    account: opportunity.account,
+    contact: opportunity.contact,
+    opportunityType: opportunity.opportunityType,
+    opportunityStage: opportunity.opportunityStage,
+    opportunityStatus: opportunity.opportunityStatus,
+    opportunityDetail: opportunity.opportunityDetail,
+    opportunityValue: opportunity.opportunityValue,
+    currency: opportunity.currency,
+    leadSource: opportunity.leadSource,
+    closureDate: formatClosureDate(opportunity.closureDate),
+    closureProbability: opportunity.closureProbability,
+    grossProfit: opportunity.grossProfit,
+    opportunityPriority: opportunity.opportunityPriority,
+    isRecurring: opportunity.isRecurring,
+    dealRegistrationNumber: opportunity.dealRegistrationNumber,
+    freeTextField: opportunity.freeTextField,
+    opportunityOwner: opportunity.opportunityOwner,
+    isActive: opportunity.isActive,
+    createdBy: opportunity.createdBy,
+    createdAt: opportunity.createdAt,
+    // ...Add or remove fields as needed.
+    // e.g. you could also include "products", "contacts", etc.
+    // but those might be nested arrays you’d flatten or stringified
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Opportunities");
+  XLSX.writeFile(workbook, fileName);
 }
 
 export default function ManageOpportunity() {
@@ -37,13 +80,13 @@ export default function ManageOpportunity() {
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin ? "all-opportunities" : "my-opportunities"
   );
-  
+
   const [opportunities, setOpportunities] = useState({
     my: [],
     team: [],
-    all: []
+    all: [],
   });
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [filterCriteria, setFilterCriteria] = useState({
@@ -52,12 +95,12 @@ export default function ManageOpportunity() {
     closureToDate: "",
     createdFilter: "All",
   });
-  
+
   const [viewMode, setViewMode] = useState("list");
   const [logs, setLogs] = useState({
     show: false,
     data: [],
-    loading: false
+    loading: false,
   });
 
   const stages = [
@@ -75,30 +118,29 @@ export default function ManageOpportunity() {
       try {
         const requests = [
           axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=my`, {
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
           }),
           axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=team`, {
-            headers: getAuthHeaders()
-          })
+            headers: getAuthHeaders(),
+          }),
         ];
 
         if (isSuperAdmin) {
           requests.push(
             axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
-              headers: getAuthHeaders()
+              headers: getAuthHeaders(),
             })
           );
         }
 
         const [myRes, teamRes, allRes] = await Promise.all(requests);
 
-        setOpportunities(prev => ({
+        setOpportunities((prev) => ({
           ...prev,
           my: myRes.data || [],
           team: teamRes.data || [],
-          all: isSuperAdmin ? (allRes?.data || []) : []
+          all: isSuperAdmin ? allRes?.data || [] : [],
         }));
-
       } catch (error) {
         console.error("Error fetching opportunities:", error);
       }
@@ -110,68 +152,82 @@ export default function ManageOpportunity() {
   // Fetch logs when dropdown is shown
   const fetchAllLogs = async () => {
     try {
-      setLogs(prev => ({ ...prev, loading: true }));
+      setLogs((prev) => ({ ...prev, loading: true }));
       const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities/logs`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
       });
-      setLogs(prev => ({ ...prev, data: res.data.logs || [] }));
+      setLogs((prev) => ({ ...prev, data: res.data.logs || [] }));
     } catch (error) {
       console.error("Error fetching logs:", error);
     } finally {
-      setLogs(prev => ({ ...prev, loading: false }));
+      setLogs((prev) => ({ ...prev, loading: false }));
     }
   };
 
   const handleLogsToggle = (show) => {
-    setLogs(prev => ({ ...prev, show }));
+    setLogs((prev) => ({ ...prev, show }));
     if (show) fetchAllLogs();
   };
 
-  // Get data based on active tab
   const getActiveData = () => {
     switch (activeTab) {
-      case "my-opportunities": return opportunities.my;
-      case "team-opportunities": return opportunities.team;
-      case "all-opportunities": return opportunities.all;
-      default: return [];
+      case "my-opportunities":
+        return opportunities.my;
+      case "team-opportunities":
+        return opportunities.team;
+      case "all-opportunities":
+        return opportunities.all;
+      default:
+        return [];
     }
   };
 
-  // Apply all filters to the data
+  // Filter the data based on search and filterCriteria
   const getFilteredData = () => {
     let data = [...getActiveData()];
     const lowerTerm = searchTerm.toLowerCase();
 
     // Search filter
     if (searchTerm) {
-      data = data.filter(op => {
+      data = data.filter((op) => {
         const searchFields = [
           op.opportunityCode,
           op.account,
           op.opportunityName,
           op.opportunityStage,
-        ].filter(Boolean).join(" ").toLowerCase();
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         return searchFields.includes(lowerTerm);
       });
     }
 
     // Stage filter
-    if (filterCriteria.opportunityStage && filterCriteria.opportunityStage !== "All") {
-      data = data.filter(op => op.opportunityStage === filterCriteria.opportunityStage);
+    if (
+      filterCriteria.opportunityStage &&
+      filterCriteria.opportunityStage !== "All"
+    ) {
+      data = data.filter(
+        (op) => op.opportunityStage === filterCriteria.opportunityStage
+      );
     }
 
     // Date range filter
     if (filterCriteria.closureFromDate) {
       const fromDate = new Date(filterCriteria.closureFromDate);
-      data = data.filter(op => new Date(op.closureDate) >= fromDate);
+      data = data.filter((op) => new Date(op.closureDate) >= fromDate);
     }
     if (filterCriteria.closureToDate) {
       const toDate = new Date(filterCriteria.closureToDate);
-      data = data.filter(op => new Date(op.closureDate) <= toDate);
+      data = data.filter((op) => new Date(op.closureDate) <= toDate);
     }
 
     // Created time period filter
-    if (filterCriteria.createdFilter && filterCriteria.createdFilter !== "All") {
+    if (
+      filterCriteria.createdFilter &&
+      filterCriteria.createdFilter !== "All"
+    ) {
       const now = new Date();
       let start, end;
 
@@ -187,6 +243,7 @@ export default function ManageOpportunity() {
           start.setDate(start.getDate() - 1);
           break;
         case "This Week":
+          // Start from Sunday
           start = new Date(now.setDate(now.getDate() - now.getDay()));
           start.setHours(0, 0, 0, 0);
           end = new Date(start);
@@ -219,7 +276,7 @@ export default function ManageOpportunity() {
       }
 
       if (start && end) {
-        data = data.filter(op => {
+        data = data.filter((op) => {
           const created = new Date(op.createdAt);
           return created >= start && created < end;
         });
@@ -242,11 +299,11 @@ export default function ManageOpportunity() {
       );
 
       // Optimistic UI update
-      setOpportunities(prev => {
+      setOpportunities((prev) => {
         const updated = { ...prev };
-        Object.keys(updated).forEach(key => {
-          updated[key] = updated[key].map(op => 
-            op._id === draggableId 
+        Object.keys(updated).forEach((key) => {
+          updated[key] = updated[key].map((op) =>
+            op._id === draggableId
               ? { ...op, opportunityStage: destination.droppableId }
               : op
           );
@@ -258,6 +315,9 @@ export default function ManageOpportunity() {
     }
   };
 
+  // -------------------------------------
+  // RENDER
+  // -------------------------------------
   return (
     <div className="min-h-screen bg-white text-gray-800 p-4">
       <Breadcrumb />
@@ -272,16 +332,16 @@ export default function ManageOpportunity() {
         <div className="flex items-center space-x-2">
           {/* Logs dropdown */}
           <div className="relative">
-            <button 
+            <button
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
               onMouseEnter={() => handleLogsToggle(true)}
               onMouseLeave={() => handleLogsToggle(false)}
             >
               Logs
             </button>
-            
+
             {logs.show && (
-              <div 
+              <div
                 className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border border-gray-300 rounded shadow-md z-50 p-2"
                 onMouseEnter={() => handleLogsToggle(true)}
                 onMouseLeave={() => handleLogsToggle(false)}
@@ -292,16 +352,28 @@ export default function ManageOpportunity() {
                   </div>
                 ) : logs.data.length > 0 ? (
                   logs.data.map((log, idx) => (
-                    <div key={idx} className="p-2 mb-2 border-b last:border-b-0 text-sm text-gray-700">
+                    <div
+                      key={idx}
+                      className="p-2 mb-2 border-b last:border-b-0 text-sm text-gray-700"
+                    >
                       <div className="flex items-center space-x-2">
-                        <span className={`inline-block w-2 h-2 rounded-full ${getDotColor(log.action)}`}></span>
-                        <span className="font-semibold capitalize">{log.action}</span>
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${getDotColor(
+                            log.action
+                          )}`}
+                        ></span>
+                        <span className="font-semibold capitalize">
+                          {log.action}
+                        </span>
                         {log.field && (
-                          <span className="text-xs text-gray-400 ml-2">{log.field}</span>
+                          <span className="text-xs text-gray-400 ml-2">
+                            {log.field}
+                          </span>
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {new Date(log.performedAt).toLocaleString()} | Opportunity: {log.opportunityName || "N/A"}
+                        {new Date(log.performedAt).toLocaleString()} |{" "}
+                        Opportunity: {log.opportunityName || "N/A"}
                       </div>
                       {log.oldValue !== undefined && (
                         <div className="mt-1 text-xs">
@@ -316,14 +388,16 @@ export default function ManageOpportunity() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-gray-500 py-2">No logs found</div>
+                  <div className="text-center text-gray-500 py-2">
+                    No logs found
+                  </div>
                 )}
               </div>
             )}
           </div>
 
           <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-          
+
           <button
             onClick={() => setShowFilter(!showFilter)}
             className="border border-gray-300 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-gray-100"
@@ -332,6 +406,14 @@ export default function ManageOpportunity() {
           </button>
 
           <ToggleButtons viewMode={viewMode} setViewMode={setViewMode} />
+
+          {/* ADDED FOR EXCEL EXPORT */}
+          <button
+            onClick={() => exportToExcel(getFilteredData())}
+            className="border border-green-500 text-green-700 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-green-50"
+          >
+            Export to Excel
+          </button>
 
           <Link
             to="/admin-dashboard/create-opportunity"
@@ -356,7 +438,7 @@ export default function ManageOpportunity() {
           filterCriteria={filterCriteria}
           handleFilterChange={(e) => {
             const { name, value } = e.target;
-            setFilterCriteria(prev => ({ ...prev, [name]: value }));
+            setFilterCriteria((prev) => ({ ...prev, [name]: value }));
           }}
           setShowFilter={setShowFilter}
           stages={stages}
@@ -365,10 +447,7 @@ export default function ManageOpportunity() {
 
       <div className="border-t border-gray-300 mt-4">
         {viewMode === "list" ? (
-          <OpportunityTable 
-            data={getFilteredData()} 
-            formatClosureDate={formatClosureDate} 
-          />
+          <OpportunityTable data={getFilteredData()} formatClosureDate={formatClosureDate} />
         ) : (
           <KanbanView
             data={getFilteredData()}
