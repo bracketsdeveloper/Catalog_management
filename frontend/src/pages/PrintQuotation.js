@@ -166,7 +166,8 @@ export default function PrintQuotation() {
       {/* Customer Info */}
       <div className="mt-4">
         <div className="text-base font-bold">
-          {editableQuotation.customerName}
+          {/* Salutation plus customer name here */}
+          {editableQuotation.salutation} {editableQuotation.customerName}
         </div>
         <div className="text-xs">{editableQuotation.customerCompany}</div>
         <div className="text-xs">{editableQuotation.customerAddress}</div>
@@ -193,8 +194,6 @@ export default function PrintQuotation() {
               <th className="border px-1 py-1">Sl. No.</th>
               <th className="border px-1 py-1">Image</th>
               <th className="border px-1 py-1">Product</th>
-              {/* HSN column */}
-              {/* <th className="border px-1 py-1">HSN</th> */}
               <th className="border px-1 py-1">Quantity</th>
               <th className="border px-1 py-1 text-right">Rate</th>
               <th className="border px-1 py-1 text-right">Amount</th>
@@ -214,12 +213,6 @@ export default function PrintQuotation() {
               const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
               const total = amount + gstAmt;
 
-              // HSN code
-              const hsnCode =
-                (item.productId && item.productId.hsnCode) ||
-                item.hsnCode ||
-                "N/A";
-
               const imageUrl = getImageUrl(item);
 
               return (
@@ -238,7 +231,6 @@ export default function PrintQuotation() {
                     )}
                   </td>
                   <td className="border px-1 py-1">{item.product}</td>
-                  {/* <td className="border px-1 py-1 text-center">{hsnCode}</td> */}
                   <td className="border px-1 py-1 text-center">{qty}</td>
                   <td className="border px-1 py-1 text-right">
                     ₹{rate.toFixed(2)}
@@ -246,9 +238,7 @@ export default function PrintQuotation() {
                   <td className="border px-1 py-1 text-right">
                     ₹{amount.toFixed(2)}
                   </td>
-                  <td className="border px-1 py-1 text-right">
-                    {gstPercent}%
-                  </td>
+                  <td className="border px-1 py-1 text-right">{gstPercent}%</td>
                   <td className="border px-1 py-1 text-right">
                     ₹{total.toFixed(2)}
                   </td>
@@ -273,7 +263,7 @@ export default function PrintQuotation() {
 
       {/* Additional Info, Terms, etc. */}
       <div className="mt-4 border-t pt-2">
-      <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
+        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
           Product subject to availability at the time of order confirmation
         </div>
         {editableQuotation.terms &&
@@ -284,7 +274,7 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-        
+
         <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mb-2">
           Rates may vary in case there is a change in specifications / quantity / timelines
         </div>
@@ -353,7 +343,6 @@ export function computedTotal(quotation) {
     const baseRate = parseFloat(item.rate) || 0;
     const quantity = parseFloat(item.quantity) || 0;
     const amount = baseRate * marginFactor * quantity;
-
     const gstPercent = parseFloat(item.productGST) || 0;
     const gstVal = parseFloat((amount * (gstPercent / 100)).toFixed(2));
     sum += amount + gstVal;

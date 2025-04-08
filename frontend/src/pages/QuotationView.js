@@ -83,8 +83,10 @@ export default function QuotationView() {
     try {
       const token = localStorage.getItem("token");
       const updatedMargin = parseFloat(editableQuotation.margin) || 0;
+      // Destructure salutation (new), plus the other existing fields
       const {
         catalogName,
+        salutation,
         customerName,
         customerEmail,
         customerCompany,
@@ -93,9 +95,10 @@ export default function QuotationView() {
         terms,
         displayTotals, // This field controls totals display
       } = editableQuotation;
-      
+
       const body = {
         catalogName,
+        salutation, // Include salutation in the payload
         customerName,
         customerEmail,
         customerCompany,
@@ -103,13 +106,15 @@ export default function QuotationView() {
         margin: updatedMargin,
         items,
         terms,
-        displayTotals, // Include displayTotals in the payload
+        displayTotals,
       };
 
       console.log("Before saving, updated quotation data:", body);
       body.items.forEach((it, idx) => {
         const effRate = it.rate * (1 + updatedMargin / 100);
-        console.log(`Item ${idx}: base rate = ${it.rate}, effective rate = ${effRate.toFixed(2)}`);
+        console.log(
+          `Item ${idx}: base rate = ${it.rate}, effective rate = ${effRate.toFixed(2)}`
+        );
       });
 
       const res = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
@@ -134,6 +139,7 @@ export default function QuotationView() {
   }
 
   function handleHeaderBlur(field, e) {
+    // Use e.target.innerText to get the text from contentEditable
     setEditableQuotation((prev) => ({
       ...prev,
       [field]: e.target.innerText,
@@ -144,7 +150,6 @@ export default function QuotationView() {
     setEditableQuotation((prev) => {
       const newItems = [...prev.items];
       newItems[index] = { ...newItems[index], [field]: newValue };
-      console.log(`After update, items:`, newItems);
       return { ...prev, items: newItems };
     });
   }
@@ -208,7 +213,6 @@ export default function QuotationView() {
       const baseRate = parseFloat(item.rate) || 0;
       const margin = parseFloat(quotation.margin) || 0;
       const marginFactor = 1 + margin / 100;
-      console.log(`Computed: rate=${baseRate}, quantity=${quantity}, marginFactor=${marginFactor}`);
       sum += baseRate * marginFactor * quantity;
     });
     return sum;
@@ -276,8 +280,15 @@ export default function QuotationView() {
 
       {/* Editable Header Fields */}
       <div className="mb-4 space-y-2 text-xs">
+        {/* Display the salutation before the customer name */}
         <div>
-          Mr./Ms.{" "}
+          <span
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={(e) => handleHeaderBlur("salutation", e)}
+          >
+            {editableQuotation.salutation || "Mr."}
+          </span>{" "}
           <span
             contentEditable
             suppressContentEditableWarning
@@ -397,7 +408,9 @@ export default function QuotationView() {
             const marginFactor = 1 + margin / 100;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
-            const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+            const gstVal = parseFloat(
+              (amount * (parseFloat(item.productGST) / 100)).toFixed(2)
+            );
             const total = parseFloat((amount + gstVal).toFixed(2));
             const imageUrl =
               item.image ||
@@ -406,16 +419,23 @@ export default function QuotationView() {
                 item.productId.images.length > 0
                 ? item.productId.images[0]
                 : "https://via.placeholder.com/150");
-            // HSN Code: try to get from the populated productId, or fallback to item.hsnCode
-            const hsnCode = (item.productId && item.productId.hsnCode) || item.hsnCode || "N/A";
 
-            console.log(`Rendering item ${index}: rate=${baseRate}, quantity=${quantity}, margin=${margin}, marginFactor=${marginFactor}`);
+            // HSN Code: try to get from the populated productId, or fallback to item.hsnCode
+            const hsnCode =
+              (item.productId && item.productId.hsnCode) ||
+              item.hsnCode ||
+              "N/A";
+
             return (
               <tr key={index} className="border-b">
                 <td className="p-2">{item.slNo}</td>
                 <td className="p-2">
                   {imageUrl !== "https://via.placeholder.com/150" ? (
-                    <img src={imageUrl} alt={item.product} className="w-16 h-16 object-cover" />
+                    <img
+                      src={imageUrl}
+                      alt={item.product}
+                      className="w-16 h-16 object-cover"
+                    />
                   ) : (
                     "No Image"
                   )}
@@ -445,7 +465,6 @@ export default function QuotationView() {
                       const newEffRate = parseFloat(newVal);
                       if (!isNaN(newEffRate)) {
                         const newBaseRate = newEffRate / marginFactor;
-                        console.log(`Editing item ${index}: new effective rate=${newEffRate}, new base rate=${newBaseRate.toFixed(2)}`);
                         updateItemField(index, "rate", parseFloat(newBaseRate.toFixed(2)));
                         updateItemField(index, "productprice", parseFloat(newBaseRate.toFixed(2)));
                       }
@@ -462,7 +481,8 @@ export default function QuotationView() {
                         updateItemField(index, "productGST", newGST);
                       }
                     }}
-                  />%
+                  />
+                  %
                 </td>
                 <td className="p-2">{total.toFixed(2)}</td>
                 <td className="p-2">
@@ -527,8 +547,19 @@ function EditableField({ value, onSave }) {
     <div className="flex items-center">
       <span>{currentValue}</span>
       <button onClick={handleIconClick} className="ml-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
+          />
         </svg>
       </button>
     </div>
@@ -542,7 +573,6 @@ function computedAmount(quotation) {
     const baseRate = parseFloat(item.rate) || 0;
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
-    console.log(`Computed: rate=${baseRate}, quantity=${quantity}, marginFactor=${marginFactor}`);
     sum += baseRate * marginFactor * quantity;
   });
   return sum;

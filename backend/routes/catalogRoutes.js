@@ -19,7 +19,7 @@ async function createLog(action, oldValue, newValue, user, ip) {
       newValue,
       performedBy: user ? user._id : null,
       performedAt: new Date(),
-      ipAddress: ip
+      ipAddress: ip,
     });
   } catch (error) {
     console.error("Error creating catalog log:", error);
@@ -43,6 +43,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       catalogName,
+      salutation, // <-- NEW FIELD
       customerName,
       customerEmail,
       customerCompany,
@@ -50,7 +51,8 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       products,
       fieldsToDisplay,
       priceRange,
-      margin
+      margin,
+      gst,
     } = req.body;
 
     const newProducts = [];
@@ -60,34 +62,30 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
         console.warn(`Product not found: ${p.productId}`);
         continue;
       }
-      // Use user-provided values if available, otherwise fall back to product defaults.
       newProducts.push({
         productId: p.productId,
         productName: p.productName || productDoc.productName || productDoc.name,
         ProductDescription:
           p.ProductDescription !== undefined
             ? p.ProductDescription
-            : (productDoc.productDetails || ""),
+            : productDoc.productDetails || "",
         ProductBrand:
           p.ProductBrand !== undefined
             ? p.ProductBrand
-            : (productDoc.brandName || ""),
+            : productDoc.brandName || "",
         color: p.color || "",
         size: p.size || "",
         quantity: p.quantity !== undefined ? p.quantity : 1,
         productCost:
-          p.productCost !== undefined
-            ? p.productCost
-            : (productDoc.productCost || 0),
+          p.productCost !== undefined ? p.productCost : productDoc.productCost || 0,
         productGST:
-          p.productGST !== undefined
-            ? p.productGST
-            : (productDoc.productGST || 0)
+          p.productGST !== undefined ? p.productGST : productDoc.productGST || 0,
       });
     }
 
     const newCatalog = new Catalog({
       catalogName,
+      salutation, // store salutation
       customerName,
       customerEmail,
       customerCompany,
@@ -95,13 +93,12 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       products: newProducts,
       fieldsToDisplay: fieldsToDisplay || [],
       margin,
+      gst: gst || 18,
       priceRange,
-      createdBy: req.user ? req.user.email : ""
+      createdBy: req.user ? req.user.email : "",
     });
 
     await newCatalog.save();
-
-    // Log if needed
     await createLog("create", null, newCatalog, req.user, req.ip);
 
     res.status(201).json({ message: "Catalog created", catalog: newCatalog });
@@ -150,7 +147,6 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
     }
 
     backtrack(0, [], 0);
-
     res.json(bestSubset);
   } catch (error) {
     console.error("Error AI generating catalog (sum-based):", error);
@@ -183,8 +179,6 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
     }
 
     const deletedCatalog = await Catalog.findByIdAndDelete(req.params.id);
-
-    // Create 'delete' log
     await createLog("delete", catalogToDelete, null, req.user, req.ip);
 
     res.json({ message: "Catalog deleted" });
@@ -199,6 +193,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       catalogName,
+      salutation, // <-- NEW FIELD
       customerName,
       customerEmail,
       customerCompany,
@@ -217,23 +212,22 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // Update basic fields
     catalog.catalogName = catalogName;
+    catalog.salutation = salutation;
     catalog.customerName = customerName;
     catalog.customerEmail = customerEmail;
     catalog.customerCompany = customerCompany;
     catalog.customerAddress = customerAddress;
     catalog.fieldsToDisplay = fieldsToDisplay || [];
     catalog.margin = margin;
-    catalog.priceRange = priceRange;
     catalog.gst = gst || 18;
+    catalog.priceRange = priceRange;
 
-    // Merge product updates: update existing subdocuments and add new ones
+    // Merge product updates
     const updatedProducts = [];
     for (let p of products) {
-      // Check if _id is present and valid (not the string "undefined")
       if (p._id && p._id !== "undefined") {
         const existingProduct = catalog.products.id(p._id);
         if (existingProduct) {
-          // Update only the fields that changed
           existingProduct.color = p.color || existingProduct.color;
           existingProduct.size = p.size || existingProduct.size;
           existingProduct.quantity = p.quantity || existingProduct.quantity;
@@ -241,18 +235,21 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
             p.productCost !== undefined ? p.productCost : existingProduct.productCost;
           existingProduct.productGST =
             p.productGST !== undefined ? p.productGST : existingProduct.productGST;
-          // Update the new fields as well:
           existingProduct.ProductDescription =
-            p.ProductDescription !== undefined ? p.ProductDescription : existingProduct.ProductDescription;
+            p.ProductDescription !== undefined
+              ? p.ProductDescription
+              : existingProduct.ProductDescription;
           existingProduct.ProductBrand =
-            p.ProductBrand !== undefined ? p.ProductBrand : existingProduct.ProductBrand;
+            p.ProductBrand !== undefined
+              ? p.ProductBrand
+              : existingProduct.ProductBrand;
           updatedProducts.push(existingProduct);
         } else {
-          // No matching subdocument found; add as new
+          // No matching subdoc found; add as new
           updatedProducts.push(p);
         }
       } else {
-        // p._id is missing or "undefined": treat as new
+        // Treat as new
         updatedProducts.push(p);
       }
     }
@@ -280,7 +277,6 @@ router.put("/catalogs/:id/approve", authenticate, authorizeAdmin, async (req, re
       { new: true }
     );
 
-    // Log the approval if desired
     await createLog("update", existingCatalog, updatedCatalog, req.user, req.ip);
 
     res.json({ message: "Catalog approved", catalog: updatedCatalog });
@@ -305,7 +301,6 @@ router.put("/catalogs/:id/remarks", authenticate, authorizeAdmin, async (req, re
       { new: true }
     );
 
-    // Log remarks update if needed
     await createLog("update", existingCatalog, updatedCatalog, req.user, req.ip);
 
     res.json({ message: "Remarks updated", catalog: updatedCatalog });

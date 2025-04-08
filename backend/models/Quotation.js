@@ -22,6 +22,10 @@ const remarkSchema = new mongoose.Schema({
 const quotationSchema = new mongoose.Schema({
   quotationNumber: { type: String, unique: true },
   catalogName: { type: String },
+
+  // NEW: Salutation field
+  salutation: { type: String, default: "Mr." },
+
   customerName: { type: String, required: true },
   customerEmail: { type: String },
   customerCompany: { type: String },
@@ -32,7 +36,7 @@ const quotationSchema = new mongoose.Schema({
   items: [quotationItemSchema],
   totalAmount: { type: Number, default: 0 },
   grandTotal: { type: Number, default: 0 },
-  displayTotals: { type: Boolean, default: false },  // NEW field
+  displayTotals: { type: Boolean, default: false },  // Field to conditionally display totals
   createdBy: { type: String },
   createdAt: { type: Date, default: Date.now },
   terms: [
@@ -43,9 +47,11 @@ const quotationSchema = new mongoose.Schema({
   ]
 });
 
+// Auto-generate a sequential quotationNumber
 quotationSchema.pre("save", async function (next) {
   if (this.isNew && !this.quotationNumber) {
     try {
+      // Ensure the counter starts at 9000 if not already
       await Counter.findOneAndUpdate(
         { id: "quotationNumber", seq: { $lt: 9000 } },
         { $set: { seq: 9000 } },

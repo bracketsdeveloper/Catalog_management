@@ -18,12 +18,7 @@ import {
 } from "../components/CatalogManagement/exportUtils";
 import {
   groupItemsByDate,
-  groupQuotationsByTimePeriod,
-  isToday as isTodayFn,
-  isYesterday as isYesterdayFn,
-  isThisWeek as isThisWeekFn,
-  isThisMonth,
-  isThisYear
+  groupQuotationsByTimePeriod
 } from "../components/CatalogManagement/dateUtils";
 
 import { fieldMapping, templateConfig } from "../components/CatalogManagement/constants";
@@ -54,14 +49,13 @@ export default function CatalogManagementPage() {
   const [toDateFilter, setToDateFilter] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
 
-  // For "create catalog" dropdown (old version for Create Catalog button)
+  // For "create catalog" dropdown
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // New state: track which catalog’s three dots dropdown is open.
+  // Track which catalog’s three-dots dropdown is open
   const [openDropdownForCatalog, setOpenDropdownForCatalog] = useState(null);
   const [selectedCatalogForDropdown, setSelectedCatalogForDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  // Use a ref for the button that triggers the dropdown.
   const dropdownButtonRef = useRef(null);
 
   // Remarks modal states
@@ -101,7 +95,7 @@ export default function CatalogManagementPage() {
     function updatePosition() {
       if (!dropdownButtonRef.current) return;
       const rect = dropdownButtonRef.current.getBoundingClientRect();
-      // Assume an approximate dropdown height of 200px
+      // Approximate dropdown height
       const dropdownHeight = 200;
       let top;
       if (window.innerHeight - rect.bottom < dropdownHeight) {
@@ -124,7 +118,7 @@ export default function CatalogManagementPage() {
     };
   }, []);
 
-  // -------------- LIFECYCLE --------------
+  // LIFECYCLE
   useEffect(() => {
     fetchData();
     fetchUserEmail();
@@ -236,7 +230,7 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- CATALOG DROPDOWN (Create Catalog) --------------
+  // -------------- CREATE CATALOG DROPDOWN --------------
   function handleToggleDropdown() {
     setDropdownOpen((prev) => !prev);
   }
@@ -253,8 +247,7 @@ export default function CatalogManagementPage() {
 
   // -------------- DELETES --------------
   async function handleDeleteCatalog(catalog) {
-    if (!window.confirm(`Are you sure you want to delete "${catalog.catalogName}"?`))
-      return;
+    if (!window.confirm(`Are you sure you want to delete "${catalog.catalogName}"?`)) return;
     try {
       const token = localStorage.getItem("token");
       await axios.delete(`${BACKEND_URL}/api/admin/catalogs/${catalog._id}`, {
@@ -269,8 +262,7 @@ export default function CatalogManagementPage() {
   }
 
   async function handleDeleteQuotation(quotation) {
-    if (!window.confirm(`Are you sure you want to delete Quotation ${quotation.quotationNumber}?`))
-      return;
+    if (!window.confirm(`Are you sure you want to delete Quotation ${quotation.quotationNumber}?`)) return;
     try {
       const token = localStorage.getItem("token");
       await axios.delete(`${BACKEND_URL}/api/admin/quotations/${quotation._id}`, {
@@ -292,9 +284,12 @@ export default function CatalogManagementPage() {
   async function handleCreateQuotationFromCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
+      // Build a new object for the Quotation
       const newQuotationData = {
         catalogNumber: catalog.catalogNumber,
         catalogName: catalog.catalogName,
+        // Include salutation from the catalog
+        salutation: catalog.salutation || "Mr.",  // <-- ADDED
         customerName: catalog.customerName,
         customerEmail: catalog.customerEmail,
         customerCompany: catalog.customerCompany,
@@ -473,7 +468,7 @@ export default function CatalogManagementPage() {
       const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
       const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
 
-      // Adjusted right text section: start at x=600 with a wider maxWidth.
+      // Combine the second PDF for each product
       for (let i = 0; i < (catalog.products || []).length; i++) {
         const sub = catalog.products[i];
         const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
@@ -521,7 +516,7 @@ export default function CatalogManagementPage() {
             color: rgb(0.5, 0.5, 0.5),
           });
         }
-        let xText = 1000; // Updated from 1000 to 600 for more width
+        let xText = 1000;
         let yText = height - 200;
         const lineHeight = 44;
         page.drawText(prod.name || sub.productName || "", {
@@ -675,13 +670,12 @@ export default function CatalogManagementPage() {
       });
   }
 
-  // ------------------ NEW: Three Dots Dropdown via Portal ------------------
+  // -------------- Three Dots Dropdown for Catalog --------------
   function toggleCatalogDropdown(id, e) {
     e.stopPropagation();
-    // Save the button element using the ref
     dropdownButtonRef.current = e.currentTarget;
     const rect = e.currentTarget.getBoundingClientRect();
-    const dropdownHeight = 200; // approximate dropdown height
+    const dropdownHeight = 200;
     let top;
     if (window.innerHeight - rect.bottom < dropdownHeight) {
       top = rect.top + window.pageYOffset - dropdownHeight;
@@ -692,13 +686,10 @@ export default function CatalogManagementPage() {
       top,
       left: rect.left + window.pageXOffset,
     });
-    setSelectedCatalogForDropdown(
-      catalogs.find((cat) => cat._id === id)
-    );
+    setSelectedCatalogForDropdown(catalogs.find((cat) => cat._id === id));
     setOpenDropdownForCatalog(id === openDropdownForCatalog ? null : id);
   }
 
-  // New: Duplicate catalog – creates a new catalog with similar details and a new catalog number.
   async function handleDuplicateCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
@@ -722,6 +713,7 @@ export default function CatalogManagementPage() {
     }
   }
 
+  // -------------- SEARCH SUGGESTIONS --------------
   const getUniqueCompanyNames = () => {
     const companySet = new Set();
     catalogs.forEach((c) => {
@@ -750,6 +742,7 @@ export default function CatalogManagementPage() {
     setSuggestions([]);
   };
 
+  // -------------- RENDER HELPERS --------------
   const renderFilterButtons = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
       <div className="flex space-x-4 mb-2 sm:mb-0">
@@ -966,9 +959,6 @@ export default function CatalogManagementPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                       Customer Name
                     </th>
-                    {/* <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Email
-                    </th> */}
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                       Items
                     </th>
@@ -983,7 +973,6 @@ export default function CatalogManagementPage() {
                       <td className="px-4 py-2">{quotation.quotationNumber}</td>
                       <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
                       <td className="px-4 py-2">{quotation.customerName}</td>
-                      {/* <td className="px-4 py-2">{quotation.customerEmail}</td> */}
                       <td className="px-4 py-2">{quotation.items?.length || 0}</td>
                       <td className="px-4 py-2 space-x-2">
                         <button
@@ -1076,7 +1065,7 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* Render the catalog actions dropdown via a portal */}
+      {/* Catalog actions dropdown via a portal */}
       {openDropdownForCatalog && selectedCatalogForDropdown &&
         createPortal(
           <div
@@ -1237,8 +1226,19 @@ function EditableField({ value, onSave }) {
     <div className="flex items-center">
       <span>{currentValue}</span>
       <button onClick={handleIconClick} className="ml-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
+          />
         </svg>
       </button>
     </div>
@@ -1312,35 +1312,75 @@ function VariationEditModal({ item, onClose, onUpdate }) {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Product Name</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Cost</label>
-              <input type="number" value={productCost} onChange={(e) => setProductCost(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="number"
+                value={productCost}
+                onChange={(e) => setProductCost(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">GST (%)</label>
-              <input type="number" value={productGST} onChange={(e) => setProductGST(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="number"
+                value={productGST}
+                onChange={(e) => setProductGST(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
-              <input type="text" value={color} onChange={(e) => setColor(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="text"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
-              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="text"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Quantity</label>
-              <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Material</label>
-              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="text"
+                value={material}
+                onChange={(e) => setMaterial(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Weight</label>
-              <input type="text" value={weight} onChange={(e) => setWeight(e.target.value)} className="border border-purple-300 rounded p-2 w-full" />
+              <input
+                type="text"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="border border-purple-300 rounded p-2 w-full"
+              />
             </div>
           </div>
           <div className="mt-6 flex justify-end space-x-2">

@@ -25,6 +25,8 @@ const remarkSchema = new mongoose.Schema({
 const catalogSchema = new mongoose.Schema({
   catalogNumber: { type: Number, unique: true },
   catalogName: { type: String },
+  // NEW: Salutation field
+  salutation: { type: String, default: "Mr." },
   customerName: { type: String },
   customerEmail: { type: String },
   customerCompany: { type: String },
@@ -32,6 +34,7 @@ const catalogSchema = new mongoose.Schema({
   approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
   margin: { type: Number, default: 0 },
+  gst: { type: Number, default: 18 }, // if you want a default GST
   products: [productSubSchema],
   fieldsToDisplay: [String],
   priceRange: {
