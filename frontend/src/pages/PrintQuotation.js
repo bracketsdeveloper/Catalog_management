@@ -273,8 +273,8 @@ export default function PrintQuotation() {
 
       {/* Additional Info, Terms, etc. */}
       <div className="mt-4 border-t pt-2">
-        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mb-2">
-          Rates may vary in case there is a change in specifications / quantity / timelines
+      <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
+          Product subject to availability at the time of order confirmation
         </div>
         {editableQuotation.terms &&
           editableQuotation.terms.length > 0 &&
@@ -284,8 +284,9 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
-          Product subject to availability at the time of order confirmation
+        
+        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mb-2">
+          Rates may vary in case there is a change in specifications / quantity / timelines
         </div>
       </div>
 
