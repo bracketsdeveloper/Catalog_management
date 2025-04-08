@@ -31,7 +31,7 @@ const jobSheetSchema = new mongoose.Schema({
   deliveryType: { type: String },
   deliveryMode: { type: String },
   deliveryCharges: { type: String },
-  
+
   // Delivery addresses revert to an array of strings:
   deliveryAddress: {
     type: [String],
@@ -46,6 +46,9 @@ const jobSheetSchema = new mongoose.Schema({
   otherDetails: { type: String },
   createdBy: { type: String },
   createdAt: { type: Date, default: Date.now },
+
+  // <--- ADDED: to separate draft from production. --->
+  isDraft: { type: Boolean, default: false },
 });
 
 // Auto-increment logic with a starting sequence of 5000
@@ -73,6 +76,5 @@ jobSheetSchema.pre("save", async function (next) {
     next(error);
   }
 });
-
 
 module.exports = mongoose.model("JobSheet", jobSheetSchema);

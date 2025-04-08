@@ -1,10 +1,9 @@
-// routes/jobsheets.js
 const express = require("express");
 const router = express.Router();
 const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// Create a new job sheet
+// Create a new job sheet (POST)
 router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -23,13 +22,17 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryMode,
       deliveryCharges,
       deliveryAddress = [],
-      brandingFileName, // <-- new top-level field
+      brandingFileName,
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
       referenceQuotation,
+
+      // Optional: isDraft status (default to false if not provided)
+      isDraft = false,
     } = req.body;
 
+    // Required fields check
     if (
       !orderDate ||
       !clientCompanyName ||
@@ -43,7 +46,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
         .json({ message: "Missing required fields or no items provided" });
     }
 
-    // Filter out any empty addresses
+    // Filter out empty addresses
     const filteredAddresses = Array.isArray(deliveryAddress)
       ? deliveryAddress.filter((addr) => addr.trim() !== "")
       : [];
@@ -64,12 +67,15 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       deliveryMode,
       deliveryCharges,
       deliveryAddress: filteredAddresses,
-      brandingFileName, // store top-level branding file name
+      brandingFileName,
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
       referenceQuotation,
       createdBy: req.user.email,
+
+      // Store isDraft if passed
+      isDraft: !!isDraft,
     });
 
     await newJobSheet.save();
@@ -83,10 +89,28 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// Get all job sheets
+// GET /jobsheets
+// - Accepts optional ?draftOnly=true
+// - If draftOnly=true, return only the current user's drafts
+// - Otherwise, return production sheets (isDraft=false or missing)
 router.get("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const jobSheets = await JobSheet.find().sort({ createdAt: -1 });
+    const { draftOnly } = req.query;
+    const filter = {};
+
+    if (draftOnly === "true") {
+      // Return only isDraft = true, created by current user
+      filter.isDraft = true;
+      filter.createdBy = req.user.email;
+    } else {
+      // Return production sheets: isDraft = false or missing
+      filter.$or = [
+        { isDraft: false },
+        { isDraft: { $exists: false } }, // older docs with no field
+      ];
+    }
+
+    const jobSheets = await JobSheet.find(filter).sort({ createdAt: -1 });
     res.json(jobSheets);
   } catch (error) {
     console.error("Error fetching job sheets:", error);
@@ -94,13 +118,23 @@ router.get("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// Get a single job sheet
+// GET /jobsheets/:id
+// - If the job sheet is a draft, only the creator can view it
+// - Otherwise, it's visible to any authorized admin
 router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const jobSheet = await JobSheet.findById(req.params.id);
     if (!jobSheet) {
       return res.status(404).json({ message: "Job sheet not found" });
     }
+
+    // If this is a draft, only the creator can see it
+    if (jobSheet.isDraft === true && jobSheet.createdBy !== req.user.email) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: you are not the owner of this draft." });
+    }
+
     res.json(jobSheet);
   } catch (error) {
     console.error("Error fetching job sheet:", error);
@@ -108,7 +142,9 @@ router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// Update a job sheet
+// PUT /jobsheets/:id
+// - If isDraft is provided, store it
+// - If job sheet is a draft, only the creator can update it
 router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     // Filter out empty addresses
@@ -118,15 +154,31 @@ router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
       );
     }
 
+    // Check if isDraft is explicitly provided
+    if (typeof req.body.isDraft !== "undefined") {
+      req.body.isDraft = !!req.body.isDraft;
+    }
+
+    // First find the doc
+    const jobSheet = await JobSheet.findById(req.params.id);
+    if (!jobSheet) {
+      return res.status(404).json({ message: "Job sheet not found" });
+    }
+
+    // If it's a draft, ensure only the creator can update
+    if (jobSheet.isDraft === true && jobSheet.createdBy !== req.user.email) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: you are not the owner of this draft." });
+    }
+
+    // Now update the doc with the new data
     const updatedJobSheet = await JobSheet.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true }
     );
 
-    if (!updatedJobSheet) {
-      return res.status(404).json({ message: "Job sheet not found" });
-    }
     res.json({ message: "Job sheet updated", jobSheet: updatedJobSheet });
   } catch (error) {
     console.error("Error updating job sheet:", error);
@@ -134,13 +186,24 @@ router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// Delete a job sheet
+// DELETE /jobsheets/:id
+// - If job sheet is a draft, only the creator can delete it
 router.delete("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const deletedJobSheet = await JobSheet.findByIdAndDelete(req.params.id);
-    if (!deletedJobSheet) {
+    const jobSheet = await JobSheet.findById(req.params.id);
+    if (!jobSheet) {
       return res.status(404).json({ message: "Job sheet not found" });
     }
+
+    // If it's a draft, ensure only the creator can delete
+    if (jobSheet.isDraft === true && jobSheet.createdBy !== req.user.email) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: you are not the owner of this draft." });
+    }
+
+    await JobSheet.findByIdAndDelete(req.params.id);
+
     res.json({ message: "Job sheet deleted" });
   } catch (error) {
     console.error("Error deleting job sheet:", error);
