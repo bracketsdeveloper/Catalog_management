@@ -5,7 +5,7 @@ import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { format, parse } from "date-fns";
+import { format } from "date-fns";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -51,7 +51,7 @@ export default function JobSheetView() {
     });
   };
 
-  // Updated function to export the job sheet content to PDF in landscape orientation 
+  // Updated function to export the job sheet content to PDF in landscape orientation
   // with proper top/bottom margin and a second line (GSTIN) lower in the footer.
   const exportToPDF = () => {
     const input = document.getElementById("job-sheet-content");
@@ -72,7 +72,8 @@ export default function JobSheetView() {
 
       // Compute usable area by subtracting margins plus footer space
       const usableWidth = pageWidth - marginLeft - marginRight;
-      const usableHeight = pageHeight - marginTop - marginBottom - footerHeight;
+      const usableHeight =
+        pageHeight - marginTop - marginBottom - footerHeight;
 
       // Maintain aspect ratio
       const imgHeight = (canvas.height * usableWidth) / canvas.width;
@@ -88,12 +89,18 @@ export default function JobSheetView() {
       while (heightLeft > 0) {
         pdf.addPage();
         position = marginTop - (imgHeight - heightLeft);
-        pdf.addImage(imgData, "PNG", marginLeft, position, usableWidth, imgHeight);
+        pdf.addImage(
+          imgData,
+          "PNG",
+          marginLeft,
+          position,
+          usableWidth,
+          imgHeight
+        );
         heightLeft -= usableHeight;
       }
 
       // Footer on the last page
-      // We'll place one line, then place the GSTIN a bit lower
       pdf.setFontSize(10);
       const footerLine1Y = pageHeight - marginBottom;
       const footerLine2Y = footerLine1Y + 55; // 15pt lower than line1
@@ -135,10 +142,12 @@ export default function JobSheetView() {
         style={{ width: "90%", maxWidth: "1123px" }}
       >
         {/* Top Header Row */}
-        <div className="grid grid-cols-[1fr_2fr_1fr] gap-0 ">
+        <div className="grid grid-cols-[1fr_2fr_1fr] gap-0">
           <div className="border border-black flex items-center justify-center text-left">
             <span className="font-bold uppercase">EVENT NAME:</span>{" "}
-            <span className="ml-1">{jobSheet.eventName || "N/A"}</span>
+            <span className="ml-1 font-semibold">
+              {jobSheet.eventName || "N/A"}
+            </span>
           </div>
           <div className="border border-black flex items-center justify-center">
             <span className="font-bold uppercase">ORDER FORM</span>
@@ -155,7 +164,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               ORDER FORM #:
             </span>
-            <span className="border-black p-1 w-[50%]">
+            <span className="border-black p-1 w-[50%] font-semibold">
               {jobSheet.jobSheetNumber || "N/A"}
             </span>
           </div>
@@ -163,7 +172,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               DELIVERY DATE:
             </span>
-            <span className="border-black p-1 w-[50%]">
+            <span className="border-black p-1 w-[50%] font-semibold">
               {formatDate(jobSheet.deliveryDate)}
             </span>
           </div>
@@ -171,7 +180,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               CLIENT COMPANY:
             </span>
-            <span className="border-r border-black p-2 w-[50%]">
+            <span className="border-r border-black p-2 w-[50%] font-semibold">
               {jobSheet.clientCompanyName || "N/A"}
             </span>
           </div>
@@ -180,7 +189,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               REF QUOTATION:
             </span>
-            <span className="border-black p-1 w-[50%]">
+            <span className="border-black p-1 w-[50%] font-semibold">
               {jobSheet.referenceQuotation || "N/A"}
             </span>
           </div>
@@ -188,7 +197,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               DELIVERY TIME:
             </span>
-            <span className="border-black p-1 w-[50%]">
+            <span className="border-black p-1 w-[50%] font-semibold">
               {jobSheet.deliveryTime || "N/A"}
             </span>
           </div>
@@ -196,7 +205,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               CLIENT NAME:
             </span>
-            <span className="border-r border-black p-2 w-[50%]">
+            <span className="border-r border-black p-2 w-[50%] font-semibold">
               {jobSheet.clientName || "N/A"}
             </span>
           </div>
@@ -205,7 +214,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               ORDER DATE:
             </span>
-            <span className="border-black p-1 w-[50%]">
+            <span className="border-black p-1 w-[50%] font-semibold">
               {formatDate(jobSheet.orderDate)}
             </span>
           </div>
@@ -213,7 +222,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               CRM INCHARGE:
             </span>
-            <span className="border-black p-1 w-[50%]">
+            <span className="border-black p-1 w-[50%] font-semibold">
               {jobSheet.crmIncharge || "N/A"}
             </span>
           </div>
@@ -221,7 +230,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-r border-black p-2 w-[50%]">
               CONTACT:
             </span>
-            <span className="border-black p-2 w-[50%]">
+            <span className="border-black p-2 w-[50%] font-semibold">
               {jobSheet.contactNumber || "N/A"}
             </span>
           </div>
@@ -235,34 +244,50 @@ export default function JobSheetView() {
                 <th className="p-1 border border-black uppercase">SL NO.</th>
                 <th className="p-1 border border-black uppercase">PRODUCTS</th>
                 <th className="p-1 border border-black uppercase">COLOR</th>
-                <th className="p-1 border border-black uppercase">SIZE/CAPACITY</th>
+                <th className="p-1 border border-black uppercase">
+                  SIZE/CAPACITY
+                </th>
                 <th className="p-1 border border-black uppercase">QTY</th>
-                <th className="p-1 border border-black uppercase">SOURCING FROM</th>
-                <th className="p-1 border border-black uppercase">BRANDING TYPE</th>
-                <th className="p-1 border border-black uppercase">BRANDING VENDOR</th>
+                <th className="p-1 border border-black uppercase">
+                  SOURCING FROM
+                </th>
+                <th className="p-1 border border-black uppercase">
+                  BRANDING TYPE
+                </th>
+                <th className="p-1 border border-black uppercase">
+                  BRANDING VENDOR
+                </th>
                 <th className="p-1 border border-black uppercase">REMARKS</th>
               </tr>
             </thead>
             <tbody>
               {jobSheet.items.map((item, index) => (
                 <tr key={index} className="border border-black">
-                  <td className="p-1 border border-black">
+                  <td className="p-1 border border-black font-semibold">
                     {item.slNo || index + 1}
                   </td>
-                  <td className="p-1 border border-black">{item.product}</td>
-                  <td className="p-1 border border-black">{item.color}</td>
-                  <td className="p-1 border border-black">{item.size}</td>
-                  <td className="p-1 border border-black">{item.quantity}</td>
-                  <td className="p-1 border border-black">
+                  <td className="p-1 border border-black font-semibold">
+                    {item.product}
+                  </td>
+                  <td className="p-1 border border-black font-semibold">
+                    {item.color}
+                  </td>
+                  <td className="p-1 border border-black font-semibold">
+                    {item.size}
+                  </td>
+                  <td className="p-1 border border-black font-semibold">
+                    {item.quantity}
+                  </td>
+                  <td className="p-1 border border-black font-semibold">
                     {item.sourcingFrom || "N/A"}
                   </td>
-                  <td className="p-1 border border-black">
+                  <td className="p-1 border border-black font-semibold">
                     {item.brandingType || "N/A"}
                   </td>
-                  <td className="p-1 border border-black">
+                  <td className="p-1 border border-black font-semibold">
                     {item.brandingVendor || "N/A"}
                   </td>
-                  <td className="p-1 border border-black">
+                  <td className="p-1 border border-black font-semibold">
                     {item.remarks || "N/A"}
                   </td>
                 </tr>
@@ -276,32 +301,42 @@ export default function JobSheetView() {
           <div className="grid grid-cols-2 gap-0 border-b border-black">
             <div className="p-1 border border-black">
               <span className="font-bold uppercase">PO NUMBER:</span>
-              <span className="ml-1">{jobSheet.poNumber || "N/A"}</span>
+              <span className="ml-1 font-semibold">
+                {jobSheet.poNumber || "N/A"}
+              </span>
             </div>
             <div className="p-1 border border-black">
               <span className="font-bold uppercase">PO STATUS:</span>
-              <span className="ml-1">{jobSheet.poStatus || "N/A"}</span>
+              <span className="ml-1 font-semibold">
+                {jobSheet.poStatus || "N/A"}
+              </span>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-0 border-b border-black">
             <div className="p-1 border-r border-black">
               <span className="font-bold uppercase">DELIVERY TYPE:</span>
-              <span className="ml-1">{jobSheet.deliveryType || "N/A"}</span>
+              <span className="ml-1 font-semibold">
+                {jobSheet.deliveryType || "N/A"}
+              </span>
             </div>
             <div className="p-1 border-r border-black">
               <span className="font-bold uppercase">DELIVERY MODE:</span>
-              <span className="ml-1">{jobSheet.deliveryMode || "N/A"}</span>
+              <span className="ml-1 font-semibold">
+                {jobSheet.deliveryMode || "N/A"}
+              </span>
             </div>
             <div className="p-1">
               <span className="font-bold uppercase">DELIVERY CHARGES:</span>
-              <span className="ml-1">{jobSheet.deliveryCharges || "N/A"}</span>
+              <span className="ml-1 font-semibold">
+                {jobSheet.deliveryCharges || "N/A"}
+              </span>
             </div>
           </div>
           <div className="border-b border-black p-1">
             <span className="font-bold uppercase border-black border-r pr-20 p-1">
               DELIVERY ADDRESS:
             </span>
-            <span className="ml-1 border-black ">
+            <span className="ml-1 font-semibold">
               {jobSheet.deliveryAddress || "N/A"}
             </span>
           </div>
@@ -309,13 +344,15 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-black border-r pr-11 p-1">
               GIFT BOX / BAGS DETAILS:
             </span>
-            <span className="ml-1">{jobSheet.giftBoxBagsDetails || "N/A"}</span>
+            <span className="ml-1 font-semibold">
+              {jobSheet.giftBoxBagsDetails || "N/A"}
+            </span>
           </div>
           <div className="border-b border-black p-1">
             <span className="font-bold uppercase border-black border-r w-16 pr-[37px] p-1">
               PACKAGING INSTRUCTIONS:
             </span>
-            <span className="ml-1">
+            <span className="ml-1 font-semibold">
               {jobSheet.packagingInstructions || "N/A"}
             </span>
           </div>
@@ -323,7 +360,9 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-black border-r pr-[79px] p-1">
               ANY OTHER DETAILS:
             </span>
-            <span className="ml-1">{jobSheet.otherDetails || "N/A"}</span>
+            <span className="ml-1 font-semibold">
+              {jobSheet.otherDetails || "N/A"}
+            </span>
           </div>
         </div>
 
@@ -331,8 +370,8 @@ export default function JobSheetView() {
         <div className="mt-2">
           <div className="flex justify-between mb-20 px-6">
             <div className="w-1/3">
-            <span className="font-bold uppercase">QTY DISPATCHED:</span>
-            <span className="border-b border-black inline-block w-full">
+              <span className="font-bold uppercase">QTY DISPATCHED:</span>
+              <span className="border-b border-black inline-block w-full">
                 &nbsp;
               </span>
             </div>
@@ -343,7 +382,6 @@ export default function JobSheetView() {
               </span>
             </div>
             <div className="w-1/3 text-right">
-              
               <span className="font-bold uppercase">SEAL/SIGN:</span>
               <span className="border-b border-black inline-block w-full">
                 &nbsp;
