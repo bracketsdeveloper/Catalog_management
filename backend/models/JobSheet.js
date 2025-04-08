@@ -50,27 +50,29 @@ const jobSheetSchema = new mongoose.Schema({
 
 // Auto-increment logic with a starting sequence of 5000
 jobSheetSchema.pre("save", async function (next) {
-  if (this.isNew) {
-    try {
-      const updatedCounter = await Counter.findOneAndUpdate(
-        { id: "jobSheetNumber" },
-        {
-          $inc: { seq: 1 },
-          // If no doc exists, create one with seq=4999, then increment to 5000
-          $setOnInsert: { seq: 4999 },
-        },
-        { new: true, upsert: true }
-      );
+  // Only run this logic on new documents
+  if (!this.isNew) return next();
 
-      // Now updatedCounter.seq will be 5000 if newly created
-      this.jobSheetNumber = updatedCounter.seq.toString().padStart(4, "0");
-      next();
-    } catch (error) {
-      next(error);
+  try {
+    let counterDoc = await Counter.findOne({ id: "jobSheetNumber" });
+    if (!counterDoc) {
+      // If there's no counter yet, create one at 5000
+      counterDoc = new Counter({ id: "jobSheetNumber", seq: 5000 });
+      await counterDoc.save();
+    } else {
+      // Otherwise just increment the existing counter
+      counterDoc.seq += 1;
+      await counterDoc.save();
     }
-  } else {
+
+    // Now set the jobSheetNumber from the updated counter
+    this.jobSheetNumber = String(counterDoc.seq).padStart(4, "0");
     next();
+  } catch (error) {
+    console.error("Error updating job sheet number:", error);
+    next(error);
   }
 });
+
 
 module.exports = mongoose.model("JobSheet", jobSheetSchema);

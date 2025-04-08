@@ -531,7 +531,7 @@ export default function CreateManualCatalog() {
         </h1>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center space-x-2">
-            <label><b>Select Margin</b></label>
+            {/* <label><b>Select Margin</b></label>
             <select
               value={marginOption === "preset" ? selectedPresetMargin : "custom"}
               onChange={(e) => {
@@ -550,8 +550,8 @@ export default function CreateManualCatalog() {
                 <option key={m} value={m}>{m}%</option>
               ))}
               <option value="custom">Custom</option>
-            </select>
-            {marginOption === "custom" && (
+            </select> */}
+            {/* {marginOption === "custom" && (
               <input
                 type="number"
                 min="1"
@@ -567,10 +567,10 @@ export default function CreateManualCatalog() {
                 className="px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
                 style={{ width: 100 }}
               />
-            )}
+            )} */}
           </div>
           <div className="flex items-center space-x-2">
-            <label><b>Select GST</b></label>
+            {/* <label><b>Select GST</b></label>
             <select
               value={gstOption === "preset" ? selectedPresetGst : "custom"}
               onChange={(e) => {
@@ -606,7 +606,7 @@ export default function CreateManualCatalog() {
                 className="px-3 py-2 bg-white border border-purple-300 rounded text-gray-900"
                 style={{ width: 100 }}
               />
-            )}
+            )} */}
           </div>
           <button onClick={handleSaveCatalog} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
             {isEditMode ? "Update Catalog" : "Create Catalog"}
