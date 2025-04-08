@@ -79,62 +79,47 @@ export default function ManageJobSheets() {
     return companyMatch && eventMatch && refMatch && dateMatch;
   });
 
-  const exportToExcel = () => {
-    const exportData = [];
-    let serial = 1;
+  // ...
+const exportToExcel = () => {
+  const exportData = [];
+  let serial = 1;
 
-    filteredJobSheets.forEach((js) => {
-      const deliveryDateFormatted =
-        js.deliveryDate && isValidDate(new Date(js.deliveryDate))
-          ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
-          : "Invalid date";
+  filteredJobSheets.forEach((js) => {
+    // Format the 'Created At' date
+    const createdAtFormatted =
+      js.createdAt && isValidDate(new Date(js.createdAt))
+        ? format(new Date(js.createdAt), "dd/MM/yyyy")
+        : "Invalid date";
 
-      if (js.items && js.items.length > 0) {
-        js.items.forEach((item) => {
-          exportData.push({
-            "Sl. No": serial++,
-            "Job Sheet Number": js.jobSheetNumber || "",
-            "Opportunity Name": js.eventName || "",
-            "Client Name": js.clientName || "",
-            "Client Delivery Date": deliveryDateFormatted,
-            "CRM": js.crmIncharge || "",
-            "Material Particulars": item.product || "",
-            "Quantity": item.quantity || "",
-            "Sourcing Vendor": item.sourcingFrom || "",
-            "Sourcing Vendor Contact": "",
-            "Product Follow Up": "",
-            "Product Expected @ Ace": "",
-            "Product Procured By": "",
-            "Branding Target Date": "",
-            "Branding Vendor": item.brandingVendor || "",
-            "Branding Type": item.brandingType || "",
-            "Branding Vendor Contact": "",
-            "Delivery Status": "",
-            "QC Done By": "",
-            "Delivered By": "",
-            "Delivered On": "",
-            "PO Status": js.poStatus || "",
-            "Invoice Submission": ""
-          });
-        });
-      } else {
+    // Format the delivery date
+    const deliveryDateFormatted =
+      js.deliveryDate && isValidDate(new Date(js.deliveryDate))
+        ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
+        : "Invalid date";
+
+    // If the job sheet has items, create one row per item
+    if (js.items && js.items.length > 0) {
+      js.items.forEach((item) => {
         exportData.push({
           "Sl. No": serial++,
+          "Created At": createdAtFormatted,                 // NEW COLUMN
+          "Quotation Number": js.referenceQuotation || "",  // NEW COLUMN
           "Job Sheet Number": js.jobSheetNumber || "",
           "Opportunity Name": js.eventName || "",
+          "Client Company Name": js.clientCompanyName || "",// NEW COLUMN
           "Client Name": js.clientName || "",
           "Client Delivery Date": deliveryDateFormatted,
           "CRM": js.crmIncharge || "",
-          "Material Particulars": "",
-          "Quantity": "",
-          "Sourcing Vendor": "",
+          "Material Particulars": item.product || "",
+          "Quantity": item.quantity || "",
+          "Sourcing Vendor": item.sourcingFrom || "",
           "Sourcing Vendor Contact": "",
           "Product Follow Up": "",
           "Product Expected @ Ace": "",
           "Product Procured By": "",
           "Branding Target Date": "",
-          "Branding Vendor": "",
-          "Branding Type": "",
+          "Branding Vendor": item.brandingVendor || "",
+          "Branding Type": item.brandingType || "",
           "Branding Vendor Contact": "",
           "Delivery Status": "",
           "QC Done By": "",
@@ -143,14 +128,46 @@ export default function ManageJobSheets() {
           "PO Status": js.poStatus || "",
           "Invoice Submission": ""
         });
-      }
-    });
+      });
+    } else {
+      // If no items array, push a single row so we still see the sheet info
+      exportData.push({
+        "Sl. No": serial++,
+        "Quotation Number": js.referenceQuotation || "",
+        "Job Sheet Number": js.jobSheetNumber || "",
+        "Opportunity Name": js.eventName || "",
+        "Client Company Name": js.clientCompanyName || "",
+        "Client Name": js.clientName || "",
+        "Client Delivery Date": deliveryDateFormatted,
+        "CRM": js.crmIncharge || "",
+        "Material Particulars": "",
+        "Quantity": "",
+        "Sourcing Vendor": "",
+        "Sourcing Vendor Contact": "",
+        "Product Follow Up": "",
+        "Product Expected @ Ace": "",
+        "Product Procured By": "",
+        "Branding Target Date": "",
+        "Branding Vendor": "",
+        "Branding Type": "",
+        "Branding Vendor Contact": "",
+        "Delivery Status": "",
+        "QC Done By": "",
+        "Delivered By": "",
+        "Delivered On": "",
+        "PO Status": js.poStatus || "",
+        "Invoice Submission": "",
+        "Created At": createdAtFormatted,
+      });
+    }
+  });
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
-    XLSX.writeFile(workbook, "JobSheets.xlsx");
-  };
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
+  XLSX.writeFile(workbook, "JobSheets.xlsx");
+};
+
 
   const isValidDate = (date) => {
     return date instanceof Date && !isNaN(date);

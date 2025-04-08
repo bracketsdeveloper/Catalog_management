@@ -27,11 +27,20 @@ const jobSheetSchema = new mongoose.Schema({
   crmIncharge: { type: String },
   items: [jobSheetItemSchema],
   poNumber: { type: String },
-  poStatus: { type: String }, // New field for PO Status
+  poStatus: { type: String },
   deliveryType: { type: String },
   deliveryMode: { type: String },
   deliveryCharges: { type: String },
-  deliveryAddress: { type: [String], default: [] },
+  
+  // Delivery addresses revert to an array of strings:
+  deliveryAddress: {
+    type: [String],
+    default: [],
+  },
+
+  // New top-level field for branding file name:
+  brandingFileName: { type: String },
+
   giftBoxBagsDetails: { type: String },
   packagingInstructions: { type: String },
   otherDetails: { type: String },
@@ -39,15 +48,22 @@ const jobSheetSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+// Auto-increment logic with a starting sequence of 5000
 jobSheetSchema.pre("save", async function (next) {
   if (this.isNew) {
     try {
-      const counter = await Counter.findOneAndUpdate(
+      const updatedCounter = await Counter.findOneAndUpdate(
         { id: "jobSheetNumber" },
-        { $inc: { seq: 1 } },
+        {
+          $inc: { seq: 1 },
+          // If no doc exists, create one with seq=4999, then increment to 5000
+          $setOnInsert: { seq: 4999 },
+        },
         { new: true, upsert: true }
       );
-      this.jobSheetNumber = counter.seq.toString().padStart(4, "0");
+
+      // Now updatedCounter.seq will be 5000 if newly created
+      this.jobSheetNumber = updatedCounter.seq.toString().padStart(4, "0");
       next();
     } catch (error) {
       next(error);

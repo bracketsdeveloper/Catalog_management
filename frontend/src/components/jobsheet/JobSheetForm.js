@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, forwardRef } from "react";
 import DatePicker from "react-datepicker";
 import { format, parse } from "date-fns";
 import UserSuggestionInput from "./UserSuggestionInput";
@@ -33,8 +33,12 @@ const JobSheetForm = ({
   setDeliveryMode,
   deliveryCharges,
   setDeliveryCharges,
-  deliveryAddress = [],
+  deliveryAddress,
   setDeliveryAddress,
+  // New top-level brandingFileName
+  brandingFileName,
+  setBrandingFileName,
+
   giftBoxBagsDetails,
   setGiftBoxBagsDetails,
   packagingInstructions,
@@ -62,32 +66,44 @@ const JobSheetForm = ({
     "Heat Transfer",
     "Patch",
     "Digital Printing",
-    "Other"
-  ]
+    "Other",
+  ],
 }) => {
-  // For delivery addresses
+  // We keep addresses as an array of strings locally too:
   const [addresses, setAddresses] = useState(
-    deliveryAddress?.length ? [...deliveryAddress] : [""]
+    deliveryAddress && deliveryAddress.length > 0
+      ? deliveryAddress
+      : [""]
   );
 
-  // New states for custom delivery text inputs
+  // For custom type/mode
   const [customDeliveryType, setCustomDeliveryType] = useState("");
   const [customDeliveryMode, setCustomDeliveryMode] = useState("");
 
-  // Delivery options arrays
   const deliveryTypeOptions = [
     "Single office delivery",
     "Multiple office delivery",
     "Individual doorstep courier",
     "Mixed",
-    "Others"
+    "Others",
   ];
   const deliveryModeOptions = ["Surface", "Air", "Other"];
   const deliveryChargesOptions = ["Included in cost", "Additional at actual"];
 
   // Convert string dates to Date objects for react-datepicker
-  const orderDateObj = orderDate ? parse(orderDate, "yyyy-MM-dd", new Date()) : null;
-  const deliveryDateObj = deliveryDate ? parse(deliveryDate, "yyyy-MM-dd", new Date()) : null;
+  const orderDateObj = orderDate
+    ? parse(orderDate, "yyyy-MM-dd", new Date())
+    : null;
+  const deliveryDateObj = deliveryDate
+    ? parse(deliveryDate, "yyyy-MM-dd", new Date())
+    : null;
+
+  const syncWithParent = (newArray) => {
+    setAddresses(newArray);
+    // Filter out empty strings
+    const filtered = newArray.filter((addr) => addr.trim() !== "");
+    setDeliveryAddress(filtered);
+  };
 
   const handleOrderDateChange = (date) => {
     const formattedDate = date ? format(date, "yyyy-MM-dd") : "";
@@ -99,24 +115,24 @@ const JobSheetForm = ({
     setDeliveryDate(formattedDate);
   };
 
+  // Manage array of string addresses
   const handleAddAddress = () => {
-    setAddresses([...addresses, ""]);
+    const newArr = [...addresses, ""];
+    syncWithParent(newArr);
   };
 
   const handleAddressChange = (index, value) => {
-    const newAddresses = [...addresses];
-    newAddresses[index] = value;
-    setAddresses(newAddresses);
-    setDeliveryAddress(newAddresses.filter((addr) => addr.trim() !== ""));
+    const newArr = [...addresses];
+    newArr[index] = value;
+    syncWithParent(newArr);
   };
 
   const handleRemoveAddress = (index) => {
-    const newAddresses = addresses.filter((_, i) => i !== index);
-    setAddresses(newAddresses);
-    setDeliveryAddress(newAddresses.filter((addr) => addr.trim() !== ""));
+    const newArr = addresses.filter((_, i) => i !== index);
+    syncWithParent(newArr);
   };
 
-  const CustomDateInput = React.forwardRef(({ value, onClick }, ref) => (
+  const CustomDateInput = forwardRef(({ value, onClick }, ref) => (
     <input
       className="border border-purple-300 rounded w-full p-2"
       onClick={onClick}
@@ -176,8 +192,12 @@ const JobSheetForm = ({
                 onChange={(e) => setPoStatus(e.target.value)}
               >
                 <option value="">Select PO Status</option>
-                <option value="PO Awaited, Wait for Invoice">PO Awaited, Wait for Invoice</option>
-                <option value="PO Received, Generate Invoice">PO Received, Generate Invoice</option>
+                <option value="PO Awaited, Wait for Invoice">
+                  PO Awaited, Wait for Invoice
+                </option>
+                <option value="PO Received, Generate Invoice">
+                  PO Received, Generate Invoice
+                </option>
                 <option value="No PO, No Invoice">No PO, No Invoice</option>
                 <option value="No PO, Direct Invoice">No PO, Direct Invoice</option>
                 <option value="Custom">Custom</option>
@@ -305,7 +325,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row: Products Table */}
+      {/* Row: If Quotation + items => show table of items */}
       {referenceQuotation && selectedItems.length > 0 && (
         <div className="mt-4">
           <h3 className="font-medium text-purple-700 mb-2">Products</h3>
@@ -382,8 +402,8 @@ const JobSheetForm = ({
                         }
                       >
                         <option value="">Select Branding Type</option>
-                        {brandingTypeOptions.map((option, index) => (
-                          <option key={index} value={option}>
+                        {brandingTypeOptions.map((option, optionIdx) => (
+                          <option key={optionIdx} value={option}>
                             {option}
                           </option>
                         ))}
@@ -527,7 +547,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row: Delivery Addresses */}
+      {/* Row: Delivery Addresses (array of strings) */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Delivery Addresses
@@ -558,6 +578,20 @@ const JobSheetForm = ({
         >
           + Add Another Address
         </button>
+      </div>
+
+      {/* NEW row: Branding File Name (top-level) */}
+      <div>
+        <label className="block mb-1 font-medium text-purple-700">
+          Branding File Name
+        </label>
+        <input
+          type="text"
+          className="border border-purple-300 rounded w-full p-2"
+          placeholder="Enter branding file name"
+          value={brandingFileName}
+          onChange={(e) => setBrandingFileName(e.target.value)}
+        />
       </div>
 
       {/* Row: Gift Box/Bags Details and Packaging Instructions */}

@@ -331,8 +331,8 @@ export default function JobSheetView() {
         <div className="mt-2">
           <div className="flex justify-between mb-20 px-6">
             <div className="w-1/3">
-              <span className="font-bold uppercase">SEAL/SIGN:</span>
-              <span className="border-b border-black inline-block w-full">
+            <span className="font-bold uppercase">QTY DISPATCHED:</span>
+            <span className="border-b border-black inline-block w-full">
                 &nbsp;
               </span>
             </div>
@@ -343,7 +343,8 @@ export default function JobSheetView() {
               </span>
             </div>
             <div className="w-1/3 text-right">
-              <span className="font-bold uppercase">QTY DISPATCHED:</span>
+              
+              <span className="font-bold uppercase">SEAL/SIGN:</span>
               <span className="border-b border-black inline-block w-full">
                 &nbsp;
               </span>

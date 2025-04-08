@@ -1,3 +1,4 @@
+// src/pages/CreateJobSheet.jsx (or wherever your file is located)
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -56,13 +57,19 @@ export default function CreateJobSheet() {
   const [deliveryType, setDeliveryType] = useState("");
   const [deliveryMode, setDeliveryMode] = useState("");
   const [deliveryCharges, setDeliveryCharges] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState([]);
+
+  // The addresses revert to array of strings:
+  const [deliveryAddress, setDeliveryAddress] = useState([""]);
+
+  // NEW top-level branding file name:
+  const [brandingFileName, setBrandingFileName] = useState("");
+
   const [giftBoxBagsDetails, setGiftBoxBagsDetails] = useState("");
   const [packagingInstructions, setPackagingInstructions] = useState("");
   const [otherDetails, setOtherDetails] = useState("");
   const [referenceQuotation, setReferenceQuotation] = useState("");
 
-  // Quotation suggestions state
+  // Quotation suggestions
   const [quotationSuggestions, setQuotationSuggestions] = useState([]);
 
   // Selected items and modal state
@@ -100,7 +107,7 @@ export default function CreateJobSheet() {
     }
   }, [id]);
 
-  // --- QUOTATION SUGGESTIONS ---
+  // Quotation suggestions
   useEffect(() => {
     if (referenceQuotation.trim().length > 0) {
       const delayDebounceFn = setTimeout(() => {
@@ -115,17 +122,14 @@ export default function CreateJobSheet() {
   const fetchQuotationSuggestions = async (query) => {
     try {
       const token = localStorage.getItem("token");
-      // Assumes your quotations endpoint supports a search query parameter.
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/quotations?search=${query}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations?search=${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setQuotationSuggestions(res.data || []);
     } catch (error) {
       console.error("Error fetching quotation suggestions:", error);
     }
   };
-  // --- END QUOTATION SUGGESTIONS ---
 
   const fetchFilterOptions = async () => {
     try {
@@ -161,6 +165,7 @@ export default function CreateJobSheet() {
         params.append("priceRanges", selectedPriceRanges.join(","));
       if (selectedVariationHinges.length > 0)
         params.append("variationHinges", selectedVariationHinges.join(","));
+
       const res = await axios.get(
         `${BACKEND_URL}/api/admin/products?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -178,10 +183,9 @@ export default function CreateJobSheet() {
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/companies?all=true`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setCompanies(res.data || []);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -197,27 +201,38 @@ export default function CreateJobSheet() {
       const data = res.data;
       setEventName(data.eventName || "");
       setOrderDate(data.orderDate ? data.orderDate.slice(0, 10) : "");
-      setClientCompanyName(data.clientCompanyName);
-      setClientName(data.clientName);
+      setClientCompanyName(data.clientCompanyName || "");
+      setClientName(data.clientName || "");
       setContactNumber(data.contactNumber || "");
       setDeliveryDate(data.deliveryDate ? data.deliveryDate.slice(0, 10) : "");
       setDeliveryTime(data.deliveryTime || "");
       setCrmIncharge(data.crmIncharge || "");
       setPoNumber(data.poNumber || "");
       setPoStatus(data.poStatus || "");
-      // If the stored poStatus is not "PO sent" or "No PO", treat it as custom:
-      if (data.poStatus && data.poStatus !== "PO sent" && data.poStatus !== "No PO") {
+      if (
+        data.poStatus &&
+        data.poStatus !== "PO Awaited, Wait for Invoice" &&
+        data.poStatus !== "PO Received, Generate Invoice" &&
+        data.poStatus !== "No PO, No Invoice" &&
+        data.poStatus !== "No PO, Direct Invoice"
+      ) {
         setPoStatus("Custom");
         setCustomPoStatus(data.poStatus);
       }
       setDeliveryType(data.deliveryType || "");
       setDeliveryMode(data.deliveryMode || "");
       setDeliveryCharges(data.deliveryCharges || "");
-      setDeliveryAddress(
-        Array.isArray(data.deliveryAddress)
-          ? data.deliveryAddress
-          : [data.deliveryAddress || ""]
-      );
+
+      // If data.deliveryAddress is an array of strings, set it. Otherwise fallback
+      if (Array.isArray(data.deliveryAddress)) {
+        setDeliveryAddress(data.deliveryAddress.length > 0 ? data.deliveryAddress : [""]);
+      } else {
+        setDeliveryAddress([""]);
+      }
+
+      // The new top-level brandingFileName
+      setBrandingFileName(data.brandingFileName || "");
+
       setGiftBoxBagsDetails(data.giftBoxBagsDetails || "");
       setPackagingInstructions(data.packagingInstructions || "");
       setOtherDetails(data.otherDetails || "");
@@ -251,83 +266,7 @@ export default function CreateJobSheet() {
     });
   };
 
-  // Address management
-  const handleAddAddress = () => {
-    setDeliveryAddress((prev) => [...prev, ""]);
-  };
-
-  const handleAddressChange = (index, value) => {
-    setDeliveryAddress((prev) => {
-      const newAddresses = [...prev];
-      newAddresses[index] = value;
-      return newAddresses.filter((addr) => addr.trim() !== "");
-    });
-  };
-
-  const handleRemoveAddress = (index) => {
-    setDeliveryAddress((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleImageSearchClick = () => {
-    if (imageInputRef.current) imageInputRef.current.click();
-  };
-
-  const handleImageSearch = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setAdvancedSearchLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("image", file);
-      const res = await axios.post(
-        `${BACKEND_URL}/api/products/advanced-search`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-      setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
-      setAdvancedSearchActive(true);
-    } catch (error) {
-      console.error("Error in image search:", error);
-      alert("Image search failed. Check console.");
-    } finally {
-      setAdvancedSearchLoading(false);
-    }
-  };
-
-  const handleClearAdvancedSearch = () => {
-    setAdvancedSearchActive(false);
-    setAdvancedSearchResults([]);
-  };
-
-  // Company selection for manual entry (with suggestion dropdown)
-  const handleCompanySelect = (company) => {
-    setClientCompanyName(company.companyName);
-    if (company.clients && company.clients.length > 0) {
-      setClientName(company.clients[0].name);
-      setContactNumber(company.clients[0].contactNumber);
-    } else {
-      setClientName("");
-      setContactNumber("");
-    }
-    setDropdownOpen(false);
-  };
-
-  const handleOpenCompanyModal = () => {
-    setShowCompanyModal(true);
-  };
-
-  const handleCloseCompanyModal = () => {
-    setShowCompanyModal(false);
-    fetchCompanies();
-  };
-
-  // Check for duplicate product (by product name, color, and size)
+  // Check for duplicates
   function isDuplicate(productName, color, size) {
     return selectedItems.some(
       (item) =>
@@ -337,6 +276,7 @@ export default function CreateJobSheet() {
     );
   }
 
+  // Add single item from ProductGrid
   const handleAddSingle = (item) => {
     if (isDuplicate(item.product, item.color, item.size)) {
       alert("This item with the same product, color & size is already added!");
@@ -395,7 +335,6 @@ export default function CreateJobSheet() {
     setSelectedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Utility to parse product string
   const parseProductString = (productStr) => {
     let color = "";
     let size = "";
@@ -413,7 +352,7 @@ export default function CreateJobSheet() {
     return { baseProduct: baseProduct.trim(), color, size };
   };
 
-  // Handle quotation selection: auto-populate client details and map items.
+  // Quotation handling
   const handleQuotationSelect = (quotation) => {
     setReferenceQuotation(quotation.quotationNumber);
     setClientCompanyName(quotation.customerCompany || "");
@@ -438,7 +377,6 @@ export default function CreateJobSheet() {
     }
   };
 
-  // --- FETCH BUTTON HANDLER ---
   const handleFetchQuotation = async () => {
     if (!referenceQuotation.trim()) {
       alert("Please enter a reference quotation number");
@@ -475,27 +413,32 @@ export default function CreateJobSheet() {
       }
     }
   };
-  // --- END FETCH BUTTON HANDLER ---
 
+  // Save or update JobSheet
   const handleSaveJobSheet = async () => {
     if (!orderDate || !clientCompanyName || !clientName || !deliveryDate) {
-      alert("Please enter Order Date, Client Company, Client Name and Delivery Date.");
+      alert("Please enter Order Date, Client Company, Client Name, and Delivery Date.");
       return;
     }
     if (selectedItems.length === 0) {
       alert("Please select at least one product.");
       return;
     }
+
+    // Filter out addresses where address is empty
     const filteredAddresses = deliveryAddress.filter((addr) => addr.trim() !== "");
     if (filteredAddresses.length === 0) {
       alert("Please enter at least one delivery address.");
       return;
     }
+
     const itemsWithSlNo = selectedItems.map((item, index) => ({
       ...item,
       slNo: item.slNo || index + 1,
     }));
+
     const finalPoStatus = poStatus === "Custom" ? customPoStatus : poStatus;
+
     const body = {
       eventName,
       orderDate,
@@ -512,6 +455,9 @@ export default function CreateJobSheet() {
       deliveryMode,
       deliveryCharges,
       deliveryAddress: filteredAddresses,
+      // new field
+      brandingFileName,
+
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
@@ -538,6 +484,65 @@ export default function CreateJobSheet() {
     }
   };
 
+  // Image-based product search
+  const handleImageSearchClick = () => {
+    if (imageInputRef.current) imageInputRef.current.click();
+  };
+
+  const handleImageSearch = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAdvancedSearchLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await axios.post(
+        `${BACKEND_URL}/api/products/advanced-search`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
+      setAdvancedSearchActive(true);
+    } catch (error) {
+      console.error("Error in image search:", error);
+      alert("Image search failed. Check console.");
+    } finally {
+      setAdvancedSearchLoading(false);
+    }
+  };
+
+  const handleClearAdvancedSearch = () => {
+    setAdvancedSearchActive(false);
+    setAdvancedSearchResults([]);
+  };
+
+  const handleCompanySelect = (company) => {
+    setClientCompanyName(company.companyName);
+    if (company.clients && company.clients.length > 0) {
+      setClientName(company.clients[0].name);
+      setContactNumber(company.clients[0].contactNumber);
+    } else {
+      setClientName("");
+      setContactNumber("");
+    }
+    setDropdownOpen(false);
+  };
+
+  const handleOpenCompanyModal = () => {
+    setShowCompanyModal(true);
+  };
+
+  const handleCloseCompanyModal = () => {
+    setShowCompanyModal(false);
+    fetchCompanies();
+  };
+
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -553,6 +558,7 @@ export default function CreateJobSheet() {
       </div>
 
       <JobSheetForm
+        // Basic fields
         eventName={eventName}
         setEventName={setEventName}
         orderDate={orderDate}
@@ -583,6 +589,10 @@ export default function CreateJobSheet() {
         setDeliveryCharges={setDeliveryCharges}
         deliveryAddress={deliveryAddress}
         setDeliveryAddress={setDeliveryAddress}
+        // Top-level brandingFileName
+        brandingFileName={brandingFileName}
+        setBrandingFileName={setBrandingFileName}
+
         giftBoxBagsDetails={giftBoxBagsDetails}
         setGiftBoxBagsDetails={setGiftBoxBagsDetails}
         packagingInstructions={packagingInstructions}
@@ -632,8 +642,8 @@ export default function CreateJobSheet() {
         selectedCategories={selectedCategories}
         setSelectedCategories={setSelectedCategories}
         fullSubCategories={fullSubCategories}
+        selectedSubCategories={setSelectedSubCategories}
         selectedSubCategories={selectedSubCategories}
-        setSelectedSubCategories={setSelectedSubCategories}
         fullBrands={fullBrands}
         selectedBrands={selectedBrands}
         setSelectedBrands={setSelectedBrands}
@@ -645,6 +655,7 @@ export default function CreateJobSheet() {
         setSelectedVariationHinges={setSelectedVariationHinges}
       />
 
+      {/* Floating Cart Button */}
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -658,6 +669,7 @@ export default function CreateJobSheet() {
         )}
       </div>
 
+      {/* Cart Drawer */}
       {cartOpen && (
         <JobSheetCart
           selectedItems={selectedItems}
@@ -667,7 +679,7 @@ export default function CreateJobSheet() {
           handleInlineUpdate={handleInlineUpdate}
         />
       )}
-      {editModalOpen && editIndex != null && (
+      {editModalOpen && editIndex !== null && (
         <JobSheetItemEditModal
           item={selectedItems[editIndex]}
           onClose={() => {
@@ -688,9 +700,7 @@ export default function CreateJobSheet() {
           onSave={handleAddVariation}
         />
       )}
-      {showCompanyModal && (
-        <CompanyModal onClose={handleCloseCompanyModal} />
-      )}
+      {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
     </div>
   );
 }

@@ -18,11 +18,12 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       crmIncharge,
       items,
       poNumber,
-      poStatus,            // <-- New field
+      poStatus,
       deliveryType,
       deliveryMode,
       deliveryCharges,
       deliveryAddress = [],
+      brandingFileName, // <-- new top-level field
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
@@ -42,9 +43,9 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
         .json({ message: "Missing required fields or no items provided" });
     }
 
-    // Filter out empty addresses
+    // Filter out any empty addresses
     const filteredAddresses = Array.isArray(deliveryAddress)
-      ? deliveryAddress.filter(addr => addr.trim() !== '')
+      ? deliveryAddress.filter((addr) => addr.trim() !== "")
       : [];
 
     const newJobSheet = new JobSheet({
@@ -58,11 +59,12 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
       crmIncharge,
       items,
       poNumber,
-      poStatus, // Save PO Status here
+      poStatus,
       deliveryType,
       deliveryMode,
       deliveryCharges,
       deliveryAddress: filteredAddresses,
+      brandingFileName, // store top-level branding file name
       giftBoxBagsDetails,
       packagingInstructions,
       otherDetails,
@@ -71,7 +73,10 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
     });
 
     await newJobSheet.save();
-    res.status(201).json({ message: "Job sheet created", jobSheet: newJobSheet });
+    res.status(201).json({
+      message: "Job sheet created",
+      jobSheet: newJobSheet,
+    });
   } catch (error) {
     console.error("Error creating job sheet:", error);
     res.status(500).json({ message: "Server error creating job sheet" });
@@ -106,14 +111,19 @@ router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
 // Update a job sheet
 router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    // Filter out empty addresses
     if (Array.isArray(req.body.deliveryAddress)) {
-      req.body.deliveryAddress = req.body.deliveryAddress.filter(addr => addr.trim() !== '');
+      req.body.deliveryAddress = req.body.deliveryAddress.filter(
+        (addr) => addr.trim() !== ""
+      );
     }
+
     const updatedJobSheet = await JobSheet.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true }
     );
+
     if (!updatedJobSheet) {
       return res.status(404).json({ message: "Job sheet not found" });
     }
