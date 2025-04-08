@@ -966,9 +966,9 @@ export default function CatalogManagementPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                       Customer Name
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    {/* <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                       Email
-                    </th>
+                    </th> */}
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                       Items
                     </th>
@@ -983,7 +983,7 @@ export default function CatalogManagementPage() {
                       <td className="px-4 py-2">{quotation.quotationNumber}</td>
                       <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
                       <td className="px-4 py-2">{quotation.customerName}</td>
-                      <td className="px-4 py-2">{quotation.customerEmail}</td>
+                      {/* <td className="px-4 py-2">{quotation.customerEmail}</td> */}
                       <td className="px-4 py-2">{quotation.items?.length || 0}</td>
                       <td className="px-4 py-2 space-x-2">
                         <button

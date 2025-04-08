@@ -30,6 +30,9 @@ const quotationSchema = new mongoose.Schema({
   remarks: { type: [remarkSchema], default: [] },
   margin: { type: Number },
   items: [quotationItemSchema],
+  totalAmount: { type: Number, default: 0 },
+  grandTotal: { type: Number, default: 0 },
+  displayTotals: { type: Boolean, default: false },  // NEW field
   createdBy: { type: String },
   createdAt: { type: Date, default: Date.now },
   terms: [

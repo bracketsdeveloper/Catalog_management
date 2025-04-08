@@ -563,6 +563,32 @@ export default function ProductManagementPage() {
     }
   };
 
+  // ---------------------- Clear Filters ----------------------
+  const clearFilters = () => {
+    setSearchTerm(""); // Reset search term
+    setSelectedCategories([]); // Reset selected categories
+    setSelectedSubCategories([]); // Reset selected subcategories
+    setSelectedBrands([]); // Reset selected brands
+    setSelectedPriceRanges([]); // Reset selected price ranges
+    setSelectedVariationHinges([]); // Reset selected variation hinges
+  };
+
+  // Sort filter options
+  const sortedCategories = fullCategories.sort();
+  const sortedSubCategories = fullSubCategories.sort();
+  const sortedBrands = fullBrands.sort();
+  const sortedPriceRanges = fullPriceRanges.sort((a, b) => a - b); // Assuming price ranges are numbers
+  const sortedVariationHinges = fullVariationHinges.sort();
+
+  // Check if any filters are applied
+  const isAnyFilterApplied =
+    searchTerm ||
+    selectedCategories.length > 0 ||
+    selectedSubCategories.length > 0 ||
+    selectedBrands.length > 0 ||
+    selectedPriceRanges.length > 0 ||
+    selectedVariationHinges.length > 0;
+
   // ---------------------- RENDER ----------------------
   return (
     <div className="bg-white text-gray-800 min-h-screen">
@@ -642,6 +668,18 @@ export default function ProductManagementPage() {
           </div>
         )}
 
+        {/* Clear Filters Button */}
+        {isAnyFilterApplied && (
+          <div className="mb-4">
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 bg-red-500 text-white text-xs rounded"
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <DropdownFilter
@@ -649,7 +687,7 @@ export default function ProductManagementPage() {
             isOpen={categoryOpen}
             setIsOpen={setCategoryOpen}
           >
-            {fullCategories.map((cat) => (
+            {sortedCategories.map((cat) => (
               <FilterItem
                 key={cat}
                 checked={selectedCategories.includes(cat)}
@@ -666,7 +704,7 @@ export default function ProductManagementPage() {
             isOpen={subCategoryOpen}
             setIsOpen={setSubCategoryOpen}
           >
-            {fullSubCategories.map((sub) => (
+            {sortedSubCategories.map((sub) => (
               <FilterItem
                 key={sub}
                 checked={selectedSubCategories.includes(sub)}
@@ -683,7 +721,7 @@ export default function ProductManagementPage() {
             isOpen={brandOpen}
             setIsOpen={setBrandOpen}
           >
-            {fullBrands.map((br) => (
+            {sortedBrands.map((br) => (
               <FilterItem
                 key={br}
                 checked={selectedBrands.includes(br)}
@@ -700,7 +738,7 @@ export default function ProductManagementPage() {
             isOpen={priceRangeOpen}
             setIsOpen={setPriceRangeOpen}
           >
-            {fullPriceRanges.map((pr) => (
+            {sortedPriceRanges.map((pr) => (
               <FilterItem
                 key={pr}
                 checked={selectedPriceRanges.includes(pr)}
@@ -717,16 +755,12 @@ export default function ProductManagementPage() {
             isOpen={variationHingeOpen}
             setIsOpen={setVariationHingeOpen}
           >
-            {fullVariationHinges.map((vh) => (
+            {sortedVariationHinges.map((vh) => (
               <FilterItem
                 key={vh}
                 checked={selectedVariationHinges.includes(vh)}
                 onChange={() =>
-                  toggleFilter(
-                    vh,
-                    selectedVariationHinges,
-                    setSelectedVariationHinges
-                  )
+                  toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)
                 }
               >
                 {vh}

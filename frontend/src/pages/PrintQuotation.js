@@ -1,15 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import html2pdf from "html2pdf.js";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function PrintQuotation() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
   const [quotation, setQuotation] = useState(null);
   const [editableQuotation, setEditableQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,15 +40,13 @@ export default function PrintQuotation() {
     }
   }
 
-  // Helper functions to compute totals based on each item's productGST
   function computedAmount(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
       const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
       const baseRate = parseFloat(item.rate) || 0;
       const quantity = parseFloat(item.quantity) || 0;
-      const amount = baseRate * marginFactor * quantity;
-      sum += amount;
+      sum += baseRate * marginFactor * quantity;
     });
     return sum;
   }
@@ -68,101 +65,130 @@ export default function PrintQuotation() {
     return sum;
   }
 
-  // Export to PDF using html2pdf.js
   const handleExportPDF = () => {
     const element = document.getElementById("printable");
-    // Clone the element to remove non-print elements
+
+    // Clone it, remove no-print elements
     const clonedElement = element.cloneNode(true);
-    clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
+    clonedElement
+      .querySelectorAll(".no-print")
+      .forEach((el) => el.remove());
+
     const opt = {
-      margin: 0.2, // 0.2 inch margin
+      margin: 0.2,
       filename: `Quotation-${editableQuotation.quotationNumber}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 7, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["css", "legacy"] },
     };
     html2pdf().set(opt).from(clonedElement).save();
   };
 
-  // While loading or error
   if (loading) {
     return <div className="p-6 text-gray-400">Loading quotation...</div>;
   }
+
   if (error) {
     return <div className="p-6 text-red-500">{error}</div>;
   }
+
   if (!editableQuotation) {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor for display
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
 
   return (
-    <div className="max-w-3xl mx-auto p-4 bg-white shadow-md" id="printable">
-      {/* Print CSS */}
+    <div
+      id="printable"
+      className="max-w-3xl mx-auto p-4 shadow-md mb-10"
+      style={{
+        // Background for both on-screen and PDF:
+        backgroundImage: "url('/quotationtemplate.png')",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+        // Reserve space on-screen so the content never overlaps the bottom 20px of the image
+        paddingBottom: "60px",
+      }}
+    >
       <style>
         {`
           @page {
             size: A4;
-            margin: 5mm 5mm 5mm 5mm;
+            /* top:4cm, right:5mm, bottom:20mm, left:5mm 
+               - Enough to cover 10mm margin + ~20px for the footer in the template */
+            margin: 4cm 5mm 20mm 5mm;
           }
           @media print {
-            .no-print { display: none !important; }
+            .no-print {
+              display: none !important;
+            }
+            .footer-page-break {
+              page-break-before: always;
+            }
           }
         `}
       </style>
 
-      {/* Top export button (hidden when printing) */}
+      {/* Button (hidden on print) */}
       <div className="flex justify-end mb-4 no-print">
         <button
           onClick={handleExportPDF}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
         >
           Export to PDF
         </button>
       </div>
 
-      {/* Header: Date, Quotation No., GSTIN, Logo */}
-      <div className="flex justify-between items-start">
-        <div>
-          <div className="text-xs text-gray-600">
-            {new Date(editableQuotation.createdAt).toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </div>
-          <div className="mt-1">
-            <div className="text-lg font-bold">
-              Quotation No.: {editableQuotation.quotationNumber}
+      {/* Header */}
+      <div className="relative">
+        <div className="flex justify-between items-center">
+          <div>
+            <div className="text-xs">
+              {new Date(editableQuotation.createdAt).toLocaleDateString(
+                "en-US",
+                {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                }
+              )}
             </div>
-            <div className="text-xs">GSTIN : 29ABCFA9924A1ZL</div>
+            <div className="mt-1 flex items-center">
+              <div className="text-lg font-bold">
+                Quotation No.: {editableQuotation.quotationNumber}
+              </div>
+            </div>
           </div>
-        </div>
-        <div>
-          <img
-            src="/logo.png"
-            alt="Logo"
-            className="h-16 w-auto"
-            crossOrigin="anonymous"
-          />
+          <div className="text-xs">
+            {/* Example: GSTIN or other info */}
+          </div>
         </div>
       </div>
 
       {/* Customer Info */}
       <div className="mt-4">
-        <div className="text-base font-bold">{editableQuotation.customerName}</div>
-        <div className="text-xs">{editableQuotation.customerCompany}</div>
-        <div className="text-xs">{editableQuotation.customerAddress}</div>
-        <div className="text-xs">Email: {editableQuotation.customerEmail}</div>
+        <div className="flex justify-between items-center">
+          <div className="text-base font-bold">
+            Mr./Ms. {editableQuotation.customerName}
+          </div>
+          <div className="text-xs mt-4">GSTIN: 29ABCFA9924A1ZL</div>
+        </div>
+        <div className="text-xs">
+          {editableQuotation.customerCompany}
+          {editableQuotation.companyAddress
+            ? `, ${editableQuotation.companyAddress}`
+            : ""}
+        </div>
       </div>
 
       {/* Quotation Title */}
       <div className="mt-4">
         <div className="text-lg font-bold">
-          Quotation: {editableQuotation.catalogName ? editableQuotation.catalogName : "Goodies"}
+          Quotation: {editableQuotation.catalogName || "Goodies"}
         </div>
       </div>
 
@@ -174,7 +200,7 @@ export default function PrintQuotation() {
               <th className="border px-1 py-1">Sl. No.</th>
               <th className="border px-1 py-1">Image</th>
               <th className="border px-1 py-1">Product</th>
-              {/* <th className="border px-1 py-1">HSN Code.</th> */}
+              <th className="border px-1 py-1">HSN</th>
               <th className="border px-1 py-1">Quantity</th>
               <th className="border px-1 py-1 text-right">Rate</th>
               <th className="border px-1 py-1 text-right">Amount</th>
@@ -188,11 +214,16 @@ export default function PrintQuotation() {
               const rate = Number(item.rate) || 0;
               const effRate = rate * marginFactor;
               const amount = effRate * qty;
-              // Calculate GST using productGST value
               const gstPercent = parseFloat(item.productGST) || 0;
               const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
               const total = amount + gstAmt;
+
               const imageUrl = getImageUrl(item);
+              const hsnCode =
+                (item.productId && item.productId.hsnCode) ||
+                item.hsnCode ||
+                "N/A";
+
               return (
                 <tr key={idx}>
                   <td className="border px-1 py-1 text-center">{idx + 1}</td>
@@ -201,7 +232,7 @@ export default function PrintQuotation() {
                       <img
                         src={imageUrl}
                         alt={item.product}
-                        className="h-10 w-auto mx-auto"
+                        className="h-20 w-auto mx-auto"
                         crossOrigin="anonymous"
                       />
                     ) : (
@@ -209,12 +240,20 @@ export default function PrintQuotation() {
                     )}
                   </td>
                   <td className="border px-1 py-1">{item.product}</td>
-                  {/* <td className="border px-1 py-1">{item.productId?.hsnCode || "N/A"}                  </td> */}
+                  <td className="border px-1 py-1 text-center">{hsnCode}</td>
                   <td className="border px-1 py-1 text-center">{qty}</td>
-                  <td className="border px-1 py-1 text-right">₹{rate.toFixed(2)}</td>
-                  <td className="border px-1 py-1 text-right">₹{amount.toFixed(2)}</td>
-                  <td className="border px-1 py-1 text-right">{gstPercent}%</td>
-                  <td className="border px-1 py-1 text-right">₹{total.toFixed(2)}</td>
+                  <td className="border px-1 py-1 text-right">
+                    ₹{rate.toFixed(2)}
+                  </td>
+                  <td className="border px-1 py-1 text-right">
+                    ₹{amount.toFixed(2)}
+                  </td>
+                  <td className="border px-1 py-1 text-right">
+                    {gstPercent}%
+                  </td>
+                  <td className="border px-1 py-1 text-right">
+                    ₹{total.toFixed(2)}
+                  </td>
                 </tr>
               );
             })}
@@ -222,38 +261,39 @@ export default function PrintQuotation() {
         </table>
       </div>
 
-      {/* Totals */}
-      <div className="mt-4 text-right">
-        <div className="text-base font-bold">
-          Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}
+      {/* Totals Section */}
+      {editableQuotation.displayTotals && (
+        <div className="mt-4 text-right text-base font-bold">
+          <div>
+            Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}
+          </div>
+          <div>
+            Grand Total (with GST): ₹
+            {computedTotal(editableQuotation).toFixed(2)}
+          </div>
         </div>
-        <div className="text-base font-bold">
-          Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}
-        </div>
-      </div>
+      )}
 
-      {/* Additional Information Blocks */}
+      {/* Additional Information */}
       <div className="mt-4 border-t pt-2">
-        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mb-2">
-          Rates may vary in case there is a change in specifications / quantity / timelines
-        </div>
-        {editableQuotation.terms &&
-          editableQuotation.terms.length > 0 &&
-          editableQuotation.terms.map((term, idx) => (
-            <div key={idx} className="mb-1">
-              <div className="font-bold text-xs">{term.heading}:</div>
-              <div className="text-xs">{term.content}</div>
-            </div>
-          ))}
-        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
+        <div className="p-1 italic font-bold text-xs text-center mt-2">
           Product subject to availability at the time of order confirmation
         </div>
+        {editableQuotation.terms &&
+          editableQuotation.terms.map((term, idx) => (
+            <div key={idx} className="mb-1 text-xs">
+              <div className="font-bold">{term.heading}:</div>
+              <div>{term.content}</div>
+            </div>
+          ))}
+        <div className="p-1 italic font-bold text-xs text-center mb-2">
+          Rates may vary in case there is a change in specifications / quantity / timelines
+        </div>
       </div>
 
-      {/* Footer: Two-column layout */}
-      <div className="mt-8 flex justify-between items-start">
-        {/* Left Column: For Ace Print Pack with Signature */}
-        <div className="flex flex-col">
+      {/* Footer Page-Break */}
+      <div className="footer-page-break mt-8">
+        <div className="flex flex-col text-blue-600">
           <div className="text-xl font-bold">For Ace Print Pack</div>
           <div className="mt-2">
             <img
@@ -265,25 +305,15 @@ export default function PrintQuotation() {
           </div>
           <h1>Neeraj Dinodia</h1>
         </div>
-        {/* Right Column: Address Image */}
-        <div>
-          <img
-            src="/address.png"
-            alt="Address"
-            className="h-32 w-auto"
-            crossOrigin="anonymous"
-          />
-        </div>
       </div>
     </div>
   );
 }
 
-// Helper to get the image URL for an item
+// Helper function to get image URL
 function getImageUrl(item) {
   if (item.image) return item.image;
-  if (item.productId && item.productId.images && item.productId.images.length > 0)
-    return item.productId.images[0];
+  if (item.productId?.images?.length > 0) return item.productId.images[0];
   return "https://via.placeholder.com/150";
 }
 
@@ -293,8 +323,7 @@ export function computedAmount(quotation) {
     const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
     const baseRate = parseFloat(item.rate) || 0;
     const quantity = parseFloat(item.quantity) || 0;
-    const amount = baseRate * marginFactor * quantity;
-    sum += amount;
+    sum += baseRate * marginFactor * quantity;
   });
   return sum;
 }

@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function QuotationView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
-  const [quotation, setQuotation] = useState(null);
+  const [jobSheet, setJobSheet] = useState(null);
   const [editableQuotation, setEditableQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,7 +67,7 @@ export default function QuotationView() {
         throw new Error("Failed to fetch quotation");
       }
       const data = await res.json();
-      setQuotation(data);
+      setJobSheet(data);
       setEditableQuotation(data);
       setError(null);
     } catch (err) {
@@ -88,6 +91,7 @@ export default function QuotationView() {
         customerAddress,
         items,
         terms,
+        displayTotals, // This field controls totals display
       } = editableQuotation;
       
       const body = {
@@ -99,10 +103,10 @@ export default function QuotationView() {
         margin: updatedMargin,
         items,
         terms,
+        displayTotals, // Include displayTotals in the payload
       };
 
       console.log("Before saving, updated quotation data:", body);
-      // Log each item's base rate and computed effective rate:
       body.items.forEach((it, idx) => {
         const effRate = it.rate * (1 + updatedMargin / 100);
         console.log(`Item ${idx}: base rate = ${it.rate}, effective rate = ${effRate.toFixed(2)}`);
@@ -143,6 +147,14 @@ export default function QuotationView() {
       console.log(`After update, items:`, newItems);
       return { ...prev, items: newItems };
     });
+  }
+
+  // New helper to remove an item from the items list
+  function removeItem(index) {
+    setEditableQuotation((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
   }
 
   function handleAddEmail() {
@@ -188,12 +200,15 @@ export default function QuotationView() {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
+  // Updated computed functions to check for either "quantity" or "qty"
   function computedAmount(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
-      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+      const quantity = parseFloat(item.quantity || item.qty) || 0;
       const baseRate = parseFloat(item.rate) || 0;
-      const quantity = parseFloat(item.quantity) || 0;
+      const margin = parseFloat(quotation.margin) || 0;
+      const marginFactor = 1 + margin / 100;
+      console.log(`Computed: rate=${baseRate}, quantity=${quantity}, marginFactor=${marginFactor}`);
       sum += baseRate * marginFactor * quantity;
     });
     return sum;
@@ -202,11 +217,13 @@ export default function QuotationView() {
   function computedTotal(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
-      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+      const quantity = parseFloat(item.quantity || item.qty) || 0;
       const baseRate = parseFloat(item.rate) || 0;
-      const quantity = parseFloat(item.quantity) || 0;
+      const margin = parseFloat(quotation.margin) || 0;
+      const marginFactor = 1 + margin / 100;
       const amount = baseRate * marginFactor * quantity;
-      const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+      const gst = parseFloat(item.productGST) || 0;
+      const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
       sum += amount + gstVal;
     });
     return sum;
@@ -222,7 +239,7 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor for display
+  // Compute margin factor for items table display
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
 
   return (
@@ -231,21 +248,36 @@ export default function QuotationView() {
       <div className="flex justify-between items-center mb-4">
         <button
           onClick={handleExportPDF}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-xs"
         >
           Export to PDF
         </button>
-        <button
-          onClick={handleSaveQuotation}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-        >
-          Save Changes
-        </button>
+        <div className="flex space-x-4">
+          <button
+            onClick={handleSaveQuotation}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+          >
+            Save Changes
+          </button>
+          {/* Toggle displayTotals: this updates the document's displayTotals field */}
+          <button
+            onClick={() =>
+              setEditableQuotation((prev) => ({
+                ...prev,
+                displayTotals: !prev.displayTotals,
+              }))
+            }
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-xs"
+          >
+            {editableQuotation.displayTotals ? "Hide Totals" : "Show Totals"}
+          </button>
+        </div>
       </div>
 
       {/* Editable Header Fields */}
-      <div className="mb-4 space-y-2">
+      <div className="mb-4 space-y-2 text-xs">
         <div>
+          Mr./Ms.{" "}
           <span
             contentEditable
             suppressContentEditableWarning
@@ -258,46 +290,35 @@ export default function QuotationView() {
           <span
             contentEditable
             suppressContentEditableWarning
-            onBlur={(e) => handleHeaderBlur("customerEmail", e)}
-          >
-            {editableQuotation.customerEmail}
-          </span>
-        </div>
-        <div>
-          <span
-            contentEditable
-            suppressContentEditableWarning
             onBlur={(e) => handleHeaderBlur("customerCompany", e)}
           >
             {editableQuotation.customerCompany}
           </span>
         </div>
-        <div>
-          <span
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) => handleHeaderBlur("gst", e)}
-          >
-            GST: {editableQuotation.gst}
-          </span>
-        </div>
+        {/* Display company address next to company name */}
+        {editableQuotation.companyAddress && (
+          <div>
+            <span className="font-bold uppercase">Company Address:</span>{" "}
+            <span>{editableQuotation.companyAddress}</span>
+          </div>
+        )}
       </div>
 
       {/* Terms Section */}
       <div className="mb-6">
         <button
           onClick={() => setTermModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4 text-xs"
         >
           + Add Terms
         </button>
         {editableQuotation.terms.map((term, idx) => (
-          <div key={idx} className="mb-4">
+          <div key={idx} className="mb-4 text-xs">
             <div className="font-semibold">{term.heading}</div>
             <div>{term.content}</div>
             <button
               onClick={() => handleEditTerm(idx)}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded mt-2"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded mt-2 text-xs"
             >
               Edit
             </button>
@@ -320,7 +341,7 @@ export default function QuotationView() {
                 onChange={(e) =>
                   setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
                 }
-                className="border p-2 w-full"
+                className="border p-2 w-full text-xs"
               />
             </div>
             <div className="mb-4">
@@ -330,20 +351,20 @@ export default function QuotationView() {
                 onChange={(e) =>
                   setNewTerm((prev) => ({ ...prev, content: e.target.value }))
                 }
-                className="border p-2 w-full"
+                className="border p-2 w-full text-xs"
                 rows="4"
               ></textarea>
             </div>
             <div className="flex justify-end space-x-4">
               <button
                 onClick={() => setTermModalOpen(false)}
-                className="bg-gray-500 text-white px-4 py-2 rounded"
+                className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
               >
                 Cancel
               </button>
               <button
                 onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
               >
                 {editingTermIdx !== null ? "Update Term" : "Add Term"}
               </button>
@@ -353,24 +374,27 @@ export default function QuotationView() {
       )}
 
       {/* Items Table */}
-      <table className="w-full border-collapse mb-6 text-sm">
+      <table className="w-full border-collapse mb-6 text-xs">
         <thead>
           <tr className="border-b">
             <th className="p-2 text-left">Sl. No.</th>
             <th className="p-2 text-left">Image</th>
             <th className="p-2 text-left">Product</th>
+            <th className="p-2 text-left">HSN</th>
             <th className="p-2 text-left">Quantity</th>
             <th className="p-2 text-left">Rate (with margin)</th>
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (%)</th>
             <th className="p-2 text-left">Total</th>
+            <th className="p-2 text-left">Remove</th>
           </tr>
         </thead>
         <tbody>
           {editableQuotation.items.map((item, index) => {
             const baseRate = parseFloat(item.rate) || 0;
-            const quantity = parseFloat(item.quantity) || 0;
-            // Effective rate = base rate * marginFactor
+            const quantity = parseFloat(item.quantity || item.qty) || 0;
+            const margin = parseFloat(editableQuotation.margin) || 0;
+            const marginFactor = 1 + margin / 100;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
             const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
@@ -382,8 +406,10 @@ export default function QuotationView() {
                 item.productId.images.length > 0
                 ? item.productId.images[0]
                 : "https://via.placeholder.com/150");
+            // HSN Code: try to get from the populated productId, or fallback to item.hsnCode
+            const hsnCode = (item.productId && item.productId.hsnCode) || item.hsnCode || "N/A";
 
-            console.log(`Rendering item ${index}: base rate = ${baseRate}, effective rate = ${effRate.toFixed(2)}`);
+            console.log(`Rendering item ${index}: rate=${baseRate}, quantity=${quantity}, margin=${margin}, marginFactor=${marginFactor}`);
             return (
               <tr key={index} className="border-b">
                 <td className="p-2">{item.slNo}</td>
@@ -394,7 +420,13 @@ export default function QuotationView() {
                     "No Image"
                   )}
                 </td>
-                <td className="p-2">{item.product}</td>
+                <td className="p-2">
+                  <EditableField
+                    value={item.product}
+                    onSave={(newVal) => updateItemField(index, "product", newVal)}
+                  />
+                </td>
+                <td className="p-2">{hsnCode}</td>
                 <td className="p-2">
                   <EditableField
                     value={item.quantity.toString()}
@@ -412,12 +444,8 @@ export default function QuotationView() {
                     onSave={(newVal) => {
                       const newEffRate = parseFloat(newVal);
                       if (!isNaN(newEffRate)) {
-                        // Compute new base rate = new effective rate divided by margin factor
                         const newBaseRate = newEffRate / marginFactor;
-                        console.log(
-                          `Editing item ${index}: new effective rate = ${newEffRate}, computed new base rate = ${newBaseRate.toFixed(2)}`
-                        );
-                        // Update both rate and productprice to the new base rate
+                        console.log(`Editing item ${index}: new effective rate=${newEffRate}, new base rate=${newBaseRate.toFixed(2)}`);
                         updateItemField(index, "rate", parseFloat(newBaseRate.toFixed(2)));
                         updateItemField(index, "productprice", parseFloat(newBaseRate.toFixed(2)));
                       }
@@ -437,18 +465,29 @@ export default function QuotationView() {
                   />%
                 </td>
                 <td className="p-2">{total.toFixed(2)}</td>
+                <td className="p-2">
+                  <button
+                    onClick={() => removeItem(index)}
+                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
 
-      <div className="mb-6 text-lg font-bold">
-        <p>Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}</p>
-        <p>Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}</p>
-      </div>
+      {/* Totals Section - Only display if displayTotals is true */}
+      {editableQuotation.displayTotals && (
+        <div className="mb-6 text-lg font-bold text-xs">
+          <p>Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}</p>
+          <p>Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}</p>
+        </div>
+      )}
 
-      <div className="p-2 italic font-bold text-blue-600 border text-center">
+      <div className="p-2 italic font-bold text-blue-600 border text-center text-xs">
         Rates may vary in case there is a change in specifications / quantity / timelines
       </div>
     </div>
@@ -475,7 +514,7 @@ function EditableField({ value, onSave }) {
     return (
       <input
         type="text"
-        className="border p-1 rounded"
+        className="border p-1 rounded text-xs"
         autoFocus
         value={currentValue}
         onChange={(e) => setCurrentValue(e.target.value)}
@@ -488,13 +527,7 @@ function EditableField({ value, onSave }) {
     <div className="flex items-center">
       <span>{currentValue}</span>
       <button onClick={handleIconClick} className="ml-2">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-4 w-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z" />
         </svg>
       </button>
@@ -502,13 +535,14 @@ function EditableField({ value, onSave }) {
   );
 }
 
-// Helper functions to compute totals
 function computedAmount(quotation) {
   let sum = 0;
   quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const quantity = parseFloat(item.quantity || item.qty) || 0;
     const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
+    const margin = parseFloat(quotation.margin) || 0;
+    const marginFactor = 1 + margin / 100;
+    console.log(`Computed: rate=${baseRate}, quantity=${quantity}, marginFactor=${marginFactor}`);
     sum += baseRate * marginFactor * quantity;
   });
   return sum;
@@ -517,11 +551,13 @@ function computedAmount(quotation) {
 function computedTotal(quotation) {
   let sum = 0;
   quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+    const quantity = parseFloat(item.quantity || item.qty) || 0;
     const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
+    const margin = parseFloat(quotation.margin) || 0;
+    const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
+    const gst = parseFloat(item.productGST) || 0;
+    const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });
   return sum;

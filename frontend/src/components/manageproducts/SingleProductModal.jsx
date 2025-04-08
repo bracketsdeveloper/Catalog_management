@@ -238,6 +238,22 @@ export default function SingleProductModal({
                 )}
               </div>
 
+              {/* Product Description */}
+              <div className="col-span-2">
+                <label className="block font-medium mb-1">Product Description</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={newProductData.productDetails}
+                  onChange={(e) =>
+                    setNewProductData((prev) => ({
+                      ...prev,
+                      productDetails: e.target.value
+                    }))
+                  }
+                  rows={4}
+                />
+              </div>
+
               {/* Qty */}
               <div>
                 <label className="block font-medium mb-1">Qty</label>
@@ -367,7 +383,7 @@ export default function SingleProductModal({
               </div>
 
               {/* Price Range */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Price Range
                 </label>
@@ -385,7 +401,7 @@ export default function SingleProductModal({
               </div>
 
               {/* Weight */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Weight
                 </label>
@@ -403,7 +419,7 @@ export default function SingleProductModal({
               </div>
 
               {/* HSN Code */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   HSN Code
                 </label>
@@ -421,7 +437,7 @@ export default function SingleProductModal({
               </div>
 
               {/* Product Cost Currency */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Product Cost Currency
                 </label>
@@ -439,7 +455,7 @@ export default function SingleProductModal({
               </div>
 
               {/* Product Cost */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Product Cost
                 </label>
@@ -457,7 +473,7 @@ export default function SingleProductModal({
               </div>
 
               {/* Product Cost Unit */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Product Cost Unit
                 </label>
@@ -475,7 +491,7 @@ export default function SingleProductModal({
               </div>
 
               {/* Product GST */}
-              <div>
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Product GST (%)
                 </label>

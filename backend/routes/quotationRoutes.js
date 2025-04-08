@@ -41,7 +41,8 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       customerAddress,
       margin,
       items,      // Items array from manual catalog
-      terms       // Dynamic terms field (headings & content)
+      terms,      // Dynamic terms field (headings & content)
+      displayTotals  // NEW: whether to show totals (true/false)
     } = req.body;
 
     console.log("Request body keys:", Object.keys(req.body));
@@ -123,7 +124,9 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       newItems.push(newItem);
     }
 
-    console.log("Final newItems array:", newItems);
+    // Compute overall totals
+    const totalAmount = newItems.reduce((acc, curr) => acc + curr.amount, 0);
+    const grandTotal = newItems.reduce((acc, curr) => acc + curr.total, 0);
 
     const newQuotation = new Quotation({
       catalogName,
@@ -134,6 +137,9 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       margin,
       items: newItems,
       terms: quotationTerms,
+      totalAmount,
+      grandTotal,
+      displayTotals: displayTotals || false, // Store the displayTotals state
       createdBy: req.user.email,
     });
 
@@ -179,16 +185,7 @@ router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
 // 4) UPDATE A QUOTATION
 router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const {
-      catalogName,
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      margin,
-      items,
-      terms
-    } = req.body;
+    const { catalogName, customerName, customerEmail, customerCompany, customerAddress, margin, items, terms, displayTotals } = req.body;
 
     let newItems = [];
     if (items) {
@@ -232,6 +229,9 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       }
     }
 
+    const totalAmount = newItems.length ? newItems.reduce((acc, curr) => acc + curr.amount, 0) : undefined;
+    const grandTotal = newItems.length ? newItems.reduce((acc, curr) => acc + curr.total, 0) : undefined;
+
     const updatedData = {
       catalogName,
       customerName,
@@ -240,10 +240,13 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       customerAddress,
       margin,
       terms,
+      displayTotals, // Update displayTotals as well
     };
 
     if (newItems.length) {
       updatedData.items = newItems;
+      updatedData.totalAmount = totalAmount;
+      updatedData.grandTotal = grandTotal;
     }
 
     const existingQuotation = await Quotation.findById(req.params.id);
@@ -251,12 +254,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       return res.status(404).json({ message: "Quotation not found" });
     }
 
-    const updatedQuotation = await Quotation.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true }
-    );
-
+    const updatedQuotation = await Quotation.findByIdAndUpdate(req.params.id, updatedData, { new: true });
     await createLog("update", existingQuotation, updatedQuotation, req.user, req.ip);
 
     res.json({ message: "Quotation updated", quotation: updatedQuotation });

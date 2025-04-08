@@ -73,10 +73,8 @@ async function createLog(action, field, oldValue, newValue, performedBy, ip) {
 
 // For granular field changes on update
 function getFieldDifferences(oldDoc, newDoc) {
-  // Compare each key in newDoc to oldDoc
   const changes = [];
   for (const key of Object.keys(newDoc)) {
-    // Convert both sides to string for safe comparison of arrays / objects / etc.
     const oldVal = oldDoc[key] == null ? "" : String(oldDoc[key]);
     const newVal = newDoc[key] == null ? "" : String(newDoc[key]);
     if (oldVal !== newVal) {
@@ -141,7 +139,6 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Removed .select() to fetch all fields for editing
     const products = await Product.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -159,8 +156,6 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching products" });
   }
 });
-
-
 
 // GET /api/admin/products/filters - Returns distinct filter values
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
@@ -214,7 +209,6 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { images = [] } = req.body;
 
-    // Validate required fields
     if (!req.body.productTag || !req.body.productId || !req.body.category || !req.body.name) {
       return res.status(400).json({
         success: false,
@@ -222,7 +216,6 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       });
     }
 
-    // Compute image hashes only if images are provided
     const imageHashes = images.length > 0 ? await computeAllHashes(images) : [];
 
     const newProduct = new Product({
@@ -251,17 +244,16 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       productCost_Currency: req.body.productCost_Currency || "",
       productCost: Number(req.body.productCost) || 0,
       productCost_Unit: req.body.productCost_Unit || "",
-      productGST: Number(req.body.productGST) || 0 // <-- read GST value
+      productGST: Number(req.body.productGST) || 0
     });
 
     await newProduct.save();
 
-    // Create 'create' log (no field-by-field changes needed)
     await createLog(
       "create",
       null,
       null,
-      newProduct, // newValue
+      newProduct,
       req.user ? req.user._id : null,
       req.ip
     );
@@ -294,7 +286,6 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
     const { id } = req.params;
     const { images = [] } = req.body;
 
-    // Find existing product
     const existingProduct = await Product.findById(id);
     if (!existingProduct) {
       return res.status(404).json({
@@ -303,13 +294,11 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       });
     }
 
-    // Only compute hashes if images were changed
     const imageHashes =
       JSON.stringify(images) !== JSON.stringify(existingProduct.images)
         ? await computeAllHashes(images)
         : existingProduct.imageHashes;
 
-    // Prepare updated data
     const updatedData = {
       productTag: req.body.productTag || existingProduct.productTag,
       productId: req.body.productId || existingProduct.productId,
@@ -340,23 +329,19 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
           ? Number(req.body.productCost)
           : existingProduct.productCost,
       productCost_Unit: req.body.productCost_Unit || existingProduct.productCost_Unit,
-      // Update GST if passed
       productGST:
         req.body.productGST != null
           ? Number(req.body.productGST)
           : existingProduct.productGST
     };
 
-    // Get field-level differences for logs
     const fieldDiffs = getFieldDifferences(existingProduct.toObject(), updatedData);
 
-    // Update product
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
       new: true,
       runValidators: true
     });
 
-    // Create logs for each changed field
     for (const diff of fieldDiffs) {
       await createLog(
         "update",
@@ -393,12 +378,11 @@ router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) =>
 
     await Product.findByIdAndDelete(req.params.id);
 
-    // Create 'delete' log
     await createLog(
       "delete",
       null,
-      existingProduct, // oldValue
-      null,           // newValue
+      existingProduct,
+      null,
       req.user ? req.user._id : null,
       req.ip
     );
@@ -441,14 +425,12 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       productGST: p.productGST != null ? Number(p.productGST) : 0
     }));
 
-    // Compute and assign image hashes for each product
     for (const prodData of productsData) {
       prodData.imageHashes = await computeAllHashes(prodData.images || []);
     }
 
     const insertedProducts = await Product.insertMany(productsData);
 
-    // Create logs for each inserted product
     for (const prod of insertedProducts) {
       await createLog(
         "create",
@@ -467,15 +449,19 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-// (Optional) Advanced Image Search endpoint (unchanged or omitted if not needed)
-// Assuming you have a Product model
-// Assuming you have a Product model
+// Advanced Image Search endpoint (optional)
 router.get("/products/:id", async (req, res) => {
   try {
-    // Explicitly select the fields you want to return
-    const product = await Product.findById(req.params.id)
-      .select("name productDetails brandName category subCategory images productCost productGST")
-      .lean();
+    // Check for a query parameter ?full=true to decide which fields to return.
+    const full = req.query.full === "true";
+    let product;
+    if (full) {
+      product = await Product.findById(req.params.id).lean();
+    } else {
+      product = await Product.findById(req.params.id)
+        .select("name productDetails brandName category subCategory images productCost productGST")
+        .lean();
+    }
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }

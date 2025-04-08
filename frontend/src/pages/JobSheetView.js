@@ -16,6 +16,10 @@ export default function JobSheetView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Filter states (if needed)
+  const [dateFilter, setDateFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
   // Fetch job sheet data on mount.
   useEffect(() => {
     const fetchJobSheet = async () => {
@@ -47,39 +51,65 @@ export default function JobSheetView() {
     });
   };
 
-  // Function to export the job sheet content to PDF in landscape orientation with margin and high quality.
+  // Updated function to export the job sheet content to PDF in landscape orientation 
+  // with proper top/bottom margin and a second line (GSTIN) lower in the footer.
   const exportToPDF = () => {
     const input = document.getElementById("job-sheet-content");
-    // Increase scale to boost the resolution.
-    html2canvas(input, { scale: 3 }).then((canvas) => {
+
+    // Customize margins
+    const marginLeft = 20;
+    const marginRight = 20;
+    const marginTop = 20;
+    const marginBottom = 20;
+    const footerHeight = 70; // Enough space so content won't overlap the footer
+
+    html2canvas(input, { scale: 5 }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
 
-      // Set a margin (in pt) for the PDF pages.
-      const margin = 4;
-      // Initialize jsPDF in landscape orientation.
       const pdf = new jsPDF("l", "pt", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      // Usable width and height taking into account the margins.
-      const usableWidth = pageWidth - margin * 2;
-      const usableHeight = pageHeight - margin * 2;
 
-      // Calculate image height to maintain aspect ratio.
+      // Compute usable area by subtracting margins plus footer space
+      const usableWidth = pageWidth - marginLeft - marginRight;
+      const usableHeight = pageHeight - marginTop - marginBottom - footerHeight;
+
+      // Maintain aspect ratio
       const imgHeight = (canvas.height * usableWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = margin;
 
-      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+      let heightLeft = imgHeight;
+      let position = marginTop; // Start at the top margin
+
+      // First page
+      pdf.addImage(imgData, "PNG", marginLeft, position, usableWidth, imgHeight);
       heightLeft -= usableHeight;
 
+      // Additional pages if needed
       while (heightLeft > 0) {
         pdf.addPage();
-        position = heightLeft - imgHeight;
-        pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+        position = marginTop - (imgHeight - heightLeft);
+        pdf.addImage(imgData, "PNG", marginLeft, position, usableWidth, imgHeight);
         heightLeft -= usableHeight;
       }
-      pdf.save(`job-sheet-${jobSheet.clientCompanyName}.pdf`);
+
+      // Footer on the last page
+      // We'll place one line, then place the GSTIN a bit lower
+      pdf.setFontSize(10);
+      const footerLine1Y = pageHeight - marginBottom;
+      const footerLine2Y = footerLine1Y + 55; // 15pt lower than line1
+      pdf.text("Your footer content here", marginLeft, footerLine1Y);
+
+      // Example GSTIN line. Adjust text & positioning to suit your needs.
+      pdf.text("GSTIN: 07AABCU9603R1ZL", marginLeft, footerLine2Y);
+
+      pdf.save(`job-sheet-${id}.pdf`);
     });
+  };
+
+  // Clear filters function (if needed)
+  const clearFilters = () => {
+    setDateFilter("");
+    setStatusFilter("");
   };
 
   if (loading) return <div className="text-xs">Loading job sheet...</div>;
@@ -254,7 +284,7 @@ export default function JobSheetView() {
             </div>
           </div>
           <div className="grid grid-cols-3 gap-0 border-b border-black">
-            <div className="p-1 border-r border-black ">
+            <div className="p-1 border-r border-black">
               <span className="font-bold uppercase">DELIVERY TYPE:</span>
               <span className="ml-1">{jobSheet.deliveryType || "N/A"}</span>
             </div>
@@ -279,9 +309,7 @@ export default function JobSheetView() {
             <span className="font-bold uppercase border-black border-r pr-11 p-1">
               GIFT BOX / BAGS DETAILS:
             </span>
-            <span className="ml-1">
-              {jobSheet.giftBoxBagsDetails || "N/A"}
-            </span>
+            <span className="ml-1">{jobSheet.giftBoxBagsDetails || "N/A"}</span>
           </div>
           <div className="border-b border-black p-1">
             <span className="font-bold uppercase border-black border-r w-16 pr-[37px] p-1">
