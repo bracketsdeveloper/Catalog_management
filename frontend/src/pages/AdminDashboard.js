@@ -15,8 +15,7 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
-// Define top-level navigation items.
-// The CRM item has a defaultPath and an array of subItems.
+// Top-level navigation items. The "CRM" item includes subItems.
 const adminPages = [
   {
     name: "Users",
@@ -69,7 +68,7 @@ const adminPages = [
       },
       {
         name: "Add / Manage Quotation",
-        path: "/admin-dashboard/manage-catalogs",
+        path: "/admin-dashboard/manage-quotation",
         permission: "manage-quotation",
       },
       {
@@ -82,11 +81,12 @@ const adminPages = [
 ];
 
 export default function AdminDashboard() {
-  // Sidebar open/hover state controls the left part's (base) width.
+  // Local sidebar states.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHover, setSidebarHover] = useState(false);
-  // crmHovered controls whether the CRM submenu is visible.
   const [crmHovered, setCrmHovered] = useState(false);
+
+  // Permissions and role.
   const [permissions, setPermissions] = useState([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [role, setRole] = useState("");
@@ -96,7 +96,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     const storedRole = localStorage.getItem("role") || "";
     setRole(storedRole);
-
     if (storedRole === "ADMIN") {
       let perms = [];
       const permsStr = localStorage.getItem("permissions");
@@ -119,7 +118,6 @@ export default function AdminDashboard() {
   };
 
   const displayedRole = role === "GENERAL" ? "DEACTIVE" : role;
-
   if (role === "GENERAL") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-gray-800">
@@ -139,8 +137,7 @@ export default function AdminDashboard() {
     return null;
   }
 
-  // Filter pages based on the permissions. For items with subItems (e.g. CRM),
-  // ensure that at least one sub-item is accessible.
+  // Filter accessible pages based on permissions.
   const accessiblePages = adminPages.filter((page) => {
     if (page.subItems) {
       const accessibleSub = page.subItems.filter(
@@ -151,20 +148,23 @@ export default function AdminDashboard() {
     return isSuperAdmin || permissions.includes(page.permission);
   });
 
-  // Base left sidebar width. When in “open”/hover mode it’s 224px; otherwise 80px.
-  const leftSidebarWidth = sidebarOpen || sidebarHover ? 380 : 80;
+  // Determine base sidebar width from open/hover state.
+  const baseSidebarWidth = (sidebarOpen || sidebarHover) ? 224 : 80;
+  // When CRM is hovered, add extra 200px.
+  const finalSidebarWidth = crmHovered ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   return (
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
-      {/* Left Sidebar */}
-      {/* The aside is fixed-width (leftSidebarWidth) but it supports horizontal scrolling */}
+      {/* Left Sidebar with smooth width transition */}
       <aside
-        className="transition-all duration-300 overflow-y-auto overflow-x-auto bg-gradient-to-b from-purple-500 via-pink-500 to-blue-500 text-white"
-        style={{ width: leftSidebarWidth }}
-        onMouseEnter={() => !sidebarOpen && setSidebarHover(true)}
+        className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-purple-500 via-pink-500 to-blue-500 text-white"
+        style={{ width: finalSidebarWidth }}
+        onMouseEnter={() => { if (!sidebarOpen) setSidebarHover(true); }}
         onMouseLeave={() => {
-          !sidebarOpen && setSidebarHover(false);
-          setCrmHovered(false);
+          if (!sidebarOpen) {
+            setSidebarHover(false);
+            setCrmHovered(false);
+          }
         }}
       >
         <div className="flex items-center justify-between p-4">
@@ -176,8 +176,7 @@ export default function AdminDashboard() {
           )}
         </div>
         <nav className="mt-4 px-2">
-          {/* Wrap the list in a div whose width can exceed the aside width */}
-          <ul className="flex flex-col space-y-2 min-w-full">
+          <ul className="space-y-2">
             {accessiblePages.map((page) => {
               if (page.name === "CRM") {
                 return (
@@ -186,36 +185,35 @@ export default function AdminDashboard() {
                     onMouseEnter={() => setCrmHovered(true)}
                     onMouseLeave={() => setCrmHovered(false)}
                   >
-                    <div className="flex">
-                      <Link
-                        to={page.defaultPath}
-                        className="flex items-center p-2 rounded-md hover:bg-white/10 transition whitespace-nowrap"
-                      >
-                        {page.icon}
-                        {(sidebarOpen || sidebarHover) && (
-                          <>
-                            <span className="ml-3 text-sm font-medium">
-                              {page.name}
-                            </span>
-                            <ChevronRightIcon className="h-4 w-4 ml-auto" />
-                          </>
-                        )}
-                      </Link>
-                      {crmHovered && (
-                        <div className="flex flex-col border-l border-white ml-2 whitespace-nowrap">
-                          {page.subItems.map((sub) => (
-                            <Link
-                              key={sub.name}
-                              to={sub.path}
-                              className="flex items-center p-2 rounded-md hover:bg-white/10 transition"
-                            >
-                              <span className="text-sm font-medium">
-                                {sub.name}
-                              </span>
-                            </Link>
-                          ))}
-                        </div>
+                    <Link
+                      to={page.defaultPath}
+                      className="flex items-center p-2 rounded-md hover:bg-white/10 transition whitespace-nowrap"
+                    >
+                      {page.icon}
+                      {(sidebarOpen || sidebarHover) && (
+                        <>
+                          <span className="ml-3 text-sm font-medium">
+                            {page.name}
+                          </span>
+                          <ChevronRightIcon className="h-4 w-4 ml-auto" />
+                        </>
                       )}
+                    </Link>
+                    {/* Always render the submenu container and transition its opacity and max height */}
+                    <div
+                      className={`ml-4 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
+                        crmHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      {page.subItems.map((sub) => (
+                        <Link
+                          key={sub.name}
+                          to={sub.path}
+                          className="block p-2 rounded-md hover:bg-white/10 transition"
+                        >
+                          <span className="text-sm font-medium">{sub.name}</span>
+                        </Link>
+                      ))}
                     </div>
                   </li>
                 );
@@ -250,7 +248,6 @@ export default function AdminDashboard() {
           </button>
         </div>
       </aside>
-
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4">
         <Outlet />

@@ -17,11 +17,7 @@ export default function CreateJobSheet() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
-
-  // A state to store if the existing job sheet is a draft
   const [existingIsDraft, setExistingIsDraft] = useState(false);
-
-  // Form state
   const [eventName, setEventName] = useState("");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,8 +28,6 @@ export default function CreateJobSheet() {
   const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const imageInputRef = useRef(null);
-
-  // Filter state
   const [fullCategories, setFullCategories] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [fullSubCategories, setFullSubCategories] = useState([]);
@@ -44,8 +38,6 @@ export default function CreateJobSheet() {
   const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
   const [fullVariationHinges, setFullVariationHinges] = useState([]);
   const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
-
-  // Job sheet form state
   const [orderDate, setOrderDate] = useState("");
   const [clientCompanyName, setClientCompanyName] = useState("");
   const [clientName, setClientName] = useState("");
@@ -59,22 +51,13 @@ export default function CreateJobSheet() {
   const [deliveryType, setDeliveryType] = useState("");
   const [deliveryMode, setDeliveryMode] = useState("");
   const [deliveryCharges, setDeliveryCharges] = useState("");
-
-  // Delivery addresses array of strings
   const [deliveryAddress, setDeliveryAddress] = useState([""]);
-
-  // Branding file
   const [brandingFileName, setBrandingFileName] = useState("");
-
   const [giftBoxBagsDetails, setGiftBoxBagsDetails] = useState("");
   const [packagingInstructions, setPackagingInstructions] = useState("");
   const [otherDetails, setOtherDetails] = useState("");
   const [referenceQuotation, setReferenceQuotation] = useState("");
-
-  // Quotation suggestions
   const [quotationSuggestions, setQuotationSuggestions] = useState([]);
-
-  // Selected items and modal state
   const [selectedItems, setSelectedItems] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -85,16 +68,13 @@ export default function CreateJobSheet() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
 
-  // On mount, load filters and companies
   useEffect(() => {
     fetchFilterOptions();
     fetchCompanies();
   }, []);
 
-  // Reload products on filters/search changes
   useEffect(() => {
     fetchProducts(1);
-    // eslint-disable-next-line
   }, [
     searchTerm,
     selectedCategories,
@@ -104,17 +84,14 @@ export default function CreateJobSheet() {
     selectedVariationHinges,
   ]);
 
-  // If editing, load existing job sheet
   useEffect(() => {
     if (isEditMode) {
       fetchExistingJobSheet();
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line
   }, [id]);
 
-  // Debounce for referenceQuotation suggestions
   useEffect(() => {
     if (referenceQuotation.trim().length > 0) {
       const delayDebounceFn = setTimeout(() => {
@@ -126,7 +103,6 @@ export default function CreateJobSheet() {
     }
   }, [referenceQuotation]);
 
-  // Fetch quotation suggestions
   async function fetchQuotationSuggestions(query) {
     try {
       const token = localStorage.getItem("token");
@@ -139,7 +115,6 @@ export default function CreateJobSheet() {
     }
   }
 
-  // Fetch filter options
   async function fetchFilterOptions() {
     try {
       const token = localStorage.getItem("token");
@@ -156,7 +131,6 @@ export default function CreateJobSheet() {
     }
   }
 
-  // Fetch products
   async function fetchProducts(page = 1) {
     setLoading(true);
     try {
@@ -195,7 +169,6 @@ export default function CreateJobSheet() {
     }
   }
 
-  // Fetch companies
   async function fetchCompanies() {
     try {
       const token = localStorage.getItem("token");
@@ -208,7 +181,6 @@ export default function CreateJobSheet() {
     }
   }
 
-  // Fetch existing job sheet
   async function fetchExistingJobSheet() {
     try {
       const token = localStorage.getItem("token");
@@ -216,10 +188,7 @@ export default function CreateJobSheet() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = res.data;
-
-      // If the existing sheet is a draft, store that so we can show "Save Draft" button
       setExistingIsDraft(data.isDraft === true);
-
       setEventName(data.eventName || "");
       setOrderDate(data.orderDate ? data.orderDate.slice(0, 10) : "");
       setClientCompanyName(data.clientCompanyName || "");
@@ -274,7 +243,6 @@ export default function CreateJobSheet() {
     }
   }
 
-  // Helper for line item update
   const handleInlineUpdate = (index, field, value) => {
     setSelectedItems((prev) => {
       const newItems = [...prev];
@@ -283,7 +251,6 @@ export default function CreateJobSheet() {
     });
   };
 
-  // Check duplicates
   function isDuplicate(productName, color, size) {
     return selectedItems.some(
       (item) =>
@@ -293,7 +260,6 @@ export default function CreateJobSheet() {
     );
   }
 
-  // Add single item from ProductGrid
   const handleAddSingle = (item) => {
     if (isDuplicate(item.product, item.color, item.size)) {
       alert("This item with the same product, color & size is already added!");
@@ -303,7 +269,6 @@ export default function CreateJobSheet() {
     setSelectedItems((prev) => [...prev, newItem]);
   };
 
-  // Variation modal
   const openVariationModal = (product) => {
     setVariationModalProduct(product);
     setVariationModalOpen(true);
@@ -324,7 +289,6 @@ export default function CreateJobSheet() {
     closeVariationModal();
   };
 
-  // Edit item
   const handleEditItem = (index) => {
     setEditIndex(index);
     setEditModalOpen(true);
@@ -354,7 +318,6 @@ export default function CreateJobSheet() {
     setSelectedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // For quotation reference
   const parseProductString = (productStr) => {
     let color = "";
     let size = "";
@@ -372,7 +335,6 @@ export default function CreateJobSheet() {
     return { baseProduct: baseProduct.trim(), color, size };
   };
 
-  // Quotation handling
   const handleQuotationSelect = (quotation) => {
     setReferenceQuotation(quotation.quotationNumber);
     setClientCompanyName(quotation.customerCompany || "");
@@ -434,55 +396,33 @@ export default function CreateJobSheet() {
     }
   };
 
-  // Save job sheet (with optional isDraft)
   const handleSaveJobSheet = async (isDraft = false) => {
-    // Required validations
-    if (!orderDate || !clientCompanyName || !clientName || !deliveryDate) {
-      alert("Please enter Order Date, Client Company, Client Name, and Delivery Date.");
-      return;
-    }
-    if (selectedItems.length === 0) {
-      alert("Please select at least one product.");
-      return;
-    }
-
-    // Filter out empty addresses
-    const filteredAddresses = deliveryAddress.filter((addr) => addr.trim() !== "");
-    if (filteredAddresses.length === 0) {
-      alert("Please enter at least one delivery address.");
-      return;
-    }
-
-    const itemsWithSlNo = selectedItems.map((item, index) => ({
-      ...item,
-      slNo: item.slNo || index + 1,
-    }));
-
-    const finalPoStatus = poStatus === "Custom" ? customPoStatus : poStatus;
-
+    const today = new Date().toISOString().split('T')[0];
+    
     const body = {
-      eventName,
-      orderDate,
-      clientCompanyName,
-      clientName,
-      contactNumber,
-      deliveryDate,
-      deliveryTime,
-      crmIncharge,
-      items: itemsWithSlNo,
-      poNumber,
-      poStatus: finalPoStatus,
-      deliveryType,
-      deliveryMode,
-      deliveryCharges,
-      deliveryAddress: filteredAddresses,
-      brandingFileName,
-      giftBoxBagsDetails,
-      packagingInstructions,
-      otherDetails,
-      referenceQuotation,
-
-      // The new field
+      eventName: eventName || ".",
+      orderDate: orderDate || today,
+      clientCompanyName: clientCompanyName || ".",
+      clientName: clientName || ".",
+      contactNumber: contactNumber || ".",
+      deliveryDate: deliveryDate || today,
+      deliveryTime: deliveryTime || ".",
+      crmIncharge: crmIncharge || ".",
+      items: selectedItems.map((item, index) => ({
+        ...item,
+        slNo: item.slNo || index + 1,
+      })),
+      poNumber: poNumber || ".",
+      poStatus: poStatus === "Custom" ? customPoStatus || "." : poStatus || ".",
+      deliveryType: deliveryType || ".",
+      deliveryMode: deliveryMode || ".",
+      deliveryCharges: deliveryCharges || ".",
+      deliveryAddress: deliveryAddress.filter(addr => addr.trim() !== "") || ["."],
+      brandingFileName: brandingFileName || ".",
+      giftBoxBagsDetails: giftBoxBagsDetails || ".",
+      packagingInstructions: packagingInstructions || ".",
+      otherDetails: otherDetails || ".",
+      referenceQuotation: referenceQuotation || ".",
       isDraft,
     };
 
@@ -514,7 +454,6 @@ export default function CreateJobSheet() {
     }
   };
 
-  // Image-based search
   const handleImageSearchClick = () => {
     if (imageInputRef.current) imageInputRef.current.click();
   };
@@ -573,14 +512,10 @@ export default function CreateJobSheet() {
     fetchCompanies();
   };
 
-  // Conditionally show "Save Draft" button
-  //  - Show if we're creating a new job sheet (not isEditMode), or
-  //  - If isEditMode but the existing job sheet is a draft
   const showSaveDraftButton = !isEditMode || existingIsDraft;
 
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Header with Save Draft / Create/Update */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Job Sheet" : "Create Job Sheet"}
@@ -588,7 +523,7 @@ export default function CreateJobSheet() {
         <div className="flex gap-3">
           {showSaveDraftButton && (
             <button
-              onClick={() => handleSaveJobSheet(true)} // isDraft = true
+              onClick={() => handleSaveJobSheet(true)}
               className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
             >
               {isEditMode ? "Update as Draft" : "Save Draft"}
@@ -596,7 +531,7 @@ export default function CreateJobSheet() {
           )}
 
           <button
-            onClick={() => handleSaveJobSheet(false)} // isDraft = false
+            onClick={() => handleSaveJobSheet(false)}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
           >
             {isEditMode ? "Update Job Sheet" : "Create Job Sheet"}
@@ -604,9 +539,7 @@ export default function CreateJobSheet() {
         </div>
       </div>
 
-      {/* The main JobSheet form section */}
       <JobSheetForm
-        // Basic fields
         eventName={eventName}
         setEventName={setEventName}
         orderDate={orderDate}
@@ -637,7 +570,6 @@ export default function CreateJobSheet() {
         setDeliveryCharges={setDeliveryCharges}
         deliveryAddress={deliveryAddress}
         setDeliveryAddress={setDeliveryAddress}
-        // Branding
         brandingFileName={brandingFileName}
         setBrandingFileName={setBrandingFileName}
         giftBoxBagsDetails={giftBoxBagsDetails}
@@ -646,26 +578,22 @@ export default function CreateJobSheet() {
         setPackagingInstructions={setPackagingInstructions}
         otherDetails={otherDetails}
         setOtherDetails={setOtherDetails}
-        // Quotation
         referenceQuotation={referenceQuotation}
         setReferenceQuotation={setReferenceQuotation}
         fetchQuotation={handleFetchQuotation}
         quotationSuggestions={quotationSuggestions}
         handleQuotationSelect={handleQuotationSelect}
-        // Company
         companies={companies}
         dropdownOpen={dropdownOpen}
         setDropdownOpen={setDropdownOpen}
         handleCompanySelect={handleCompanySelect}
         handleOpenCompanyModal={handleOpenCompanyModal}
-        // Items
         selectedItems={selectedItems}
         handleInlineUpdate={handleInlineUpdate}
         handleRemoveSelectedItem={handleRemoveSelectedItem}
         handleEditItem={handleEditItem}
       />
 
-      {/* Product listing and advanced search */}
       <ProductGrid
         products={products}
         loading={loading}
@@ -706,7 +634,6 @@ export default function CreateJobSheet() {
         setSelectedVariationHinges={setSelectedVariationHinges}
       />
 
-      {/* Floating cart icon */}
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -720,7 +647,6 @@ export default function CreateJobSheet() {
         )}
       </div>
 
-      {/* Cart drawer */}
       {cartOpen && (
         <JobSheetCart
           selectedItems={selectedItems}
@@ -731,7 +657,6 @@ export default function CreateJobSheet() {
         />
       )}
 
-      {/* Edit item modal */}
       {editModalOpen && editIndex !== null && (
         <JobSheetItemEditModal
           item={selectedItems[editIndex]}
@@ -747,7 +672,6 @@ export default function CreateJobSheet() {
         />
       )}
 
-      {/* Variation modal */}
       {variationModalOpen && variationModalProduct && (
         <VariationModal
           product={variationModalProduct}
@@ -756,7 +680,6 @@ export default function CreateJobSheet() {
         />
       )}
 
-      {/* Company modal */}
       {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
     </div>
   );

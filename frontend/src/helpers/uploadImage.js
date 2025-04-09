@@ -14,7 +14,8 @@ const uploadImage = async (image) => {
     });
 
     const result = await dataResponse.json();
-    console.log("Uploaded Image URL:", result.secure_url);
+    // Log the result URL for debugging
+    // console.log("Uploaded Image URL:", result.secure_url);
     return result;
   } catch (error) {
     console.error("Error uploading image:", error);

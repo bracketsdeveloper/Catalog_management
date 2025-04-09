@@ -445,7 +445,6 @@ export default function CatalogManagementPage() {
     setSelectedItemForPDF(item);
     setPdfTemplateModalOpen(true);
   }
-
   async function handleExportCombinedPDF(catalog, templateId = "1") {
     try {
       const tmpl = templateConfig[templateId];
@@ -453,6 +452,7 @@ export default function CatalogManagementPage() {
         alert("Invalid template selection");
         return;
       }
+
       const pdf1Bytes = await fetch(tmpl.pdf1).then((res) => res.arrayBuffer());
       const pdf2Bytes = await fetch(tmpl.pdf2).then((res) => res.arrayBuffer());
       const pdf3Bytes = await fetch(tmpl.pdf3).then((res) => res.arrayBuffer());
@@ -516,18 +516,20 @@ export default function CatalogManagementPage() {
             color: rgb(0.5, 0.5, 0.5),
           });
         }
+
         let xText = 1000;
         let yText = height - 200;
-        const lineHeight = 44;
+        const lineHeight = 48;
         page.drawText(prod.name || sub.productName || "", {
           x: xText,
           y: yText,
-          size: 39,
+          size: 32,
           font: boldFont,
           color: rgb(0, 0, 0),
           maxWidth: 800,
         });
-        yText -= lineHeight * 1.3;
+        yText -= lineHeight * 2;
+
         if (prod.ProductBrand || sub.ProductBrand) {
           page.drawText("Brand Name: ", {
             x: xText,
@@ -547,6 +549,7 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
+
         if (prod.ProductDescription || sub.ProductDescription) {
           page.drawText("Description:", {
             x: xText,
@@ -557,6 +560,7 @@ export default function CatalogManagementPage() {
             maxWidth: 800,
           });
           yText -= lineHeight;
+
           const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
           const wrapped = wrapText(descriptionText, 500, normalFont, 7);
           wrapped.forEach((line) => {
@@ -570,8 +574,9 @@ export default function CatalogManagementPage() {
             });
             yText -= lineHeight;
           });
-          yText -= lineHeight * 0.5;
+          yText -= lineHeight * 0.5; // Additional spacing after description
         }
+
         if (sub.quantity) {
           page.drawText("Qty: ", {
             x: xText,
@@ -591,6 +596,7 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
+
         if (sub.productCost !== undefined) {
           const baseCost = sub.productCost;
           const margin = catalog.margin || 0;
@@ -613,6 +619,7 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
+
         if (sub.productGST !== undefined) {
           page.drawText("GST: ", {
             x: xText,
@@ -632,6 +639,7 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
         }
+
         newPdf.addPage(page);
       }
 
@@ -652,6 +660,7 @@ export default function CatalogManagementPage() {
       alert("Combined PDF export failed");
     }
   }
+
 
   // -------------- VIRTUAL LINK --------------
   function handleVirtualLink(item) {

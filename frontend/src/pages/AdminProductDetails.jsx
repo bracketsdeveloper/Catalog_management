@@ -1,9 +1,10 @@
-"use client"; // Remove if you're using Create React App
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Loader from "../components/Loader";
+import SingleProductModal from "../components/manageproducts/SingleProductModal"; // Import the modal
+
+// Helpers
 import uploadImage from "../helpers/uploadImage";
 
 export default function AdminProductDetails() {
@@ -17,7 +18,7 @@ export default function AdminProductDetails() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
 
-  // Use the same field names as in your SingleProductModal for consistency
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [formData, setFormData] = useState({
     productTag: "",
     productId: "",
@@ -45,12 +46,9 @@ export default function AdminProductDetails() {
     productCost_Unit: "",
     productGST: 0
   });
-
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // ----------------- FETCH PRODUCT -----------------
-  // IMPORTANT: Ensure that your backend GET endpoint for a single product returns all fields
-  // (e.g., by using ?full=true in the URL).
   const fetchProduct = async () => {
     setLoading(true);
     try {
@@ -59,10 +57,11 @@ export default function AdminProductDetails() {
         `${BACKEND_URL}/api/admin/products/${prodId}?full=true`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Handle cases where your endpoint returns either { product: {...} } or the product directly
-      const prod = res.data.product ? res.data.product : res.data;
+      const prod = res.data.product || res.data;
       setProduct(prod);
-      // Populate formData exactly as in your SingleProductModal
+      setActiveImageIndex(0); // reset active image on new fetch
+      setError(null);
+      // Populate formData with the product details for editing
       setFormData({
         productTag: prod.productTag || "",
         productId: prod.productId || "",
@@ -90,7 +89,6 @@ export default function AdminProductDetails() {
         productCost_Unit: prod.productCost_Unit || "",
         productGST: prod.productGST || 0
       });
-      setError(null);
     } catch (err) {
       console.error("Error fetching product details:", err);
       setError("Failed to fetch product details");
@@ -105,6 +103,7 @@ export default function AdminProductDetails() {
 
   // ----------------- HANDLERS -----------------
   const handleBack = () => navigate(-1);
+
   const handleEditToggle = () => setEditing((prev) => !prev);
 
   const handleChange = (e) => {
@@ -112,39 +111,28 @@ export default function AdminProductDetails() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e) => {
-    // Store new file uploads (as File objects)
-    setFormData((prev) => ({
-      ...prev,
-      images: [...e.target.files]
-    }));
-  };
+  const handleFileChange = async (e) => {
+    const newImages = [...e.target.files];
+    const uploadedImages = [];
 
-  const handleRemoveExistingImage = (idx) => {
+    for (let i = 0; i < newImages.length; i++) {
+      const uploadedImage = await uploadImage(newImages[i]);
+      uploadedImages.push(uploadedImage.secure_url);
+    }
+
+    // Set the images to the uploaded image URLs
     setFormData((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== idx)
+      images: [...prev.images, ...uploadedImages]
     }));
   };
 
   const handleProductUpdate = async (e) => {
     e.preventDefault();
     setUploadProgress(0);
+    
     try {
       const token = localStorage.getItem("token");
-      let finalImages = [];
-
-      // If images are new File objects, upload them first
-      if (formData.images.length && formData.images[0] instanceof File) {
-        for (let i = 0; i < formData.images.length; i++) {
-          const res = await uploadImage(formData.images[i]);
-          finalImages.push(res.url);
-          setUploadProgress(Math.round(((i + 1) / formData.images.length) * 100));
-        }
-      } else {
-        finalImages = formData.images;
-      }
-
       const payload = {
         productTag: formData.productTag,
         productId: formData.productId,
@@ -154,7 +142,7 @@ export default function AdminProductDetails() {
         variationHinge: formData.variationHinge,
         name: formData.name,
         brandName: formData.brandName,
-        images: finalImages,
+        images: formData.images, // The images are already URLs from Cloudinary
         productDetails: formData.productDetails,
         qty: formData.qty,
         MRP_Currency: formData.MRP_Currency,
@@ -176,7 +164,8 @@ export default function AdminProductDetails() {
       await axios.put(`${BACKEND_URL}/api/admin/products/${prodId}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setEditing(false);
+
+      setEditing(false); // Toggle editing off after the update
       fetchProduct(); // Refresh product details after update
     } catch (err) {
       console.error("Error updating product:", err);
@@ -190,8 +179,6 @@ export default function AdminProductDetails() {
   if (loading) return <Loader />;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
   if (!product) return <div className="p-4">Product not found</div>;
-
-  const userRole = localStorage.getItem("role");
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -211,7 +198,8 @@ export default function AdminProductDetails() {
           >
             Manage Products
           </span>{" "}
-          / <span className="font-semibold text-gray-900">Product Details</span>
+          /{" "}
+          <span className="font-semibold text-gray-900">Product Details</span>
         </nav>
 
         <button onClick={handleBack} className="mb-6 text-sm text-blue-600 hover:underline">
@@ -224,11 +212,13 @@ export default function AdminProductDetails() {
             {/* Left Section: Image Gallery */}
             <div className="md:w-1/2 p-4 flex flex-col items-center bg-gray-50">
               {product.images && product.images.length > 0 ? (
-                <img
-                  src={product.images[0]}
-                  alt={product.name}
-                  className="object-contain max-h-96 w-auto mb-4"
-                />
+                <div className="relative w-full h-96 bg-gray-200 flex items-center justify-center">
+                  <img
+                    src={product.images[activeImageIndex]}
+                    alt={product.name}
+                    className="object-contain w-full h-full" // Ensures the image fills the container
+                  />
+                </div>
               ) : (
                 <div className="h-96 w-full bg-gray-200 flex items-center justify-center text-gray-500">
                   No Image
@@ -236,12 +226,15 @@ export default function AdminProductDetails() {
               )}
               {product.images && product.images.length > 1 && (
                 <div className="flex gap-2">
-                  {product.images.slice(1).map((thumbUrl, idx) => (
+                  {product.images.map((thumbUrl, idx) => (
                     <img
                       key={idx}
                       src={thumbUrl}
-                      alt="Thumbnail"
-                      className="h-20 w-20 object-cover border border-gray-300"
+                      alt={`Thumbnail ${idx}`}
+                      className={`h-20 w-20 object-cover border border-gray-300 cursor-pointer ${
+                        activeImageIndex === idx ? "opacity-80" : ""
+                      }`}
+                      onClick={() => setActiveImageIndex(idx)}
                     />
                   ))}
                 </div>
@@ -349,345 +342,19 @@ export default function AdminProductDetails() {
             </div>
           </div>
         ) : (
-          // EDIT MODE
-          <form onSubmit={handleProductUpdate} className="bg-white p-6 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-purple-700 mb-4">Edit Product</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Product Tag */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Product Tag *</label>
-                <input
-                  type="text"
-                  name="productTag"
-                  value={formData.productTag}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Product ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Product ID *</label>
-                <input
-                  type="text"
-                  name="productId"
-                  value={formData.productId}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Variant ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Variant ID</label>
-                <input
-                  type="text"
-                  name="variantId"
-                  value={formData.variantId}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Category *</label>
-                <input
-                  type="text"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Sub Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Sub Category</label>
-                <input
-                  type="text"
-                  name="subCategory"
-                  value={formData.subCategory}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Variation Hinge */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Variation Hinge</label>
-                <input
-                  type="text"
-                  name="variationHinge"
-                  value={formData.variationHinge}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Name */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Name *</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Brand Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Brand Name</label>
-                <input
-                  type="text"
-                  name="brandName"
-                  value={formData.brandName}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Qty */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Qty</label>
-                <input
-                  type="number"
-                  name="qty"
-                  value={formData.qty}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* MRP Currency */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">MRP Currency</label>
-                <input
-                  type="text"
-                  name="MRP_Currency"
-                  value={formData.MRP_Currency}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* MRP */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">MRP</label>
-                <input
-                  type="number"
-                  name="MRP"
-                  value={formData.MRP}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* MRP Unit */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">MRP Unit</label>
-                <input
-                  type="text"
-                  name="MRP_Unit"
-                  value={formData.MRP_Unit}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Delivery Time */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Delivery Time</label>
-                <input
-                  type="text"
-                  name="deliveryTime"
-                  value={formData.deliveryTime}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Size */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Size</label>
-                <input
-                  type="text"
-                  name="size"
-                  value={formData.size}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Color */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Color</label>
-                <input
-                  type="text"
-                  name="color"
-                  value={formData.color}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Material */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Material</label>
-                <input
-                  type="text"
-                  name="material"
-                  value={formData.material}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Price Range */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Price Range</label>
-                <input
-                  type="text"
-                  name="priceRange"
-                  value={formData.priceRange}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Weight */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Weight</label>
-                <input
-                  type="text"
-                  name="weight"
-                  value={formData.weight}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* HSN Code */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">HSN Code</label>
-                <input
-                  type="text"
-                  name="hsnCode"
-                  value={formData.hsnCode}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Product Cost Currency */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Product Cost Currency</label>
-                <input
-                  type="text"
-                  name="productCost_Currency"
-                  value={formData.productCost_Currency}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Product Cost */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Product Cost</label>
-                <input
-                  type="number"
-                  name="productCost"
-                  value={formData.productCost}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Product Cost Unit */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Product Cost Unit</label>
-                <input
-                  type="text"
-                  name="productCost_Unit"
-                  value={formData.productCost_Unit}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Product GST */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Product GST (%)</label>
-                <input
-                  type="number"
-                  name="productGST"
-                  value={formData.productGST}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, productGST: Number(e.target.value) }))
-                  }
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-              {/* Product Description */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Product Description</label>
-                <textarea
-                  name="productDetails"
-                  value={formData.productDetails}
-                  onChange={handleChange}
-                  rows={4}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-600"
-                />
-              </div>
-            </div>
-
-            {/* Existing Images */}
-            {editing &&
-              formData.images?.length > 0 &&
-              typeof formData.images[0] === "string" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Existing Images
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.images.map((imgUrl, idx) => (
-                      <div key={idx} className="relative">
-                        <img
-                          src={imgUrl}
-                          alt="existing"
-                          className="w-24 h-24 object-cover border border-gray-300 rounded"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              images: prev.images.filter((_, i) => i !== idx)
-                            }))
-                          }
-                          className="absolute top-0 right-0 bg-red-600 text-white text-xs p-1 rounded"
-                        >
-                          X
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Upload New Images */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Upload Images</label>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="w-full"
-                onChange={handleFileChange}
-              />
-              {uploadProgress > 0 && (
-                <div className="mt-2 w-full bg-gray-200 h-2.5 rounded">
-                  <div
-                    className="bg-purple-500 h-2.5 rounded"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <button
-                type="submit"
-                className="px-6 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 disabled:opacity-50"
-              >
-                Update Product
-              </button>
-            </div>
-          </form>
+          // Using the SingleProductModal for editing
+          <SingleProductModal
+            editProductId={product._id}
+            newProductData={formData}
+            setNewProductData={setFormData}
+            handleSingleProductSubmit={handleProductUpdate}
+            closeSingleProductModal={handleEditToggle}
+            handleFileChange={handleFileChange}
+            uploadProgress={uploadProgress}
+            categories={product.categories}
+            subCategories={product.subCategories}
+            brands={product.brands}
+          />
         )}
       </div>
     </div>
