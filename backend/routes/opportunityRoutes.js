@@ -91,7 +91,8 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
 
     switch (filter) {
       case "my":
-        query.createdBy = userId;
+        // Change createdBy to opportunityOwner for "my" filter
+        query.opportunityOwner = userId;
         break;
       case "team":
         // Match opportunities where the current user's ID or username is present in teamMembers
@@ -113,6 +114,7 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching opportunities" });
   }
 });
+
 
 
 
