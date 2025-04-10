@@ -516,6 +516,7 @@ export default function OpportunityDetails({
               onChange={handleChange}
               className="border rounded w-full px-2 py-1 text-sm"
               placeholder="Auto-generated or manual"
+              disabled
             />
           </div>
           <div>

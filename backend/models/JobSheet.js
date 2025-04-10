@@ -1,6 +1,6 @@
 // models/JobSheet.js
 const mongoose = require("mongoose");
-const Counter = require("./Counter"); // Ensure this path is correct
+const Counter = require("./Counterforjobsheet"); // Ensure this path is correct
 
 const jobSheetItemSchema = new mongoose.Schema({
   slNo: { type: Number, required: true },
