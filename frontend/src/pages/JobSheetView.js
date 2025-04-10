@@ -63,7 +63,7 @@ export default function JobSheetView() {
     const marginBottom = 20;
     const footerHeight = 70; // Enough space so content won't overlap the footer
 
-    html2canvas(input, { scale: 5 }).then((canvas) => {
+    html2canvas(input, { scale: 1.5 }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
 
       const pdf = new jsPDF("l", "pt", "a4");

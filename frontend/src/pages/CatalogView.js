@@ -1,7 +1,7 @@
 "use client"; // Remove if using plain Create React App
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom"; 
+import { useParams } from "react-router-dom";
 import axios from "axios";
 
 // Fields we never want to display
@@ -86,35 +86,37 @@ export default function CatalogView() {
     }
 
     return (
-      <div className="flex gap-4 items-start bg-white shadow-lg rounded p-4">
-        {/* LEFT: image (if "images" in fields) */}
-        <div className="w-1/3">
-          {safeFieldsToDisplay.includes("images") && productDoc.images && productDoc.images[0] ? (
-            <img
-              src={productDoc.images[0]}
-              alt={productDoc.name}
-              className="w-full h-40 object-cover rounded"
-            />
-          ) : (
-            <div className="w-full h-40 bg-gray-100 flex items-center justify-center rounded">
-              <span className="text-gray-400 text-sm">No Image</span>
-            </div>
-          )}
-        </div>
+      <div className="bg-white shadow-lg rounded overflow-hidden flex flex-col">
+        {/* IMAGE */}
+       {/* IMAGE */}
+<div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+  {safeFieldsToDisplay.includes("images") && productDoc.images && productDoc.images[0] ? (
+    <img
+      src={productDoc.images[0]}
+      alt={productDoc.name}
+      className="w-full h-full object-contain"
+    />
+  ) : (
+    <div className="w-full h-full flex items-center justify-center">
+      <span className="text-gray-400 text-sm">No Image</span>
+    </div>
+  )}
+</div>
 
-        {/* RIGHT: Show mandatory fields first, then optional fields */}
-        <div className="flex-1">
-          {/* 1) Name */}
+
+        {/* DETAILS */}
+        <div className="p-4 flex flex-col flex-1">
+          {/* Name */}
           <h2 className="text-xl font-semibold mb-1 text-purple-700">
             {productDoc.name || "Unnamed Product"}
           </h2>
 
-          {/* 2) Price => productCost + margin */}
+          {/* Price */}
           <p className="text-md text-gray-800 font-bold mb-1">
             ₹{effectivePrice !== null ? effectivePrice : "N/A"}
           </p>
 
-          {/* 3) Category + subCategory if allowed */}
+          {/* Category and Sub-category */}
           <p className="text-sm text-gray-600 mb-1">
             Category: {productDoc.category || ""}
             {productDoc.subCategory &&
@@ -122,7 +124,7 @@ export default function CatalogView() {
               ` / ${productDoc.subCategory}`}
           </p>
 
-          {/* 4) productDetails */}
+          {/* Product Details */}
           {productDoc.productDetails && (
             <p className="text-sm text-gray-600 mt-2">
               <span className="font-semibold">Description:</span>{" "}
@@ -130,8 +132,7 @@ export default function CatalogView() {
             </p>
           )}
 
-          {/* Additional fields: brandName, size, etc. 
-              Skip anything in COMMON_FIELDS or not in fieldMapping or missing value. */}
+          {/* Additional Fields */}
           {safeFieldsToDisplay.map((field) => {
             if (COMMON_FIELDS.includes(field)) return null;
             const mappedKey = fieldMapping[field];
@@ -139,12 +140,11 @@ export default function CatalogView() {
             const val = productDoc[mappedKey];
             if (!val) return null;
 
-            // e.g. brandName => "Brand: Nike"
+            // Generate label
             let label = field;
             if (field === "brandName") label = "Brand";
             else if (field === "subCategory") label = "Sub-Category";
             else {
-              // capitalized field
               label = field.charAt(0).toUpperCase() + field.slice(1);
             }
 
@@ -171,12 +171,11 @@ export default function CatalogView() {
             <span className="font-semibold">For:</span> {catalog.customerName}
             {catalog.customerEmail ? ` (${catalog.customerEmail})` : ""}
           </p>
-          {/* If you want more catalog details, add them here */}
         </div>
       </div>
 
       {/* Product List */}
-      <div className="max-w-4xl mx-auto grid grid-cols-1 gap-6">
+      <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6">
         {products.length > 0 ? (
           products.map((subDoc, i) => {
             const productDoc = subDoc.productId;
@@ -190,7 +189,11 @@ export default function CatalogView() {
                 </div>
               );
             }
-            return <div key={i}>{renderProduct(productDoc)}</div>;
+            return (
+              <div key={i}>
+                {renderProduct(productDoc)}
+              </div>
+            );
           })
         ) : (
           <p className="text-gray-600">No products in this catalog.</p>
