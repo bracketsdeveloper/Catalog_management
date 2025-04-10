@@ -778,8 +778,22 @@ export default function ProductManagementPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {(advancedSearchActive ? advancedSearchResults : products).map(
-              (product) => (
+            {(advancedSearchActive ? advancedSearchResults : products)
+              .slice() // Create a copy to avoid mutating the original array
+              .sort((a, b) => {
+                if (!searchTerm) return 0;
+                const term = searchTerm.toLowerCase();
+                const aBrand = (a.brandName || '').toLowerCase();
+                const bBrand = (b.brandName || '').toLowerCase();
+                const aMatch = aBrand.includes(term);
+                const bMatch = bBrand.includes(term);
+                
+                // Prioritize brand matches first
+                if (aMatch && !bMatch) return -1;
+                if (!aMatch && bMatch) return 1;
+                return 0;
+              })
+              .map((product) => (
                 <ProductCard
                   key={product._id}
                   product={product}
@@ -790,8 +804,8 @@ export default function ProductManagementPage() {
                   handleNextImage={handleNextImage}
                   handlePrevImage={handlePrevImage}
                 />
-              )
-            )}
+              ))
+            }
           </div>
         )}
 
