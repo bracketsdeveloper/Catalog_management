@@ -168,39 +168,46 @@ router.get("/products/catalog/filters", authenticate, authorizeAdmin, async (req
       variationHinges
     ] = await Promise.all([
       Product.aggregate([
+        { $match: { category: { $ne: null } } }, // Only consider products with valid category
         { $group: { _id: "$category", count: { $sum: 1 } } },
-        { $project: { name: "$_id", count: 1, _id: 0 } }    
+        { $project: { name: "$_id", count: 1, _id: 0 } }
       ]),
       Product.aggregate([
+        { $match: { subCategory: { $ne: null } } }, // Only consider products with valid subcategory
         { $group: { _id: "$subCategory", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } }
       ]),
       Product.aggregate([
+        { $match: { brandName: { $ne: null } } }, // Only consider products with valid brand
         { $group: { _id: "$brandName", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } }
       ]),
       Product.aggregate([
+        { $match: { priceRange: { $ne: null } } }, // Only consider products with valid price range
         { $group: { _id: "$priceRange", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } }
       ]),
       Product.aggregate([
+        { $match: { variationHinge: { $ne: null } } }, // Only consider products with valid variation hinge
         { $group: { _id: "$variationHinge", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } }
       ])
     ]);
 
+    // Filter out categories/subcategories/brands/etc. that have no name (or no count)
     res.status(200).json({
-      categories: categories.filter(c => c.name),
-      subCategories: subCategories.filter(c => c.name),
-      brands: brands.filter(c => c.name),
-      priceRanges: priceRanges.filter(c => c.name),
-      variationHinges: variationHinges.filter(c => c.name)
+      categories: categories.filter(c => c.name && c.count > 0),
+      subCategories: subCategories.filter(c => c.name && c.count > 0),
+      brands: brands.filter(c => c.name && c.count > 0),
+      priceRanges: priceRanges.filter(c => c.name && c.count > 0),
+      variationHinges: variationHinges.filter(c => c.name && c.count > 0)
     });
   } catch (error) {
     console.error("Error fetching filter options:", error);
     res.status(500).json({ message: "Error fetching filter options" });
   }
 });
+
 
 
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {

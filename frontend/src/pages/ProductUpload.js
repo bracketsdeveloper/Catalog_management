@@ -11,6 +11,7 @@ import SkeletonCard from "../components/manageproducts/SkeletonCard";
 import SingleProductModal from "../components/manageproducts/SingleProductModal";
 import DropdownFilter from "../components/manageproducts/DropdownFilter";
 import FilterItem from "../components/manageproducts/FilterItem";
+import BulkUploadModal from "../components/manageproducts/BulkUploadModal";
 
 // Helpers
 import uploadImage from "../helpers/uploadImage";
@@ -69,7 +70,7 @@ export default function ProductManagementPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Bulk upload
-  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [csvData, setCsvData] = useState([]);
 
   // Filters + search (selected filters)
@@ -660,32 +661,12 @@ export default function ProductManagementPage() {
             >
               Upload Single Product
             </button>
-            <div className="relative inline-block text-left">
-              <button
-                onClick={() => setBulkMode((prev) => !prev)}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90"
-              >
-                {bulkMode ? "Hide Bulk Options" : "Upload in Bulk"}
-              </button>
-              {bulkMode && (
-                <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                  <div className="py-1">
-                    <button
-                      onClick={handleDownloadTemplate}
-                      className="text-left w-full px-4 py-2 text-sm hover:bg-gray-100"
-                    >
-                      Download Template
-                    </button>
-                    <button
-                      onClick={processBulkUpload}
-                      className="text-left w-full px-4 py-2 text-sm hover:bg-gray-100"
-                    >
-                      Upload Products
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              onClick={() => setBulkUploadOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90"
+            >
+              Bulk Upload
+            </button>
           </div>
         </div>
 
@@ -867,6 +848,18 @@ export default function ProductManagementPage() {
           categories={fullCategories}
           subCategories={fullSubCategories}
           brands={fullBrands}
+        />
+      )}
+
+      {/* Bulk Upload Modal */}
+      {bulkUploadOpen && (
+        <BulkUploadModal
+          onClose={() => setBulkUploadOpen(false)}
+          getRootProps={getRootProps}
+          getInputProps={getInputProps}
+          handleDownloadTemplate={handleDownloadTemplate}
+          processBulkUpload={processBulkUpload}
+          csvData={csvData}
         />
       )}
     </div>
