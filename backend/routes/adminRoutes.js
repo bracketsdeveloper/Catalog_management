@@ -160,18 +160,41 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
 // GET /api/admin/products/filters - Returns distinct filter values
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const categories = await Product.distinct("category");
-    const subCategories = await Product.distinct("subCategory");
-    const brands = await Product.distinct("brandName");
-    const priceRanges = await Product.distinct("priceRange");
-    const variationHinges = await Product.distinct("variationHinge");
-
-    res.status(200).json({
+    const [
       categories,
       subCategories,
       brands,
       priceRanges,
       variationHinges
+    ] = await Promise.all([
+      Product.aggregate([
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } }
+      ]),
+      Product.aggregate([
+        { $group: { _id: "$subCategory", count: { $sum: 1 } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } }
+      ]),
+      Product.aggregate([
+        { $group: { _id: "$brandName", count: { $sum: 1 } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } }
+      ]),
+      Product.aggregate([
+        { $group: { _id: "$priceRange", count: { $sum: 1 } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } }
+      ]),
+      Product.aggregate([
+        { $group: { _id: "$variationHinge", count: { $sum: 1 } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } }
+      ])
+    ]);
+
+    res.status(200).json({
+      categories: categories.filter(c => c.name),
+      subCategories: subCategories.filter(c => c.name),
+      brands: brands.filter(c => c.name),
+      priceRanges: priceRanges.filter(c => c.name),
+      variationHinges: variationHinges.filter(c => c.name)
     });
   } catch (error) {
     console.error("Error fetching filter options:", error);

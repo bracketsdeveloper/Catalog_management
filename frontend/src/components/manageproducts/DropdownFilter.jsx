@@ -25,7 +25,7 @@ export default function DropdownFilter({ label, isOpen, setIsOpen, children }) {
         {label}
       </button>
       {isOpen && (
-        <div className="absolute z-10 mt-2 w-48 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-10 mt-2 w-100 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
           {children}
         </div>
       )}

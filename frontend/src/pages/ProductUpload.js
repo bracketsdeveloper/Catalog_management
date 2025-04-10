@@ -95,6 +95,15 @@ export default function ProductManagementPage() {
   const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
 
+  // Modify the state definitions
+  const [filterCounts, setFilterCounts] = useState({
+    categories: {},
+    subCategories: {},
+    brands: {},
+    priceRanges: {},
+    variationHinges: {}
+  });
+
   // ---------------------- FETCH FILTER OPTIONS ----------------------
   useEffect(() => {
     const fetchFilterOptions = async () => {
@@ -103,11 +112,30 @@ export default function ProductManagementPage() {
         const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setFullCategories(res.data.categories);
-        setFullSubCategories(res.data.subCategories);
-        setFullBrands(res.data.brands);
-        setFullPriceRanges(res.data.priceRanges);
-        setFullVariationHinges(res.data.variationHinges);
+        
+        // Create count maps
+        const counts = {
+          categories: {},
+          subCategories: {},
+          brands: {},
+          priceRanges: {},
+          variationHinges: {}
+        };
+
+        res.data.categories.forEach(c => counts.categories[c.name] = c.count);
+        res.data.subCategories.forEach(c => counts.subCategories[c.name] = c.count);
+        res.data.brands.forEach(c => counts.brands[c.name] = c.count);
+        res.data.priceRanges.forEach(c => counts.priceRanges[c.name] = c.count);
+        res.data.variationHinges.forEach(c => counts.variationHinges[c.name] = c.count);
+
+        setFilterCounts(counts);
+        
+        // Set filter options
+        setFullCategories(res.data.categories.map(c => c.name).sort());
+        setFullSubCategories(res.data.subCategories.map(c => c.name).sort());
+        setFullBrands(res.data.brands.map(c => c.name).sort());
+        setFullPriceRanges(res.data.priceRanges.map(c => c.name).sort((a, b) => a - b));
+        setFullVariationHinges(res.data.variationHinges.map(c => c.name).sort());
       } catch (error) {
         console.error("Error fetching filter options:", error);
       }
@@ -691,9 +719,8 @@ export default function ProductManagementPage() {
               <FilterItem
                 key={cat}
                 checked={selectedCategories.includes(cat)}
-                onChange={() =>
-                  toggleFilter(cat, selectedCategories, setSelectedCategories)
-                }
+                onChange={() => toggleFilter(cat, selectedCategories, setSelectedCategories)}
+                count={filterCounts.categories[cat] || 0}
               >
                 {cat}
               </FilterItem>
@@ -708,9 +735,8 @@ export default function ProductManagementPage() {
               <FilterItem
                 key={sub}
                 checked={selectedSubCategories.includes(sub)}
-                onChange={() =>
-                  toggleFilter(sub, selectedSubCategories, setSelectedSubCategories)
-                }
+                onChange={() => toggleFilter(sub, selectedSubCategories, setSelectedSubCategories)}
+                count={filterCounts.subCategories[sub] || 0}
               >
                 {sub}
               </FilterItem>
@@ -725,9 +751,8 @@ export default function ProductManagementPage() {
               <FilterItem
                 key={br}
                 checked={selectedBrands.includes(br)}
-                onChange={() =>
-                  toggleFilter(br, selectedBrands, setSelectedBrands)
-                }
+                onChange={() => toggleFilter(br, selectedBrands, setSelectedBrands)}
+                count={filterCounts.brands[br] || 0}
               >
                 {br}
               </FilterItem>
@@ -742,9 +767,8 @@ export default function ProductManagementPage() {
               <FilterItem
                 key={pr}
                 checked={selectedPriceRanges.includes(pr)}
-                onChange={() =>
-                  toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)
-                }
+                onChange={() => toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)}
+                count={filterCounts.priceRanges[pr] || 0}
               >
                 {pr}
               </FilterItem>
@@ -759,9 +783,8 @@ export default function ProductManagementPage() {
               <FilterItem
                 key={vh}
                 checked={selectedVariationHinges.includes(vh)}
-                onChange={() =>
-                  toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)
-                }
+                onChange={() => toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)}
+                count={filterCounts.variationHinges[vh] || 0}
               >
                 {vh}
               </FilterItem>
