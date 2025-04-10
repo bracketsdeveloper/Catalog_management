@@ -63,7 +63,14 @@ export default function JobSheetView() {
     const marginBottom = 20;
     const footerHeight = 70; // Enough space so content won't overlap the footer
 
-    html2canvas(input, { scale: 1.5 }).then((canvas) => {
+    html2canvas(input, {
+      scale: 1.5,
+      backgroundColor: null, // Ensures transparency is maintained (optional)
+      useCORS: true, // Allow cross-origin resource sharing (useful if images are external)
+      logging: false, // Disable logging for clean output
+      x: 0, // Optional offset adjustments
+      y: 0, // Optional offset adjustments
+    }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
 
       const pdf = new jsPDF("l", "pt", "a4");
@@ -139,7 +146,7 @@ export default function JobSheetView() {
       <div
         id="job-sheet-content"
         className="mx-auto border border-black text-xs"
-        style={{ width: "90%", maxWidth: "1123px" }}
+        style={{ width: "90%", maxWidth: "1123px", boxSizing: "border-box" }}
       >
         {/* Top Header Row */}
         <div className="grid grid-cols-[1fr_2fr_1fr] gap-0">
