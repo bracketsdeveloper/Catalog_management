@@ -63,12 +63,23 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
     // Generate code if none provided
     const code = await generateOpportunityCode();
 
+    // Create the new Opportunity
     const newOpportunity = new Opportunity({
       ...req.body,
       opportunityCode: req.body.opportunityCode || code,
       createdBy: req.user._id?.toString() || "System",
       logs: [createLogEntry(req, "create", null, null, null)],
     });
+
+    // Check if the current user is not the opportunity owner, then add them to the team
+    if (newOpportunity.createdBy !== newOpportunity.opportunityOwner) {
+      newOpportunity.teamMembers.push({
+        teamMemberCode: newOpportunity.createdBy,
+        userName: req.user.name,
+        description: "Team member added automatically",
+        isActive: true,
+      });
+    }
 
     await newOpportunity.save();
     res.status(201).json({ message: "Opportunity created", opportunity: newOpportunity });
@@ -78,29 +89,31 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
+
 /**
  * GET all Opportunities
  */
+const User = require("../models/User"); // Import the User model
+
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { filter } = req.query;
-    const userId = req.user._id.toString();
-    const userName = req.user.name; // Ensure req.user.name is available
+    const userName = req.user.name; // Get current user's name
 
     let query = {};
 
     switch (filter) {
       case "my":
-        query.createdBy = userId;
+        // Directly use username for filtering
+        query.opportunityOwner = userName;
         break;
       case "team":
-        // Match opportunities where the current user's ID or username is present in teamMembers
+        // Search in teamMembers by username
         query.$or = [
-          { "teamMembers.teamMemberCode": userId },
           { "teamMembers.userName": userName }
         ];
         break;
-      // 'all' handled by default empty query
+      // 'all' case remains default
     }
 
     const opportunities = await Opportunity.find(query)
@@ -113,6 +126,7 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching opportunities" });
   }
 });
+
 
 
 

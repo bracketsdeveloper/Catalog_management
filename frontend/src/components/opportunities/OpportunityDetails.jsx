@@ -26,6 +26,27 @@ export default function OpportunityDetails({
   // Local state for suggestion lists
   const [accountSuggestions, setAccountSuggestions] = useState([]);
   const [contactSuggestions, setContactSuggestions] = useState([]);
+  const [ownerSuggestions, setOwnerSuggestions] = useState([]);
+
+  // Add error state
+  const [errors, setErrors] = useState({});
+
+  // Add validation handler
+  const validateField = (fieldName, value) => {
+    const requiredFields = {
+      opportunityName: 'Opportunity Name',
+      account: 'Account',
+      opportunityValue: 'Opportunity Value',
+      currency: 'Currency',
+      closureDate: 'Closure Date',
+      opportunityOwner: 'Opportunity Owner'
+    };
+
+    setErrors(prev => ({
+      ...prev,
+      [fieldName]: !value ? `${requiredFields[fieldName]} is required` : ''
+    }));
+  };
 
   // When user picks a stage from the funnel
   const handleStageSelect = (stage) => {
@@ -96,6 +117,21 @@ export default function OpportunityDetails({
     }
   };
 
+  const handleOwnerInputChange = (e) => {
+    const value = e.target.value;
+    handleChange(e); // Update the data state
+    // Filter and sort users
+    const filteredUsers = users.filter(user => 
+      user.name.toLowerCase().includes(value.toLowerCase())
+    ).sort((a, b) => a.name.localeCompare(b.name));
+    setOwnerSuggestions(filteredUsers);
+  };
+
+  const handleSelectOwnerSuggestion = (userName) => {
+    setData(prev => ({ ...prev, opportunityOwner: userName }));
+    setOwnerSuggestions([]);
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-6">
       {/* LEFT: Form Fields */}
@@ -112,9 +148,15 @@ export default function OpportunityDetails({
               name="opportunityName"
               value={data.opportunityName}
               onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
+              onBlur={(e) => validateField('opportunityName', e.target.value)}
+              className={`border rounded w-full px-2 py-1 text-sm ${
+                errors.opportunityName ? 'border-red-500' : ''
+              }`}
               placeholder="Enter Opportunity Name"
             />
+            {errors.opportunityName && (
+              <div className="text-red-500 text-xs mt-1">{errors.opportunityName}</div>
+            )}
           </div>
           {/* Account with suggestions and Create button */}
           <div className="relative">
@@ -127,7 +169,10 @@ export default function OpportunityDetails({
                 name="account"
                 value={data.account}
                 onChange={handleAccountChange}
-                className="border rounded-l w-full px-2 py-1 text-sm"
+                onBlur={(e) => validateField('account', e.target.value)}
+                className={`border rounded-l w-full px-2 py-1 text-sm ${
+                  errors.account ? 'border-red-500' : ''
+                }`}
                 placeholder="Enter Company Name"
               />
               <button
@@ -138,6 +183,9 @@ export default function OpportunityDetails({
                 +
               </button>
             </div>
+            {errors.account && (
+              <div className="text-red-500 text-xs mt-1">{errors.account}</div>
+            )}
             {accountSuggestions.length > 0 && (
               <div className="absolute z-10 bg-white border border-gray-300 w-full mt-1 max-h-40 overflow-auto">
                 {accountSuggestions.map((company) => (
@@ -257,9 +305,15 @@ export default function OpportunityDetails({
               name="opportunityValue"
               value={data.opportunityValue}
               onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
+              onBlur={(e) => validateField('opportunityValue', e.target.value)}
+              className={`border rounded w-full px-2 py-1 text-sm ${
+                errors.opportunityValue ? 'border-red-500' : ''
+              }`}
               placeholder="e.g., 10000"
             />
+            {errors.opportunityValue && (
+              <div className="text-red-500 text-xs mt-1">{errors.opportunityValue}</div>
+            )}
             <label className="block text-sm font-semibold text-gray-700 mb-1 mt-3">
               Currency <span className="text-red-500">*</span>
             </label>
@@ -419,23 +473,37 @@ export default function OpportunityDetails({
 
         {/* Row: Opportunity Owner, Opportunity Code, Is Active */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
+          <div className="relative">
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Opportunity Owner <span className="text-red-500">*</span>
             </label>
-            <select
+            <input
+              type="text"
               name="opportunityOwner"
               value={data.opportunityOwner}
-              onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
-            >
-              <option value="">--Select User--</option>
-              {users.map((u) => (
-                <option key={u._id} value={u.name}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
+              onChange={handleOwnerInputChange}
+              onBlur={(e) => validateField('opportunityOwner', e.target.value)}
+              className={`border rounded w-full px-2 py-1 text-sm ${
+                errors.opportunityOwner ? 'border-red-500' : ''
+              }`}
+              placeholder="Start typing to search users..."
+            />
+            {errors.opportunityOwner && (
+              <div className="text-red-500 text-xs mt-1">{errors.opportunityOwner}</div>
+            )}
+            {ownerSuggestions.length > 0 && (
+              <div className="absolute bottom-full z-10 bg-white border border-gray-300 w-full mb-1 max-h-40 overflow-auto">
+                {ownerSuggestions.map((user) => (
+                  <div
+                    key={user._id}
+                    className="px-2 py-1 hover:bg-gray-200 cursor-pointer"
+                    onClick={() => handleSelectOwnerSuggestion(user.name)}
+                  >
+                    {user.name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">

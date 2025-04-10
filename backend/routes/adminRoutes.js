@@ -201,6 +201,8 @@ router.get("/products/catalog/filters", authenticate, authorizeAdmin, async (req
     res.status(500).json({ message: "Error fetching filter options" });
   }
 });
+
+
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const categories = await Product.distinct("category");

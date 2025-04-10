@@ -171,6 +171,35 @@ export default function CreateOpportunity() {
       const token = localStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };
 
+      // Validate required fields
+      const requiredFields = {
+        opportunityName: "Opportunity Name",
+        account: "Account",
+        opportunityType: "Opportunity Type",
+        opportunityStage: "Opportunity Stage",
+        closureDate: "Closure Date",
+        opportunityOwner: "Opportunity Owner"
+      };
+
+      const missingFields = [];
+      Object.entries(requiredFields).forEach(([key, label]) => {
+        if (!opportunityData[key]?.toString().trim()) {
+          missingFields.push(label);
+        }
+      });
+
+      if (missingFields.length > 0) {
+        alert(`Please fill in all required fields:\n${missingFields.join("\n")}`);
+        return;
+      }
+
+      // Validate closure date format
+      const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+      if (!dateRegex.test(opportunityData.closureDate)) {
+        alert("Please enter Closure Date in DD/MM/YYYY format");
+        return;
+      }
+
       // Build final body
       const body = {
         ...opportunityData,
@@ -196,7 +225,7 @@ export default function CreateOpportunity() {
       navigate("/admin-dashboard/opportunities");
     } catch (error) {
       console.error("Error saving opportunity:", error);
-      alert("Error saving opportunity. Check console.");
+      alert(error.response?.data?.message || "Error saving opportunity. Please check all fields and try again.");
     }
   }
 
