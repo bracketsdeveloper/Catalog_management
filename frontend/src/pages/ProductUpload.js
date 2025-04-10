@@ -109,7 +109,7 @@ export default function ProductManagementPage() {
     const fetchFilterOptions = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
+        const res = await axios.get(`${BACKEND_URL}/api/admin/products/catalog/filters`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
