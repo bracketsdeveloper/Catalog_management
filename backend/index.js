@@ -86,6 +86,11 @@ app.use("/api", require("./routes/erpRoutes.js"));
 // after other routes...
 const opportunityRoutes = require("./routes/opportunityRoutes");
 app.use("/api/admin", opportunityRoutes);
+app.use("/api/admin", require("./routes/openPurchases.js"));
+app.use("/api/admin", require("./routes/purchaseInvoice.js"));
+app.use("/api/admin", require("./routes/productionJobsheetRoutes.js"));
+
+
 
 
 // app.use("/api/reports" ,reportRoutes)

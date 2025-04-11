@@ -29,6 +29,14 @@ import JobSheetView from "../pages/JobSheetView";
 import ManageOpportunity from "../pages/ManageOpportunity";
 import CreateOpportunity from "../pages/CreateOpportunity";
 import ForgotPassword from "../pages/ForgotPassword";
+import CreateOpenPurchase from "../pages/CreateOpenPurchase";
+import OpenPurchaseList from "../pages/OpenPurchaseList";
+import ClosedPurchaseList from "../pages/ClosedPurchaseList";
+import CreatePurchaseInvoice from "../pages/CreatePurchaseInvoice";
+import ManagePurchaseInvoice from "../pages/ManagePurchaseInvoice";
+import CreateProductionJobsheet from "../pages/CreateProductionJobsheet";
+import ManageProductionJobsheet from "../pages/ManageProductionJobsheet";
+import ClosedProductionJobsheetList from "../pages/ClosedProductionJobsheetList";
 
 const router = createBrowserRouter([
     {
@@ -162,9 +170,51 @@ const router = createBrowserRouter([
                     {
                         path:'create-opportunity/:id',
                         element:<CreateOpportunity/>
+                    },
+                    {
+                        path:'manage-openpurchase',
+                        element:<OpenPurchaseList/>
+                    },
+                    {
+                        path:"open-purchase",
+                        element:<CreateOpenPurchase/>
+                    },
+                    {
+                        path:"open-purchase/:id",
+                        element:<CreateOpenPurchase/>
+                    },
+                    {
+                        path:'manage-closepurchase',
+                        element:<ClosedPurchaseList/>
+                    },
+                    {
+                        path:'manage-purchaseinvoice',
+                        element:<ManagePurchaseInvoice/>
+                    },
+                    {
+                        path:'create-purchaseinvoice',
+                        element:<CreatePurchaseInvoice/>
+                    },
+                    {
+                        path:'create-purchaseinvoice/:id',
+                        element:<CreatePurchaseInvoice/>
+                    },
+                    {
+                        path:'manage-productionjobsheet',
+                        element:<ManageProductionJobsheet/>
+                    },
+                    {
+                        path:"create-productionjobsheet",
+                        element:<CreateProductionJobsheet/>
+                    },
+                    {
+                        path:"create-productionjobsheet/:id",
+                        element:<CreateProductionJobsheet/>
+                    },
+                    {
+                        path:"closed-productionjobsheet",
+                        element:<ClosedProductionJobsheetList/>
                     }
-
-                    
                 ]
             }
         ],

@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CgOrganisation } from "react-icons/cg";
@@ -76,15 +74,65 @@ const adminPages = [
         path: "/admin-dashboard/manage-jobsheets",
         permission: "manage-jobsheets",
       },
+      
+      
+    ],
+  },
+  {
+    name: "PURCHASE",
+    defaultPath: "/admin-dashboard/",
+    icon: <CubeIcon className="h-6 w-6" />,
+    subItems: [
+      {
+        name: "open-purchase",
+        path: "/admin-dashboard/manage-openpurchase",
+        permission: "open-purchase",
+      },
+      {
+        name: "closed-purchases",
+        path: "/admin-dashboard/manage-closepurchase",
+        permission: "closed-purchases",
+      },
+      {
+        name: "Manage Purchase Invoice",
+        path: "/admin-dashboard/manage-purchaseinvoice",
+        permission: "manage-purchaseinvoice",
+      },
+    ],
+  },{
+    name: "Production",
+    defaultPath: "/admin-dashboard/",
+    icon: <CubeIcon className="h-6 w-6" />,
+    subItems: [
+      {
+        name: "Open Production Jobsheets",
+        path: "/admin-dashboard/manage-productionjobsheet",
+        permission: "manage-productionjobsheet",
+      },
+      {
+        name: "Closed Production Jobsheets",
+        path: "/admin-dashboard/closed-productionjobsheet",
+        permission: "closed-productionjobsheet",
+      },
+      {
+        name: "Production Invoice",
+        path: "/admin-dashboard/production-invoice",
+        permission: "production-invoice",
+      },
+      
     ],
   },
 ];
+
+
 
 export default function AdminDashboard() {
   // Local sidebar states.
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHover, setSidebarHover] = useState(false);
   const [crmHovered, setCrmHovered] = useState(false);
+  const [purchaseHovered, setPurchaseHovered] = useState(false);
+  const [productionHovered, setProductionHovered] = useState(false);
 
   // Permissions and role.
   const [permissions, setPermissions] = useState([]);
@@ -150,8 +198,8 @@ export default function AdminDashboard() {
 
   // Determine base sidebar width from open/hover state.
   const baseSidebarWidth = (sidebarOpen || sidebarHover) ? 224 : 80;
-  // When CRM is hovered, add extra 200px.
-  const finalSidebarWidth = crmHovered ? baseSidebarWidth + 200 : baseSidebarWidth;
+  // When any menu with subItems is hovered, add extra 200px.
+  const finalSidebarWidth = (crmHovered || purchaseHovered || productionHovered) ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   return (
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
@@ -164,6 +212,8 @@ export default function AdminDashboard() {
           if (!sidebarOpen) {
             setSidebarHover(false);
             setCrmHovered(false);
+            setPurchaseHovered(false);
+            setProductionHovered(false);
           }
         }}
       >
@@ -203,6 +253,84 @@ export default function AdminDashboard() {
                     <div
                       className={`ml-4 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
                         crmHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      {page.subItems.map((sub) => (
+                        <Link
+                          key={sub.name}
+                          to={sub.path}
+                          className="block p-2 rounded-md hover:bg-white/10 transition"
+                        >
+                          <span className="text-sm font-medium">{sub.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </li>
+                );
+              }
+              if (page.name === "PURCHASE") {
+                return (
+                  <li
+                    key={page.name}
+                    onMouseEnter={() => setPurchaseHovered(true)}
+                    onMouseLeave={() => setPurchaseHovered(false)}
+                  >
+                    <Link
+                      to={page.defaultPath}
+                      className="flex items-center p-2 rounded-md hover:bg-white/10 transition whitespace-nowrap"
+                    >
+                      {page.icon}
+                      {(sidebarOpen || sidebarHover) && (
+                        <>
+                          <span className="ml-3 text-sm font-medium">
+                            {page.name}
+                          </span>
+                          <ChevronRightIcon className="h-4 w-4 ml-auto" />
+                        </>
+                      )}
+                    </Link>
+                    <div
+                      className={`ml-4 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
+                        purchaseHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      {page.subItems.map((sub) => (
+                        <Link
+                          key={sub.name}
+                          to={sub.path}
+                          className="block p-2 rounded-md hover:bg-white/10 transition"
+                        >
+                          <span className="text-sm font-medium">{sub.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </li>
+                );
+              }
+              if (page.name === "Production") {
+                return (
+                  <li
+                    key={page.name}
+                    onMouseEnter={() => setProductionHovered(true)}
+                    onMouseLeave={() => setProductionHovered(false)}
+                  >
+                    <Link
+                      to={page.defaultPath}
+                      className="flex items-center p-2 rounded-md hover:bg-white/10 transition whitespace-nowrap"
+                    >
+                      {page.icon}
+                      {(sidebarOpen || sidebarHover) && (
+                        <>
+                          <span className="ml-3 text-sm font-medium">
+                            {page.name}
+                          </span>
+                          <ChevronRightIcon className="h-4 w-4 ml-auto" />
+                        </>
+                      )}
+                    </Link>
+                    <div
+                      className={`ml-4 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
+                        productionHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
                       }`}
                     >
                       {page.subItems.map((sub) => (

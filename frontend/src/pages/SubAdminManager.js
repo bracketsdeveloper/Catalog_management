@@ -36,6 +36,13 @@ export default function SubAdminManager() {
     "manage-jobsheets",
     "manage-companies",
     "opportunities",
+    "edit-production",
+    "open-purchase",
+    "closed-purchases",
+    "manage-purchaseinvoice",
+    "manage-productionjobsheet",
+    "closed-productionjobsheet",
+    "production-invoice",
   ];
 
   useEffect(() => {
