@@ -11,6 +11,8 @@ import {
   PencilIcon,
   BriefcaseIcon,
   ChevronRightIcon,
+  ShoppingBagIcon,
+  CurrencyDollarIcon
 } from "@heroicons/react/24/outline";
 
 // Top-level navigation items. The "CRM" item includes subItems.
@@ -42,7 +44,7 @@ const adminPages = [
   {
     name: "CRM",
     defaultPath: "/admin-dashboard/manage-companies",
-    icon: <CubeIcon className="h-6 w-6" />,
+    icon: <UserGroupIcon className="h-6 w-6" />,
     subItems: [
       {
         name: "Manage Client/Company Details",
@@ -81,15 +83,15 @@ const adminPages = [
   {
     name: "PURCHASE",
     defaultPath: "/admin-dashboard/",
-    icon: <CubeIcon className="h-6 w-6" />,
+    icon: <ShoppingBagIcon className="h-6 w-6" />,
     subItems: [
       {
-        name: "open-purchase",
+        name: "Manage Purchase",
         path: "/admin-dashboard/manage-openpurchase",
         permission: "open-purchase",
       },
       {
-        name: "closed-purchases",
+        name: "Closed Purchases",
         path: "/admin-dashboard/manage-closepurchase",
         permission: "closed-purchases",
       },
@@ -102,10 +104,10 @@ const adminPages = [
   },{
     name: "Production",
     defaultPath: "/admin-dashboard/",
-    icon: <CubeIcon className="h-6 w-6" />,
+    icon: <CurrencyDollarIcon className="h-6 w-6" />,
     subItems: [
       {
-        name: "Open Production Jobsheets",
+        name: "Manage Production Jobsheets",
         path: "/admin-dashboard/manage-productionjobsheet",
         permission: "manage-productionjobsheet",
       },
