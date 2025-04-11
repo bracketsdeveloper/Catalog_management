@@ -37,6 +37,8 @@ import ManagePurchaseInvoice from "../pages/ManagePurchaseInvoice";
 import CreateProductionJobsheet from "../pages/CreateProductionJobsheet";
 import ManageProductionJobsheet from "../pages/ManageProductionJobsheet";
 import ClosedProductionJobsheetList from "../pages/ClosedProductionJobsheetList";
+import CreateProductionInvoice from "../pages/CreateProductionInvoice";
+import ManageProductionInvoice from "../pages/ManageProductionInvoice";
 
 const router = createBrowserRouter([
     {
@@ -214,7 +216,20 @@ const router = createBrowserRouter([
                     {
                         path:"closed-productionjobsheet",
                         element:<ClosedProductionJobsheetList/>
-                    }
+                    },
+                    {
+                        path:'production-invoice',
+                        element:<CreateProductionInvoice/>
+                    },
+                    {
+                        path:'production-invoice/:id',
+                        element:<CreateProductionInvoice/>
+                    },
+                    {
+                        path:'manage-production-invoice',
+                        element:<ManageProductionInvoice/>
+                    },
+                    
                 ]
             }
         ],

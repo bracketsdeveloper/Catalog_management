@@ -89,9 +89,7 @@ app.use("/api/admin", opportunityRoutes);
 app.use("/api/admin", require("./routes/openPurchases.js"));
 app.use("/api/admin", require("./routes/purchaseInvoice.js"));
 app.use("/api/admin", require("./routes/productionJobsheetRoutes.js"));
-
-
-
+app.use("/api/admin", require('./routes/productionInvoice.js'))
 
 // app.use("/api/reports" ,reportRoutes)
 

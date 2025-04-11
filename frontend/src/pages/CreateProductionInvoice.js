@@ -8,12 +8,12 @@ import { useNavigate, useParams } from "react-router-dom";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CreateProductionInvoice() {
-  // Get id from URL; if available, we're in update mode.
+  // Get id from URL; if exists, we're in update mode.
   const { id } = useParams();
   const isEditMode = Boolean(id);
   const navigate = useNavigate();
 
-  // States for Reference Jobsheet and suggestions
+  // State for Reference Jobsheet & suggestions
   const [refJobSheet, setRefJobSheet] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [selectedProductionJobsheet, setSelectedProductionJobsheet] = useState(null);
@@ -27,7 +27,7 @@ export default function CreateProductionInvoice() {
   // Invoice Items (the products table)
   const [invoiceItems, setInvoiceItems] = useState([]);
 
-  // --- Fetch existing production invoice if in update mode ---
+  // --- Fetch existing Production Invoice if in update mode ---
   useEffect(() => {
     if (!isEditMode) return;
     async function fetchInvoice() {
@@ -60,12 +60,12 @@ export default function CreateProductionInvoice() {
     async function fetchSuggestions() {
       try {
         const token = localStorage.getItem("token");
-        // Use production jobsheet API with suggestion flag.
+        // Using the production jobsheet API with suggestion flag.
         const res = await axios.get(
           `${BACKEND_URL}/api/admin/productionjobsheets?suggestion=true&search=${refJobSheet}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        // (Ensure backend returns only production jobsheets that exist.)
+        // Assume backend returns production jobsheets that are available for referencing.
         setSuggestions(res.data || []);
       } catch (error) {
         console.error("Error fetching production jobsheet suggestions:", error);
@@ -78,34 +78,30 @@ export default function CreateProductionInvoice() {
     }
   }, [refJobSheet, isEditMode]);
 
-  // When a suggestion is selected, fill in fields and map items from the production jobsheet
-  const handleSuggestionSelect = (jobsheet) => {
-    setRefJobSheet(jobsheet.jobSheetNumber);
-    setSelectedProductionJobsheet(jobsheet);
+  // When a suggestion is selected, fill in the fields and prepare the invoice items array.
+  const handleSuggestionSelect = (purchase) => {
+    setRefJobSheet(purchase.jobSheetNumber);
+    setSelectedProductionJobsheet(purchase);
     setOrderConfirmationDate(
-      jobsheet.orderDate
-        ? new Date(jobsheet.orderDate).toISOString().split("T")[0]
+      purchase.orderDate
+        ? new Date(purchase.orderDate).toISOString().split("T")[0]
         : ""
     );
-    setJobSheet(jobsheet.jobSheetNumber);
-    // Here we assume the production jobsheet model contains clientName and eventName.
-    setClientName(jobsheet.clientCompanyName || "");
-    setEventName(jobsheet.eventName || "");
-    // Map the production jobsheet items (if available) to invoice items.
-    // We'll assume each jobsheet item has fields: productName and sourcingFrom.
-    if (jobsheet.items && jobsheet.items.length > 0) {
-      const mappedItems = jobsheet.items.map((item) => ({
-        product: item.productName,
-        sourcingFrom: item.sourcingFrom || "", // Adjust if sourcingFrom exists
-        cost: "",
-        negotiatedCost: "",
-        paymentMode: "",
-        paymentRef: "",
-        vendorInvoiceNumber: "",
-        vendorInvoiceReceived: false,
-      }));
-      setInvoiceItems(mappedItems);
-    }
+    setJobSheet(purchase.jobSheetNumber);
+    // Assume production jobsheet has clientCompanyName and eventName.
+    setClientName(purchase.clientCompanyName || "");
+    setEventName(purchase.eventName || "");
+    // Map production jobsheet items to invoice items. (sourcingFrom removed)
+    const mappedItems = (purchase.items || []).map((item) => ({
+      product: item.productName,
+      cost: "",
+      negotiatedCost: "",
+      paymentMode: "",
+      paymentRef: "",
+      vendorInvoiceNumber: "",
+      vendorInvoiceReceived: false,
+    }));
+    setInvoiceItems(mappedItems);
     setSuggestions([]);
   };
 
@@ -118,7 +114,7 @@ export default function CreateProductionInvoice() {
     });
   };
 
-  // Save (or update) Production Invoice
+  // Save Production Invoice
   const handleSaveInvoice = async () => {
     const body = {
       referenceJobsheetNo: refJobSheet,
@@ -128,6 +124,7 @@ export default function CreateProductionInvoice() {
       eventName,
       items: invoiceItems,
     };
+
     try {
       const token = localStorage.getItem("token");
       if (isEditMode) {
@@ -141,7 +138,7 @@ export default function CreateProductionInvoice() {
         });
         alert("Production Invoice created successfully!");
       }
-      navigate("/admin-dashboard/manage-productioninvoice");
+      navigate("/admin-dashboard/manage-production-invoice");
     } catch (error) {
       console.error("Error saving production invoice:", error);
       alert("Error saving production invoice. Check console.");
@@ -186,7 +183,7 @@ export default function CreateProductionInvoice() {
           </div>
         )}
 
-        {/* Auto-filled fields */}
+        {/* Auto-filled Fields */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-purple-700 mb-1">
@@ -241,7 +238,6 @@ export default function CreateProductionInvoice() {
               <thead className="bg-purple-100">
                 <tr>
                   <th className="px-3 py-2 text-left">Product Name</th>
-                  <th className="px-3 py-2 text-left">Source From</th>
                   <th className="px-3 py-2 text-left">Cost</th>
                   <th className="px-3 py-2 text-left">Negotiated Cost</th>
                   <th className="px-3 py-2 text-left">Payment Mode</th>
@@ -257,14 +253,6 @@ export default function CreateProductionInvoice() {
                       <input
                         type="text"
                         value={item.product}
-                        readOnly
-                        className="border border-gray-300 rounded p-1 w-full bg-gray-100"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={item.sourcingFrom}
                         readOnly
                         className="border border-gray-300 rounded p-1 w-full bg-gray-100"
                       />
@@ -305,7 +293,9 @@ export default function CreateProductionInvoice() {
                       <input
                         type="text"
                         value={item.vendorInvoiceNumber}
-                        onChange={(e) => handleInvoiceItemChange(idx, "vendorInvoiceNumber", e.target.value)}
+                        onChange={(e) =>
+                          handleInvoiceItemChange(idx, "vendorInvoiceNumber", e.target.value)
+                        }
                         className="border border-gray-300 rounded p-1 w-full"
                         placeholder="Invoice No."
                       />
@@ -314,7 +304,11 @@ export default function CreateProductionInvoice() {
                       <select
                         value={item.vendorInvoiceReceived ? "Yes" : "No"}
                         onChange={(e) =>
-                          handleInvoiceItemChange(idx, "vendorInvoiceReceived", e.target.value === "Yes")
+                          handleInvoiceItemChange(
+                            idx,
+                            "vendorInvoiceReceived",
+                            e.target.value === "Yes"
+                          )
                         }
                         className="border border-gray-300 rounded p-1 w-full text-sm"
                       >

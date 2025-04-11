@@ -116,7 +116,7 @@ const adminPages = [
       },
       {
         name: "Production Invoice",
-        path: "/admin-dashboard/production-invoice",
+        path: "/admin-dashboard/manage-production-invoice",
         permission: "production-invoice",
       },
       

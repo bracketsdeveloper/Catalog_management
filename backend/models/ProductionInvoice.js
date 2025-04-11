@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 
 const productionInvoiceItemSchema = new mongoose.Schema({
   product: { type: String, required: true },
-  sourcingFrom: { type: String, required: true },
+  // Removed sourcingFrom field
   cost: { type: Number, required: true },
   negotiatedCost: { type: Number },
   paymentMode: { type: String },
