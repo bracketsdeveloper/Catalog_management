@@ -1,8 +1,9 @@
-// routes/productionJobsheet.js
 const express = require("express");
 const router = express.Router();
 const ProductionJobsheet = require("../models/ProductionJobsheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+const User = require("../models/User");         // Import User model for looking up super admins
+const sendMail = require("../utils/sendMail");     // Import sendMail utility
 
 // Utility function to update followUps with createdBy (if missing)
 function populateFollowUps(items, userName) {
@@ -20,15 +21,61 @@ function populateFollowUps(items, userName) {
   return items;
 }
 
+// Helper function to check for alert items and send an email if needed.
+async function checkAndSendAlertEmail(jobsheet) {
+  // Filter items with status "Alert"
+  const alertItems = jobsheet.items.filter((item) => item.status === "Alert");
+
+  if (alertItems.length > 0) {
+    // Build the alert details for the email body
+    let alertDetails = "";
+    alertItems.forEach((item) => {
+      alertDetails += `Product: ${item.productName}\n`;
+      alertDetails += `Expected In Hand: ${item.expectedInHand}\n`;
+      alertDetails += `Status: ${item.status}\n`;
+      if (item.brandingType) alertDetails += `Branding Type: ${item.brandingType}\n`;
+      if (item.brandingVendor) alertDetails += `Branding Vendor: ${item.brandingVendor}\n`;
+      if (item.remarks) alertDetails += `Remarks: ${item.remarks}\n`;
+      alertDetails += `\n`;
+    });
+    const mailBody = `JobSheet Number: ${jobsheet.jobSheetNumber}\nCompany Nmae : ${jobsheet.clientCompanyName}\nCreated By: ${jobsheet.createdBy}\n\nAlert Items:\n${alertDetails}`;
+
+    try {
+      // Lookup all super admin users (isSuperAdmin set to true)
+      const superAdmins = await User.find({ isSuperAdmin: true });
+      if (superAdmins.length === 0) {
+        console.warn("No SuperAdmin users found. Alert email will not be sent.");
+        return;
+      }
+      // Send an alert email to each super admin
+      for (const admin of superAdmins) {
+        await sendMail({
+          to: admin.email,
+          subject: `AutoMail : Alert in Production ${jobsheet.jobSheetNumber}`,
+          text: mailBody,
+          // Optionally add an HTML version with an html property if desired
+        });
+      }
+    } catch (error) {
+      console.error("Error sending alert email:", error);
+      // Email errors shouldn't block the main flow.
+    }
+  }
+}
+
 // Create a new Production Jobsheet
 router.post("/productionjobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const currentUser = req.user ? (req.user.email || req.user.name) : "Unknown User";
-    // Populate createdBy for each follow-up in items if not provided
+    // Populate createdBy for each follow-up in items if not provided.
     req.body.items = populateFollowUps(req.body.items, currentUser);
 
     const newProdJobsheet = new ProductionJobsheet({ ...req.body, createdBy: currentUser });
     await newProdJobsheet.save();
+
+    // Check if any item has status "Alert" and send an email to super admins.
+    checkAndSendAlertEmail(newProdJobsheet);
+
     res.status(201).json({ message: "Production Jobsheet created", productionJobsheet: newProdJobsheet });
   } catch (error) {
     console.error("Error creating production jobsheet:", error);
@@ -67,6 +114,7 @@ router.put("/productionjobsheets/:id", authenticate, authorizeAdmin, async (req,
     const currentUser = req.user ? (req.user.email || req.user.name) : "Unknown User";
     // Ensure that every follow-up has createdBy populated
     req.body.items = populateFollowUps(req.body.items, currentUser);
+
     const updatedJobsheet = await ProductionJobsheet.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -75,6 +123,10 @@ router.put("/productionjobsheets/:id", authenticate, authorizeAdmin, async (req,
     if (!updatedJobsheet) {
       return res.status(404).json({ message: "Production jobsheet not found" });
     }
+
+    // After update, check for alert items and send an email if necessary.
+    checkAndSendAlertEmail(updatedJobsheet);
+
     res.json({ message: "Production jobsheet updated", productionJobsheet: updatedJobsheet });
   } catch (error) {
     console.error("Error updating production jobsheet:", error);
