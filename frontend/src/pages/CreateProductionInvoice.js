@@ -13,6 +13,15 @@ export default function CreateProductionInvoice() {
   const isEditMode = Boolean(id);
   const navigate = useNavigate();
 
+  // Read permissions from localStorage
+  const permissions = localStorage.getItem("permissions")
+    ? JSON.parse(localStorage.getItem("permissions"))
+    : [];
+  // In update mode, only user with "edit-production" permission is allowed to edit.
+  const canEditProduction = permissions.includes("edit-production");
+  // In create mode, all fields are editable.
+  const isEditable = !isEditMode || (isEditMode && canEditProduction);
+
   // State for Reference Jobsheet & suggestions
   const [refJobSheet, setRefJobSheet] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -65,7 +74,7 @@ export default function CreateProductionInvoice() {
           `${BACKEND_URL}/api/admin/productionjobsheets?suggestion=true&search=${refJobSheet}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        // Assume backend returns production jobsheets that are available for referencing.
+        // Assume backend returns production jobsheets available for referencing.
         setSuggestions(res.data || []);
       } catch (error) {
         console.error("Error fetching production jobsheet suggestions:", error);
@@ -91,7 +100,8 @@ export default function CreateProductionInvoice() {
     // Assume production jobsheet has clientCompanyName and eventName.
     setClientName(purchase.clientCompanyName || "");
     setEventName(purchase.eventName || "");
-    // Map production jobsheet items to invoice items. (sourcingFrom removed)
+    // Map production jobsheet items to invoice items.
+    // Note: "Source From" is removed from the model so it is not mapped.
     const mappedItems = (purchase.items || []).map((item) => ({
       product: item.productName,
       cost: "",
@@ -105,7 +115,7 @@ export default function CreateProductionInvoice() {
     setSuggestions([]);
   };
 
-  // Handler to update an invoice item field
+  // Handler to update an invoice item field.
   const handleInvoiceItemChange = (index, field, value) => {
     setInvoiceItems((prevItems) => {
       const updatedItems = [...prevItems];
@@ -114,7 +124,7 @@ export default function CreateProductionInvoice() {
     });
   };
 
-  // Save Production Invoice
+  // Save Production Invoice (create or update)
   const handleSaveInvoice = async () => {
     const body = {
       referenceJobsheetNo: refJobSheet,
@@ -138,7 +148,7 @@ export default function CreateProductionInvoice() {
         });
         alert("Production Invoice created successfully!");
       }
-      navigate("/admin-dashboard/manage-production-invoice");
+      navigate("/admin-dashboard/manage-productioninvoice");
     } catch (error) {
       console.error("Error saving production invoice:", error);
       alert("Error saving production invoice. Check console.");
@@ -263,6 +273,7 @@ export default function CreateProductionInvoice() {
                         value={item.cost}
                         onChange={(e) => handleInvoiceItemChange(idx, "cost", e.target.value)}
                         className="border border-gray-300 rounded p-1 w-full"
+                        disabled={!isEditable}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -271,6 +282,7 @@ export default function CreateProductionInvoice() {
                         value={item.negotiatedCost}
                         onChange={(e) => handleInvoiceItemChange(idx, "negotiatedCost", e.target.value)}
                         className="border border-gray-300 rounded p-1 w-full"
+                        disabled={!isEditable}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -279,6 +291,7 @@ export default function CreateProductionInvoice() {
                         value={item.paymentMode}
                         onChange={(e) => handleInvoiceItemChange(idx, "paymentMode", e.target.value)}
                         className="border border-gray-300 rounded p-1 w-full"
+                        disabled={!isEditable}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -287,6 +300,7 @@ export default function CreateProductionInvoice() {
                         value={item.paymentRef}
                         onChange={(e) => handleInvoiceItemChange(idx, "paymentRef", e.target.value)}
                         className="border border-gray-300 rounded p-1 w-full"
+                        disabled={!isEditable}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -298,19 +312,17 @@ export default function CreateProductionInvoice() {
                         }
                         className="border border-gray-300 rounded p-1 w-full"
                         placeholder="Invoice No."
+                        disabled={!isEditable}
                       />
                     </td>
                     <td className="px-3 py-2">
                       <select
                         value={item.vendorInvoiceReceived ? "Yes" : "No"}
                         onChange={(e) =>
-                          handleInvoiceItemChange(
-                            idx,
-                            "vendorInvoiceReceived",
-                            e.target.value === "Yes"
-                          )
+                          handleInvoiceItemChange(idx, "vendorInvoiceReceived", e.target.value === "Yes")
                         }
                         className="border border-gray-300 rounded p-1 w-full text-sm"
+                        disabled={!isEditable}
                       >
                         <option value="No">No</option>
                         <option value="Yes">Yes</option>
@@ -326,6 +338,7 @@ export default function CreateProductionInvoice() {
         <button
           onClick={handleSaveInvoice}
           className="mt-6 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+          disabled={isEditMode && !isEditable}
         >
           {isEditMode ? "Update Production Invoice" : "Save Production Invoice"}
         </button>

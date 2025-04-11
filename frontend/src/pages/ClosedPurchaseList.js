@@ -183,7 +183,7 @@ export default function ClosedPurchaseList() {
                 </select>
               </th>
               <th className="px-4 py-2 text-left">Status</th>
-              <th className="px-4 py-2 text-left">Action</th>
+              {/* <th className="px-4 py-2 text-left">Action</th> */}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -205,7 +205,7 @@ export default function ClosedPurchaseList() {
                   <td className="px-4 py-2">
                     Total ({statusCounts.total}) | Received ({statusCounts.received})
                   </td>
-                  <td className="px-4 py-2">
+                  {/* <td className="px-4 py-2">
                     <button
                       onClick={() =>
                         navigate(`/admin-dashboard/closed-purchase/${purchase._id}`)
@@ -214,7 +214,7 @@ export default function ClosedPurchaseList() {
                     >
                       &#8230;
                     </button>
-                  </td>
+                  </td> */}
                 </tr>
               );
             })}

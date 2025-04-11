@@ -18,7 +18,7 @@ const formatSchedulePickup = (dateStr) => {
     hour12: true,
     month: "2-digit",
     day: "2-digit",
-    year: "numeric"
+    year: "numeric",
   });
 };
 
@@ -26,26 +26,24 @@ const formatSchedulePickup = (dateStr) => {
 const getStatusCounts = (items) => {
   let pending = 0,
     received = 0,
-    alertCount = 0;
+    alert = 0;
   if (items && Array.isArray(items)) {
     items.forEach((item) => {
       if (item.status === "Pending") pending++;
       else if (item.status === "Received") received++;
-      else if (item.status === "Alert") alertCount++;
+      else if (item.status === "Alert") alert++;
     });
   }
-  return { pending, received, alert: alertCount };
+  return { total: items ? items.length : 0, pending, received, alert };
 };
 
 export default function ManageProductionJobsheet() {
   const [jobsheets, setJobsheets] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Sorting state for headers
   const [sortJobSheet, setSortJobSheet] = useState("");
   const [sortClient, setSortClient] = useState("");
   const [sortSchedulePickup, setSortSchedulePickup] = useState("");
-
+  const [viewMode, setViewMode] = useState("open"); // "open" or "closed"
   const navigate = useNavigate();
 
   // Fetch all production jobsheets on mount
@@ -54,7 +52,7 @@ export default function ManageProductionJobsheet() {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(`${BACKEND_URL}/api/admin/productionjobsheets`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         setJobsheets(res.data);
       } catch (error) {
@@ -64,7 +62,7 @@ export default function ManageProductionJobsheet() {
     fetchJobsheets();
   }, []);
 
-  // Filter jobsheets based on search query (searching jobSheetNumber, clientCompanyName, eventName)
+  // Apply common search filter (searching jobSheetNumber, clientCompanyName, eventName)
   const filteredJobsheets = jobsheets.filter((j) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -75,7 +73,7 @@ export default function ManageProductionJobsheet() {
     );
   });
 
-  // Apply sorting
+  // Apply sorting on filtered jobsheets
   let sortedJobsheets = [...filteredJobsheets];
   if (sortJobSheet === "asc") {
     sortedJobsheets.sort((a, b) => a.jobSheetNumber.localeCompare(b.jobSheetNumber));
@@ -89,29 +87,46 @@ export default function ManageProductionJobsheet() {
   }
   if (sortSchedulePickup === "asc") {
     sortedJobsheets.sort((a, b) => {
-      const dateA = (a.items && a.items[0] && a.items[0].schedulePickup)
-        ? new Date(a.items[0].schedulePickup)
-        : new Date(0);
-      const dateB = (b.items && b.items[0] && b.items[0].schedulePickup)
-        ? new Date(b.items[0].schedulePickup)
-        : new Date(0);
+      const dateA =
+        a.items && a.items[0] && a.items[0].schedulePickup
+          ? new Date(a.items[0].schedulePickup)
+          : new Date(0);
+      const dateB =
+        b.items && b.items[0] && b.items[0].schedulePickup
+          ? new Date(b.items[0].schedulePickup)
+          : new Date(0);
       return dateA - dateB;
     });
   } else if (sortSchedulePickup === "desc") {
     sortedJobsheets.sort((a, b) => {
-      const dateA = (a.items && a.items[0] && a.items[0].schedulePickup)
-        ? new Date(a.items[0].schedulePickup)
-        : new Date(0);
-      const dateB = (b.items && b.items[0] && b.items[0].schedulePickup)
-        ? new Date(b.items[0].schedulePickup)
-        : new Date(0);
+      const dateA =
+        a.items && a.items[0] && a.items[0].schedulePickup
+          ? new Date(a.items[0].schedulePickup)
+          : new Date(0);
+      const dateB =
+        b.items && b.items[0] && b.items[0].schedulePickup
+          ? new Date(b.items[0].schedulePickup)
+          : new Date(0);
       return dateB - dateA;
     });
   }
 
+  // Divide jobsheets into Open and Closed based on item status counts.
+  const openJobsheets = sortedJobsheets.filter((j) => {
+    const counts = getStatusCounts(j.items);
+    return counts.total !== counts.received;
+  });
+  const closedJobsheets = sortedJobsheets.filter((j) => {
+    const counts = getStatusCounts(j.items);
+    return counts.total > 0 && counts.total === counts.received;
+  });
+
+  // Choose which list to display based on viewMode
+  const displayedJobsheets = viewMode === "open" ? openJobsheets : closedJobsheets;
+
   return (
     <div className="min-h-screen p-6 bg-white text-gray-800 relative">
-      {/* Top right button to create a new production jobsheet */}
+      {/* Top Right Create Button */}
       <button
         onClick={() => navigate("/admin-dashboard/create-productionjobsheet")}
         className="absolute top-6 right-6 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
@@ -132,6 +147,23 @@ export default function ManageProductionJobsheet() {
         />
       </div>
 
+      {/* Switch Buttons for View Mode */}
+      <div className="mb-4">
+        <button
+          onClick={() => setViewMode("open")}
+          className={`px-4 py-2 mr-2 rounded ${viewMode === "open" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"}`}
+        >
+          Open
+        </button>
+        <button
+          onClick={() => setViewMode("closed")}
+          className={`px-4 py-2 rounded ${viewMode === "closed" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"}`}
+        >
+          Closed
+        </button>
+      </div>
+
+      {/* Table Section */}
       <div className="bg-white shadow rounded overflow-x-auto">
         <table className="min-w-full">
           <thead className="bg-purple-100">
@@ -177,9 +209,8 @@ export default function ManageProductionJobsheet() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {sortedJobsheets.map((jobsheet) => {
-              const statusCounts = getStatusCounts(jobsheet.items);
-              // Format Schedule Pickup using helper function from the first item (if exists)
+            {displayedJobsheets.map((jobsheet) => {
+              const counts = getStatusCounts(jobsheet.items);
               const schedulePickup =
                 (jobsheet.items &&
                   jobsheet.items[0] &&
@@ -191,11 +222,15 @@ export default function ManageProductionJobsheet() {
                   <td className="px-4 py-2">{jobsheet.clientCompanyName}</td>
                   <td className="px-4 py-2">{schedulePickup}</td>
                   <td className="px-4 py-2">
-                    Pending ({statusCounts.pending}) | Received ({statusCounts.received}) | Alert ({statusCounts.alert})
+                    {viewMode === "open"
+                      ? `Pending (${counts.pending}) | Received (${counts.received}) | Alert (${counts.alert})`
+                      : `Total (${counts.total}) | Received (${counts.received})`}
                   </td>
                   <td className="px-4 py-2">
                     <button
-                      onClick={() => navigate(`/admin-dashboard/create-productionjobsheet/${jobsheet._id}`)}
+                      onClick={() =>
+                        navigate(`/admin-dashboard/create-productionjobsheet/${jobsheet._id}`)
+                      }
                       className="text-purple-600 hover:text-purple-900 text-2xl"
                     >
                       &#8230;
@@ -204,7 +239,7 @@ export default function ManageProductionJobsheet() {
                 </tr>
               );
             })}
-            {sortedJobsheets.length === 0 && (
+            {displayedJobsheets.length === 0 && (
               <tr>
                 <td className="px-4 py-2 text-center" colSpan="5">
                   No records found.
@@ -217,4 +252,3 @@ export default function ManageProductionJobsheet() {
     </div>
   );
 }
-
