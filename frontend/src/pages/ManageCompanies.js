@@ -12,6 +12,7 @@ export default function ManageCompanies() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Modals for add & edit
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -24,13 +25,6 @@ export default function ManageCompanies() {
   const [uploadError, setUploadError] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
 
-  // Pagination
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    totalPages: 1
-  });
-
   // Logs dropdown
   const [commonLogs, setCommonLogs] = useState([]);
   const [showLogsDropdown, setShowLogsDropdown] = useState(false);
@@ -42,24 +36,16 @@ export default function ManageCompanies() {
   useEffect(() => {
     fetchCompanies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page]);
+  }, []);
 
   async function fetchCompanies() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          page: pagination.page,
-          limit: pagination.limit
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setCompanies(res.data.companies);
-      setPagination(prev => ({
-        ...prev,
-        totalPages: res.data.totalPages
-      }));
+      setCompanies(res.data);
       setError(null);
     } catch (err) {
       console.error("Error fetching companies:", err);
@@ -68,6 +54,22 @@ export default function ManageCompanies() {
       setLoading(false);
     }
   }
+
+  // Add filtered companies calculation
+  const filteredCompanies = companies.filter(company => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      company.companyName.toLowerCase().includes(searchLower) ||
+      (company.brandName && company.brandName.toLowerCase().includes(searchLower)) ||
+      (company.GSTIN && company.GSTIN.toLowerCase().includes(searchLower)) ||
+      (company.companyEmail && company.companyEmail.toLowerCase().includes(searchLower)) ||
+      (company.companyAddress && company.companyAddress.toLowerCase().includes(searchLower)) ||
+      company.clients?.some(client => 
+        client.name.toLowerCase().includes(searchLower) ||
+        client.contactNumber.includes(searchTerm)
+      )
+    );
+  });
 
   // -----------------------
   // Soft delete
@@ -213,13 +215,6 @@ export default function ManageCompanies() {
     }
   }
 
-  // -----------------------
-  // Pagination
-  // -----------------------
-  const handlePageChange = (newPage) => {
-    setPagination(prev => ({ ...prev, page: newPage }));
-  };
-
   // Helper: pick dot color based on action
   const getDotColor = (action) => {
     switch (action) {
@@ -236,7 +231,7 @@ export default function ManageCompanies() {
 
   return (
     <div className="p-6">
-      {/* Header: Title, Logs (hover), Add, Bulk */}
+      {/* Header: Title, Logs (hover), Add, Bulk, Search */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Manage Companies</h1>
         <div className="flex space-x-2 items-center">
@@ -331,6 +326,17 @@ export default function ManageCompanies() {
         </div>
       </div>
 
+      {/* Add search bar */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search companies..."
+          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
       {/* Table or spinner/error */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
@@ -356,7 +362,7 @@ export default function ManageCompanies() {
                 </tr>
               </thead>
               <tbody>
-                {companies.map((company) => (
+                {filteredCompanies.map((company) => (
                   <tr key={company._id} className="border-b hover:bg-gray-50">
                     <td className="p-3">{company.companyName}</td>
                     <td className="p-3">{company.brandName || "-"}</td>
@@ -396,35 +402,6 @@ export default function ManageCompanies() {
                 ))}
               </tbody>
             </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex justify-between items-center mt-4">
-            <button
-              onClick={() => handlePageChange(pagination.page - 1)}
-              disabled={pagination.page === 1}
-              className={`px-4 py-2 rounded ${
-                pagination.page === 1
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              Previous
-            </button>
-            <span>
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <button
-              onClick={() => handlePageChange(pagination.page + 1)}
-              disabled={pagination.page === pagination.totalPages}
-              className={`px-4 py-2 rounded ${
-                pagination.page === pagination.totalPages
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              Next
-            </button>
           </div>
         </>
       )}

@@ -93,31 +93,12 @@ router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
 // routes/companyRoutes.js
 router.get("/companies", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { all } = req.query;
-    if (all === "true") {
-      const companies = await Company.find({ deleted: { $ne: true } })
-        .sort({ createdAt: -1 })
-        .populate("createdBy", "name email")
-        .populate("updatedBy", "name email");
-      return res.json(companies);
-    }
-    // Paginated response
-    let { page = 1, limit = 10 } = req.query;
-    page = parseInt(page) || 1;
-    limit = parseInt(limit) || 10;
-    const filter = { deleted: { $ne: true } };
-    const companies = await Company.find(filter)
+    const companies = await Company.find({ deleted: { $ne: true } })
       .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip((page - 1) * limit)
       .populate("createdBy", "name email")
       .populate("updatedBy", "name email");
-    const count = await Company.countDocuments(filter);
-    res.json({
-      companies,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
-    });
+
+    res.json(companies);
   } catch (error) {
     console.error("Error fetching companies:", error);
     res.status(500).json({ message: "Failed to fetch companies" });
