@@ -19,7 +19,7 @@ async function checkAndSendAlertEmail(openPurchase) {
       if (item.size) alertDetails += `Size: ${item.size}\n`;
       alertDetails += `Quantity: ${item.quantity}\n\n`;
     });
-    const mailBody = `JobSheet Number: ${openPurchase.jobSheetNumber}\nCompany Nmae : ${openPurchase.clientCompanyName}\nCreated By: ${openPurchase.createdBy}\n\nAlert Items:\n${alertDetails}`;
+    const mailBody = `JobSheet Number: ${openPurchase.jobSheetNumber}\nCompany Nmae : ${openPurchase.clientCompanyName}\nCreated By: ${openPurchase.createdBy}\n\nAlert Items:\n${alertDetails}\n🔥🔥🔥`;
 
     try {
       // Find all Super Admin users.
@@ -32,7 +32,7 @@ async function checkAndSendAlertEmail(openPurchase) {
       for (const admin of superAdmins) {
         await sendMail({
           to: admin.email,
-          subject: `AutoMail : Alert in Purchase ${openPurchase.jobSheetNumber}`,
+          subject: `AutoMail : Alert🔥 in Purchase ${openPurchase.jobSheetNumber}`,
           text: mailBody, // Optionally you can use html: mailBody if desired.
         });
       }

@@ -38,7 +38,7 @@ async function checkAndSendAlertEmail(jobsheet) {
       if (item.remarks) alertDetails += `Remarks: ${item.remarks}\n`;
       alertDetails += `\n`;
     });
-    const mailBody = `JobSheet Number: ${jobsheet.jobSheetNumber}\nCompany Nmae : ${jobsheet.clientCompanyName}\nCreated By: ${jobsheet.createdBy}\n\nAlert Items:\n${alertDetails}`;
+    const mailBody = `JobSheet Number: ${jobsheet.jobSheetNumber}\nCompany Nmae : ${jobsheet.clientCompanyName}\nCreated By: ${jobsheet.createdBy}\n\nAlert Items:\n${alertDetails}\n🔥🔥🔥`;
 
     try {
       // Lookup all super admin users (isSuperAdmin set to true)
@@ -51,7 +51,7 @@ async function checkAndSendAlertEmail(jobsheet) {
       for (const admin of superAdmins) {
         await sendMail({
           to: admin.email,
-          subject: `AutoMail : Alert in Production ${jobsheet.jobSheetNumber}`,
+          subject: `AutoMail : Alert🔥 in Production ${jobsheet.jobSheetNumber}`,
           text: mailBody,
           // Optionally add an HTML version with an html property if desired
         });
