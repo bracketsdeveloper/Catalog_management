@@ -74,7 +74,9 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
       <div className="bg-white p-6 rounded w-full max-w-3xl max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-purple-700">Edit Purchase Invoice</h2>
+          <h2 className="text-2xl font-bold text-purple-700">
+            Edit Purchase Invoice
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-600 hover:text-gray-900 text-2xl"
@@ -158,7 +160,9 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               <input
                 type="number"
                 value={editedData.negotiatedCost || ""}
-                onChange={(e) => handleFieldChange("negotiatedCost", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("negotiatedCost", e.target.value)
+                }
                 className="w-full border p-1"
               />
             </div>
@@ -169,7 +173,9 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               <input
                 type="number"
                 value={editedData.paymentMade || ""}
-                onChange={(e) => handleFieldChange("paymentMade", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("paymentMade", e.target.value)
+                }
                 className="w-full border p-1"
               />
             </div>
@@ -182,7 +188,9 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               <input
                 type="text"
                 value={editedData.vendorInvoiceNumber || ""}
-                onChange={(e) => handleFieldChange("vendorInvoiceNumber", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("vendorInvoiceNumber", e.target.value)
+                }
                 className="w-full border p-1"
               />
             </div>
@@ -192,7 +200,9 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               </label>
               <select
                 value={editedData.vendorInvoiceReceived || "No"}
-                onChange={(e) => handleFieldChange("vendorInvoiceReceived", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("vendorInvoiceReceived", e.target.value)
+                }
                 className="w-full border p-1"
               >
                 {invoiceReceivedOptions.map((opt) => (
@@ -232,6 +242,22 @@ export default function ManagePurchaseInvoice() {
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [currentInvoice, setCurrentInvoice] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+
+  // Load user permissions from localStorage
+  useEffect(() => {
+    const permsStr = localStorage.getItem("permissions");
+    if (permsStr) {
+      try {
+        setPermissions(JSON.parse(permsStr));
+      } catch (err) {
+        console.error("Error parsing permissions:", err);
+      }
+    }
+  }, []);
+
+  // Determine if the user can write (edit/update) purchase invoices
+  const canEdit = permissions.includes("write-purchase");
 
   useEffect(() => {
     async function fetchData() {
@@ -329,12 +355,10 @@ export default function ManagePurchaseInvoice() {
       (inv.product || "").toLowerCase().includes(searchLower) ||
       (inv.sourcingFrom || "").toLowerCase().includes(searchLower) ||
       (inv.cost ? String(inv.cost).toLowerCase() : "").includes(searchLower) ||
-      (inv.negotiatedCost ? String(inv.negotiatedCost).toLowerCase() : "").includes(
-        searchLower
-      ) ||
-      (inv.paymentMade ? String(inv.paymentMade).toLowerCase() : "").includes(
-        searchLower
-      ) ||
+      (inv.negotiatedCost
+        ? String(inv.negotiatedCost).toLowerCase()
+        : "").includes(searchLower) ||
+      (inv.paymentMade ? String(inv.paymentMade).toLowerCase() : "").includes(searchLower) ||
       (inv.vendorInvoiceNumber || "").toLowerCase().includes(searchLower) ||
       (inv.vendorInvoiceReceived || "").toLowerCase().includes(searchLower)
     );
@@ -423,6 +447,10 @@ export default function ManagePurchaseInvoice() {
   };
 
   const handleOpenEditModal = (invoice) => {
+    if (!canEdit) {
+      alert("You don't have permission to edit purchase invoices.");
+      return;
+    }
     setCurrentInvoice(invoice);
     setEditModalOpen(true);
   };
@@ -525,13 +553,54 @@ export default function ManagePurchaseInvoice() {
     }
   };
 
-  if (loading) return <div>Loading purchase invoices...</div>;
+  // Skeleton Loader instead of plain text
+  if (loading) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">
+          Manage Purchase Invoice
+        </h1>
+        <div className="animate-pulse">
+          <div className="mb-4 h-8 bg-gray-300 rounded"></div>
+          <table className="min-w-full border-collapse border border-gray-300">
+            <thead className="bg-gray-50">
+              <tr>
+                {Array(13).fill(0).map((_, i) => (
+                  <th
+                    key={i}
+                    className="p-2 border border-gray-300 h-4 bg-gray-300"
+                  ></th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array(5).fill(0).map((_, rowIdx) => (
+                <tr key={rowIdx}>
+                  {Array(13).fill(0).map((_, colIdx) => (
+                    <td
+                      key={colIdx}
+                      className="p-2 border border-gray-300 h-4 bg-gray-300"
+                    ></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-purple-700 mb-4">
         Manage Purchase Invoice
       </h1>
+      {!canEdit && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+          <p>You don't have permission to make changes.</p>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-4">
         <input
           type="text"
@@ -669,15 +738,33 @@ export default function ManagePurchaseInvoice() {
                   ? new Date(invoice.deliveryDateTime).toLocaleDateString()
                   : ""}
               </td>
-              <td className="p-2 border border-gray-300">{invoice.jobSheetNumber}</td>
-              <td className="p-2 border border-gray-300">{invoice.clientCompanyName}</td>
-              <td className="p-2 border border-gray-300">{invoice.eventName}</td>
-              <td className="p-2 border border-gray-300">{invoice.product}</td>
-              <td className="p-2 border border-gray-300">{invoice.sourcingFrom}</td>
-              <td className="p-2 border border-gray-300">{invoice.cost || ""}</td>
-              <td className="p-2 border border-gray-300">{invoice.negotiatedCost || ""}</td>
-              <td className="p-2 border border-gray-300">{invoice.paymentMade || ""}</td>
-              <td className="p-2 border border-gray-300">{invoice.vendorInvoiceNumber || ""}</td>
+              <td className="p-2 border border-gray-300">
+                {invoice.jobSheetNumber}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.clientCompanyName}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.eventName}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.product}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.sourcingFrom}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.cost || ""}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.negotiatedCost || ""}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.paymentMade || ""}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.vendorInvoiceNumber || ""}
+              </td>
               <td className="p-2 border border-gray-300">
                 {invoice.vendorInvoiceReceived || "No"}
               </td>
@@ -685,6 +772,12 @@ export default function ManagePurchaseInvoice() {
                 <button
                   onClick={() => handleOpenEditModal(invoice)}
                   className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] w-full"
+                  disabled={!canEdit}
+                  title={
+                    !canEdit
+                      ? "You do not have permission to edit."
+                      : ""
+                  }
                 >
                   Edit
                 </button>

@@ -87,11 +87,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
           <h3 className="text-xl font-bold text-purple-700">Manage Follow Ups</h3>
           <button onClick={handleClose} className="text-gray-600 hover:text-gray-900 text-2xl">×</button>
         </div>
-        {/* <div className="mb-4">
-          <div className="flex flex-col gap-2">
-            
-          </div>
-        </div> */}
         <div className="max-h-64 overflow-y-auto border p-2 mb-4">
           {localFollowUps.length === 0 && <p className="text-gray-600 text-sm">No follow ups yet.</p>}
           {localFollowUps.map((fu, index) => {
@@ -105,14 +100,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
                   {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
                 </span>
                 <div className="flex gap-2">
-                  {/* {!fu.done && (
-                    <button
-                      onClick={() => handleMarkDone(index)}
-                      className="bg-green-500 text-white px-2 py-1 rounded text-xs"
-                    >
-                      Mark as Done
-                    </button>
-                  )} */}
                   <button onClick={() => handleRemove(index)} className="text-red-500 text-xs">
                     Remove
                   </button>
@@ -317,6 +304,22 @@ export default function OpenPurchases() {
   const [searchText, setSearchText] = useState("");
   const [headerFilters, setHeaderFilters] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
+  const [permissions, setPermissions] = useState([]);
+
+  // Load permissions from localStorage
+  useEffect(() => {
+    const permsStr = localStorage.getItem("permissions");
+    if (permsStr) {
+      try {
+        setPermissions(JSON.parse(permsStr));
+      } catch (err) {
+        console.error("Error parsing permissions:", err);
+      }
+    }
+  }, []);
+
+  // Determine if the user can edit purchases.
+  const canEdit = permissions.includes("write-purchase");
 
   useEffect(() => {
     async function fetchPurchases() {
@@ -408,6 +411,10 @@ export default function OpenPurchases() {
   };
 
   const handleOpenEditModal = (purchase) => {
+    if (!canEdit) {
+      alert("You don't have permission to edit purchases.");
+      return;
+    }
     setCurrentEditPurchase(purchase);
     setEditModalOpen(true);
   };
@@ -418,6 +425,10 @@ export default function OpenPurchases() {
   };
 
   const handleSaveEdit = async (updatedData) => {
+    if (!canEdit) {
+      alert("You don't have permission to update purchases.");
+      return;
+    }
     if (updatedData.status === "received") {
       const confirmMsg =
         "You have marked this record as RECEIVED. Once saved, it cannot be edited further and the entire job sheet group will be removed if all items are received. Do you wish to proceed?";
@@ -465,11 +476,44 @@ export default function OpenPurchases() {
     setViewFollowUpModalOpen(true);
   };
 
-  if (loading) return <div>Loading open purchases...</div>;
+  // Skeleton Loader when loading data.
+  if (loading) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
+        <div className="animate-pulse">
+          <div className="mb-4 h-8 bg-gray-300 rounded"></div>
+          <table className="min-w-full border-collapse border border-gray-300">
+            <thead className="bg-gray-50">
+              <tr>
+                {Array(15).fill(0).map((_, i) => (
+                  <th key={i} className="p-2 border border-gray-300 h-4 bg-gray-300"></th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array(5).fill(0).map((_, rowIdx) => (
+                <tr key={rowIdx}>
+                  {Array(15).fill(0).map((_, colIdx) => (
+                    <td key={colIdx} className="p-2 border border-gray-300 h-4 bg-gray-300"></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
+      {!canEdit && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+          <p>You need the <strong>Permission</strong> permission to edit this page.</p>
+        </div>
+      )}
       <div className="mb-4">
         <input
           type="text"
@@ -589,8 +633,14 @@ export default function OpenPurchases() {
                   <button
                     onClick={() => handleOpenEditModal(purchase)}
                     className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] w-full"
-                    disabled={purchase.status === "received"}
-                    title={purchase.status === "received" ? "Record marked as received cannot be edited." : ""}
+                    disabled={!canEdit || purchase.status === "received"}
+                    title={
+                      !canEdit
+                        ? "You do not have permission to edit."
+                        : purchase.status === "received"
+                        ? "Record marked as received cannot be edited."
+                        : ""
+                    }
                   >
                     Edit
                   </button>

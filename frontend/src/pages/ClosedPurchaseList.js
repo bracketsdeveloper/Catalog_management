@@ -626,11 +626,7 @@ export default function ClosedPurchases() {
                 </td>
                 <td className="p-2 border border-gray-300">{purchase.remarks}</td>
                 <td className="p-2 border border-gray-300">{purchase.status}</td>
-                <td className="p-2 border border-gray-300">
-                  {latestFollowUp 
-                    ? `${new Date(latestFollowUp.updatedAt).toLocaleString()} – ${latestFollowUp.updatedBy}`
-                    : "No follow-ups"}
-                </td>
+                
               </tr>
             );
           })}
