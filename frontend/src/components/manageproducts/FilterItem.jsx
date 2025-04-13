@@ -1,3 +1,4 @@
+// FilterItem.jsx
 import React from "react";
 
 export default function FilterItem({ checked, onChange, children, count }) {
@@ -10,7 +11,7 @@ export default function FilterItem({ checked, onChange, children, count }) {
           checked={checked}
           onChange={onChange}
         />
-        <span className="truncate">{children}</span>
+        <span className="truncate ml-2">{children}</span>
       </div>
       <span className="text-gray-500 text-sm ml-2">({count})</span>
     </label>

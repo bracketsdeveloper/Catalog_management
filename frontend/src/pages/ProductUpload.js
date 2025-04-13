@@ -1,5 +1,4 @@
-"use client"; // Remove if you're using Create React App
-
+// ProductManagementPage.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -22,23 +21,37 @@ export default function ProductManagementPage() {
   // ---------------------- STATES ----------------------
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 100;
 
-  // Separate filter options (fetched from backend)
-  const [fullCategories, setFullCategories] = useState([]);
-  const [fullSubCategories, setFullSubCategories] = useState([]);
-  const [fullBrands, setFullBrands] = useState([]);
-  const [fullPriceRanges, setFullPriceRanges] = useState([]);
-  const [fullVariationHinges, setFullVariationHinges] = useState([]);
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedSubCategories, setSelectedSubCategories] = useState([]);
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
+  const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+
+  // Dropdown open/close states
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [subCategoryOpen, setSubCategoryOpen] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [priceRangeOpen, setPriceRangeOpen] = useState(false);
+  const [variationHingeOpen, setVariationHingeOpen] = useState(false);
+
+  // Filter counts
+  const [filterCounts, setFilterCounts] = useState({
+    categories: {},
+    subCategories: {},
+    brands: {},
+    priceRanges: {},
+    variationHinges: {}
+  });
 
   // Single product modal
   const [singleProductModalOpen, setSingleProductModalOpen] = useState(false);
   const [editProductId, setEditProductId] = useState(null);
-
-  // Include productGST in our default data
   const [newProductData, setNewProductData] = useState({
     productTag: "",
     productId: "",
@@ -64,87 +77,23 @@ export default function ProductManagementPage() {
     productCost_Currency: "",
     productCost: 0,
     productCost_Unit: "",
-    productGST: 0 // <-- NEW
+    productGST: 0
   });
-
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Bulk upload
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [csvData, setCsvData] = useState([]);
 
-  // Filters + search (selected filters)
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedSubCategories, setSelectedSubCategories] = useState([]);
-  const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
-  const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
-
-  // Dropdown open/close states
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const [subCategoryOpen, setSubCategoryOpen] = useState(false);
-  const [brandOpen, setBrandOpen] = useState(false);
-  const [priceRangeOpen, setPriceRangeOpen] = useState(false);
-  const [variationHingeOpen, setVariationHingeOpen] = useState(false);
-
-  // Carousel indices
-  const [carouselIndexMap, setCarouselIndexMap] = useState({});
-
   // Advanced image search
   const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
   const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
 
-  // Modify the state definitions
-  const [filterCounts, setFilterCounts] = useState({
-    categories: {},
-    subCategories: {},
-    brands: {},
-    priceRanges: {},
-    variationHinges: {}
-  });
+  // Carousel indices
+  const [carouselIndexMap, setCarouselIndexMap] = useState({});
 
-  // ---------------------- FETCH FILTER OPTIONS ----------------------
-  useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(`${BACKEND_URL}/api/admin/products/catalog/filters`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        // Create count maps
-        const counts = {
-          categories: {},
-          subCategories: {},
-          brands: {},
-          priceRanges: {},
-          variationHinges: {}
-        };
-
-        res.data.categories.forEach(c => counts.categories[c.name] = c.count);
-        res.data.subCategories.forEach(c => counts.subCategories[c.name] = c.count);
-        res.data.brands.forEach(c => counts.brands[c.name] = c.count);
-        res.data.priceRanges.forEach(c => counts.priceRanges[c.name] = c.count);
-        res.data.variationHinges.forEach(c => counts.variationHinges[c.name] = c.count);
-
-        setFilterCounts(counts);
-        
-        // Set filter options
-        setFullCategories(res.data.categories.map(c => c.name).sort());
-        setFullSubCategories(res.data.subCategories.map(c => c.name).sort());
-        setFullBrands(res.data.brands.map(c => c.name).sort());
-        setFullPriceRanges(res.data.priceRanges.map(c => c.name).sort((a, b) => a - b));
-        setFullVariationHinges(res.data.variationHinges.map(c => c.name).sort());
-      } catch (error) {
-        console.error("Error fetching filter options:", error);
-      }
-    };
-    fetchFilterOptions();
-  }, [BACKEND_URL]);
-
-  // ---------------------- FETCH PRODUCTS (WITH SERVER-SIDE FILTERING & PAGINATION) ----------------------
+  // ---------------------- FETCH PRODUCTS ----------------------
   const fetchProducts = async (page = currentPage) => {
     setLoading(true);
     try {
@@ -174,6 +123,7 @@ export default function ProductManagementPage() {
       setProducts(res.data.products);
       setCurrentPage(res.data.currentPage);
       setTotalPages(res.data.totalPages);
+      updateFilterCounts(res.data.products);
     } catch (error) {
       console.error("Error fetching products:", error);
     } finally {
@@ -181,7 +131,47 @@ export default function ProductManagementPage() {
     }
   };
 
-  // Refetch products when filter selections or search term changes
+  // ---------------------- UPDATE FILTER COUNTS ----------------------
+  const updateFilterCounts = (products) => {
+    const counts = {
+      categories: {},
+      subCategories: {},
+      brands: {},
+      priceRanges: {},
+      variationHinges: {}
+    };
+
+    products.forEach(product => {
+      if (product.category) counts.categories[product.category] = (counts.categories[product.category] || 0) + 1;
+      if (product.subCategory) counts.subCategories[product.subCategory] = (counts.subCategories[product.subCategory] || 0) + 1;
+      if (product.brandName) counts.brands[product.brandName] = (counts.brands[product.brandName] || 0) + 1;
+      if (product.priceRange) counts.priceRanges[product.priceRange] = (counts.priceRanges[product.priceRange] || 0) + 1;
+      if (product.variationHinge) counts.variationHinges[product.variationHinge] = (counts.variationHinges[product.variationHinge] || 0) + 1;
+    });
+
+    setFilterCounts(counts);
+  };
+
+  // ---------------------- COMPUTE FILTER OPTIONS ----------------------
+  const computeFilterOptions = (products) => {
+    const categories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+    const subCategories = [...new Set(products.map(p => p.subCategory).filter(Boolean))].sort();
+    const brands = [...new Set(products.map(p => p.brandName).filter(Boolean))].sort();
+    const priceRanges = [...new Set(products.map(p => p.priceRange).filter(Boolean))].sort((a, b) => a - b);
+    const variationHinges = [...new Set(products.map(p => p.variationHinge).filter(Boolean))].sort();
+    return { categories, subCategories, brands, priceRanges, variationHinges };
+  };
+
+  // ---------------------- HELPER: Toggle Filter ----------------------
+  const toggleFilter = (value, list, setList) => {
+    if (list.includes(value)) {
+      setList(list.filter((item) => item !== value));
+    } else {
+      setList([...list, value]);
+    }
+  };
+
+  // ---------------------- FETCH PRODUCTS ON FILTER CHANGE ----------------------
   useEffect(() => {
     fetchProducts(1);
     // eslint-disable-next-line
@@ -193,15 +183,6 @@ export default function ProductManagementPage() {
     selectedPriceRanges,
     selectedVariationHinges
   ]);
-
-  // ---------------------- HELPER: Toggle Filter ----------------------
-  const toggleFilter = (value, list, setList) => {
-    if (list.includes(value)) {
-      setList(list.filter((item) => item !== value));
-    } else {
-      setList([...list, value]);
-    }
-  };
 
   // ---------------------- SINGLE PRODUCT MODAL HANDLERS ----------------------
   const openSingleProductModal = (product = null) => {
@@ -232,7 +213,7 @@ export default function ProductManagementPage() {
         productCost_Currency: product.productCost_Currency || "",
         productCost: product.productCost || 0,
         productCost_Unit: product.productCost_Unit || "",
-        productGST: product.productGST || 0 // <-- load existing GST
+        productGST: product.productGST || 0
       });
     } else {
       setEditProductId(null);
@@ -261,7 +242,7 @@ export default function ProductManagementPage() {
         productCost_Currency: "",
         productCost: 0,
         productCost_Unit: "",
-        productGST: 0 // <-- default GST
+        productGST: 0
       });
     }
     setSingleProductModalOpen(true);
@@ -276,24 +257,16 @@ export default function ProductManagementPage() {
     setUploadProgress(0);
     try {
       const token = localStorage.getItem("token");
-
-      // Ensure images are valid strings
       const finalImages = (newProductData.images || []).filter(
         (img) => typeof img === "string" && img.trim() !== ""
       );
-
-      const payload = {
-        ...newProductData,
-        images: finalImages
-      };
+      const payload = { ...newProductData, images: finalImages };
 
       if (!editProductId) {
-        // Create new product
         await axios.post(`${BACKEND_URL}/api/admin/products`, payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        // Update existing product
         await axios.put(
           `${BACKEND_URL}/api/admin/products/${editProductId}`,
           payload,
@@ -321,18 +294,15 @@ export default function ProductManagementPage() {
         const uploadedImage = await uploadImage(file);
         if (uploadedImage && uploadedImage.secure_url) {
           newImages.push(uploadedImage.secure_url);
-        } else {
-          console.error("Image upload failed:", uploadedImage);
         }
       } catch (error) {
         console.error("Error during image upload:", error);
       }
     }
-    // Update the product data state with the new image URLs
-    setNewProductData((prev) => {
-      const updatedImages = [...prev.images, ...newImages];
-      return { ...prev, images: updatedImages };
-    });
+    setNewProductData((prev) => ({
+      ...prev,
+      images: [...prev.images, ...newImages]
+    }));
   };
 
   const handleDeleteProduct = async (id) => {
@@ -408,7 +378,6 @@ export default function ProductManagementPage() {
         productCost_Currency: row["Product Cost_Currency"] || "",
         productCost: row["Product Cost"] || 0,
         productCost_Unit: row["Product Cost_Unit"] || "",
-        // If you store GST in CSV, parse that here as well
         productGST: row["ProductGST"] != null ? Number(row["ProductGST"]) : 0
       }));
 
@@ -430,36 +399,35 @@ export default function ProductManagementPage() {
   const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
     const headerRow = [
-      { v: "Product Tag (required)" },
-      { v: "Product ID (required)" },
-      { v: "Variant ID (optional)" },
-      { v: "Category (required)" },
-      { v: "Sub Category (optional)" },
-      { v: "Variation_hinge (optional)" },
-      { v: "Name (required)" },
-      { v: "Brand Name (optional)" },
-      { v: "Qty" },
-      { v: "MRP_Currency" },
-      { v: "MRP" },
-      { v: "MRP_Unit" },
-      { v: "Delivery Time" },
-      { v: "Size" },
-      { v: "Color" },
-      { v: "Material" },
-      { v: "Price Range" },
-      { v: "Weight" },
-      { v: "HSN Code" },
-      { v: "Product Cost_Currency" },
-      { v: "Product Cost" },
-      { v: "Product Cost_Unit" },
-      { v: "Product_Details (optional)" },
-      { v: "Main_Image_URL (optional)" },
-      { v: "Second_Image_URL (optional)" },
-      { v: "Third_Image_URL (optional)" },
-      { v: "Fourth_Image_URL (optional)" },
-      { v: "Other_image_URL (optional)" },
-      // Add your ProductGST column if needed:
-      { v: "ProductGST (optional)" }
+      "Product Tag (required)",
+      "Product ID (required)",
+      "Variant ID (optional)",
+      "Category (required)",
+      "Sub Category (optional)",
+      "Variation_hinge (optional)",
+      "Name (required)",
+      "Brand Name (optional)",
+      "Qty",
+      "MRP_Currency",
+      "MRP",
+      "MRP_Unit",
+      "Delivery Time",
+      "Size",
+      "Color",
+      "Material",
+      "Price Range",
+      "Weight",
+      "HSN Code",
+      "Product Cost_Currency",
+      "Product Cost",
+      "Product Cost_Unit",
+      "Product_Details (optional)",
+      "Main_Image_URL (optional)",
+      "Second_Image_URL (optional)",
+      "Third_Image_URL (optional)",
+      "Fourth_Image_URL (optional)",
+      "Other_image_URL (optional)",
+      "ProductGST (optional)"
     ];
 
     const exampleRow = [
@@ -477,7 +445,7 @@ export default function ProductManagementPage() {
       "per unit",
       "3-5 days",
       "M",
-      "Red",
+      "Red Colony",
       "Cotton",
       "Budget",
       "500g",
@@ -491,12 +459,12 @@ export default function ProductManagementPage() {
       "",
       "",
       "",
-      // Add example GST value
-      18 // ProductGST
+      18
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([headerRow, exampleRow]);
     XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.write(wb, { bookType: "xlsx", type: "binary" });
     const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     const blob = new Blob([wbOut], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
@@ -509,41 +477,39 @@ export default function ProductManagementPage() {
   };
 
   // ---------------------- ADVANCED (IMAGE) SEARCH ----------------------
-  const {
-    getRootProps: advGetRootProps,
-    getInputProps: advGetInputProps
-  } = useDropzone({
-    accept: "image/*",
-    multiple: false,
-    onDrop: useCallback(
-      async ([file]) => {
-        try {
-          setAdvancedSearchLoading(true);
-          const token = localStorage.getItem("token");
-          const formData = new FormData();
-          formData.append("image", file);
-          const res = await axios.post(
-            `${BACKEND_URL}/api/products/advanced-search`,
-            formData,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "multipart/form-data"
+  const { getRootProps: advGetRootProps, getInputProps: advGetInputProps } =
+    useDropzone({
+      accept: "image/*",
+      multiple: false,
+      onDrop: useCallback(
+        async ([file]) => {
+          try {
+            setAdvancedSearchLoading(true);
+            const token = localStorage.getItem("token");
+            const formData = new FormData();
+            formData.append("image", file);
+            const res = await axios.post(
+              `${BACKEND_URL}/api/products/advanced-search`,
+              formData,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "multipart/form-data"
+                }
               }
-            }
-          );
-          setAdvancedSearchResults(res.data);
-          setAdvancedSearchActive(true);
-        } catch (error) {
-          console.error("Error in advanced search:", error);
-          alert("Image search failed");
-        } finally {
-          setAdvancedSearchLoading(false);
-        }
-      },
-      [BACKEND_URL]
-    )
-  });
+            );
+            setAdvancedSearchResults(res.data);
+            setAdvancedSearchActive(true);
+          } catch (error) {
+            console.error("Error in advanced search:", error);
+            alert("Image search failed");
+          } finally {
+            setAdvancedSearchLoading(false);
+          }
+        },
+        [BACKEND_URL]
+      )
+    });
 
   const handleClearAdvancedSearch = () => {
     setAdvancedSearchActive(false);
@@ -592,33 +558,21 @@ export default function ProductManagementPage() {
     }
   };
 
-  // ---------------------- Clear Filters ----------------------
+  // ---------------------- CLEAR FILTERS ----------------------
   const clearFilters = () => {
-    setSearchTerm(""); // Reset search term
-    setSelectedCategories([]); // Reset selected categories
-    setSelectedSubCategories([]); // Reset selected subcategories
-    setSelectedBrands([]); // Reset selected brands
-    setSelectedPriceRanges([]); // Reset selected price ranges
-    setSelectedVariationHinges([]); // Reset selected variation hinges
+    setSearchTerm("");
+    setSelectedCategories([]);
+    setSelectedSubCategories([]);
+    setSelectedBrands([]);
+    setSelectedPriceRanges([]);
+    setSelectedVariationHinges([]);
   };
 
-  // Sort filter options
-  const sortedCategories = fullCategories.sort();
-  const sortedSubCategories = fullSubCategories.sort();
-  const sortedBrands = fullBrands.sort();
-  const sortedPriceRanges = fullPriceRanges.sort((a, b) => a - b); // Assuming price ranges are numbers
-  const sortedVariationHinges = fullVariationHinges.sort();
-
-  // Check if any filters are applied
-  const isAnyFilterApplied =
-    searchTerm ||
-    selectedCategories.length > 0 ||
-    selectedSubCategories.length > 0 ||
-    selectedBrands.length > 0 ||
-    selectedPriceRanges.length > 0 ||
-    selectedVariationHinges.length > 0;
-
   // ---------------------- RENDER ----------------------
+  const displayProducts = advancedSearchActive ? advancedSearchResults : products;
+  const { categories, subCategories, brands, priceRanges, variationHinges } =
+    computeFilterOptions(displayProducts);
+
   return (
     <div className="bg-white text-gray-800 min-h-screen">
       <div className="md:p-6 p-4 w-full max-w-7xl mx-auto">
@@ -632,7 +586,6 @@ export default function ProductManagementPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            {/* Advanced Image Search */}
             <div
               {...advGetRootProps()}
               className="flex items-center px-3 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded cursor-pointer hover:opacity-90"
@@ -653,7 +606,6 @@ export default function ProductManagementPage() {
               </button>
             )}
           </div>
-          {/* Single Upload + Bulk Upload Toggles */}
           <div className="space-x-2">
             <button
               onClick={() => openSingleProductModal()}
@@ -670,15 +622,18 @@ export default function ProductManagementPage() {
           </div>
         </div>
 
-        {/* Display search results info if search term provided */}
         {searchTerm && (
           <div className="mb-4 text-sm text-gray-600">
-            Found {products.length} products with "{searchTerm}"
+            Found {displayProducts.length} products with "{searchTerm}"
           </div>
         )}
 
-        {/* Clear Filters Button */}
-        {isAnyFilterApplied && (
+        {(searchTerm ||
+          selectedCategories.length > 0 ||
+          selectedSubCategories.length > 0 ||
+          selectedBrands.length > 0 ||
+          selectedPriceRanges.length > 0 ||
+          selectedVariationHinges.length > 0) && (
           <div className="mb-4">
             <button
               onClick={clearFilters}
@@ -695,82 +650,47 @@ export default function ProductManagementPage() {
             label={`Categories (${selectedCategories.length})`}
             isOpen={categoryOpen}
             setIsOpen={setCategoryOpen}
-          >
-            {sortedCategories.map((cat) => (
-              <FilterItem
-                key={cat}
-                checked={selectedCategories.includes(cat)}
-                onChange={() => toggleFilter(cat, selectedCategories, setSelectedCategories)}
-                count={filterCounts.categories[cat] || 0}
-              >
-                {cat}
-              </FilterItem>
-            ))}
-          </DropdownFilter>
+            options={categories}
+            selectedOptions={selectedCategories}
+            toggleOption={(value) => toggleFilter(value, selectedCategories, setSelectedCategories)}
+            filterCounts={filterCounts.categories}
+          />
           <DropdownFilter
             label={`SubCats (${selectedSubCategories.length})`}
             isOpen={subCategoryOpen}
             setIsOpen={setSubCategoryOpen}
-          >
-            {sortedSubCategories.map((sub) => (
-              <FilterItem
-                key={sub}
-                checked={selectedSubCategories.includes(sub)}
-                onChange={() => toggleFilter(sub, selectedSubCategories, setSelectedSubCategories)}
-                count={filterCounts.subCategories[sub] || 0}
-              >
-                {sub}
-              </FilterItem>
-            ))}
-          </DropdownFilter>
+            options={subCategories}
+            selectedOptions={selectedSubCategories}
+            toggleOption={(value) => toggleFilter(value, selectedSubCategories, setSelectedSubCategories)}
+            filterCounts={filterCounts.subCategories}
+          />
           <DropdownFilter
             label={`Brands (${selectedBrands.length})`}
             isOpen={brandOpen}
             setIsOpen={setBrandOpen}
-          >
-            {sortedBrands.map((br) => (
-              <FilterItem
-                key={br}
-                checked={selectedBrands.includes(br)}
-                onChange={() => toggleFilter(br, selectedBrands, setSelectedBrands)}
-                count={filterCounts.brands[br] || 0}
-              >
-                {br}
-              </FilterItem>
-            ))}
-          </DropdownFilter>
+            options={brands}
+            selectedOptions={selectedBrands}
+            toggleOption={(value) => toggleFilter(value, selectedBrands, setSelectedBrands)}
+            filterCounts={filterCounts.brands}
+          />
           <DropdownFilter
             label={`Price Range (${selectedPriceRanges.length})`}
             isOpen={priceRangeOpen}
             setIsOpen={setPriceRangeOpen}
-          >
-            {sortedPriceRanges.map((pr) => (
-              <FilterItem
-                key={pr}
-                checked={selectedPriceRanges.includes(pr)}
-                onChange={() => toggleFilter(pr, selectedPriceRanges, setSelectedPriceRanges)}
-                count={filterCounts.priceRanges[pr] || 0}
-              >
-                {pr}
-              </FilterItem>
-            ))}
-          </DropdownFilter>
+            options={priceRanges}
+            selectedOptions={selectedPriceRanges}
+            toggleOption={(value) => toggleFilter(value, selectedPriceRanges, setSelectedPriceRanges)}
+            filterCounts={filterCounts.priceRanges}
+          />
           <DropdownFilter
             label={`Variation Hinge (${selectedVariationHinges.length})`}
             isOpen={variationHingeOpen}
             setIsOpen={setVariationHingeOpen}
-          >
-            {sortedVariationHinges.map((vh) => (
-              <FilterItem
-                key={vh}
-                checked={selectedVariationHinges.includes(vh)}
-                onChange={() => toggleFilter(vh, selectedVariationHinges, setSelectedVariationHinges)}
-                count={filterCounts.variationHinges[vh] || 0}
-              >
-                {vh}
-              </FilterItem>
-            ))}
-          </DropdownFilter>
+            options={variationHinges}
+            selectedOptions={selectedVariationHinges}
+            toggleOption={(value) => toggleFilter(value, selectedVariationHinges, setSelectedVariationHinges)}
+            filterCounts={filterCounts.variationHinges}
+          />
         </div>
 
         {/* Product Grid or Loading Skeleton */}
@@ -782,17 +702,15 @@ export default function ProductManagementPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {(advancedSearchActive ? advancedSearchResults : products)
-              .slice() // Create a copy to avoid mutating the original array
+            {displayProducts
+              .slice()
               .sort((a, b) => {
                 if (!searchTerm) return 0;
                 const term = searchTerm.toLowerCase();
-                const aBrand = (a.brandName || '').toLowerCase();
-                const bBrand = (b.brandName || '').toLowerCase();
+                const aBrand = (a.brandName || "").toLowerCase();
+                const bBrand = (b.brandName || "").toLowerCase();
                 const aMatch = aBrand.includes(term);
                 const bMatch = bBrand.includes(term);
-                
-                // Prioritize brand matches first
                 if (aMatch && !bMatch) return -1;
                 if (!aMatch && bMatch) return 1;
                 return 0;
@@ -808,8 +726,7 @@ export default function ProductManagementPage() {
                   handleNextImage={handleNextImage}
                   handlePrevImage={handlePrevImage}
                 />
-              ))
-            }
+              ))}
           </div>
         )}
 
@@ -835,7 +752,6 @@ export default function ProductManagementPage() {
         </div>
       </div>
 
-      {/* Single Product Modal */}
       {singleProductModalOpen && (
         <SingleProductModal
           editProductId={editProductId}
@@ -845,13 +761,12 @@ export default function ProductManagementPage() {
           closeSingleProductModal={closeSingleProductModal}
           handleFileChange={handleFileChange}
           uploadProgress={uploadProgress}
-          categories={fullCategories}
-          subCategories={fullSubCategories}
-          brands={fullBrands}
+          categories={categories}
+          subCategories={subCategories}
+          brands={brands}
         />
       )}
 
-      {/* Bulk Upload Modal */}
       {bulkUploadOpen && (
         <BulkUploadModal
           onClose={() => setBulkUploadOpen(false)}

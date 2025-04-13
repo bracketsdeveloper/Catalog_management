@@ -1,151 +1,166 @@
 const express = require("express");
 const router = express.Router();
 const OpenPurchase = require("../models/OpenPurchase");
+const ClosedPurchase = require("../models/ClosedPurchase");
+const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
-const User = require("../models/User");         // Added: Import the User model
-const sendMail = require("../utils/sendMail");     // Added: Import the sendMail utility
 
-// Helper function to check for alert items and send email if needed.
-async function checkAndSendAlertEmail(openPurchase) {
-  // Get any items with status Alert
-  const alertItems = openPurchase.items.filter(item => item.status === "Alert");
-
-  if (alertItems.length > 0) {
-    // Build the alert details in the email body.
-    let alertDetails = "";
-    alertItems.forEach(item => {
-      alertDetails += `Product: ${item.product}\n`;
-      if (item.color) alertDetails += `Color: ${item.color}\n`;
-      if (item.size) alertDetails += `Size: ${item.size}\n`;
-      alertDetails += `Quantity: ${item.quantity}\n\n`;
-    });
-    const mailBody = `JobSheet Number: ${openPurchase.jobSheetNumber}\nCompany Nmae : ${openPurchase.clientCompanyName}\nCreated By: ${openPurchase.createdBy}\n\nAlert Items:\n${alertDetails}\n🔥🔥🔥`;
-
-    try {
-      // Find all Super Admin users.
-      const superAdmins = await User.find({ isSuperAdmin: true });
-      if (superAdmins.length === 0) {
-        console.warn("No SuperAdmin users found, cannot send alert email.");
-        return;
-      }
-      // Loop through each and send the mail.
-      for (const admin of superAdmins) {
-        await sendMail({
-          to: admin.email,
-          subject: `AutoMail : Alert🔥 in Purchase ${openPurchase.jobSheetNumber}`,
-          text: mailBody, // Optionally you can use html: mailBody if desired.
-        });
-      }
-    } catch (error) {
-      console.error("Error sending alert email:", error);
-      // Email errors shouldn’t block the main flow.
-    }
-  }
-}
-
-// Create a new open purchase record
-router.post("/openPurchases", authenticate, authorizeAdmin, async (req, res) => {
+/**
+ * GET /
+ * Fetch all open purchase records combined (aggregated from JobSheets and updated OpenPurchase records).
+ * (This endpoint builds an aggregated list.)
+ */
+router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { jobSheetNumber, jobSheetCreatedDate, clientCompanyName, eventName, items } = req.body;
-    
-    // Check required fields
-    if (!jobSheetNumber || !jobSheetCreatedDate || !clientCompanyName || !eventName || !items || items.length === 0) {
-      return res.status(400).json({ message: "Missing required fields or no items provided" });
-    }
-    
-    // Use req.user to set createdBy – using name (or email) if name not available
-    const createdBy = req.user && (req.user.name || req.user.email) || "Unknown User";
-
-    // Ensure that within each item, if followUps exist they have updatedBy set.
-    const updatedItems = items.map((item) => {
-      if (item.followUps && Array.isArray(item.followUps)) {
-        item.followUps = item.followUps.map((fu) => {
-          // Default to current user's name if updatedBy is missing.
-          if (!fu.updatedBy) {
-            fu.updatedBy = createdBy;
-          }
-          return fu;
+    // STEP 1: Aggregate from JobSheets
+    const jobSheets = await JobSheet.find({});
+    let aggregated = [];
+    jobSheets.forEach(js => {
+      js.items.forEach((item, index) => {
+        aggregated.push({
+          _id: `temp_${js._id}_${index}`, // Temporary ID
+          jobSheetCreatedDate: js.createdAt,
+          jobSheetNumber: js.jobSheetNumber,
+          clientCompanyName: js.clientCompanyName,
+          eventName: js.eventName,
+          product: item.product,
+          sourcingFrom: item.sourcingFrom,
+          vendorContactNumber: "",
+          orderConfirmedDate: null,
+          expectedReceiveDate: null,
+          schedulePickUp: null,
+          followUp: [],
+          remarks: "",
+          status: "pending",
+          jobSheetId: js._id,
+          isTemporary: true
         });
+      });
+    });
+
+    // STEP 2: Fetch updated records from OpenPurchase collection
+    const updatedRecords = await OpenPurchase.find({});
+    updatedRecords.forEach(updated => {
+      if (updated.jobSheetId) {
+        const index = aggregated.findIndex(rec =>
+          rec.jobSheetId &&
+          rec.jobSheetId.toString() === updated.jobSheetId.toString() &&
+          rec.product === updated.product
+        );
+        if (index !== -1) {
+          aggregated[index] = { ...updated.toObject(), isTemporary: false };
+        } else {
+          aggregated.push({ ...updated.toObject(), isTemporary: false });
+        }
+      } else {
+        aggregated.push({ ...updated.toObject(), isTemporary: false });
       }
-      return item;
     });
 
-    const newOpenPurchase = new OpenPurchase({
-      jobSheetNumber,
-      // Convert jobSheetCreatedDate if needed (assumes ISO string)
-      jobSheetCreatedDate: new Date(jobSheetCreatedDate),
-      clientCompanyName,
-      eventName,
-      items: updatedItems,
-      createdBy
+    // Remove duplicates using composite key of jobSheetNumber + product.
+    const seen = new Set();
+    const finalAggregated = aggregated.filter((rec) => {
+      const key = `${rec.jobSheetNumber}_${rec.product}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
 
-    await newOpenPurchase.save();
+    res.json(finalAggregated);
+  } catch (error) {
+    console.error("Error fetching combined open purchases:", error);
+    res.status(500).json({ message: "Server error fetching open purchases" });
+  }
+});
 
-    // Check if any item has status "Alert" and send an email if so.
-    checkAndSendAlertEmail(newOpenPurchase);
-
-    res.status(201).json({ message: "Open Purchase created", openPurchase: newOpenPurchase });
+/**
+ * POST /
+ * Create a new Open Purchase record.
+ */
+router.post("/", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const data = { ...req.body };
+    if (data._id && data._id.startsWith("temp_")) {
+      delete data._id;
+    }
+    const newPurchase = new OpenPurchase(data);
+    await newPurchase.save();
+    res.status(201).json({ message: "Open purchase created", purchase: newPurchase });
   } catch (error) {
     console.error("Error creating open purchase:", error);
     res.status(500).json({ message: "Server error creating open purchase" });
   }
 });
 
-// GET all open purchases
-router.get("/openPurchases", authenticate, authorizeAdmin, async (req, res) => {
+/**
+ * PUT /:id
+ * Update an existing Open Purchase record.
+ * Then check if all products for the same job sheet are received;
+ * if so, move them to ClosedPurchase.
+ */
+router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const openPurchases = await OpenPurchase.find().sort({ createdAt: -1 });
-    res.json(openPurchases);
-  } catch (error) {
-    console.error("Error fetching open purchases:", error);
-    res.status(500).json({ message: "Server error fetching open purchases" });
-  }
-});
+    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedPurchase) return res.status(404).json({ message: "Open purchase not found" });
 
-// GET open purchase by ID
-router.get("/openPurchases/:id", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const openPurchase = await OpenPurchase.findById(req.params.id);
-    if (!openPurchase) {
-      return res.status(404).json({ message: "Open purchase not found" });
+    // After updating, check if all OpenPurchase records for this job sheet are "received"
+    const jobSheetId = updatedPurchase.jobSheetId;
+    if (jobSheetId) {
+      // Find the corresponding JobSheet to get list of products
+      const jobSheet = await JobSheet.findById(jobSheetId);
+      if (jobSheet) {
+        const products = jobSheet.items.map(item => item.product);
+        // Fetch all OpenPurchase records with this jobSheetId (and product in that list)
+        const openPurchases = await OpenPurchase.find({
+          jobSheetId,
+          product: { $in: products }
+        });
+        // Check if every record in openPurchases has status "received"
+        if (openPurchases.length > 0 && openPurchases.every(p => p.status === "received")) {
+          // For each record, create a ClosedPurchase record
+          for (const p of openPurchases) {
+            const closedData = {
+              jobSheetCreatedDate: p.jobSheetCreatedDate,
+              jobSheetNumber: p.jobSheetNumber,
+              clientCompanyName: p.clientCompanyName,
+              eventName: p.eventName,
+              product: p.product,
+              sourcingFrom: p.sourcingFrom,
+              vendorContactNumber: p.vendorContactNumber,
+              orderConfirmedDate: p.orderConfirmedDate,
+              expectedReceiveDate: p.expectedReceiveDate,
+              schedulePickUp: p.schedulePickUp,
+              followUp: p.followUp,
+              remarks: p.remarks,
+              status: p.status,
+              jobSheetId: p.jobSheetId,
+              createdAt: p.createdAt
+            };
+            const newClosed = new (require("../models/ClosedPurchase"))(closedData);
+            await newClosed.save();
+          }
+          // Delete these records from OpenPurchase.
+          await OpenPurchase.deleteMany({ jobSheetId, product: { $in: products } });
+          console.log(`Moved ${openPurchases.length} records for jobSheetId ${jobSheetId} to ClosedPurchase`);
+        }
+      }
     }
-    res.json(openPurchase);
-  } catch (error) {
-    console.error("Error fetching open purchase:", error);
-    res.status(500).json({ message: "Server error fetching open purchase" });
-  }
-});
 
-// Update an open purchase
-router.put("/openPurchases/:id", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const updatedOpenPurchase = await OpenPurchase.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-    if (!updatedOpenPurchase) {
-      return res.status(404).json({ message: "Open purchase not found" });
-    }
-
-    // After update, check for alert items as well.
-    checkAndSendAlertEmail(updatedOpenPurchase);
-    
-    res.json({ message: "Open purchase updated", openPurchase: updatedOpenPurchase });
+    res.json({ message: "Open purchase updated", purchase: updatedPurchase });
   } catch (error) {
     console.error("Error updating open purchase:", error);
     res.status(500).json({ message: "Server error updating open purchase" });
   }
 });
 
-// Delete an open purchase
-router.delete("/openPurchases/:id", authenticate, authorizeAdmin, async (req, res) => {
+/**
+ * DELETE /:id
+ * Delete an Open Purchase record.
+ */
+router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const openPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
-    if (!openPurchase) {
-      return res.status(404).json({ message: "Open purchase not found" });
-    }
+    const deletedPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
+    if (!deletedPurchase) return res.status(404).json({ message: "Open purchase not found" });
     res.json({ message: "Open purchase deleted" });
   } catch (error) {
     console.error("Error deleting open purchase:", error);
