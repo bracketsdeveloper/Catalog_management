@@ -33,9 +33,9 @@ export default function CreateOpenPurchase() {
 
   // Helper function: returns a tailwind class based on item status
   const getStatusRowClass = (status) => {
-    if (status === "Pending") return "bg-orange-500";
+    if (status === "Pending") return "bg-orange-300";
     if (status === "Received") return "bg-green-300";
-    if (status === "Alert") return "bg-red-500";
+    if (status === "Alert") return "bg-red-300";
     return "";
   };
 

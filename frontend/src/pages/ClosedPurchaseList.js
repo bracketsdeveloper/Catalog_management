@@ -409,6 +409,9 @@ export default function ClosedPurchases() {
       "Job Sheet Created Date": purchase.jobSheetCreatedDate
         ? new Date(purchase.jobSheetCreatedDate).toLocaleDateString()
         : "",
+      "Delivery Date": purchase.deliveryDateTime
+        ? new Date(purchase.deliveryDateTime).toLocaleDateString()
+        : "",
       "Job Sheet Number": purchase.jobSheetNumber || "",
       "Client Company Name": purchase.clientCompanyName || "",
       "Event Name": purchase.eventName || "",
@@ -465,6 +468,14 @@ export default function ClosedPurchases() {
             >
               Job Sheet Created Date{" "}
               {sortConfig.key === "jobSheetCreatedDate" &&
+                (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("deliveryDateTime", "date")}
+            >
+              Delivery Date{" "}
+              {sortConfig.key === "deliveryDateTime" &&
                 (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
             <th
@@ -558,55 +569,71 @@ export default function ClosedPurchases() {
           </tr>
         </thead>
         <tbody>
-          {sortedPurchases.map((purchase) => (
-            <tr
-              key={purchase._id || purchase.jobSheetNumber + purchase.product}
-              className={`text-xs ${
-                purchase.status === "alert"
-                  ? "bg-red-500"
-                  : purchase.status === "pending"
-                  ? "bg-orange-500"
-                  : purchase.status === "received"
-                  ? "bg-green-300"
-                  : ""
-              }`}
-            >
-              <td className="p-2 border border-gray-300">
-                {new Date(purchase.jobSheetCreatedDate).toLocaleDateString()}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.jobSheetNumber}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.clientCompanyName}
-              </td>
-              <td className="p-2 border border-gray-300">{purchase.eventName}</td>
-              <td className="p-2 border border-gray-300">{purchase.product}</td>
-              <td className="p-2 border border-gray-300">
-                {purchase.sourcingFrom}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.vendorContactNumber}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.orderConfirmedDate
-                  ? purchase.orderConfirmedDate.substring(0, 10)
-                  : ""}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.expectedReceiveDate
-                  ? purchase.expectedReceiveDate.substring(0, 10)
-                  : ""}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.schedulePickUp
-                  ? purchase.schedulePickUp.substring(0, 16)
-                  : ""}
-              </td>
-              <td className="p-2 border border-gray-300">{purchase.remarks}</td>
-              <td className="p-2 border border-gray-300">{purchase.status}</td>
-            </tr>
-          ))}
+          {sortedPurchases.map((purchase) => {
+            const latestFollowUp = purchase.followUp && purchase.followUp.length > 0 
+              ? purchase.followUp[purchase.followUp.length - 1] 
+              : null;
+
+            return (
+              <tr
+                key={purchase._id || purchase.jobSheetNumber + purchase.product}
+                className={`text-xs ${
+                  purchase.status === "alert"
+                    ? "bg-red-300"
+                    : purchase.status === "pending"
+                    ? "bg-orange-300"
+                    : purchase.status === "received"
+                    ? "bg-green-300"
+                    : ""
+                }`}
+              >
+                <td className="p-2 border border-gray-300">
+                  {new Date(purchase.jobSheetCreatedDate).toLocaleDateString()}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.deliveryDateTime 
+                    ? new Date(purchase.deliveryDateTime).toLocaleDateString()
+                    : ""}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.jobSheetNumber}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.clientCompanyName}
+                </td>
+                <td className="p-2 border border-gray-300">{purchase.eventName}</td>
+                <td className="p-2 border border-gray-300">{purchase.product}</td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.sourcingFrom}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.vendorContactNumber}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.orderConfirmedDate
+                    ? purchase.orderConfirmedDate.substring(0, 10)
+                    : ""}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.expectedReceiveDate
+                    ? purchase.expectedReceiveDate.substring(0, 10)
+                    : ""}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.schedulePickUp
+                    ? purchase.schedulePickUp.substring(0, 16)
+                    : ""}
+                </td>
+                <td className="p-2 border border-gray-300">{purchase.remarks}</td>
+                <td className="p-2 border border-gray-300">{purchase.status}</td>
+                <td className="p-2 border border-gray-300">
+                  {latestFollowUp 
+                    ? `${new Date(latestFollowUp.updatedAt).toLocaleString()} – ${latestFollowUp.updatedBy}`
+                    : "No follow-ups"}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -219,7 +219,7 @@ export default function ManageCompanies() {
   const getDotColor = (action) => {
     switch (action) {
       case "create":
-        return "bg-green-500";
+        return "bg-green-300";
       case "update":
         return "bg-orange-500";
       case "delete":

@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const statusOptions = ["pending", "received", "alert"];
+const statusOptions = ["", "pending", "received", "alert"];
 
-/* HeaderFilters component: renders input fields for each column. 
-   It receives the current headerFilters and an onFilterChange callback. */
 function HeaderFilters({ headerFilters, onFilterChange }) {
-  // Define keys for our columns (adjust as needed)
   const columns = [
     { key: "jobSheetCreatedDate", label: "Job Sheet Created Date" },
     { key: "jobSheetNumber", label: "Job Sheet Number" },
@@ -14,6 +11,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     { key: "eventName", label: "Event Name" },
     { key: "product", label: "Product" },
     { key: "sourcingFrom", label: "Sourced From" },
+    { key: "deliveryDateTime", label: "Delivery Date" },
     { key: "vendorContactNumber", label: "Vendor Contact Number" },
     { key: "orderConfirmedDate", label: "Order Confirmed Date" },
     { key: "expectedReceiveDate", label: "Expected Receive Date" },
@@ -21,7 +19,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     { key: "remarks", label: "Remarks" },
     { key: "status", label: "Status" }
   ];
-  
+
   return (
     <tr className="bg-gray-100">
       {columns.map(col => (
@@ -40,19 +38,23 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
   );
 }
 
-/**
- * FollowUpModal Component
- * Displays current follow ups and lets the user add or remove entries.
- */
 function FollowUpModal({ followUps, onUpdate, onClose }) {
   const [localFollowUps, setLocalFollowUps] = useState(followUps || []);
-  const [newFollowUpName, setNewFollowUpName] = useState("");
+  const [newFollowUpDate, setNewFollowUpDate] = useState("");
+  const [newFollowUpNote, setNewFollowUpNote] = useState("");
 
   const handleAdd = () => {
-    if (!newFollowUpName.trim()) return;
-    const newEntry = { updatedAt: new Date(), updatedBy: newFollowUpName };
+    if (!newFollowUpDate.trim() || !newFollowUpNote.trim()) return;
+    const newEntry = {
+      updatedAt: new Date(),
+      followUpDate: newFollowUpDate,
+      note: newFollowUpNote,
+      done: false,
+      updatedBy: "admin" // Adjust based on your auth system
+    };
     setLocalFollowUps(prev => [...prev, newEntry]);
-    setNewFollowUpName("");
+    setNewFollowUpDate("");
+    setNewFollowUpNote("");
   };
 
   const handleRemove = (index) => {
@@ -63,10 +65,20 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
     });
   };
 
+  const handleMarkDone = (index) => {
+    setLocalFollowUps(prev => {
+      const updated = [...prev];
+      updated[index].done = true;
+      return updated;
+    });
+  };
+
   const handleClose = () => {
     onUpdate(localFollowUps);
     onClose();
   };
+
+  const todayStr = new Date().toISOString().split("T")[0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -75,26 +87,39 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
           <h3 className="text-xl font-bold text-purple-700">Manage Follow Ups</h3>
           <button onClick={handleClose} className="text-gray-600 hover:text-gray-900 text-2xl">×</button>
         </div>
+        {/* <div className="mb-4">
+          <div className="flex flex-col gap-2">
+            
+          </div>
+        </div> */}
         <div className="max-h-64 overflow-y-auto border p-2 mb-4">
           {localFollowUps.length === 0 && <p className="text-gray-600 text-sm">No follow ups yet.</p>}
-          {localFollowUps.map((fu, index) => (
-            <div key={index} className="flex items-center justify-between text-xs border-b py-1">
-              <span>{new Date(fu.updatedAt).toLocaleString()} – {fu.updatedBy}</span>
-              <button onClick={() => handleRemove(index)} className="text-red-500 text-xs">Remove</button>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2 mb-4">
-          <input 
-            type="text"
-            placeholder="Enter your name"
-            value={newFollowUpName}
-            onChange={(e) => setNewFollowUpName(e.target.value)}
-            className="w-full p-1 border text-xs"
-          />
-          <button onClick={handleAdd} className="bg-blue-500 text-white px-2 py-1 text-xs rounded">
-            Add
-          </button>
+          {localFollowUps.map((fu, index) => {
+            const isOverdue = !fu.done && fu.followUpDate < todayStr;
+            return (
+              <div
+                key={index}
+                className={`flex items-center justify-between text-xs border-b py-1 ${isOverdue ? "bg-red-200" : ""}`}
+              >
+                <span>
+                  {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
+                </span>
+                <div className="flex gap-2">
+                  {/* {!fu.done && (
+                    <button
+                      onClick={() => handleMarkDone(index)}
+                      className="bg-green-500 text-white px-2 py-1 rounded text-xs"
+                    >
+                      Mark as Done
+                    </button>
+                  )} */}
+                  <button onClick={() => handleRemove(index)} className="text-red-500 text-xs">
+                    Remove
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="flex justify-end">
           <button
@@ -109,11 +134,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
   );
 }
 
-/**
- * EditPurchaseModal Component
- * Displays a modal form for editing an Open Purchase record.
- * Includes a "View Follow Ups" button to open the FollowUpModal.
- */
 function EditPurchaseModal({ purchase, onClose, onSave }) {
   const [editedData, setEditedData] = useState({ ...purchase });
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
@@ -149,7 +169,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             <button onClick={onClose} className="text-gray-600 hover:text-gray-900 text-2xl">×</button>
           </div>
           <form className="space-y-4">
-            {/* Read-only JobSheet Details */}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Job Sheet Number:</label>
@@ -178,7 +197,16 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 <span>{editedData.sourcingFrom}</span>
               </div>
             </div>
-            {/* Editable Fields */}
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <label className="block text-purple-700 font-bold mb-1">Delivery Date:</label>
+                <span>
+                  {editedData.deliveryDateTime
+                    ? new Date(editedData.deliveryDateTime).toLocaleDateString()
+                    : "N/A"}
+                </span>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Vendor Contact Number:</label>
@@ -238,7 +266,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 >
                   {statusOptions.map((option, i) => (
                     <option key={i} value={option}>
-                      {option}
+                      {option === "" ? "Empty" : option}
                     </option>
                   ))}
                 </select>
@@ -279,12 +307,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   );
 }
 
-/**
- * OpenPurchases Component
- * Fetches aggregated open purchase data from the backend and applies group filtering:
- * Only those job sheet groups where not all items are received are shown.
- * Additionally, per-column header filters are available.
- */
 export default function OpenPurchases() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -293,24 +315,16 @@ export default function OpenPurchases() {
   const [viewFollowUpModalOpen, setViewFollowUpModalOpen] = useState(false);
   const [currentViewFollowId, setCurrentViewFollowId] = useState(null);
   const [searchText, setSearchText] = useState("");
-  const [headerFilters, setHeaderFilters] = useState({}); // header filters state
-  const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
+  const [headerFilters, setHeaderFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
 
   useEffect(() => {
     async function fetchPurchases() {
       try {
+        setLoading(true);
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        console.log("Fetched open purchases:", res.data.map(p => ({
-          _id: p._id,
-          jobSheetNumber: p.jobSheetNumber,
-          product: p.product,
-          status: p.status,
-          isTemporary: p.isTemporary
-        })));
+        const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases?sortKey=${sortConfig.key}&sortDirection=${sortConfig.direction}`;
+        const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
         setPurchases(res.data);
       } catch (error) {
         console.error("Error fetching open purchases:", error);
@@ -319,9 +333,8 @@ export default function OpenPurchases() {
       }
     }
     fetchPurchases();
-  }, []);
+  }, [sortConfig]);
 
-  // Global search filtering.
   const globalFiltered = purchases.filter((purchase) => {
     const searchLower = searchText.toLowerCase();
     return (
@@ -334,9 +347,7 @@ export default function OpenPurchases() {
     );
   });
 
-  // Apply header filters to each record.
   const headerFiltered = globalFiltered.filter((record) => {
-    // Define the columns that should be filtered—adjust keys as necessary.
     const filterKeys = [
       "jobSheetCreatedDate",
       "jobSheetNumber",
@@ -344,6 +355,7 @@ export default function OpenPurchases() {
       "eventName",
       "product",
       "sourcingFrom",
+      "deliveryDateTime",
       "vendorContactNumber",
       "orderConfirmedDate",
       "expectedReceiveDate",
@@ -351,20 +363,20 @@ export default function OpenPurchases() {
       "remarks",
       "status"
     ];
-    // For each key, if a filter exists, check that record value includes the filter string.
     return filterKeys.every((key) => {
       if (!headerFilters[key]) return true;
-      // For dates, we can simply convert to a localized string.
-      const value = record[key]
-        ? key.includes("Date") || key === "schedulePickUp"
-          ? new Date(record[key]).toLocaleString()
-          : String(record[key])
-        : "";
+      let value = "";
+      if (record[key]) {
+        if (key.includes("Date") || key === "schedulePickUp" || key === "deliveryDateTime") {
+          value = new Date(record[key]).toLocaleDateString();
+        } else {
+          value = String(record[key]);
+        }
+      }
       return value.toLowerCase().includes(headerFilters[key].toLowerCase());
     });
   });
 
-  // Group the headerFiltered records by jobSheetNumber and exclude groups where every record is "received".
   const groupAndFilter = (records) => {
     const groups = {};
     records.forEach((record) => {
@@ -388,14 +400,14 @@ export default function OpenPurchases() {
     setHeaderFilters(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc"
+    }));
+  };
+
   const handleOpenEditModal = (purchase) => {
-    console.log("Opening edit modal for open purchase:", {
-      _id: purchase._id,
-      jobSheetNumber: purchase.jobSheetNumber,
-      product: purchase.product,
-      status: purchase.status,
-      isTemporary: purchase.isTemporary
-    });
     setCurrentEditPurchase(purchase);
     setEditModalOpen(true);
   };
@@ -405,7 +417,6 @@ export default function OpenPurchases() {
     setCurrentEditPurchase(null);
   };
 
-  // Modified save handler.
   const handleSaveEdit = async (updatedData) => {
     if (updatedData.status === "received") {
       const confirmMsg =
@@ -420,13 +431,7 @@ export default function OpenPurchases() {
       if (isTempId || updatedData.isTemporary) {
         delete dataToSend._id;
       }
-
       if (updatedData._id && !isTempId && !updatedData.isTemporary) {
-        console.log("Sending PUT request for:", {
-          _id: updatedData._id,
-          jobSheetNumber: updatedData.jobSheetNumber,
-          status: updatedData.status
-        });
         const res = await axios.put(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${updatedData._id}`,
           dataToSend,
@@ -434,10 +439,6 @@ export default function OpenPurchases() {
         );
         returnedData = res.data.purchase;
       } else {
-        console.log("Sending POST request for:", {
-          jobSheetNumber: updatedData.jobSheetNumber,
-          status: updatedData.status
-        });
         const res = await axios.post(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
           dataToSend,
@@ -445,18 +446,10 @@ export default function OpenPurchases() {
         );
         returnedData = res.data.purchase;
       }
-
       const res = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases?sortKey=${sortConfig.key}&sortDirection=${sortConfig.direction}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("Refreshed open purchases:", res.data.map(p => ({
-        _id: p._id,
-        jobSheetNumber: p.jobSheetNumber,
-        product: p.product,
-        status: p.status,
-        isTemporary: p.isTemporary
-      })));
       setPurchases(res.data);
       setEditModalOpen(false);
       setCurrentEditPurchase(null);
@@ -467,48 +460,16 @@ export default function OpenPurchases() {
     }
   };
 
-  const handleSort = (key, type = "string") => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-    setPurchases(prev => {
-      const sorted = [...prev].sort((a, b) => {
-        let aVal = a[key] || "";
-        let bVal = b[key] || "";
-        if (type === "date") {
-          aVal = aVal ? new Date(aVal) : new Date(0);
-          bVal = bVal ? new Date(bVal) : new Date(0);
-        }
-        if (aVal < bVal) return direction === "asc" ? -1 : 1;
-        if (aVal > bVal) return direction === "asc" ? 1 : -1;
-        return 0;
-      });
-      return sorted;
-    });
-  };
-
   const handleOpenViewFollowModal = (purchase) => {
-    console.log("Opening follow-up modal for purchase:", purchase._id);
     setCurrentViewFollowId(purchase._id);
     setViewFollowUpModalOpen(true);
   };
 
   if (loading) return <div>Loading open purchases...</div>;
 
-  console.log("Rendering filtered open purchases:", openPurchasesToShow.map((p) => ({
-    _id: p._id,
-    jobSheetNumber: p.jobSheetNumber,
-    product: p.product,
-    status: p.status,
-    isTemporary: p.isTemporary
-  })));
-
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
-      {/* Global Search Bar */}
       <div className="mb-4">
         <input
           type="text"
@@ -521,77 +482,44 @@ export default function OpenPurchases() {
       <table className="min-w-full border-collapse border border-gray-300">
         <thead className="bg-gray-50">
           <tr className="text-xs">
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("jobSheetCreatedDate", "date")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("jobSheetCreatedDate")}>
               Job Sheet Created Date {sortConfig.key === "jobSheetCreatedDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("jobSheetNumber", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("jobSheetNumber")}>
               Job Sheet Number {sortConfig.key === "jobSheetNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("clientCompanyName", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("clientCompanyName")}>
               Client Company Name {sortConfig.key === "clientCompanyName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("eventName", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("eventName")}>
               Event Name {sortConfig.key === "eventName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("product", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("product")}>
               Product {sortConfig.key === "product" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("sourcingFrom", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("sourcingFrom")}>
               Sourced From {sortConfig.key === "sourcingFrom" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("vendorContactNumber", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("deliveryDateTime")}>
+              Delivery Date {sortConfig.key === "deliveryDateTime" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("vendorContactNumber")}>
               Vendor Contact Number {sortConfig.key === "vendorContactNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("orderConfirmedDate", "date")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("orderConfirmedDate")}>
               Order Confirmed Date {sortConfig.key === "orderConfirmedDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("expectedReceiveDate", "date")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("expectedReceiveDate")}>
               Expected Receive Date {sortConfig.key === "expectedReceiveDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("schedulePickUp", "date")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("schedulePickUp")}>
               Schedule Pick Up {sortConfig.key === "schedulePickUp" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
             <th className="p-2 border border-gray-300">Follow Up</th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("remarks", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("remarks")}>
               Remarks {sortConfig.key === "remarks" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("status", "string")}
-            >
+            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("status")}>
               Status {sortConfig.key === "status" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
             <th className="p-2 border border-gray-300">Actions</th>
@@ -599,59 +527,77 @@ export default function OpenPurchases() {
           <HeaderFilters headerFilters={headerFilters} onFilterChange={handleHeaderFilterChange} />
         </thead>
         <tbody>
-          {openPurchasesToShow.map((purchase) => (
-            <tr
-              key={purchase._id || (purchase.jobSheetNumber + purchase.product)}
-              className={`text-xs ${
-                purchase.status === "alert"
-                  ? "bg-red-500"
-                  : purchase.status === "pending"
-                  ? "bg-orange-500"
-                  : purchase.status === "received"
-                  ? "bg-green-300"
-                  : ""
-              }`}
-            >
-              <td className="p-2 border border-gray-300">
-                {new Date(purchase.jobSheetCreatedDate).toLocaleDateString()}
-              </td>
-              <td className="p-2 border border-gray-300">{purchase.jobSheetNumber}</td>
-              <td className="p-2 border border-gray-300">{purchase.clientCompanyName}</td>
-              <td className="p-2 border border-gray-300">{purchase.eventName}</td>
-              <td className="p-2 border border-gray-300">{purchase.product}</td>
-              <td className="p-2 border border-gray-300">{purchase.sourcingFrom}</td>
-              <td className="p-2 border border-gray-300">{purchase.vendorContactNumber}</td>
-              <td className="p-2 border border-gray-300">
-                {purchase.orderConfirmedDate ? purchase.orderConfirmedDate.substring(0, 10) : ""}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.expectedReceiveDate ? purchase.expectedReceiveDate.substring(0, 10) : ""}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {purchase.schedulePickUp ? purchase.schedulePickUp.substring(0, 16) : ""}
-              </td>
-              <td className="p-2 border border-gray-300">
-                <button
-                  onClick={() => handleOpenViewFollowModal(purchase)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded text-[10px] w-full"
-                >
-                  View {purchase.followUp ? `(${purchase.followUp.length})` : ""}
-                </button>
-              </td>
-              <td className="p-2 border border-gray-300">{purchase.remarks}</td>
-              <td className="p-2 border border-gray-300">{purchase.status}</td>
-              <td className="p-2 border border-gray-300">
-                <button
-                  onClick={() => handleOpenEditModal(purchase)}
-                  className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] w-full"
-                  disabled={purchase.status === "received"}
-                  title={purchase.status === "received" ? "Record marked as received cannot be edited." : ""}
-                >
-                  Edit
-                </button>
-              </td>
-            </tr>
-          ))}
+          {openPurchasesToShow.map((purchase) => {
+            // Find the latest follow-up based on updatedAt
+            const latestFollowUp = purchase.followUp && purchase.followUp.length > 0
+              ? purchase.followUp.reduce((latest, fu) =>
+                  new Date(fu.updatedAt) > new Date(latest.updatedAt) ? fu : latest
+                )
+              : null;
+
+            return (
+              <tr
+                key={purchase._id || (purchase.jobSheetNumber + purchase.product)}
+                className={`text-xs ${
+                  purchase.status === "alert"
+                    ? "bg-red-300"
+                    : purchase.status === "pending"
+                    ? "bg-orange-300"
+                    : purchase.status === "received"
+                    ? "bg-green-300"
+                    : ""
+                }`}
+              >
+                <td className="p-2 border border-gray-300">
+                  {new Date(purchase.jobSheetCreatedDate).toLocaleDateString()}
+                </td>
+                <td className="p-2 border border-gray-300">{purchase.jobSheetNumber}</td>
+                <td className="p-2 border border-gray-300">{purchase.clientCompanyName}</td>
+                <td className="p-2 border border-gray-300">{purchase.eventName}</td>
+                <td className="p-2 border border-gray-300">{purchase.product}</td>
+                <td className="p-2 border border-gray-300">{purchase.sourcingFrom}</td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.deliveryDateTime ? new Date(purchase.deliveryDateTime).toLocaleDateString() : ""}
+                </td>
+                <td className="p-2 border border-gray-300">{purchase.vendorContactNumber}</td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.orderConfirmedDate ? new Date(purchase.orderConfirmedDate).toLocaleDateString() : ""}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.expectedReceiveDate ? new Date(purchase.expectedReceiveDate).toLocaleDateString() : ""}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.schedulePickUp ? new Date(purchase.schedulePickUp).toLocaleString() : ""}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {latestFollowUp ? (
+                    <button
+                      onClick={() => handleOpenViewFollowModal(purchase)}
+                      className="text-blue-600 hover:underline"
+                      title="View all follow-ups"
+                    >
+                      {latestFollowUp.note} ({latestFollowUp.followUpDate}
+                      {latestFollowUp.done ? ", Done" : ""})
+                    </button>
+                  ) : (
+                    <span>No follow-ups</span>
+                  )}
+                </td>
+                <td className="p-2 border border-gray-300">{purchase.remarks}</td>
+                <td className="p-2 border border-gray-300">{purchase.status}</td>
+                <td className="p-2 border border-gray-300">
+                  <button
+                    onClick={() => handleOpenEditModal(purchase)}
+                    className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] w-full"
+                    disabled={purchase.status === "received"}
+                    title={purchase.status === "received" ? "Record marked as received cannot be edited." : ""}
+                  >
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {editModalOpen && currentEditPurchase && (

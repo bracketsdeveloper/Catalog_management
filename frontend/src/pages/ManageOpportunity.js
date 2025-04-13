@@ -28,11 +28,11 @@ function formatClosureDate(dateStr) {
 function getDotColor(action) {
   switch (action) {
     case "create":
-      return "bg-green-500";
+      return "bg-green-300";
     case "update":
-      return "bg-orange-500";
+      return "bg-orange-300";
     case "delete":
-      return "bg-red-500";
+      return "bg-red-300";
     default:
       return "bg-gray-500";
   }

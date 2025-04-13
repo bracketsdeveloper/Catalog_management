@@ -2,7 +2,10 @@ const mongoose = require("mongoose");
 
 const followUpSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
-  updatedBy: { type: String, required: true }
+  updatedBy: { type: String, required: true },
+  followUpDate: { type: String, required: true }, // Stored as string to match frontend date input (YYYY-MM-DD)
+  note: { type: String, required: true },
+  done: { type: Boolean, default: false }
 });
 
 const openPurchaseSchema = new mongoose.Schema({
@@ -21,10 +24,13 @@ const openPurchaseSchema = new mongoose.Schema({
   schedulePickUp: { type: Date },
   followUp: { type: [followUpSchema], default: [] },
   remarks: { type: String },
-  status: { type: String, enum: ["pending", "received", "alert"], default: "pending" },
+  status: { type: String, enum: ["pending", "received", "alert"] },
 
   // Optional reference to the original jobsheet
   jobSheetId: { type: mongoose.Schema.Types.ObjectId, ref: "JobSheet" },
+
+  // NEW: Combined delivery date and time from JobSheet.
+  deliveryDateTime: { type: Date },
 
   createdAt: { type: Date, default: Date.now }
 });

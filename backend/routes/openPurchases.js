@@ -4,41 +4,41 @@ const OpenPurchase = require("../models/OpenPurchase");
 const ClosedPurchase = require("../models/ClosedPurchase");
 const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+const sendMail = require("../utils/sendMail");
+const User = require("../models/User");
 
-/**
- * GET /
- * Fetch all open purchase records combined (aggregated from JobSheets and updated OpenPurchase records).
- * (This endpoint builds an aggregated list.)
- */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // STEP 1: Aggregate from JobSheets
+    const sortKey = req.query.sortKey || "deliveryDateTime";
+    const sortDirection = req.query.sortDirection === "desc" ? -1 : 1;
+
     const jobSheets = await JobSheet.find({});
     let aggregated = [];
     jobSheets.forEach(js => {
       js.items.forEach((item, index) => {
+        const deliveryDate = js.deliveryDate ? new Date(js.deliveryDate) : null;
         aggregated.push({
-          _id: `temp_${js._id}_${index}`, // Temporary ID
+          _id: `temp_${js._id}_${index}`,
           jobSheetCreatedDate: js.createdAt,
           jobSheetNumber: js.jobSheetNumber,
           clientCompanyName: js.clientCompanyName,
           eventName: js.eventName,
           product: item.product,
           sourcingFrom: item.sourcingFrom,
+          deliveryDateTime: deliveryDate,
           vendorContactNumber: "",
           orderConfirmedDate: null,
           expectedReceiveDate: null,
           schedulePickUp: null,
           followUp: [],
           remarks: "",
-          status: "pending",
+          status: "",
           jobSheetId: js._id,
           isTemporary: true
         });
       });
     });
 
-    // STEP 2: Fetch updated records from OpenPurchase collection
     const updatedRecords = await OpenPurchase.find({});
     updatedRecords.forEach(updated => {
       if (updated.jobSheetId) {
@@ -57,13 +57,30 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
-    // Remove duplicates using composite key of jobSheetNumber + product.
     const seen = new Set();
     const finalAggregated = aggregated.filter((rec) => {
       const key = `${rec.jobSheetNumber}_${rec.product}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
+    });
+
+    finalAggregated.sort((a, b) => {
+      let aVal = a[sortKey];
+      let bVal = b[sortKey];
+      if (!aVal && !bVal) return 0;
+      if (!aVal) return sortDirection === 1 ? 1 : -1;
+      if (!bVal) return sortDirection === 1 ? -1 : 1;
+      if (sortKey.includes("Date") || sortKey === "schedulePickUp" || sortKey === "deliveryDateTime") {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      } else if (typeof aVal === "string" && typeof bVal === "string") {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      if (aVal < bVal) return -sortDirection;
+      if (aVal > bVal) return sortDirection;
+      return 0;
     });
 
     res.json(finalAggregated);
@@ -73,15 +90,17 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/**
- * POST /
- * Create a new Open Purchase record.
- */
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const data = { ...req.body };
     if (data._id && data._id.startsWith("temp_")) {
       delete data._id;
+    }
+    if (data.jobSheetId) {
+      const js = await JobSheet.findById(data.jobSheetId);
+      if (js && js.deliveryDate) {
+        data.deliveryDateTime = new Date(js.deliveryDate);
+      }
     }
     const newPurchase = new OpenPurchase(data);
     await newPurchase.save();
@@ -92,32 +111,29 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/**
- * PUT /:id
- * Update an existing Open Purchase record.
- * Then check if all products for the same job sheet are received;
- * if so, move them to ClosedPurchase.
- */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedPurchase) return res.status(404).json({ message: "Open purchase not found" });
+    const updateData = { ...req.body };
+    if (updateData.jobSheetId) {
+      const js = await JobSheet.findById(updateData.jobSheetId);
+      if (js && js.deliveryDate) {
+        updateData.deliveryDateTime = new Date(js.deliveryDate);
+      }
+    }
+    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    if (!updatedPurchase)
+      return res.status(404).json({ message: "Open purchase not found" });
 
-    // After updating, check if all OpenPurchase records for this job sheet are "received"
     const jobSheetId = updatedPurchase.jobSheetId;
     if (jobSheetId) {
-      // Find the corresponding JobSheet to get list of products
       const jobSheet = await JobSheet.findById(jobSheetId);
       if (jobSheet) {
         const products = jobSheet.items.map(item => item.product);
-        // Fetch all OpenPurchase records with this jobSheetId (and product in that list)
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
           product: { $in: products }
         });
-        // Check if every record in openPurchases has status "received"
         if (openPurchases.length > 0 && openPurchases.every(p => p.status === "received")) {
-          // For each record, create a ClosedPurchase record
           for (const p of openPurchases) {
             const closedData = {
               jobSheetCreatedDate: p.jobSheetCreatedDate,
@@ -134,15 +150,53 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               remarks: p.remarks,
               status: p.status,
               jobSheetId: p.jobSheetId,
-              createdAt: p.createdAt
+              createdAt: p.createdAt,
+              deliveryDateTime: p.deliveryDateTime
             };
-            const newClosed = new (require("../models/ClosedPurchase"))(closedData);
+            const newClosed = new ClosedPurchase(closedData);
             await newClosed.save();
           }
-          // Delete these records from OpenPurchase.
           await OpenPurchase.deleteMany({ jobSheetId, product: { $in: products } });
           console.log(`Moved ${openPurchases.length} records for jobSheetId ${jobSheetId} to ClosedPurchase`);
         }
+      }
+    }
+
+    // If updated status is alert, send email to all super-admin users.
+    if (updatedPurchase.status === "alert") {
+      const purchaseObj = updatedPurchase.toObject();
+
+      // Create an HTML email body with bold headings.
+      let mailBody = "";
+      const fields = [
+        "jobSheetCreatedDate",
+        "jobSheetNumber",
+        "clientCompanyName",
+        "eventName",
+        "product",
+        "sourcingFrom",
+        "status",
+        "jobSheetId",
+        "deliveryDateTime"
+      ];
+      fields.forEach(field => {
+        let value = purchaseObj[field];
+        // If the field is a date, format it.
+        if (value && (field.includes("Date") || field === "deliveryDateTime")) {
+          value = new Date(value).toLocaleString();
+        }
+        mailBody += `<b>${field}:</b> ${value}<br/>`;
+      });
+
+      // Fetch emails of all users with isSuperAdmin true.
+      const superAdmins = await User.find({ isSuperAdmin: true });
+      const emails = superAdmins.map(user => user.email);
+      if (emails.length > 0) {
+        await sendMail({
+          to: emails.join(","),
+          subject: "Alert Raised 🔥🔥!! IN PURCHASES",
+          html: mailBody
+        });
       }
     }
 
@@ -153,14 +207,11 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/**
- * DELETE /:id
- * Delete an Open Purchase record.
- */
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const deletedPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
-    if (!deletedPurchase) return res.status(404).json({ message: "Open purchase not found" });
+    if (!deletedPurchase)
+      return res.status(404).json({ message: "Open purchase not found" });
     res.json({ message: "Open purchase deleted" });
   } catch (error) {
     console.error("Error deleting open purchase:", error);

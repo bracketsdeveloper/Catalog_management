@@ -7,6 +7,7 @@ const invoiceReceivedOptions = ["Yes", "No"];
 function HeaderFilters({ headerFilters, onFilterChange }) {
   const columns = [
     { key: "orderConfirmedDate", label: "Order Confirmation Date" },
+    { key: "deliveryDateTime", label: "Delivery Date" },
     { key: "jobSheetNumber", label: "Job Sheet" },
     { key: "clientCompanyName", label: "Client Name" },
     { key: "eventName", label: "Event Name" },
@@ -90,6 +91,16 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               <span>
                 {invoice.orderConfirmedDate
                   ? new Date(invoice.orderConfirmedDate).toLocaleDateString()
+                  : ""}
+              </span>
+            </div>
+            <div>
+              <label className="block text-purple-700 font-bold mb-1">
+                Delivery Date:
+              </label>
+              <span>
+                {invoice.deliveryDateTime
+                  ? new Date(invoice.deliveryDateTime).toLocaleDateString()
                   : ""}
               </span>
             </div>
@@ -267,7 +278,7 @@ export default function ManagePurchaseInvoice() {
               ? matchingInvoice.clientName
               : openPurchase.clientCompanyName,
             orderConfirmedDate: matchingInvoice
-              ? matchingInvoice.orderConfirmationDate
+              ? matchingInvoice.orderConfirmationDate 
               : openPurchase.orderConfirmedDate,
           };
         });
@@ -388,12 +399,15 @@ export default function ManagePurchaseInvoice() {
       "Order Confirmation Date": inv.orderConfirmedDate
         ? new Date(inv.orderConfirmedDate).toLocaleDateString()
         : "",
+      "Delivery Date": inv.deliveryDateTime
+        ? new Date(inv.deliveryDateTime).toLocaleDateString()
+        : "",
       "Job Sheet": inv.jobSheetNumber || "",
       "Client Name": inv.clientCompanyName || "",
       "Event Name": inv.eventName || "",
-      Product: inv.product || "",
+      "Product": inv.product || "",
       "Source From": inv.sourcingFrom || "",
-      Cost: inv.cost || "",
+      "Cost": inv.cost || "",
       "Negotiated Cost": inv.negotiatedCost || "",
       "Payment Made": inv.paymentMade || "",
       "Vendor Invoice Number": inv.vendorInvoiceNumber
@@ -401,6 +415,7 @@ export default function ManagePurchaseInvoice() {
         : "",
       "Vendor Invoice Received": inv.vendorInvoiceReceived || "No",
     }));
+
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "PurchaseInvoice");
@@ -545,6 +560,14 @@ export default function ManagePurchaseInvoice() {
             </th>
             <th
               className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("deliveryDateTime", "date")}
+            >
+              Delivery Date{" "}
+              {sortConfig.key === "deliveryDateTime" &&
+                (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
               onClick={() => handleSort("jobSheetNumber", "string")}
             >
               Job Sheet{" "}
@@ -639,6 +662,11 @@ export default function ManagePurchaseInvoice() {
               <td className="p-2 border border-gray-300">
                 {invoice.orderConfirmedDate
                   ? new Date(invoice.orderConfirmedDate).toLocaleDateString()
+                  : ""}
+              </td>
+              <td className="p-2 border border-gray-300">
+                {invoice.deliveryDateTime
+                  ? new Date(invoice.deliveryDateTime).toLocaleDateString()
                   : ""}
               </td>
               <td className="p-2 border border-gray-300">{invoice.jobSheetNumber}</td>

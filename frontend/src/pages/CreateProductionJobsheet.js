@@ -9,9 +9,9 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Helper function: returns a Tailwind CSS class based on the status value.
 const getStatusRowClass = (status) => {
-  if (status === "Pending") return "bg-orange-500";
+  if (status === "Pending") return "bg-orange-300";
   if (status === "Received") return "bg-green-300";
-  if (status === "Alert") return "bg-red-500";
+  if (status === "Alert") return "bg-red-300";
   return "";
 };
 
