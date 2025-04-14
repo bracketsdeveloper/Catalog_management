@@ -97,23 +97,38 @@ const User = require("../models/User"); // Import the User model
 
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { filter } = req.query;
-    const userName = req.user.name; // Get current user's name
+    const { filter, searchTerm } = req.query;
+    const userName = req.user.name;
 
     let query = {};
 
     switch (filter) {
       case "my":
-        // Directly use username for filtering
         query.opportunityOwner = userName;
         break;
       case "team":
-        // Search in teamMembers by username
-        query.$or = [
-          { "teamMembers.userName": userName }
-        ];
+        query.$or = [{ "teamMembers.userName": userName }];
         break;
       // 'all' case remains default
+    }
+
+    // Add search functionality across all relevant fields
+    if (searchTerm) {
+      const regex = new RegExp(searchTerm, "i");
+      query.$or = [
+        { opportunityCode: regex },
+        { opportunityName: regex },
+        { account: regex },
+        { contact: regex },
+        { opportunityStage: regex },
+        { opportunityStatus: regex },
+        { opportunityDetail: regex },
+        { opportunityOwner: regex },
+        { createdBy: regex },
+        { dealRegistrationNumber: regex },
+        { freeTextField: regex },
+        // Add other fields as needed
+      ];
     }
 
     const opportunities = await Opportunity.find(query)

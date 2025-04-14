@@ -66,7 +66,7 @@ function exportToExcel(data, fileName = "OpportunitiesData.xlsx") {
     createdAt: opportunity.createdAt,
     // ...Add or remove fields as needed.
     // e.g. you could also include "products", "contacts", etc.
-    // but those might be nested arrays you’d flatten or stringified
+    // but those might be nested arrays you'd flatten or stringified
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -117,23 +117,24 @@ export default function ManageOpportunity() {
     const fetchData = async () => {
       try {
         const requests = [
-          axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=my`, {
+          axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=my${searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""}`, {
             headers: getAuthHeaders(),
           }),
-          axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=team`, {
+          axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=team${searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""}`, {
             headers: getAuthHeaders(),
           }),
         ];
 
         if (isSuperAdmin) {
           requests.push(
-            axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+            axios.get(`${BACKEND_URL}/api/admin/opportunities${searchTerm ? `?searchTerm=${encodeURIComponent(searchTerm)}` : ""}`, {
               headers: getAuthHeaders(),
             })
           );
         }
 
         const [myRes, teamRes, allRes] = await Promise.all(requests);
+        console.log("API Responses:", { myRes, teamRes, allRes });
 
         setOpportunities((prev) => ({
           ...prev,
@@ -147,7 +148,7 @@ export default function ManageOpportunity() {
     };
 
     fetchData();
-  }, [activeTab, isSuperAdmin]);
+  }, [activeTab, isSuperAdmin, searchTerm]);
 
   // Fetch logs when dropdown is shown
   const fetchAllLogs = async () => {
@@ -182,35 +183,13 @@ export default function ManageOpportunity() {
     }
   };
 
-  // Filter the data based on search and filterCriteria
+  // Filter the data based on filterCriteria (no local search)
   const getFilteredData = () => {
     let data = [...getActiveData()];
-    const lowerTerm = searchTerm.toLowerCase();
-
-    // Search filter
-    if (searchTerm) {
-      data = data.filter((op) => {
-        const searchFields = [
-          op.opportunityCode,
-          op.account,
-          op.opportunityName,
-          op.opportunityStage,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return searchFields.includes(lowerTerm);
-      });
-    }
 
     // Stage filter
-    if (
-      filterCriteria.opportunityStage &&
-      filterCriteria.opportunityStage !== "All"
-    ) {
-      data = data.filter(
-        (op) => op.opportunityStage === filterCriteria.opportunityStage
-      );
+    if (filterCriteria.opportunityStage && filterCriteria.opportunityStage !== "All") {
+      data = data.filter((op) => op.opportunityStage === filterCriteria.opportunityStage);
     }
 
     // Date range filter
@@ -224,10 +203,7 @@ export default function ManageOpportunity() {
     }
 
     // Created time period filter
-    if (
-      filterCriteria.createdFilter &&
-      filterCriteria.createdFilter !== "All"
-    ) {
+    if (filterCriteria.createdFilter && filterCriteria.createdFilter !== "All") {
       const now = new Date();
       let start, end;
 
@@ -243,7 +219,6 @@ export default function ManageOpportunity() {
           start.setDate(start.getDate() - 1);
           break;
         case "This Week":
-          // Start from Sunday
           start = new Date(now.setDate(now.getDate() - now.getDay()));
           start.setHours(0, 0, 0, 0);
           end = new Date(start);

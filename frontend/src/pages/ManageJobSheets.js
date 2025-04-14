@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import DatePicker from "react-datepicker";
 import { format, parse } from "date-fns";
 import "react-datepicker/dist/react-datepicker.css";
+import { Dropdown } from "react-bootstrap";
+import { FaEllipsisV } from "react-icons/fa";
 
 export default function ManageJobSheets() {
   const navigate = useNavigate();
@@ -16,22 +18,35 @@ export default function ManageJobSheets() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filter state values
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [company, setCompany] = useState("");
-  const [eventName, setEventName] = useState("");
-  const [referenceQuotation, setReferenceQuotation] = useState("");
+  // Single search query state
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Modal for create
   const [modalOpen, setModalOpen] = useState(false);
   const [createOption, setCreateOption] = useState(null);
 
   // Local states for the "Draft Panel"
-  const [draftPanelOpen, setDraftPanelOpen] = useState(false); // whether the draft panel is visible
-  const [draftSheets, setDraftSheets] = useState([]);          // user’s drafts
-  const [draftLoading, setDraftLoading] = useState(false);      // loading state for draft fetch
-  const [draftError, setDraftError] = useState(null);           // error in fetching drafts
+  const [draftPanelOpen, setDraftPanelOpen] = useState(false);
+  const [draftSheets, setDraftSheets] = useState([]);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState(null);
+
+  // Inside the component:
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // 1) On mount, fetch normal job sheets (production)
   useEffect(() => {
@@ -45,7 +60,7 @@ export default function ManageJobSheets() {
       const token = localStorage.getItem("token");
       let url = `${BACKEND_URL}/api/admin/jobsheets`;
       if (draftOnly) {
-        url += "?draftOnly=true"; // triggers route logic for user’s drafts
+        url += "?draftOnly=true"; // triggers route logic for user's drafts
       }
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -60,7 +75,7 @@ export default function ManageJobSheets() {
     }
   }
 
-  // 3) A separate function to fetch only the user’s drafts
+  // 3) A separate function to fetch only the user's drafts
   async function fetchMyDrafts() {
     try {
       setDraftLoading(true);
@@ -102,22 +117,16 @@ export default function ManageJobSheets() {
 
   // Filtering logic for main table
   const filteredJobSheets = jobSheets.filter((js) => {
-    const createdAt = new Date(js.createdAt);
-    const from = fromDate ? parse(fromDate, "yyyy-MM-dd", new Date()) : null;
-    const to = toDate ? parse(toDate, "yyyy-MM-dd", new Date()) : null;
-    const companyMatch = company
-      ? js.clientCompanyName?.toLowerCase().includes(company.toLowerCase())
-      : true;
-    const eventMatch = eventName
-      ? js.eventName?.toLowerCase().includes(eventName.toLowerCase())
-      : true;
-    const refMatch = referenceQuotation
-      ? js.referenceQuotation?.toLowerCase().includes(referenceQuotation.toLowerCase())
-      : true;
+    if (!searchQuery) return true;
 
-    const dateMatch = (!from || createdAt >= from) && (!to || createdAt <= to);
-
-    return companyMatch && eventMatch && refMatch && dateMatch;
+    const query = searchQuery.toLowerCase();
+    return (
+      (js.clientCompanyName?.toLowerCase().includes(query)) ||
+      (js.eventName?.toLowerCase().includes(query)) ||
+      (js.referenceQuotation?.toLowerCase().includes(query)) ||
+      (js.clientName?.toLowerCase().includes(query)) ||
+      (js.jobSheetNumber?.toLowerCase().includes(query))
+    );
   });
 
   // Export to Excel
@@ -248,75 +257,16 @@ export default function ManageJobSheets() {
         </div>
       </div>
 
-      {/* Filter Section */}
+      {/* Single Search Field */}
       <div className="mb-4 p-4 border rounded">
-        <h2 className="font-bold mb-2">Filters</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium">From Date (Created At)</label>
-            <DatePicker
-              selected={fromDate ? parse(fromDate, "yyyy-MM-dd", new Date()) : null}
-              onChange={(date) => setFromDate(date ? format(date, "yyyy-MM-dd") : "")}
-              dateFormat="dd/MM/yyyy"
-              className="border p-2 rounded w-full"
-              placeholderText="DD/MM/YYYY"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">To Date (Created At)</label>
-            <DatePicker
-              selected={toDate ? parse(toDate, "yyyy-MM-dd", new Date()) : null}
-              onChange={(date) => setToDate(date ? format(date, "yyyy-MM-dd") : "")}
-              dateFormat="dd/MM/yyyy"
-              className="border p-2 rounded w-full"
-              placeholderText="DD/MM/YYYY"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Company</label>
-            <input
-              type="text"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Search by Company"
-              className="border p-2 rounded w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Event Name</label>
-            <input
-              type="text"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              placeholder="Search by Event Name"
-              className="border p-2 rounded w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Reference Quotation</label>
-            <input
-              type="text"
-              value={referenceQuotation}
-              onChange={(e) => setReferenceQuotation(e.target.value)}
-              placeholder="Search by Reference Quotation"
-              className="border p-2 rounded w-full"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setFromDate("");
-                setToDate("");
-                setCompany("");
-                setEventName("");
-                setReferenceQuotation("");
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
+        <h2 className="font-bold mb-2">Search</h2>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by Company, Event, Quotation, etc."
+          className="border p-2 rounded w-full"
+        />
       </div>
 
       {/* Main Content: Table of Production Sheets */}
@@ -352,25 +302,46 @@ export default function ManageJobSheets() {
                     ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
                     : "Invalid date"}
                 </td>
-                <td className="p-2 space-x-2">
-                  <button
-                    onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded"
-                  >
-                    View
-                  </button>
-                  <button
-                    onClick={() => navigate(`/admin-dashboard/create-jobsheet/${js._id}`)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteJobSheet(js._id, false)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
-                  >
-                    Delete
-                  </button>
+                <td className="p-2" ref={dropdownRef}>
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenDropdownId(openDropdownId === js._id ? null : js._id)}
+                      className="text-gray-500 hover:text-gray-800"
+                    >
+                      <FaEllipsisV />
+                    </button>
+                    {openDropdownId === js._id && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded border border-gray-200 z-50">
+                        <button
+                          onClick={() => {
+                            navigate(`/admin-dashboard/jobsheet/${js._id}`);
+                            setOpenDropdownId(null);
+                          }}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigate(`/admin-dashboard/create-jobsheet/${js._id}`);
+                            setOpenDropdownId(null);
+                          }}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            deleteJobSheet(js._id, false);
+                            setOpenDropdownId(null);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -448,29 +419,46 @@ export default function ManageJobSheets() {
                         ? format(new Date(draft.deliveryDate), "dd/MM/yyyy")
                         : "Invalid date"}
                     </td>
-                    <td className="p-2 space-x-1">
-                      <button
-                        onClick={() =>
-                          navigate(`/admin-dashboard/jobsheet/${draft._id}`)
-                        }
-                        className="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs"
-                      >
-                        View
-                      </button>
-                      <button
-                        onClick={() =>
-                          navigate(`/admin-dashboard/create-jobsheet/${draft._id}`)
-                        }
-                        className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteJobSheet(draft._id, true)}
-                        className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs"
-                      >
-                        Delete
-                      </button>
+                    <td className="p-2" ref={dropdownRef}>
+                      <div className="relative">
+                        <button
+                          onClick={() => setOpenDropdownId(openDropdownId === draft._id ? null : draft._id)}
+                          className="text-gray-500 hover:text-gray-800"
+                        >
+                          <FaEllipsisV />
+                        </button>
+                        {openDropdownId === draft._id && (
+                          <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded border border-gray-200 z-50">
+                            <button
+                              onClick={() => {
+                                navigate(`/admin-dashboard/jobsheet/${draft._id}`);
+                                setOpenDropdownId(null);
+                              }}
+                              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                navigate(`/admin-dashboard/create-jobsheet/${draft._id}`);
+                                setOpenDropdownId(null);
+                              }}
+                              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                deleteJobSheet(draft._id, true);
+                                setOpenDropdownId(null);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
