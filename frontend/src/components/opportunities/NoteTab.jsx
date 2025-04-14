@@ -65,7 +65,7 @@ export default function NoteTab({ notes, setNotes }) {
             value={nt.noteDate}
             onChange={(e) => handleChange(index, "noteDate", e.target.value)}
           />
-          <input
+          <textarea
             type="text"
             className="border rounded px-2 py-1 text-sm"
             placeholder="Enter note content"

@@ -69,7 +69,7 @@ export default function TeamTab({ teamMembers, setTeamMembers, users = [] }) {
             ))}
           </select>
 
-          <input
+          <textarea
             type="text"
             className="border rounded px-2 py-1 text-sm"
             placeholder="Description"
