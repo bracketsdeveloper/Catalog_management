@@ -125,6 +125,14 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
                   {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
                 </span>
                 <div className="flex gap-2">
+                  {!fu.done && (
+                    <button
+                      onClick={() => handleMarkDone(index)}
+                      className="bg-green-500 text-white px-2 py-1 rounded text-xs"
+                    >
+                      Mark as Done
+                    </button>
+                  )}
                   <button onClick={() => handleRemove(index)} className="text-red-500 text-xs">
                     Remove
                   </button>
