@@ -16,9 +16,7 @@ function OpportunityTableRow({ oppty, formatClosureDate }) {
       </td>
       <td className="py-2 px-3">{formatClosureDate(oppty.closureDate)}</td>
       <td className="py-2 px-3">{oppty.opportunityStage}</td>
-      <td className="py-2 px-3">
-        {new Date(oppty.createdAt).toLocaleDateString("en-GB")}
-      </td>
+      <td className="py-2 px-3">{oppty.opportunityStatus || "-"}</td>
       <td className="py-2 px-3">
         <Link
           to={`/admin-dashboard/create-opportunity/${oppty._id}`}
@@ -30,6 +28,7 @@ function OpportunityTableRow({ oppty, formatClosureDate }) {
     </tr>
   );
 }
+
 
 export default function OpportunityTable({ data, formatClosureDate }) {
   if (!data?.length) {
@@ -50,7 +49,7 @@ export default function OpportunityTable({ data, formatClosureDate }) {
             <th className="py-2 px-3 text-left">Opportunity Value</th>
             <th className="py-2 px-3 text-left">Closure Date</th>
             <th className="py-2 px-3 text-left">Opportunity Stage</th>
-            <th className="py-2 px-3 text-left">Created On</th>
+            <th className="py-2 px-3 text-left">Opportunity Status</th>
             <th className="py-2 px-3 text-left">Action</th>
           </tr>
         </thead>

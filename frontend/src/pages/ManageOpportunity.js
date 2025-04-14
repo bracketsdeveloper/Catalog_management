@@ -40,7 +40,7 @@ function getDotColor(action) {
 
 // ADDED FOR EXCEL EXPORT
 function exportToExcel(data, fileName = "OpportunitiesData.xlsx") {
-  // Convert each Opportunity into a flat JSON object you want in your spreadsheet
+  // Convert each opportunity into a flat JSON object for your spreadsheet
   const exportData = data.map((opportunity) => ({
     opportunityCode: opportunity.opportunityCode,
     opportunityName: opportunity.opportunityName,
@@ -65,8 +65,6 @@ function exportToExcel(data, fileName = "OpportunitiesData.xlsx") {
     createdBy: opportunity.createdBy,
     createdAt: opportunity.createdAt,
     // ...Add or remove fields as needed.
-    // e.g. you could also include "products", "contacts", etc.
-    // but those might be nested arrays you'd flatten or stringified
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -117,19 +115,28 @@ export default function ManageOpportunity() {
     const fetchData = async () => {
       try {
         const requests = [
-          axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=my${searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""}`, {
-            headers: getAuthHeaders(),
-          }),
-          axios.get(`${BACKEND_URL}/api/admin/opportunities?filter=team${searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""}`, {
-            headers: getAuthHeaders(),
-          }),
+          axios.get(
+            `${BACKEND_URL}/api/admin/opportunities?filter=my${
+              searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""
+            }`,
+            { headers: getAuthHeaders() }
+          ),
+          axios.get(
+            `${BACKEND_URL}/api/admin/opportunities?filter=team${
+              searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""
+            }`,
+            { headers: getAuthHeaders() }
+          ),
         ];
 
         if (isSuperAdmin) {
           requests.push(
-            axios.get(`${BACKEND_URL}/api/admin/opportunities${searchTerm ? `?searchTerm=${encodeURIComponent(searchTerm)}` : ""}`, {
-              headers: getAuthHeaders(),
-            })
+            axios.get(
+              `${BACKEND_URL}/api/admin/opportunities${
+                searchTerm ? `?searchTerm=${encodeURIComponent(searchTerm)}` : ""
+              }`,
+              { headers: getAuthHeaders() }
+            )
           );
         }
 
@@ -261,38 +268,53 @@ export default function ManageOpportunity() {
     return data;
   };
 
-  // Handle stage change via Kanban drag
+  // Updated drag handler that uses the server's returned updated opportunity.
   const handleDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
     if (!destination || destination.droppableId === source.droppableId) return;
 
+    // Determine update payload based on destination.
+    let updatePayload = {};
+    if (["Won", "Lost", "Discontinued"].includes(destination.droppableId)) {
+      updatePayload = {
+        opportunityStage: "Won/Lost/Discontinued",
+        opportunityStatus: destination.droppableId,
+      };
+    } else {
+      updatePayload = { opportunityStage: destination.droppableId };
+    }
+
+    console.log("Updating card", draggableId, "with payload", updatePayload);
+
     try {
-      await axios.put(
+      // Perform the API request and get the updated opportunity from the server.
+      const response = await axios.put(
         `${BACKEND_URL}/api/admin/opportunities/${draggableId}`,
-        { opportunityStage: destination.droppableId },
+        updatePayload,
         { headers: getAuthHeaders() }
       );
 
-      // Optimistic UI update
+      const updatedOpportunity = response.data.opportunity;
+      if (!updatedOpportunity) {
+        console.error("No updated opportunity returned from server");
+        return;
+      }
+
+      // Update the local state using the returned updated opportunity object.
       setOpportunities((prev) => {
         const updated = { ...prev };
         Object.keys(updated).forEach((key) => {
           updated[key] = updated[key].map((op) =>
-            op._id === draggableId
-              ? { ...op, opportunityStage: destination.droppableId }
-              : op
+            op._id === draggableId ? { ...op, ...updatedOpportunity } : op
           );
         });
         return updated;
       });
     } catch (err) {
-      console.error("Error updating stage:", err);
+      console.error("Error updating stage/status:", err);
     }
   };
 
-  // -------------------------------------
-  // RENDER
-  // -------------------------------------
   return (
     <div className="min-h-screen bg-white text-gray-800 p-4">
       <Breadcrumb />
@@ -347,8 +369,8 @@ export default function ManageOpportunity() {
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {new Date(log.performedAt).toLocaleString()} |{" "}
-                        Opportunity: {log.opportunityName || "N/A"}
+                        {new Date(log.performedAt).toLocaleString()} | Opportunity:{" "}
+                        {log.opportunityName || "N/A"}
                       </div>
                       {log.oldValue !== undefined && (
                         <div className="mt-1 text-xs">
