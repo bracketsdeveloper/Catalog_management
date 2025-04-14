@@ -85,7 +85,32 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
       <div className="bg-white p-6 rounded w-full max-w-lg">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-purple-700">Manage Follow Ups</h3>
-          <button onClick={handleClose} className="text-gray-600 hover:text-gray-900 text-2xl">×</button>
+          <button onClick={handleClose} className="text-gray-600 hover:text-gray-900 text-2xl">
+            ×
+          </button>
+        </div>
+        <div className="mb-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold">Add New Follow Up:</label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={newFollowUpDate}
+                onChange={(e) => setNewFollowUpDate(e.target.value)}
+                className="p-1 border rounded text-sm"
+              />
+              <input
+                type="text"
+                placeholder="Enter follow up note"
+                value={newFollowUpNote}
+                onChange={(e) => setNewFollowUpNote(e.target.value)}
+                className="p-1 border rounded text-sm flex-grow"
+              />
+              <button onClick={handleAdd} className="bg-blue-500 text-white px-2 py-1 rounded text-sm">
+                Add
+              </button>
+            </div>
+          </div>
         </div>
         <div className="max-h-64 overflow-y-auto border p-2 mb-4">
           {localFollowUps.length === 0 && <p className="text-gray-600 text-sm">No follow ups yet.</p>}
@@ -153,7 +178,9 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
         <div className="bg-white p-6 rounded w-full max-w-3xl">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-gray-600 hover:text-gray-900 text-2xl">×</button>
+            <button onClick={onClose} className="text-gray-600 hover:text-gray-900 text-2xl">
+              ×
+            </button>
           </div>
           <form className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
@@ -270,7 +297,10 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             </div>
           </form>
           <div className="mt-6 flex justify-end gap-4">
-            <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-100">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border rounded hover:bg-gray-100"
+            >
               Cancel
             </button>
             <button
@@ -306,7 +336,7 @@ export default function OpenPurchases() {
   const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
   const [permissions, setPermissions] = useState([]);
 
-  // Load permissions from localStorage
+  // Load user permissions from localStorage
   useEffect(() => {
     const permsStr = localStorage.getItem("permissions");
     if (permsStr) {
@@ -318,7 +348,7 @@ export default function OpenPurchases() {
     }
   }, []);
 
-  // Determine if the user can edit purchases.
+  // Determine if the user has write permission
   const canEdit = permissions.includes("write-purchase");
 
   useEffect(() => {
@@ -346,7 +376,7 @@ export default function OpenPurchases() {
       (purchase.eventName || "").toLowerCase().includes(searchLower) ||
       (purchase.product || "").toLowerCase().includes(searchLower) ||
       (purchase.sourcingFrom || "").toLowerCase().includes(searchLower) ||
-      ((purchase.vendorContactNumber || "").toLowerCase().includes(searchLower))
+      (purchase.vendorContactNumber || "").toLowerCase().includes(searchLower)
     );
   });
 
@@ -425,10 +455,6 @@ export default function OpenPurchases() {
   };
 
   const handleSaveEdit = async (updatedData) => {
-    if (!canEdit) {
-      alert("You don't have permission to update purchases.");
-      return;
-    }
     if (updatedData.status === "received") {
       const confirmMsg =
         "You have marked this record as RECEIVED. Once saved, it cannot be edited further and the entire job sheet group will be removed if all items are received. Do you wish to proceed?";
@@ -476,7 +502,7 @@ export default function OpenPurchases() {
     setViewFollowUpModalOpen(true);
   };
 
-  // Skeleton Loader when loading data.
+  // Skeleton loader while loading data
   if (loading) {
     return (
       <div className="p-6">
@@ -508,12 +534,13 @@ export default function OpenPurchases() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
+      {/* Red warning box if user does not have permission to edit */}
       {!canEdit && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
-          <p>You need the <strong>Permission</strong> permission to edit this page.</p>
+        <div className="mb-4 p-2 text-red-700 bg-red-200 border border-red-400 rounded">
+          You don't have permission to edit purchase records.
         </div>
       )}
+      <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
       <div className="mb-4">
         <input
           type="text"
@@ -572,7 +599,6 @@ export default function OpenPurchases() {
         </thead>
         <tbody>
           {openPurchasesToShow.map((purchase) => {
-            // Find the latest follow-up based on updatedAt
             const latestFollowUp = purchase.followUp && purchase.followUp.length > 0
               ? purchase.followUp.reduce((latest, fu) =>
                   new Date(fu.updatedAt) > new Date(latest.updatedAt) ? fu : latest
