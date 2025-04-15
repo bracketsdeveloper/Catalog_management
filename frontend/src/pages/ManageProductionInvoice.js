@@ -16,6 +16,21 @@ const ProductionJobSheetInvoice = () => {
   const [sortConfig, setSortConfig] = useState({ key: "orderConfirmationDate", direction: "asc" });
   // New state to track current tab: "open" or "closed"
   const [activeTab, setActiveTab] = useState("open");
+  // Load user permissions.
+  const [permissions, setPermissions] = useState([]);
+
+  useEffect(() => {
+    const permsStr = localStorage.getItem("permissions");
+    if (permsStr) {
+      try {
+        setPermissions(JSON.parse(permsStr));
+      } catch (err) {
+        console.error("Error parsing permissions:", err);
+      }
+    }
+  }, []);
+  // Determine if user has "write-production" permission.
+  const canEdit = permissions.includes("write-production");
 
   const fetchInvoices = async () => {
     try {
@@ -34,6 +49,10 @@ const ProductionJobSheetInvoice = () => {
   }, []);
 
   const handleActionClick = (invoice) => {
+    if (!canEdit) {
+      alert("You don't have permission to edit production job sheet invoices.");
+      return;
+    }
     setSelectedInvoice(invoice);
     setModalOpen(true);
   };
@@ -73,7 +92,7 @@ const ProductionJobSheetInvoice = () => {
     if (!sortConfig.key) return 0;
     let aVal = a[sortConfig.key];
     let bVal = b[sortConfig.key];
-    // Treat "orderConfirmationDate" as date field
+    // Treat "orderConfirmationDate" as a date field.
     if (sortConfig.key === "orderConfirmationDate") {
       aVal = aVal ? new Date(aVal) : new Date(0);
       bVal = bVal ? new Date(bVal) : new Date(0);
@@ -90,6 +109,13 @@ const ProductionJobSheetInvoice = () => {
     <div className="p-4 bg-white min-h-screen">
       <h1 className="text-2xl text-purple-700 font-bold mb-4">Production Job Sheet Invoice</h1>
       
+      {/* Red warning box if user lacks edit permission */}
+      {!canEdit && (
+        <div className="mb-4 p-2 text-red-700 bg-red-200 border border-red-400 rounded">
+          You don't have permission to edit production job sheet invoices.
+        </div>
+      )}
+
       {/* Buttons to switch between Open and Closed Invoices */}
       <div className="mb-4 flex space-x-4">
         <button
@@ -122,7 +148,10 @@ const ProductionJobSheetInvoice = () => {
         onActionClick={handleActionClick}
       />
       {modalOpen && selectedInvoice && (
-        <ProductionJobSheetInvoiceModal invoice={selectedInvoice} onClose={handleModalClose} />
+        <ProductionJobSheetInvoiceModal
+          invoice={selectedInvoice}
+          onClose={handleModalClose}
+        />
       )}
     </div>
   );

@@ -15,6 +15,22 @@ const ManageProductionJobsheet = () => {
   const [sortOrder, setSortOrder] = useState("asc");
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Load user permissions from localStorage
+  const [permissions, setPermissions] = useState([]);
+  useEffect(() => {
+    const permsStr = localStorage.getItem("permissions");
+    if (permsStr) {
+      try {
+        setPermissions(JSON.parse(permsStr));
+      } catch (err) {
+        console.error("Error parsing permissions:", err);
+      }
+    }
+  }, []);
+
+  // Determine if the user has the "write-production" permission
+  const canEdit = permissions.includes("write-production");
+
   const fetchAggregatedData = async () => {
     try {
       const res = await axios.get(
@@ -32,6 +48,10 @@ const ManageProductionJobsheet = () => {
   }, []);
 
   const handleActionClick = (record) => {
+    if (!canEdit) {
+      alert("You don't have permission to edit production job sheets.");
+      return;
+    }
     setSelectedRecord(record);
     setModalOpen(true);
   };
@@ -59,30 +79,28 @@ const ManageProductionJobsheet = () => {
     return acc;
   }, {});
 
-  // Filter out groups where all rows (records with the same jobSheetNumber) are "received".
-  // We include the group if there is at least one record that is not "received".
+  // Filter out groups where all records with the same jobSheetNumber are "received"
   const nonFullyReceivedGroups = Object.values(groups).filter((group) => {
     return group.some(
       (record) => !record.status || record.status.toLowerCase() !== "received"
     );
   });
 
-  // Flatten the filtered groups back into a single array.
+  // Flatten the filtered groups into a single array.
   let filteredData = nonFullyReceivedGroups.flat();
 
-  // Apply search filtering on the flattened data.
+  // Apply search filter.
   filteredData = filteredData.filter((record) => {
     const recordString = JSON.stringify(record).toLowerCase();
     return recordString.includes(searchTerm.toLowerCase());
   });
 
-  // Sort the filtered data by the selected sortField.
+  // Sort the data.
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortField) return 0;
     let aVal = a[sortField];
     let bVal = b[sortField];
-
-    // Define date fields.
+    // Treat as date if applicable.
     const dateFields = [
       "jobSheetCreatedDate",
       "deliveryDateTime",
@@ -96,7 +114,6 @@ const ManageProductionJobsheet = () => {
       aVal = aVal ? aVal.toString().toLowerCase() : "";
       bVal = bVal ? bVal.toString().toLowerCase() : "";
     }
-
     if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
     if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
     return 0;
@@ -107,7 +124,14 @@ const ManageProductionJobsheet = () => {
       <h1 className="text-2xl text-purple-700 font-bold mb-4">
         Manage Production Job Sheet
       </h1>
-      {/* Common search bar */}
+      
+      {/* Red warning box if the user does not have edit permission */}
+      {!canEdit && (
+        <div className="mb-4 p-2 text-red-700 bg-red-200 border border-red-400 rounded">
+          You don't have permission to edit production job sheets.
+        </div>
+      )}
+
       <div className="mb-4">
         <input
           type="text"
@@ -125,7 +149,10 @@ const ManageProductionJobsheet = () => {
         onSortChange={handleSortChange}
       />
       {modalOpen && (
-        <ProductionJobSheetModal record={selectedRecord} onClose={handleModalClose} />
+        <ProductionJobSheetModal
+          record={selectedRecord}
+          onClose={handleModalClose}
+        />
       )}
     </div>
   );
