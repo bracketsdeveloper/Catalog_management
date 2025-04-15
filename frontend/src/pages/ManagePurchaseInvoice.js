@@ -37,22 +37,6 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
   );
 }
 
-const getClosedPurchases = (records) => {
-  const groups = {};
-  records.forEach((record) => {
-    const key = record.jobSheetNumber;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(record);
-  });
-  const closed = [];
-  Object.values(groups).forEach((group) => {
-    if (group.length > 0 && group.every((item) => item.status === "received")) {
-      closed.push(...group);
-    }
-  });
-  return closed;
-};
-
 function EditInvoiceModal({ invoice, onClose, onSave }) {
   const [editedData, setEditedData] = useState({ ...invoice });
 
@@ -263,22 +247,25 @@ export default function ManagePurchaseInvoice() {
     async function fetchData() {
       try {
         const token = localStorage.getItem("token");
-        // Fetch open purchases
+        // Fetch open purchases from the backend.
         const openPurchasesRes = await axios.get(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        const closedData = getClosedPurchases(openPurchasesRes.data);
+        // Filter open purchases whose status is "received"
+        const receivedPurchases = openPurchasesRes.data.filter(
+          (purchase) => purchase.status === "received"
+        );
 
-        // Fetch all purchase invoices
+        // Fetch all purchase invoices.
         const purchaseInvoicesRes = await axios.get(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const purchaseInvoices = purchaseInvoicesRes.data;
 
-        // Merge closed purchases with purchase invoices
-        const mergedData = closedData.map((openPurchase) => {
+        // Merge received open purchases with purchase invoices.
+        const mergedData = receivedPurchases.map((openPurchase) => {
           const matchingInvoice = purchaseInvoices.find(
             (invoice) =>
               invoice.jobSheetNumber === openPurchase.jobSheetNumber &&
@@ -309,7 +296,7 @@ export default function ManagePurchaseInvoice() {
           };
         });
 
-        // Add any purchase invoices that don't exist in closedData
+        // Add any purchase invoices that do not exist in mergedData.
         purchaseInvoices.forEach((invoice) => {
           if (
             !mergedData.some(
@@ -553,7 +540,6 @@ export default function ManagePurchaseInvoice() {
     }
   };
 
-  // Skeleton Loader instead of plain text
   if (loading) {
     return (
       <div className="p-6">
@@ -774,9 +760,7 @@ export default function ManagePurchaseInvoice() {
                   className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] w-full"
                   disabled={!canEdit}
                   title={
-                    !canEdit
-                      ? "You do not have permission to edit."
-                      : ""
+                    !canEdit ? "You do not have permission to edit." : ""
                   }
                 >
                   Edit

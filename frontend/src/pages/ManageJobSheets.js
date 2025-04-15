@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -30,23 +30,6 @@ export default function ManageJobSheets() {
   const [draftSheets, setDraftSheets] = useState([]);
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftError, setDraftError] = useState(null);
-
-  // Inside the component:
-  const [openDropdownId, setOpenDropdownId] = useState(null);
-  const dropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setOpenDropdownId(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   // 1) On mount, fetch normal job sheets (production)
   useEffect(() => {
@@ -302,46 +285,36 @@ export default function ManageJobSheets() {
                     ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
                     : "Invalid date"}
                 </td>
-                <td className="p-2" ref={dropdownRef}>
-                  <div className="relative">
-                    <button
-                      onClick={() => setOpenDropdownId(openDropdownId === js._id ? null : js._id)}
+                <td className="p-2">
+                  <Dropdown autoClose="outside">
+                    <Dropdown.Toggle
+                      variant="link"
+                      id={`dropdown-actions-${js._id}`}
                       className="text-gray-500 hover:text-gray-800"
                     >
                       <FaEllipsisV />
-                    </button>
-                    {openDropdownId === js._id && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded border border-gray-200 z-50">
-                        <button
-                          onClick={() => {
-                            navigate(`/admin-dashboard/jobsheet/${js._id}`);
-                            setOpenDropdownId(null);
-                          }}
-                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => {
-                            navigate(`/admin-dashboard/create-jobsheet/${js._id}`);
-                            setOpenDropdownId(null);
-                          }}
-                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            deleteJobSheet(js._id, false);
-                            setOpenDropdownId(null);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu className="bg-white shadow-lg rounded border border-gray-200">
+                      <Dropdown.Item
+                        onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      >
+                        View
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        onClick={() => navigate(`/admin-dashboard/create-jobsheet/${js._id}`)}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      >
+                        Edit
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        onClick={() => deleteJobSheet(js._id, false)}
+                        className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
+                      >
+                        Delete
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
                 </td>
               </tr>
             ))}
@@ -419,46 +392,36 @@ export default function ManageJobSheets() {
                         ? format(new Date(draft.deliveryDate), "dd/MM/yyyy")
                         : "Invalid date"}
                     </td>
-                    <td className="p-2" ref={dropdownRef}>
-                      <div className="relative">
-                        <button
-                          onClick={() => setOpenDropdownId(openDropdownId === draft._id ? null : draft._id)}
+                    <td className="p-2">
+                      <Dropdown autoClose="outside">
+                        <Dropdown.Toggle
+                          variant="link"
+                          id={`dropdown-draft-actions-${draft._id}`}
                           className="text-gray-500 hover:text-gray-800"
                         >
                           <FaEllipsisV />
-                        </button>
-                        {openDropdownId === draft._id && (
-                          <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded border border-gray-200 z-50">
-                            <button
-                              onClick={() => {
-                                navigate(`/admin-dashboard/jobsheet/${draft._id}`);
-                                setOpenDropdownId(null);
-                              }}
-                              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={() => {
-                                navigate(`/admin-dashboard/create-jobsheet/${draft._id}`);
-                                setOpenDropdownId(null);
-                              }}
-                              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => {
-                                deleteJobSheet(draft._id, true);
-                                setOpenDropdownId(null);
-                              }}
-                              className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                        </Dropdown.Toggle>
+                        <Dropdown.Menu className="bg-white shadow-lg rounded border border-gray-200">
+                          <Dropdown.Item
+                            onClick={() => navigate(`/admin-dashboard/jobsheet/${draft._id}`)}
+                            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                          >
+                            View
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            onClick={() => navigate(`/admin-dashboard/create-jobsheet/${draft._id}`)}
+                            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                          >
+                            Edit
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            onClick={() => deleteJobSheet(draft._id, true)}
+                            className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
+                          >
+                            Delete
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown>
                     </td>
                   </tr>
                 ))}

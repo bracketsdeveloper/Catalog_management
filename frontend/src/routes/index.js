@@ -39,6 +39,7 @@ import ManageProductionJobsheet from "../pages/ManageProductionJobsheet";
 import ClosedProductionJobsheetList from "../pages/ClosedProductionJobsheetList";
 import CreateProductionInvoice from "../pages/CreateProductionInvoice";
 import ManageProductionInvoice from "../pages/ManageProductionInvoice";
+import ClosedProductionJobsheet from "../pages/ClosedProductionJobsheet";
 
 const router = createBrowserRouter([
     {
@@ -215,7 +216,7 @@ const router = createBrowserRouter([
                     },
                     {
                         path:"closed-productionjobsheet",
-                        element:<ClosedProductionJobsheetList/>
+                        element:<ClosedProductionJobsheet/>
                     },
                     {
                         path:'production-invoice',
