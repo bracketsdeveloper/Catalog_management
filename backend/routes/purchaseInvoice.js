@@ -3,6 +3,7 @@ const router = express.Router();
 const PurchaseInvoice = require("../models/PurchaseInvoice");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
+// GET all invoices sorted by createdAt descending
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoices = await PurchaseInvoice.find({}).sort({ createdAt: -1 });
@@ -13,6 +14,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+// GET invoice by jobSheetNumber and product (for finding an existing record)
 router.get("/find", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { jobSheetNumber, product } = req.query;
@@ -24,6 +26,7 @@ router.get("/find", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+// GET invoice by id
 router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoice = await PurchaseInvoice.findById(req.params.id);
@@ -37,6 +40,7 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+// POST – create or upsert invoice
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -48,6 +52,9 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       sourcingFrom,
       cost,
       vendorInvoiceNumber,
+      // New fields (optional)
+      qtyRequired,
+      qtyOrdered,
     } = req.body;
 
     if (
@@ -57,7 +64,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       !clientName ||
       !eventName ||
       !sourcingFrom ||
-      !cost
+      cost === undefined // cost is required
     ) {
       return res.status(400).json({
         message: "Required fields are missing",
@@ -66,8 +73,13 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 
     const invoiceData = {
       ...req.body,
-      vendorInvoiceNumber: vendorInvoiceNumber ? vendorInvoiceNumber.toUpperCase() : "",
+      vendorInvoiceNumber: vendorInvoiceNumber
+        ? vendorInvoiceNumber.toUpperCase()
+        : "",
       vendorInvoiceReceived: req.body.vendorInvoiceReceived || "No",
+      // New fields are directly passed. They are optional so may be undefined.
+      qtyRequired,
+      qtyOrdered,
     };
 
     const invoice = await PurchaseInvoice.findOneAndUpdate(
@@ -82,6 +94,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+// PUT – update invoice by id
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoiceData = {
@@ -89,6 +102,9 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       vendorInvoiceNumber: req.body.vendorInvoiceNumber
         ? req.body.vendorInvoiceNumber.toUpperCase()
         : "",
+      // Include new quantity fields
+      qtyRequired: req.body.qtyRequired,
+      qtyOrdered: req.body.qtyOrdered,
     };
 
     const invoice = await PurchaseInvoice.findByIdAndUpdate(
@@ -106,6 +122,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+// DELETE invoice by id
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoice = await PurchaseInvoice.findByIdAndDelete(req.params.id);

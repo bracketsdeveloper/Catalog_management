@@ -1,3 +1,4 @@
+// models/OpenPurchase.js
 const mongoose = require("mongoose");
 
 const followUpSchema = new mongoose.Schema({
@@ -17,6 +18,10 @@ const openPurchaseSchema = new mongoose.Schema({
   product: { type: String, required: true },
   sourcingFrom: { type: String, required: true },
 
+  // NEW: Quantity fields
+  qtyRequired: { type: Number, required: true },
+  qtyOrdered: { type: Number, default: 0 },
+
   // Manually entered fields:
   vendorContactNumber: { type: String },
   orderConfirmedDate: { type: Date },
@@ -29,7 +34,7 @@ const openPurchaseSchema = new mongoose.Schema({
   // Optional reference to the original jobsheet
   jobSheetId: { type: mongoose.Schema.Types.ObjectId, ref: "JobSheet" },
 
-  // NEW: Combined delivery date and time from JobSheet.
+  // Combined delivery date and time from JobSheet.
   deliveryDateTime: { type: Date },
 
   createdAt: { type: Date, default: Date.now }

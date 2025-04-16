@@ -1,7 +1,7 @@
 // src/pages/ClosedProductionJobsheet.js
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import ClosedProductionJobSheetTable from "../components/productionjobsheet/ClosedProductionJobSheetTable.js";
+import ClosedProductionJobSheetTable from "../components/productionjobsheet/ClosedProductionJobSheetTable";
 
 const ClosedProductionJobsheet = () => {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -18,10 +18,7 @@ const ClosedProductionJobsheet = () => {
         `${BACKEND_URL}/api/admin/productionjobsheets/aggregated`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Filter only records with status "received" (closed)
-      const closedRecords = res.data.filter(
-        (record) => record.status === "received"
-      );
+      const closedRecords = res.data.filter((r) => r.status === "received");
       setData(closedRecords);
     } catch (error) {
       console.error("Error fetching closed production job sheets", error);
@@ -30,17 +27,16 @@ const ClosedProductionJobsheet = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line
   }, []);
 
-  // Global search filtering
-  const filteredData = data.filter((record) => {
-    const recordString = JSON.stringify(record).toLowerCase();
-    return recordString.includes(searchTerm.toLowerCase());
-  });
+  const filteredData = data.filter((record) =>
+    JSON.stringify(record).toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  // Sorting the data based on the sortField
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortField) return 0;
+
     let aVal = a[sortField];
     let bVal = b[sortField];
 
@@ -55,8 +51,8 @@ const ClosedProductionJobsheet = () => {
       aVal = aVal ? new Date(aVal) : new Date(0);
       bVal = bVal ? new Date(bVal) : new Date(0);
     } else {
-      aVal = aVal ? aVal.toString().toLowerCase() : "";
-      bVal = bVal ? bVal.toString().toLowerCase() : "";
+      aVal = aVal !== undefined && aVal !== null ? aVal.toString().toLowerCase() : "";
+      bVal = bVal !== undefined && bVal !== null ? bVal.toString().toLowerCase() : "";
     }
 
     if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
@@ -64,10 +60,8 @@ const ClosedProductionJobsheet = () => {
     return 0;
   });
 
-  // Handle header click to change sorting.
   const handleSortChange = (field) => {
     if (sortField === field) {
-      // Toggle sort order if the same field is clicked.
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
@@ -80,7 +74,6 @@ const ClosedProductionJobsheet = () => {
       <h1 className="text-2xl text-purple-700 font-bold mb-4">
         Closed Production Job Sheet
       </h1>
-      {/* Search Bar */}
       <div className="mb-4">
         <input
           type="text"

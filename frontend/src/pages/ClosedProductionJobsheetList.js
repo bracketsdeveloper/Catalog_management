@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Helper to format the schedule pickup date/time in 12-hour format with AM/PM
+// helpers
 const formatSchedulePickup = (dateStr) => {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
@@ -22,105 +22,97 @@ const formatSchedulePickup = (dateStr) => {
   });
 };
 
-// Helper to get counts for each status in items (for display in Status column)
 const getStatusCounts = (items) => {
-  const total = items ? items.length : 0;
-  const received = items ? items.filter((item) => item.status === "Received").length : 0;
-  const pending = items ? items.filter((item) => item.status === "Pending").length : 0;
-  const alert = items ? items.filter((item) => item.status === "Alert").length : 0;
+  const total = items?.length || 0;
+  const received = items?.filter((i) => i.status === "Received").length || 0;
+  const pending = items?.filter((i) => i.status === "Pending").length || 0;
+  const alert = items?.filter((i) => i.status === "Alert").length || 0;
   return { total, received, pending, alert };
+};
+
+// NEW: qty totals (from items or top‑level fallback)
+const getQtyTotals = (jobsheet) => {
+  if (jobsheet.items && jobsheet.items.length > 0) {
+    return jobsheet.items.reduce(
+      (acc, item) => {
+        acc.qtyRequired += item.qtyRequired || 0;
+        acc.qtyOrdered += item.qtyOrdered || 0;
+        return acc;
+      },
+      { qtyRequired: 0, qtyOrdered: 0 }
+    );
+  }
+  return {
+    qtyRequired: jobsheet.qtyRequired || 0,
+    qtyOrdered: jobsheet.qtyOrdered || 0,
+  };
 };
 
 export default function ClosedProductionJobsheetList() {
   const [jobsheets, setJobsheets] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Sorting state variables
   const [sortJobSheet, setSortJobSheet] = useState("");
   const [sortClient, setSortClient] = useState("");
   const [sortSchedulePickup, setSortSchedulePickup] = useState("");
 
   const navigate = useNavigate();
 
-  // Fetch all production jobsheets on mount
   useEffect(() => {
-    async function fetchJobsheets() {
+    (async () => {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(`${BACKEND_URL}/api/admin/productionjobsheets`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setJobsheets(res.data);
-      } catch (error) {
-        console.error("Error fetching production jobsheets:", error);
+      } catch (err) {
+        console.error("Error fetching production jobsheets:", err);
       }
-    }
-    fetchJobsheets();
+    })();
   }, []);
 
-  // Filter jobsheets: only include those where every item's status is "Received"
   const closedJobsheets = jobsheets.filter(
-    (jobsheet) =>
-      jobsheet.items &&
-      jobsheet.items.length > 0 &&
-      jobsheet.items.every((item) => item.status === "Received")
+    (js) => js.items?.length && js.items.every((it) => it.status === "Received")
   );
 
-  // Apply common search filter (searches jobSheetNumber, clientCompanyName, eventName)
   const filteredJobsheets = closedJobsheets.filter((j) => {
     if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase();
     return (
-      (j.jobSheetNumber && j.jobSheetNumber.toLowerCase().includes(query)) ||
-      (j.clientCompanyName && j.clientCompanyName.toLowerCase().includes(query)) ||
-      (j.eventName && j.eventName.toLowerCase().includes(query))
+      j.jobSheetNumber?.toLowerCase().includes(q) ||
+      j.clientCompanyName?.toLowerCase().includes(q) ||
+      j.eventName?.toLowerCase().includes(q)
     );
   });
 
-  // Sorting logic for filtered jobsheets
   let sortedJobsheets = [...filteredJobsheets];
 
-  if (sortJobSheet === "asc") {
-    sortedJobsheets.sort((a, b) => a.jobSheetNumber.localeCompare(b.jobSheetNumber));
-  } else if (sortJobSheet === "desc") {
-    sortedJobsheets.sort((a, b) => b.jobSheetNumber.localeCompare(a.jobSheetNumber));
-  }
-  if (sortClient === "asc") {
-    sortedJobsheets.sort((a, b) => a.clientCompanyName.localeCompare(b.clientCompanyName));
-  } else if (sortClient === "desc") {
-    sortedJobsheets.sort((a, b) => b.clientCompanyName.localeCompare(a.clientCompanyName));
-  }
-  if (sortSchedulePickup === "asc") {
+  if (sortJobSheet)
+    sortedJobsheets.sort((a, b) =>
+      sortJobSheet === "asc"
+        ? a.jobSheetNumber.localeCompare(b.jobSheetNumber)
+        : b.jobSheetNumber.localeCompare(a.jobSheetNumber)
+    );
+
+  if (sortClient)
+    sortedJobsheets.sort((a, b) =>
+      sortClient === "asc"
+        ? a.clientCompanyName.localeCompare(b.clientCompanyName)
+        : b.clientCompanyName.localeCompare(a.clientCompanyName)
+    );
+
+  if (sortSchedulePickup)
     sortedJobsheets.sort((a, b) => {
-      const dateA =
-        a.items && a.items[0] && a.items[0].schedulePickup
-          ? new Date(a.items[0].schedulePickup)
-          : new Date(0);
-      const dateB =
-        b.items && b.items[0] && b.items[0].schedulePickup
-          ? new Date(b.items[0].schedulePickup)
-          : new Date(0);
-      return dateA - dateB;
+      const dA = a.items?.[0]?.schedulePickup ? new Date(a.items[0].schedulePickup) : new Date(0);
+      const dB = b.items?.[0]?.schedulePickup ? new Date(b.items[0].schedulePickup) : new Date(0);
+      return sortSchedulePickup === "asc" ? dA - dB : dB - dA;
     });
-  } else if (sortSchedulePickup === "desc") {
-    sortedJobsheets.sort((a, b) => {
-      const dateA =
-        a.items && a.items[0] && a.items[0].schedulePickup
-          ? new Date(a.items[0].schedulePickup)
-          : new Date(0);
-      const dateB =
-        b.items && b.items[0] && b.items[0].schedulePickup
-          ? new Date(b.items[0].schedulePickup)
-          : new Date(0);
-      return dateB - dateA;
-    });
-  }
 
   return (
     <div className="min-h-screen p-6 bg-white text-gray-800">
       <h1 className="text-2xl font-bold text-purple-700 mb-4">Closed Production Jobsheets</h1>
 
-      {/* Common Search Bar */}
       <div className="mb-4">
         <input
           type="text"
@@ -131,7 +123,6 @@ export default function ClosedProductionJobsheetList() {
         />
       </div>
 
-      {/* Table Header with Sorting Dropdowns */}
       <div className="bg-white shadow rounded overflow-x-auto">
         <table className="min-w-full">
           <thead className="bg-purple-100">
@@ -172,30 +163,34 @@ export default function ClosedProductionJobsheetList() {
                   <option value="desc">Closest</option>
                 </select>
               </th>
+              <th className="px-4 py-2 text-left">Qty Required</th>
+              <th className="px-4 py-2 text-left">Qty Ordered</th>
               <th className="px-4 py-2 text-left">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {sortedJobsheets.map((jobsheet) => {
-              const statusCounts = getStatusCounts(jobsheet.items);
+            {sortedJobsheets.map((js) => {
+              const statusCounts = getStatusCounts(js.items);
+              const { qtyRequired, qtyOrdered } = getQtyTotals(js);
               return (
-                <tr key={jobsheet._id}>
-                  <td className="px-4 py-2">{jobsheet.jobSheetNumber}</td>
-                  <td className="px-4 py-2">{jobsheet.clientCompanyName}</td>
+                <tr key={js._id}>
+                  <td className="px-4 py-2">{js.jobSheetNumber}</td>
+                  <td className="px-4 py-2">{js.clientCompanyName}</td>
                   <td className="px-4 py-2">
-                    {(jobsheet.items &&
-                      jobsheet.items[0] &&
-                      formatSchedulePickup(jobsheet.items[0].schedulePickup)) || "-"}
+                    {js.items?.[0] ? formatSchedulePickup(js.items[0].schedulePickup) : "-"}
                   </td>
+                  <td className="px-4 py-2">{qtyRequired}</td>
+                  <td className="px-4 py-2">{qtyOrdered}</td>
                   <td className="px-4 py-2">
-                    Pending ({statusCounts.pending}) | Received ({statusCounts.received}) | Alert ({statusCounts.alert})
+                    Pending ({statusCounts.pending}) | Received ({statusCounts.received}) | Alert (
+                    {statusCounts.alert})
                   </td>
                 </tr>
               );
             })}
             {sortedJobsheets.length === 0 && (
               <tr>
-                <td className="px-4 py-2 text-center" colSpan="4">
+                <td className="px-4 py-2 text-center" colSpan="6">
                   No records found.
                 </td>
               </tr>
@@ -206,4 +201,3 @@ export default function ClosedProductionJobsheetList() {
     </div>
   );
 }
-

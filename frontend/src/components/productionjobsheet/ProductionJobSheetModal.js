@@ -10,50 +10,32 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
   const token = localStorage.getItem("token");
 
   const [formData, setFormData] = useState({
-    // If there is an existing date, format it to YYYY-MM-DD for the date input
     expectedPostBranding: record.expectedPostBranding
       ? new Date(record.expectedPostBranding).toISOString().split("T")[0]
       : "",
-    schedulePickUp: record.schedulePickUp ? record.schedulePickUp.split("T")[0] : "",
+    schedulePickUp: record.schedulePickUp
+      ? record.schedulePickUp.split("T")[0]
+      : "",
+    qtyRequired: record.qtyRequired || 0,
+    qtyOrdered: record.qtyOrdered || 0,
     remarks: record.remarks || "",
-    status: "", // Default always empty and independent
+    status: "",
     followUp: record.followUp || [],
   });
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((p) => ({ ...p, [name]: value }));
   };
 
-  const addFollowUp = (newFollowUp) => {
-    setFormData((prev) => ({
-      ...prev,
-      followUp: [...prev.followUp, newFollowUp],
-    }));
+  const addFollowUp = (fu) => {
+    setFormData((p) => ({ ...p, followUp: [...p.followUp, fu] }));
     setShowFollowUpModal(false);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Validate required fields
-    const requiredFields = ["expectedPostBranding", "schedulePickUp", "status"];
-    const missingFields = requiredFields.filter((field) => !formData[field]);
-
-    if (missingFields.length > 0) {
-      missingFields.forEach((field) => {
-        const inputElement = document.querySelector(`[name="${field}"]`);
-        if (inputElement) {
-          inputElement.style.borderColor = "red";
-        }
-      });
-      toast.error(`Missing required fields: ${missingFields.join(", ")}`);
-      return;
-    }
-
     try {
       let url = `${BACKEND_URL}/api/admin/productionjobsheets`;
       let method = "post";
@@ -61,29 +43,29 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
         url = `${BACKEND_URL}/api/admin/productionjobsheets/${record._id}`;
         method = "put";
       } else {
-        formData.openPurchaseId = record._id;
-        formData.jobSheetId = record.jobSheetId;
-        formData.jobSheetCreatedDate = record.jobSheetCreatedDate;
-        formData.jobSheetNumber = record.jobSheetNumber;
-        formData.clientCompanyName = record.clientCompanyName;
-        formData.eventName = record.eventName;
-        formData.product = record.product;
-        formData.deliveryDateTime = record.deliveryDateTime;
-        formData.expectedReceiveDate = record.expectedReceiveDate;
-        formData.brandingType = record.brandingType;
-        formData.brandingVendor = record.brandingVendor;
+        Object.assign(formData, {
+          openPurchaseId: record._id,
+          jobSheetId: record.jobSheetId,
+          jobSheetCreatedDate: record.jobSheetCreatedDate,
+          jobSheetNumber: record.jobSheetNumber,
+          clientCompanyName: record.clientCompanyName,
+          eventName: record.eventName,
+          product: record.product,
+          deliveryDateTime: record.deliveryDateTime,
+          expectedReceiveDate: record.expectedReceiveDate,
+          brandingType: record.brandingType,
+          brandingVendor: record.brandingVendor,
+        });
       }
       await axios[method](url, formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      toast.success("Production job sheet saved successfully!");
+      toast.success("Saved successfully!");
       onClose();
     } catch (error) {
       console.error("Error saving production job sheet", error);
       toast.error(
-        `Error saving production job sheet: ${
-          error.response?.data?.message || error.message
-        }`
+        `Error: ${error.response?.data?.message || error.message}`
       );
     }
   };
@@ -98,21 +80,23 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
           onSubmit={handleSubmit}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
         >
-          {/* Disabled Fields */}
+          {/* STATIC / NON‑EDITABLE */}
           <div className="col-span-1">
             <label className="block text-purple-600 font-semibold">
               Order Date
             </label>
             <input
               type="text"
-              value={new Date(record.jobSheetCreatedDate).toLocaleDateString()}
+              value={new Date(
+                record.jobSheetCreatedDate
+              ).toLocaleDateString()}
               disabled
               className="w-full border border-blue-300 p-1 rounded bg-gray-50"
             />
           </div>
           <div className="col-span-1">
             <label className="block text-purple-600 font-semibold">
-              Job Sheet Number
+              Job Sheet #
             </label>
             <input
               type="text"
@@ -127,14 +111,16 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             </label>
             <input
               type="text"
-              value={new Date(record.deliveryDateTime).toLocaleDateString()}
+              value={new Date(
+                record.deliveryDateTime
+              ).toLocaleDateString()}
               disabled
               className="w-full border border-blue-300 p-1 rounded bg-gray-50"
             />
           </div>
           <div className="col-span-1">
             <label className="block text-purple-600 font-semibold">
-              Client Company Name
+              Client Company
             </label>
             <input
               type="text"
@@ -167,6 +153,21 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
           </div>
           <div className="col-span-1">
             <label className="block text-purple-600 font-semibold">
+              Product Expected In Hand
+            </label>
+            <input
+              type="text"
+              value={
+                record.expectedReceiveDate
+                  ? new Date(record.expectedReceiveDate).toLocaleDateString()
+                  : "-"
+              }
+              disabled
+              className="w-full border border-blue-300 p-1 rounded bg-gray-50"
+            />
+          </div>
+          <div className="col-span-1">
+            <label className="block text-purple-600 font-semibold">
               Branding Type
             </label>
             <input
@@ -187,10 +188,35 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
               className="w-full border border-blue-300 p-1 rounded bg-gray-50"
             />
           </div>
-          {/* Editable Fields */}
+
+          {/* EDITABLE */}
           <div className="col-span-1">
             <label className="block text-purple-600 font-semibold">
-              Expected Post Branding in Ace
+              Qty Required
+            </label>
+            <input
+              type="number"
+              name="qtyRequired"
+              value={formData.qtyRequired}
+              onChange={handleInputChange}
+              className="w-full border border-blue-300 p-1 rounded"
+            />
+          </div>
+          <div className="col-span-1">
+            <label className="block text-purple-600 font-semibold">
+              Qty Ordered
+            </label>
+            <input
+              type="number"
+              name="qtyOrdered"
+              value={formData.qtyOrdered}
+              onChange={handleInputChange}
+              className="w-full border border-blue-300 p-1 rounded"
+            />
+          </div>
+          <div className="col-span-1">
+            <label className="block text-purple-600 font-semibold">
+              Expected Post Branding
             </label>
             <input
               type="date"
@@ -202,7 +228,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
           </div>
           <div className="col-span-1">
             <label className="block text-purple-600 font-semibold">
-              Schedule Pick Up Date &amp; Time
+              Schedule Pick Up
             </label>
             <input
               type="datetime-local"
@@ -222,7 +248,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
               onChange={handleInputChange}
               className="w-full border border-blue-300 p-1 rounded"
             >
-              <option value="">-- Select Status --</option>
+              <option value="">-- Select --</option>
               <option value="pending">Pending</option>
               <option value="received">Received</option>
               <option value="alert">Alert</option>
@@ -251,18 +277,19 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
               Add Follow Up
             </button>
             <ul className="list-disc pl-5">
-              {formData.followUp.map((fu, idx) => (
-                <li key={idx}>
+              {formData.followUp.map((fu, i) => (
+                <li key={i}>
                   {fu.followUpDate}: {fu.note}
                 </li>
               ))}
             </ul>
           </div>
+
           <div className="col-span-1 md:col-span-3 flex justify-end space-x-2 mt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded bg-gray-300 text-gray-800"
+              className="px-4 py-2 border rounded bg-gray-300"
             >
               Cancel
             </button>
@@ -274,6 +301,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             </button>
           </div>
         </form>
+
         {showFollowUpModal && (
           <FollowUpModal
             onClose={() => setShowFollowUpModal(false)}

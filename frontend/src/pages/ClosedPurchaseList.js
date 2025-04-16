@@ -4,10 +4,6 @@ import * as XLSX from "xlsx";
 
 const statusOptions = ["pending", "received", "alert"];
 
-/**
- * FollowUpModal Component
- * Displays current follow ups and lets the user add or remove entries.
- */
 function FollowUpModal({ followUps, onUpdate, onClose }) {
   const [localFollowUps, setLocalFollowUps] = useState(followUps || []);
   const [newFollowUpName, setNewFollowUpName] = useState("");
@@ -93,11 +89,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
   );
 }
 
-/**
- * EditPurchaseModal Component
- * Displays a form for editing a Closed Purchase record.
- * Includes a "View Follow Ups" button that opens the FollowUpModal.
- */
 function EditPurchaseModal({ purchase, onClose, onSave }) {
   const [editedData, setEditedData] = useState({ ...purchase });
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
@@ -177,6 +168,28 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   Sourced From:
                 </label>
                 <span>{editedData.sourcingFrom}</span>
+              </div>
+            </div>
+            {/* New Quantity Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-purple-700 font-bold mb-1">
+                  Qty Required:
+                </label>
+                <span>{editedData.qtyRequired}</span>
+              </div>
+              <div>
+                <label className="block text-purple-700 font-bold mb-1">
+                  Qty Ordered:
+                </label>
+                <input
+                  type="number"
+                  value={editedData.qtyOrdered || ""}
+                  onChange={(e) =>
+                    handleFieldChange("qtyOrdered", parseInt(e.target.value) || 0)
+                  }
+                  className="w-full border p-1"
+                />
               </div>
             </div>
             {/* Editable Fields */}
@@ -315,19 +328,13 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   );
 }
 
-/**
- * ClosedPurchases Component
- * Fetches aggregated open purchase records and filters them (by jobSheetNumber group)
- * so that only those groups where every product's status is "received" are shown.
- * Provides export to Excel functionality excluding the Follow Up column.
- */
 export default function ClosedPurchases() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [sortConfig, setSortConfig] = useState({ 
     key: "schedulePickUp", 
-    direction: "asc",
+    direction: "asc", 
     type: "date" 
   });
 
@@ -349,7 +356,7 @@ export default function ClosedPurchases() {
     fetchPurchases();
   }, []);
 
-  // Group records by jobSheetNumber and return only groups where every record is received
+  // Group records by jobSheetNumber and return only groups where every record is "received"
   const getClosedPurchases = (records) => {
     const groups = {};
     records.forEach((record) => {
@@ -380,19 +387,10 @@ export default function ClosedPurchases() {
     );
   });
 
-  const handleSort = (key, type = "string") => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction, type });
-  };
-
-  // Sort after filtering
   const sortedPurchases = [...filteredPurchases].sort((a, b) => {
     let aVal = a[sortConfig.key] || "";
     let bVal = b[sortConfig.key] || "";
-    
+
     if (sortConfig.type === "date") {
       aVal = aVal ? new Date(aVal) : new Date(0);
       bVal = bVal ? new Date(bVal) : new Date(0);
@@ -403,7 +401,15 @@ export default function ClosedPurchases() {
     return 0;
   });
 
-  // Export to Excel function
+  const handleSort = (key, type = "string") => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction, type });
+  };
+
+  // Export to Excel function (excludes the Follow Up column)
   const exportToExcel = () => {
     const exportData = sortedPurchases.map((purchase) => ({
       "Job Sheet Created Date": purchase.jobSheetCreatedDate
@@ -416,6 +422,8 @@ export default function ClosedPurchases() {
       "Client Company Name": purchase.clientCompanyName || "",
       "Event Name": purchase.eventName || "",
       Product: purchase.product || "",
+      "Qty Required": purchase.qtyRequired,
+      "Qty Ordered": purchase.qtyOrdered,
       "Sourced From": purchase.sourcingFrom || "",
       "Vendor Contact Number": purchase.vendorContactNumber || "",
       "Order Confirmed Date": purchase.orderConfirmedDate
@@ -437,7 +445,47 @@ export default function ClosedPurchases() {
     XLSX.writeFile(workbook, "Closed_Purchases.xlsx");
   };
 
-  if (loading) return <div>Loading closed purchases...</div>;
+  // Skeleton Loader Component
+  const SkeletonLoader = () => (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-purple-700 mb-4">Closed Purchases</h1>
+      <div className="animate-pulse">
+        <div className="mb-4 h-8 bg-gray-300 rounded"></div>
+        <table className="min-w-full border-collapse border border-gray-300">
+          <thead className="bg-gray-50">
+            <tr>
+              {Array(17)
+                .fill(0)
+                .map((_, i) => (
+                  <th
+                    key={i}
+                    className="p-2 border border-gray-300 h-4 bg-gray-300"
+                  ></th>
+                ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array(5)
+              .fill(0)
+              .map((_, rowIdx) => (
+                <tr key={rowIdx}>
+                  {Array(17)
+                    .fill(0)
+                    .map((_, colIdx) => (
+                      <td
+                        key={colIdx}
+                        className="p-2 border border-gray-300 h-4 bg-gray-300"
+                      ></td>
+                    ))}
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  if (loading) return <SkeletonLoader />;
 
   return (
     <div className="p-6">
@@ -510,6 +558,23 @@ export default function ClosedPurchases() {
               {sortConfig.key === "product" &&
                 (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
+            {/* New Qty Required and Qty Ordered Columns */}
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("qtyRequired", "number")}
+            >
+              Qty Required{" "}
+              {sortConfig.key === "qtyRequired" &&
+                (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("qtyOrdered", "number")}
+            >
+              Qty Ordered{" "}
+              {sortConfig.key === "qtyOrdered" &&
+                (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
             <th
               className="p-2 border border-gray-300 cursor-pointer"
               onClick={() => handleSort("sourcingFrom", "string")}
@@ -570,9 +635,10 @@ export default function ClosedPurchases() {
         </thead>
         <tbody>
           {sortedPurchases.map((purchase) => {
-            const latestFollowUp = purchase.followUp && purchase.followUp.length > 0 
-              ? purchase.followUp[purchase.followUp.length - 1] 
-              : null;
+            const latestFollowUp =
+              purchase.followUp && purchase.followUp.length > 0
+                ? purchase.followUp[purchase.followUp.length - 1]
+                : null;
 
             return (
               <tr
@@ -591,7 +657,7 @@ export default function ClosedPurchases() {
                   {new Date(purchase.jobSheetCreatedDate).toLocaleDateString()}
                 </td>
                 <td className="p-2 border border-gray-300">
-                  {purchase.deliveryDateTime 
+                  {purchase.deliveryDateTime
                     ? new Date(purchase.deliveryDateTime).toLocaleDateString()
                     : ""}
                 </td>
@@ -601,8 +667,19 @@ export default function ClosedPurchases() {
                 <td className="p-2 border border-gray-300">
                   {purchase.clientCompanyName}
                 </td>
-                <td className="p-2 border border-gray-300">{purchase.eventName}</td>
-                <td className="p-2 border border-gray-300">{purchase.product}</td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.eventName}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.product}
+                </td>
+                {/* New Qty Required and Qty Ordered cells */}
+                <td className="p-2 border border-gray-300">
+                  {purchase.qtyRequired}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.qtyOrdered}
+                </td>
                 <td className="p-2 border border-gray-300">
                   {purchase.sourcingFrom}
                 </td>
@@ -624,9 +701,12 @@ export default function ClosedPurchases() {
                     ? purchase.schedulePickUp.substring(0, 16)
                     : ""}
                 </td>
-                <td className="p-2 border border-gray-300">{purchase.remarks}</td>
-                <td className="p-2 border border-gray-300">{purchase.status}</td>
-                
+                <td className="p-2 border border-gray-300">
+                  {purchase.remarks}
+                </td>
+                <td className="p-2 border border-gray-300">
+                  {purchase.status}
+                </td>
               </tr>
             );
           })}

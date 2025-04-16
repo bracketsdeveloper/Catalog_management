@@ -2,50 +2,47 @@
 import React from "react";
 import * as XLSX from "xlsx";
 
-// Helper functions for clean display.
-function displayText(value) {
-  return value && value !== "-" ? value : "";
-}
-function displayDate(value) {
-  if (!value || value === "-") return "";
-  const dateObj = new Date(value);
-  return isNaN(dateObj.getTime()) ? "" : dateObj.toLocaleDateString();
-}
+const txt = (v) => (v && v !== "-" ? v : "");
+const dte = (v) => (!v || v === "-" ? "" : new Date(v).toLocaleDateString());
 
-const ProductionJobSheetInvoiceTable = ({ data, sortConfig, onSortChange, onActionClick }) => {
-  const renderSortIcon = (field) => {
-    if (sortConfig.key !== field) {
-      return <span className="ml-1 opacity-50 text-xs">↕</span>;
-    }
-    return sortConfig.direction === "asc" ? (
-      <span className="ml-1 text-xs">▲</span>
+const ProductionJobSheetInvoiceTable = ({
+  data,
+  sortConfig,
+  onSortChange,
+  onActionClick,
+}) => {
+  const sortIcon = (f) =>
+    sortConfig.key === f ? (
+      sortConfig.direction === "asc" ? (
+        <span className="ml-1 text-xs">▲</span>
+      ) : (
+        <span className="ml-1 text-xs">▼</span>
+      )
     ) : (
-      <span className="ml-1 text-xs">▼</span>
+      <span className="ml-1 opacity-50 text-xs">↕</span>
     );
-  };
 
-  // Export all rows (regardless of filters) to Excel.
   const exportToExcel = () => {
-    const exportData = data.map((inv) => ({
-      "Order Confirmation Date": displayDate(inv.orderConfirmationDate),
-      "Job Sheet": displayText(inv.jobSheetNumber),
-      "Client Name": displayText(inv.clientCompanyName),
-      "Event Name": displayText(inv.eventName),
-      "Product Name": displayText(inv.product),
-      "Source From": displayText(inv.sourceFrom),
-      "Cost": inv.cost || "",
-      "Negotiated Cost": inv.negotiatedCost || "",
+    const exp = data.map((i) => ({
+      "Order Confirmation Date": dte(i.orderConfirmationDate),
+      "Job Sheet": txt(i.jobSheetNumber),
+      "Client Name": txt(i.clientCompanyName),
+      "Event Name": txt(i.eventName),
+      "Product Name": txt(i.product),
+      "Qty Required": i.qtyRequired ?? "",
+      "Qty Ordered": i.qtyOrdered ?? "",
+      "Source From": txt(i.sourceFrom),
+      Cost: i.cost ?? "",
+      "Negotiated Cost": i.negotiatedCost ?? "",
       "Payment Modes":
-        inv.paymentModes && inv.paymentModes.length > 0
-          ? inv.paymentModes.map((pm) => pm.mode).join(", ")
-          : "",
-      "Vendor Invoice Number": displayText(inv.vendorInvoiceNumber),
-      "Vendor Invoice Received": displayText(inv.vendorInvoiceReceived),
+        i.paymentModes?.length ? i.paymentModes.map((p) => p.mode).join(", ") : "",
+      "Vendor Invoice Number": txt(i.vendorInvoiceNumber),
+      "Vendor Invoice Received": txt(i.vendorInvoiceReceived),
     }));
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "ProductionJobSheetInvoice");
-    XLSX.writeFile(workbook, "ProductionJobSheetInvoice.xlsx");
+    const ws = XLSX.utils.json_to_sheet(exp);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+    XLSX.writeFile(wb, "ProductionJobSheetInvoice.xlsx");
   };
 
   return (
@@ -61,93 +58,67 @@ const ProductionJobSheetInvoiceTable = ({ data, sortConfig, onSortChange, onActi
       <table className="min-w-full border-collapse text-xs">
         <thead className="bg-gray-50">
           <tr>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("orderConfirmationDate")}
-            >
-              Order Confirmation Date {renderSortIcon("orderConfirmationDate")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("orderConfirmationDate")}>
+              Order Confirmation Date {sortIcon("orderConfirmationDate")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("jobSheetNumber")}
-            >
-              Job Sheet {renderSortIcon("jobSheetNumber")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("jobSheetNumber")}>
+              Job Sheet {sortIcon("jobSheetNumber")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("clientCompanyName")}
-            >
-              Client Name {renderSortIcon("clientCompanyName")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("clientCompanyName")}>
+              Client Name {sortIcon("clientCompanyName")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("eventName")}
-            >
-              Event Name {renderSortIcon("eventName")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("eventName")}>
+              Event Name {sortIcon("eventName")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("product")}
-            >
-              Product Name {renderSortIcon("product")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("product")}>
+              Product Name {sortIcon("product")}
             </th>
-            <th className="p-2 border border-gray-300">Source From</th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("cost")}
-            >
-              Cost {renderSortIcon("cost")}
+            <th className="p-2 border">Qty Req</th>
+            <th className="p-2 border">Qty Ord</th>
+            <th className="p-2 border">Source From</th>
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("cost")}>
+              Cost {sortIcon("cost")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("negotiatedCost")}
-            >
-              Negotiated Cost {renderSortIcon("negotiatedCost")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("negotiatedCost")}>
+              Negotiated Cost {sortIcon("negotiatedCost")}
             </th>
-            <th className="p-2 border border-gray-300">Payment Mode</th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("vendorInvoiceNumber")}
-            >
-              Vendor Invoice Number {renderSortIcon("vendorInvoiceNumber")}
+            <th className="p-2 border">Payment Mode</th>
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("vendorInvoiceNumber")}>
+              Vendor Invoice Number {sortIcon("vendorInvoiceNumber")}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => onSortChange("vendorInvoiceReceived")}
-            >
-              Vendor Invoice Received {renderSortIcon("vendorInvoiceReceived")}
+            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("vendorInvoiceReceived")}>
+              Vendor Invoice Received {sortIcon("vendorInvoiceReceived")}
             </th>
-            <th className="p-2 border border-gray-300">Actions</th>
+            <th className="p-2 border">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {data.map((inv) => {
-            // If vendorInvoiceReceived is "Yes" (case-insensitive), use a green background.
-            const rowBg = inv.vendorInvoiceReceived &&
-              inv.vendorInvoiceReceived.toLowerCase() === "yes"
-              ? "bg-green-100"
-              : "bg-white";
+          {data.map((i) => {
+            const bg =
+              i.vendorInvoiceReceived?.toLowerCase() === "yes"
+                ? "bg-green-100"
+                : "bg-white";
             return (
-              <tr key={inv._id} className={rowBg}>
-                <td className="p-2 border border-gray-300">
-                  {displayDate(inv.orderConfirmationDate)}
-                </td>
-                <td className="p-2 border border-gray-300">{displayText(inv.jobSheetNumber)}</td>
-                <td className="p-2 border border-gray-300">{displayText(inv.clientCompanyName)}</td>
-                <td className="p-2 border border-gray-300">{displayText(inv.eventName)}</td>
-                <td className="p-2 border border-gray-300">{displayText(inv.product)}</td>
-                <td className="p-2 border border-gray-300">{displayText(inv.sourceFrom)}</td>
-                <td className="p-2 border border-gray-300">{inv.cost || ""}</td>
-                <td className="p-2 border border-gray-300">{inv.negotiatedCost || ""}</td>
-                <td className="p-2 border border-gray-300">
-                  {inv.paymentModes && inv.paymentModes.length > 0
-                    ? inv.paymentModes.map((pm) => pm.mode).join(", ")
+              <tr key={i._id} className={bg}>
+                <td className="p-2 border">{dte(i.orderConfirmationDate)}</td>
+                <td className="p-2 border">{txt(i.jobSheetNumber)}</td>
+                <td className="p-2 border">{txt(i.clientCompanyName)}</td>
+                <td className="p-2 border">{txt(i.eventName)}</td>
+                <td className="p-2 border">{txt(i.product)}</td>
+                <td className="p-2 border">{i.qtyRequired ?? ""}</td>
+                <td className="p-2 border">{i.qtyOrdered ?? ""}</td>
+                <td className="p-2 border">{txt(i.sourceFrom)}</td>
+                <td className="p-2 border">{i.cost ?? ""}</td>
+                <td className="p-2 border">{i.negotiatedCost ?? ""}</td>
+                <td className="p-2 border">
+                  {i.paymentModes?.length
+                    ? i.paymentModes.map((p) => p.mode).join(", ")
                     : ""}
                 </td>
-                <td className="p-2 border border-gray-300">{displayText(inv.vendorInvoiceNumber)}</td>
-                <td className="p-2 border border-gray-300">{displayText(inv.vendorInvoiceReceived)}</td>
-                <td className="p-2 border border-gray-300 text-center">
-                  <button onClick={() => onActionClick(inv)} className="focus:outline-none">
+                <td className="p-2 border">{txt(i.vendorInvoiceNumber)}</td>
+                <td className="p-2 border">{txt(i.vendorInvoiceReceived)}</td>
+                <td className="p-2 border text-center">
+                  <button onClick={() => onActionClick(i)} className="focus:outline-none">
                     ⋮
                   </button>
                 </td>

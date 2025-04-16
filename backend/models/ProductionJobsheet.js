@@ -14,19 +14,17 @@ const productionJobSheetSchema = new mongoose.Schema({
   clientCompanyName: { type: String, required: true },
   eventName: { type: String, required: true },
   product: { type: String, required: true },
+  qtyRequired: { type: Number, default: 0 },   // NEW
+  qtyOrdered: { type: Number, default: 0 },    // NEW
   deliveryDateTime: { type: Date, required: true },
   expectedReceiveDate: { type: Date },
   brandingType: { type: String },
   brandingVendor: { type: String },
-  expectedPostBranding: { type: Date }, // Updated field type
+  expectedPostBranding: { type: Date },
   schedulePickUp: { type: Date },
   followUp: { type: [followUpSchema], default: [] },
   remarks: { type: String },
-  status: {
-    type: String,
-    enum: ["pending", "received", "alert"],
-    required: true,
-  },
+  status: { type: String, enum: ["pending", "received", "alert"], required: true },
   openPurchaseId: { type: mongoose.Schema.Types.ObjectId, ref: "OpenPurchase" },
   jobSheetId: { type: mongoose.Schema.Types.ObjectId, ref: "JobSheet" },
   createdAt: { type: Date, default: Date.now },

@@ -6,18 +6,28 @@ const PaymentModeSchema = new mongoose.Schema({
 });
 
 const productionJobSheetInvoiceSchema = new mongoose.Schema({
-  productionJobSheetId: { type: mongoose.Schema.Types.ObjectId, ref: "ProductionJobSheet", required: true },
+  productionJobSheetId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ProductionJobSheet",
+    required: true,
+  },
   orderConfirmationDate: { type: Date, required: true },
   jobSheetNumber: { type: String, required: true },
   clientCompanyName: { type: String, required: true },
   eventName: { type: String, required: true },
   product: { type: String, required: true },
+  qtyRequired: { type: Number, default: 0 }, // NEW
+  qtyOrdered: { type: Number, default: 0 },  // NEW
   sourceFrom: { type: String, required: true },
   cost: { type: Number, required: true },
   negotiatedCost: { type: Number, required: true },
   paymentModes: { type: [PaymentModeSchema], default: [] },
   vendorInvoiceNumber: { type: String, required: true },
-  vendorInvoiceReceived: { type: String, enum: ["Yes", "No"], default: "No" },
+  vendorInvoiceReceived: {
+    type: String,
+    enum: ["Yes", "No"],
+    default: "No",
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -30,4 +40,7 @@ productionJobSheetInvoiceSchema.pre("save", function (next) {
   next();
 });
 
-module.exports = mongoose.model("ProductionJobSheetInvoice", productionJobSheetInvoiceSchema);
+module.exports = mongoose.model(
+  "ProductionJobSheetInvoice",
+  productionJobSheetInvoiceSchema
+);

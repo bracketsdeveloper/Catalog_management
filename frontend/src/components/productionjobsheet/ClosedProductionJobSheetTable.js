@@ -2,58 +2,57 @@
 import React from "react";
 import * as XLSX from "xlsx";
 
-// Helper functions for display. Return an empty string if no valid value.
-function displayText(value) {
-  return value && value !== "-" ? value : "";
-}
+const displayText = (v) => (v && v !== "-" ? v : "");
+const displayDate = (v) => {
+  if (!v || v === "-") return "";
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
+};
 
-function displayDate(value) {
-  if (!value || value === "-") return "";
-  const dateObj = new Date(value);
-  return isNaN(dateObj.getTime()) ? "" : dateObj.toLocaleDateString();
-}
-
-// The export function will export the passed data with appropriate headers.
-function exportToExcel(data) {
-  // Map each record into a clean object for export.
-  const exportData = data.map((record) => ({
-    "Order Date": displayDate(record.jobSheetCreatedDate),
-    "Job Sheet Number": displayText(record.jobSheetNumber),
-    "Delivery Date": displayDate(record.deliveryDateTime),
-    "Client Company Name": displayText(record.clientCompanyName),
-    "Event Name": displayText(record.eventName),
-    "Product": displayText(record.product),
-    "Product Expected In Hand": displayDate(record.expectedReceiveDate),
-    "Branding Type": displayText(record.brandingType),
-    "Branding Vendor": displayText(record.brandingVendor),
-    "Expected Post Branding in Ace": displayText(record.expectedPostBranding),
-    "Schedule Pick Up Date": displayDate(record.schedulePickUp),
-    "Remarks": displayText(record.remarks),
-    "Status": displayText(record.status),
+const exportToExcel = (data) => {
+  const exportData = data.map((r) => ({
+    "Order Date": displayDate(r.jobSheetCreatedDate),
+    "Job Sheet Number": displayText(r.jobSheetNumber),
+    "Delivery Date": displayDate(r.deliveryDateTime),
+    "Client Company Name": displayText(r.clientCompanyName),
+    "Event Name": displayText(r.eventName),
+    "Product": displayText(r.product),
+    "Qty Required": r.qtyRequired ?? "",
+    "Qty Ordered": r.qtyOrdered ?? "",
+    "Product Expected In Hand": displayDate(r.expectedReceiveDate),
+    "Branding Type": displayText(r.brandingType),
+    "Branding Vendor": displayText(r.brandingVendor),
+    "Expected Post Branding in Ace": displayText(r.expectedPostBranding),
+    "Schedule Pick Up Date": displayDate(r.schedulePickUp),
+    Remarks: displayText(r.remarks),
+    Status: displayText(r.status),
   }));
 
-  const worksheet = XLSX.utils.json_to_sheet(exportData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Closed Production Job Sheets");
-  XLSX.writeFile(workbook, "ClosedProductionJobSheets.xlsx");
-}
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Closed Sheets");
+  XLSX.writeFile(wb, "ClosedProductionJobSheets.xlsx");
+};
 
-const ClosedProductionJobSheetTable = ({ data, sortField, sortOrder, onSortChange }) => {
-  // Render sort icon for a header field.
-  const renderSortIcon = (field) => {
-    if (sortField !== field) {
-      return <span className="ml-1 opacity-50 text-xs">↕</span>;
-    }
-    return sortOrder === "asc" ? (
-      <span className="ml-1 text-xs">▲</span>
+const ClosedProductionJobSheetTable = ({
+  data,
+  sortField,
+  sortOrder,
+  onSortChange,
+}) => {
+  const renderSortIcon = (field) =>
+    sortField === field ? (
+      sortOrder === "asc" ? (
+        <span className="ml-1 text-xs">▲</span>
+      ) : (
+        <span className="ml-1 text-xs">▼</span>
+      )
     ) : (
-      <span className="ml-1 text-xs">▼</span>
+      <span className="ml-1 opacity-50 text-xs">↕</span>
     );
-  };
 
   return (
     <div>
-      {/* Export Button positioned at the top right */}
       <div className="flex justify-end mb-4">
         <button
           onClick={() => exportToExcel(data)}
@@ -66,73 +65,71 @@ const ClosedProductionJobSheetTable = ({ data, sortField, sortOrder, onSortChang
         <thead className="bg-gray-50">
           <tr>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("jobSheetCreatedDate")}
             >
               Order Date {renderSortIcon("jobSheetCreatedDate")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("jobSheetNumber")}
             >
               Job Sheet Number {renderSortIcon("jobSheetNumber")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("deliveryDateTime")}
             >
               Delivery Date {renderSortIcon("deliveryDateTime")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("clientCompanyName")}
             >
               Client Company Name {renderSortIcon("clientCompanyName")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("eventName")}
             >
               Event Name {renderSortIcon("eventName")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("product")}
             >
               Product {renderSortIcon("product")}
             </th>
-            <th className="p-2 border border-gray-300">
-              Product Expected In Hand
-            </th>
+            <th className="p-2 border">Qty Required</th>
+            <th className="p-2 border">Qty Ordered</th>
+            <th className="p-2 border">Product Expected In Hand</th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("brandingType")}
             >
               Branding Type {renderSortIcon("brandingType")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("brandingVendor")}
             >
               Branding Vendor {renderSortIcon("brandingVendor")}
             </th>
-            <th className="p-2 border border-gray-300">
-              Expected Post Branding in Ace
-            </th>
+            <th className="p-2 border">Expected Post Branding in Ace</th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("schedulePickUp")}
             >
               Schedule Pick Up Date {renderSortIcon("schedulePickUp")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("remarks")}
             >
               Remarks {renderSortIcon("remarks")}
             </th>
             <th
-              className="p-2 border border-gray-300 cursor-pointer"
+              className="p-2 border cursor-pointer"
               onClick={() => onSortChange("status")}
             >
               Status {renderSortIcon("status")}
@@ -140,47 +137,25 @@ const ClosedProductionJobSheetTable = ({ data, sortField, sortOrder, onSortChang
           </tr>
         </thead>
         <tbody>
-          {data.map((record) => (
-            <tr key={record._id} className="bg-green-200">
-              <td className="p-2 border border-gray-300">
-                {displayDate(record.jobSheetCreatedDate)}
+          {data.map((r) => (
+            <tr key={r._id} className="bg-green-200">
+              <td className="p-2 border">{displayDate(r.jobSheetCreatedDate)}</td>
+              <td className="p-2 border">{displayText(r.jobSheetNumber)}</td>
+              <td className="p-2 border">{displayDate(r.deliveryDateTime)}</td>
+              <td className="p-2 border">{displayText(r.clientCompanyName)}</td>
+              <td className="p-2 border">{displayText(r.eventName)}</td>
+              <td className="p-2 border">{displayText(r.product)}</td>
+              <td className="p-2 border">{r.qtyRequired ?? ""}</td>
+              <td className="p-2 border">{r.qtyOrdered ?? ""}</td>
+              <td className="p-2 border">{displayDate(r.expectedReceiveDate)}</td>
+              <td className="p-2 border">{displayText(r.brandingType)}</td>
+              <td className="p-2 border">{displayText(r.brandingVendor)}</td>
+              <td className="p-2 border">
+                {displayText(r.expectedPostBranding)}
               </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.jobSheetNumber)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayDate(record.deliveryDateTime)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.clientCompanyName)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.eventName)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.product)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayDate(record.expectedReceiveDate)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.brandingType)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.brandingVendor)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.expectedPostBranding)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayDate(record.schedulePickUp)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.remarks)}
-              </td>
-              <td className="p-2 border border-gray-300">
-                {displayText(record.status)}
-              </td>
+              <td className="p-2 border">{displayDate(r.schedulePickUp)}</td>
+              <td className="p-2 border">{displayText(r.remarks)}</td>
+              <td className="p-2 border">{displayText(r.status)}</td>
             </tr>
           ))}
         </tbody>

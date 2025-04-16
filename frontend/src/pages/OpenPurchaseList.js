@@ -4,12 +4,15 @@ import axios from "axios";
 const statusOptions = ["", "pending", "received", "alert"];
 
 function HeaderFilters({ headerFilters, onFilterChange }) {
+  // Added the new columns "qtyRequired" and "qtyOrdered"
   const columns = [
     { key: "jobSheetCreatedDate", label: "Job Sheet Created Date" },
     { key: "jobSheetNumber", label: "Job Sheet Number" },
     { key: "clientCompanyName", label: "Client Company Name" },
     { key: "eventName", label: "Event Name" },
     { key: "product", label: "Product" },
+    { key: "qtyRequired", label: "Qty Required" },
+    { key: "qtyOrdered", label: "Qty Ordered" },
     { key: "sourcingFrom", label: "Sourced From" },
     { key: "deliveryDateTime", label: "Delivery Date" },
     { key: "vendorContactNumber", label: "Vendor Contact Number" },
@@ -155,6 +158,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 }
 
 function EditPurchaseModal({ purchase, onClose, onSave }) {
+  // Initialize state with the current purchase object
   const [editedData, setEditedData] = useState({ ...purchase });
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
 
@@ -229,6 +233,25 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 </span>
               </div>
             </div>
+            {/* New Quantity Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-purple-700 font-bold mb-1">Qty Required:</label>
+                <span>{editedData.qtyRequired}</span>
+              </div>
+              <div>
+                <label className="block text-purple-700 font-bold mb-1">Qty Ordered:</label>
+                <input
+                  type="number"
+                  value={editedData.qtyOrdered || ""}
+                  onChange={(e) =>
+                    handleFieldChange("qtyOrdered", parseInt(e.target.value) || 0)
+                  }
+                  className="w-full border p-1"
+                />
+              </div>
+            </div>
+            {/* End new fields */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Vendor Contact Number:</label>
@@ -305,10 +328,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             </div>
           </form>
           <div className="mt-6 flex justify-end gap-4">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-100"
-            >
+            <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-100">
               Cancel
             </button>
             <button
@@ -395,6 +415,8 @@ export default function OpenPurchases() {
       "clientCompanyName",
       "eventName",
       "product",
+      "qtyRequired",
+      "qtyOrdered",
       "sourcingFrom",
       "deliveryDateTime",
       "vendorContactNumber",
@@ -520,7 +542,7 @@ export default function OpenPurchases() {
           <table className="min-w-full border-collapse border border-gray-300">
             <thead className="bg-gray-50">
               <tr>
-                {Array(15).fill(0).map((_, i) => (
+                {Array(17).fill(0).map((_, i) => (
                   <th key={i} className="p-2 border border-gray-300 h-4 bg-gray-300"></th>
                 ))}
               </tr>
@@ -528,7 +550,7 @@ export default function OpenPurchases() {
             <tbody>
               {Array(5).fill(0).map((_, rowIdx) => (
                 <tr key={rowIdx}>
-                  {Array(15).fill(0).map((_, colIdx) => (
+                  {Array(17).fill(0).map((_, colIdx) => (
                     <td key={colIdx} className="p-2 border border-gray-300 h-4 bg-gray-300"></td>
                   ))}
                 </tr>
@@ -542,7 +564,6 @@ export default function OpenPurchases() {
 
   return (
     <div className="p-6">
-      {/* Red warning box if user does not have permission to edit */}
       {!canEdit && (
         <div className="mb-4 p-2 text-red-700 bg-red-200 border border-red-400 rounded">
           You don't have permission to edit purchase records.
@@ -561,44 +582,96 @@ export default function OpenPurchases() {
       <table className="min-w-full border-collapse border border-gray-300">
         <thead className="bg-gray-50">
           <tr className="text-xs">
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("jobSheetCreatedDate")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("jobSheetCreatedDate")}
+            >
               Job Sheet Created Date {sortConfig.key === "jobSheetCreatedDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("jobSheetNumber")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("jobSheetNumber")}
+            >
               Job Sheet Number {sortConfig.key === "jobSheetNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("clientCompanyName")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("clientCompanyName")}
+            >
               Client Company Name {sortConfig.key === "clientCompanyName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("eventName")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("eventName")}
+            >
               Event Name {sortConfig.key === "eventName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("product")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("product")}
+            >
               Product {sortConfig.key === "product" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("sourcingFrom")}>
+            {/* New columns for Qty Required and Qty Ordered */}
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("qtyRequired")}
+            >
+              Qty Required {sortConfig.key === "qtyRequired" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("qtyOrdered")}
+            >
+              Qty Ordered {sortConfig.key === "qtyOrdered" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("sourcingFrom")}
+            >
               Sourced From {sortConfig.key === "sourcingFrom" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("deliveryDateTime")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("deliveryDateTime")}
+            >
               Delivery Date {sortConfig.key === "deliveryDateTime" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("vendorContactNumber")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("vendorContactNumber")}
+            >
               Vendor Contact Number {sortConfig.key === "vendorContactNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("orderConfirmedDate")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("orderConfirmedDate")}
+            >
               Order Confirmed Date {sortConfig.key === "orderConfirmedDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("expectedReceiveDate")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("expectedReceiveDate")}
+            >
               Expected Receive Date {sortConfig.key === "expectedReceiveDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("schedulePickUp")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("schedulePickUp")}
+            >
               Schedule Pick Up {sortConfig.key === "schedulePickUp" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
             <th className="p-2 border border-gray-300">Follow Up</th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("remarks")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("remarks")}
+            >
               Remarks {sortConfig.key === "remarks" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            <th className="p-2 border border-gray-300 cursor-pointer" onClick={() => handleSort("status")}>
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("status")}
+            >
               Status {sortConfig.key === "status" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
             <th className="p-2 border border-gray-300">Actions</th>
@@ -607,11 +680,12 @@ export default function OpenPurchases() {
         </thead>
         <tbody>
           {openPurchasesToShow.map((purchase) => {
-            const latestFollowUp = purchase.followUp && purchase.followUp.length > 0
-              ? purchase.followUp.reduce((latest, fu) =>
-                  new Date(fu.updatedAt) > new Date(latest.updatedAt) ? fu : latest
-                )
-              : null;
+            const latestFollowUp =
+              purchase.followUp && purchase.followUp.length > 0
+                ? purchase.followUp.reduce((latest, fu) =>
+                    new Date(fu.updatedAt) > new Date(latest.updatedAt) ? fu : latest
+                  )
+                : null;
 
             return (
               <tr
@@ -633,6 +707,9 @@ export default function OpenPurchases() {
                 <td className="p-2 border border-gray-300">{purchase.clientCompanyName}</td>
                 <td className="p-2 border border-gray-300">{purchase.eventName}</td>
                 <td className="p-2 border border-gray-300">{purchase.product}</td>
+                {/* New Qty Required and Qty Ordered cells */}
+                <td className="p-2 border border-gray-300">{purchase.qtyRequired}</td>
+                <td className="p-2 border border-gray-300">{purchase.qtyOrdered}</td>
                 <td className="p-2 border border-gray-300">{purchase.sourcingFrom}</td>
                 <td className="p-2 border border-gray-300">
                   {purchase.deliveryDateTime ? new Date(purchase.deliveryDateTime).toLocaleDateString() : ""}
@@ -693,10 +770,14 @@ export default function OpenPurchases() {
       )}
       {viewFollowUpModalOpen && currentViewFollowId !== null && (
         <FollowUpModal
-          followUps={purchases.find((p) => p._id === currentViewFollowId)?.followUp || []}
+          followUps={
+            purchases.find((p) => p._id === currentViewFollowId)?.followUp || []
+          }
           onUpdate={(newFUs) => {
-            setPurchases(prev =>
-              prev.map(p => p._id === currentViewFollowId ? { ...p, followUp: newFUs } : p)
+            setPurchases((prev) =>
+              prev.map((p) =>
+                p._id === currentViewFollowId ? { ...p, followUp: newFUs } : p
+              )
             );
           }}
           onClose={() => {

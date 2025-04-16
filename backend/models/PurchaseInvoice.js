@@ -21,10 +21,14 @@ const purchaseInvoiceSchema = new mongoose.Schema(
       enum: ["Yes", "No"],
       default: "No",
     },
+    // NEW fields (optional)
+    qtyRequired: { type: Number },
+    qtyOrdered: { type: Number },
   },
   { timestamps: true }
 );
 
+// Composite unique index on jobSheetNumber and product
 purchaseInvoiceSchema.index({ jobSheetNumber: 1, product: 1 }, { unique: true });
 
 module.exports = mongoose.model("PurchaseInvoice", purchaseInvoiceSchema);

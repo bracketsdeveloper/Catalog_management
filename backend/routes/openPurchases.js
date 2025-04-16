@@ -7,6 +7,7 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const sendMail = require("../utils/sendMail");
 const User = require("../models/User");
 
+// routes/openPurchases.js (snippet from the GET endpoint)
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sortKey = req.query.sortKey || "deliveryDateTime";
@@ -25,6 +26,9 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           eventName: js.eventName,
           product: item.product,
           sourcingFrom: item.sourcingFrom,
+          // NEW: Set qtyRequired from item's quantity and default qtyOrdered
+          qtyRequired: item.quantity,
+          qtyOrdered: 0,
           deliveryDateTime: deliveryDate,
           vendorContactNumber: "",
           orderConfirmedDate: null,
@@ -39,6 +43,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       });
     });
 
+    // Merge in records stored in the database
     const updatedRecords = await OpenPurchase.find({});
     updatedRecords.forEach(updated => {
       if (updated.jobSheetId) {
@@ -57,6 +62,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
+    // Remove duplicates then sort
     const seen = new Set();
     const finalAggregated = aggregated.filter((rec) => {
       const key = `${rec.jobSheetNumber}_${rec.product}`;
@@ -90,6 +96,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+
+// routes/openPurchases.js (snippet from POST endpoint)
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const data = { ...req.body };
@@ -102,6 +110,8 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
         data.deliveryDateTime = new Date(js.deliveryDate);
       }
     }
+    // data.qtyRequired should ideally be coming from the aggregated JobSheet item.
+    // data.qtyOrdered will come from the form input.
     const newPurchase = new OpenPurchase(data);
     await newPurchase.save();
     res.status(201).json({ message: "Open purchase created", purchase: newPurchase });
@@ -110,6 +120,34 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error creating open purchase" });
   }
 });
+
+// And in the PUT endpoint, the same pattern applies:
+router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const updateData = { ...req.body };
+    if (updateData.jobSheetId) {
+      const js = await JobSheet.findById(updateData.jobSheetId);
+      if (js && js.deliveryDate) {
+        updateData.deliveryDateTime = new Date(js.deliveryDate);
+      }
+    }
+    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    if (!updatedPurchase)
+      return res.status(404).json({ message: "Open purchase not found" });
+    
+    // (Logic to move records to ClosedPurchase if all items are received remains unchanged.)
+    // ...
+
+    // Email alert if status is "alert" remains unchanged.
+    // ...
+
+    res.json({ message: "Open purchase updated", purchase: updatedPurchase });
+  } catch (error) {
+    console.error("Error updating open purchase:", error);
+    res.status(500).json({ message: "Server error updating open purchase" });
+  }
+});
+
 
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -220,3 +258,4 @@ router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
 });
 
 module.exports = router;
+

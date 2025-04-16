@@ -7,8 +7,9 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const token = localStorage.getItem("token");
 
-  // Editable fields only.
   const [formData, setFormData] = useState({
+    qtyRequired: invoice.qtyRequired || 0,
+    qtyOrdered: invoice.qtyOrdered || 0,
     cost: invoice.cost || "",
     negotiatedCost: invoice.negotiatedCost || "",
     paymentModes: invoice.paymentModes || [],
@@ -19,35 +20,31 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((p) => ({ ...p, [name]: value }));
   };
 
   const addPaymentMode = () => {
-    if (formData.newPaymentMode.trim() !== "") {
-      setFormData(prev => ({
-        ...prev,
-        paymentModes: [...prev.paymentModes, { mode: formData.newPaymentMode.trim() }],
+    if (formData.newPaymentMode.trim())
+      setFormData((p) => ({
+        ...p,
+        paymentModes: [...p.paymentModes, { mode: p.newPaymentMode.trim() }],
         newPaymentMode: "",
       }));
-    }
   };
 
-  const removePaymentMode = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      paymentModes: prev.paymentModes.filter((_, i) => i !== index),
+  const removePaymentMode = (i) =>
+    setFormData((p) => ({
+      ...p,
+      paymentModes: p.paymentModes.filter((_, idx) => idx !== i),
     }));
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.cost || !formData.negotiatedCost || !formData.vendorInvoiceNumber) {
-      toast.error("Please fill in all required fields.");
+      toast.error("Fill all mandatory fields.");
       return;
     }
+
     const payload = {
       productionJobSheetId: invoice.productionJobSheetId,
       orderConfirmationDate: invoice.orderConfirmationDate,
@@ -56,6 +53,8 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
       eventName: invoice.eventName,
       product: invoice.product,
       sourceFrom: invoice.sourceFrom,
+      qtyRequired: Number(formData.qtyRequired),
+      qtyOrdered: Number(formData.qtyOrdered),
       cost: Number(formData.cost),
       negotiatedCost: Number(formData.negotiatedCost),
       paymentModes: formData.paymentModes,
@@ -64,32 +63,33 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
     };
 
     try {
-      let url = `${BACKEND_URL}/api/admin/productionjobsheetinvoice`;
-      let method = "post";
-      // If the invoice has an _id and is not a virtual record, then perform an update.
-      if (invoice._id && !invoice.isVirtual) {
-        url = `${BACKEND_URL}/api/admin/productionjobsheetinvoice/${invoice._id}`;
-        method = "put";
-      }
-      await axios[method](url, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast.success("Invoice saved successfully!");
+      const url =
+        invoice._id && !invoice.isVirtual
+          ? `${BACKEND_URL}/api/admin/productionjobsheetinvoice/${invoice._id}`
+          : `${BACKEND_URL}/api/admin/productionjobsheetinvoice`;
+      const method = invoice._id && !invoice.isVirtual ? "put" : "post";
+      await axios[method](url, payload, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("Invoice saved!");
       onClose();
-    } catch (error) {
-      console.error("Error saving invoice", error);
-      toast.error(`Error saving invoice: ${error.response?.data?.message || error.message}`);
+    } catch (err) {
+      console.error("Error", err);
+      toast.error(err.response?.data?.message || err.message);
     }
   };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
       <div className="bg-white p-4 rounded w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-lg">
-        <h2 className="text-xl text-purple-700 font-bold mb-4">Edit Production Job Sheet Invoice</h2>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Non-editable Fields */}
+        <h2 className="text-xl font-bold text-purple-700 mb-4">
+          Edit Production Job Sheet Invoice
+        </h2>
+        <form
+          onSubmit={handleSubmit}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
+          {/* Non-editable */}
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Order Confirmation Date</label>
+            <label className="font-semibold text-purple-600">Order Confirmation Date</label>
             <input
               type="text"
               value={new Date(invoice.orderConfirmationDate).toLocaleDateString()}
@@ -98,53 +98,49 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Job Sheet</label>
+            <label className="font-semibold text-purple-600">Job Sheet</label>
+            <input type="text" value={invoice.jobSheetNumber} disabled className="w-full border p-1 rounded bg-gray-50" />
+          </div>
+          <div className="col-span-1">
+            <label className="font-semibold text-purple-600">Client Name</label>
+            <input type="text" value={invoice.clientCompanyName} disabled className="w-full border p-1 rounded bg-gray-50" />
+          </div>
+          <div className="col-span-1">
+            <label className="font-semibold text-purple-600">Event Name</label>
+            <input type="text" value={invoice.eventName} disabled className="w-full border p-1 rounded bg-gray-50" />
+          </div>
+          <div className="col-span-1">
+            <label className="font-semibold text-purple-600">Product Name</label>
+            <input type="text" value={invoice.product} disabled className="w-full border p-1 rounded bg-gray-50" />
+          </div>
+          <div className="col-span-1">
+            <label className="font-semibold text-purple-600">Source From</label>
+            <input type="text" value={invoice.sourceFrom} disabled className="w-full border p-1 rounded bg-gray-50" />
+          </div>
+
+          {/* Editable */}
+          <div className="col-span-1">
+            <label className="font-semibold text-purple-600">Qty Required</label>
             <input
-              type="text"
-              value={invoice.jobSheetNumber}
-              disabled
-              className="w-full border p-1 rounded bg-gray-50"
+              type="number"
+              name="qtyRequired"
+              value={formData.qtyRequired}
+              onChange={handleInputChange}
+              className="w-full border p-1 rounded"
             />
           </div>
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Client Name</label>
+            <label className="font-semibold text-purple-600">Qty Ordered</label>
             <input
-              type="text"
-              value={invoice.clientCompanyName}
-              disabled
-              className="w-full border p-1 rounded bg-gray-50"
+              type="number"
+              name="qtyOrdered"
+              value={formData.qtyOrdered}
+              onChange={handleInputChange}
+              className="w-full border p-1 rounded"
             />
           </div>
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Event Name</label>
-            <input
-              type="text"
-              value={invoice.eventName}
-              disabled
-              className="w-full border p-1 rounded bg-gray-50"
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Product Name</label>
-            <input
-              type="text"
-              value={invoice.product}
-              disabled
-              className="w-full border p-1 rounded bg-gray-50"
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Source From</label>
-            <input
-              type="text"
-              value={invoice.sourceFrom}
-              disabled
-              className="w-full border p-1 rounded bg-gray-50"
-            />
-          </div>
-          {/* Editable Fields */}
-          <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Cost</label>
+            <label className="font-semibold text-purple-600">Cost</label>
             <input
               type="number"
               name="cost"
@@ -155,7 +151,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Negotiated Cost</label>
+            <label className="font-semibold text-purple-600">Negotiated Cost</label>
             <input
               type="number"
               name="negotiatedCost"
@@ -166,8 +162,8 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             />
           </div>
           <div className="col-span-1 md:col-span-2">
-            <label className="block font-semibold text-purple-600">Payment Made</label>
-            <div className="flex items-center space-x-2">
+            <label className="font-semibold text-purple-600">Payment Made</label>
+            <div className="flex space-x-2">
               <input
                 type="text"
                 name="newPaymentMode"
@@ -181,10 +177,10 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
               </button>
             </div>
             <ul className="text-xs mt-1">
-              {formData.paymentModes.map((pm, index) => (
-                <li key={index} className="flex justify-between items-center">
-                  <span>{pm.mode}</span>
-                  <button type="button" onClick={() => removePaymentMode(index)} className="text-red-500">
+              {formData.paymentModes.map((pm, idx) => (
+                <li key={idx} className="flex justify-between">
+                  {pm.mode}
+                  <button type="button" onClick={() => removePaymentMode(idx)} className="text-red-500">
                     x
                   </button>
                 </li>
@@ -192,7 +188,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             </ul>
           </div>
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Vendor Invoice Number</label>
+            <label className="font-semibold text-purple-600">Vendor Invoice Number</label>
             <input
               type="text"
               name="vendorInvoiceNumber"
@@ -203,7 +199,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block font-semibold text-purple-600">Vendor Invoice Received</label>
+            <label className="font-semibold text-purple-600">Vendor Invoice Received</label>
             <select
               name="vendorInvoiceReceived"
               value={formData.vendorInvoiceReceived}
@@ -215,11 +211,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             </select>
           </div>
           <div className="col-span-3 flex justify-end space-x-3 mt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded bg-gray-300 text-gray-800"
-            >
+            <button type="button" onClick={onClose} className="px-4 py-2 border rounded bg-gray-300">
               Cancel
             </button>
             <button type="submit" className="px-4 py-2 border rounded bg-blue-500 text-white">
