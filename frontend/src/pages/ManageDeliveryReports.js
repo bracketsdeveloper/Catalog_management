@@ -22,7 +22,10 @@ export default function ManageDeliveryReports() {
   const [excelRow, setExcelRow] = useState(null); // NEW
 
   /* ---------------------------------------------------------------- */
-  useEffect(() => fetchRows(), []); // eslint-disable-line
+  useEffect(() => {
+          fetchRows();
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, []);
 
   async function fetchRows() {
     const res = await axios.get(`${BACKEND}/api/admin/delivery-reports`, {
