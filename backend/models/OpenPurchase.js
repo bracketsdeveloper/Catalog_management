@@ -3,23 +3,23 @@ const mongoose = require("mongoose");
 
 const followUpSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
-  updatedBy: { type: String, required: true },
-  followUpDate: { type: String, required: true }, // Stored as string to match frontend date input (YYYY-MM-DD)
-  note: { type: String, required: true },
+  updatedBy: { type: String },           // no longer required
+  followUpDate: { type: String },        // no longer required
+  note: { type: String },                // no longer required
   done: { type: Boolean, default: false }
 });
 
 const openPurchaseSchema = new mongoose.Schema({
-  // Data coming from the job sheet:
-  jobSheetCreatedDate: { type: Date, required: true },
-  jobSheetNumber: { type: String, required: true },
-  clientCompanyName: { type: String, required: true },
-  eventName: { type: String, required: true },
-  product: { type: String, required: true },
-  sourcingFrom: { type: String, required: true },
+  // Data coming from the job sheet (all now optional):
+  jobSheetCreatedDate: { type: Date },
+  jobSheetNumber: { type: String },
+  clientCompanyName: { type: String },
+  eventName: { type: String },
+  product: { type: String },
+  sourcingFrom: { type: String },
 
   // NEW: Quantity fields
-  qtyRequired: { type: Number, required: true },
+  qtyRequired: { type: Number },      // no longer required
   qtyOrdered: { type: Number, default: 0 },
 
   // Manually entered fields:
