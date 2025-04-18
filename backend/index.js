@@ -104,6 +104,10 @@ app.use("/api/admin/dispatch-schedule", dispatchRoutes);
 const deliveryRoutes = require("./routes/deliveryreports");
 app.use("/api/admin/delivery-reports", deliveryRoutes);
 
+
+const deliveryCompletedRoutes = require("./routes/deliveryCompleted");
+app.use("/api/admin/delivery-completed", deliveryCompletedRoutes);
+
 // app.use("/api/reports" ,reportRoutes)
 
 // Start server (original)

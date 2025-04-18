@@ -44,6 +44,7 @@ import ManagePendingPacking from "../pages/ManagePendingPacking";
 import ManagePendingPackingClosed from "../pages/ManagePendingPackingClosed";
 import ManageDispatchScheduled from "../pages/ManageDispatchScheduled";
 import ManageDeliveryReports from "../pages/ManageDeliveryReports";
+import ManageDeliveryCompleted from "../pages/ManageDeliveryCompleted";
 
 const router = createBrowserRouter([
     {
@@ -249,6 +250,10 @@ const router = createBrowserRouter([
                     {
                         path:"delivery-reports" ,
                         element:<ManageDeliveryReports />
+                    },
+                    {
+                        path:"delivery-completed",
+                        element:<ManageDeliveryCompleted/>
                     }
 
                 ]
