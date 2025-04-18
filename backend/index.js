@@ -94,6 +94,15 @@ app.use("/api/admin/closedPurchases", require("./routes/closedPurchasesRoutes.js
 
 app.use("/api/admin/productionjobsheetinvoice", require("./routes/productionjobsheetinvoice"));
 
+const pendingPackingRoutes = require("./routes/pendingpacking");
+app.use("/api/admin/packing-pending", pendingPackingRoutes);
+
+const dispatchRoutes = require("./routes/dispatchschedule");
+app.use("/api/admin/dispatch-schedule", dispatchRoutes);
+
+
+const deliveryRoutes = require("./routes/deliveryreports");
+app.use("/api/admin/delivery-reports", deliveryRoutes);
 
 // app.use("/api/reports" ,reportRoutes)
 

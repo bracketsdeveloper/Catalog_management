@@ -40,6 +40,10 @@ import ClosedProductionJobsheetList from "../pages/ClosedProductionJobsheetList"
 import CreateProductionInvoice from "../pages/CreateProductionInvoice";
 import ManageProductionInvoice from "../pages/ManageProductionInvoice";
 import ClosedProductionJobsheet from "../pages/ClosedProductionJobsheet";
+import ManagePendingPacking from "../pages/ManagePendingPacking";
+import ManagePendingPackingClosed from "../pages/ManagePendingPackingClosed";
+import ManageDispatchScheduled from "../pages/ManageDispatchScheduled";
+import ManageDeliveryReports from "../pages/ManageDeliveryReports";
 
 const router = createBrowserRouter([
     {
@@ -230,7 +234,23 @@ const router = createBrowserRouter([
                         path:'manage-production-invoice',
                         element:<ManageProductionInvoice/>
                     },
-                    
+                    {
+                        path:'pending-packing',
+                        element:<ManagePendingPacking/>
+                    },
+                    {
+                        path:'closed-pending-packing',
+                        element:<ManagePendingPackingClosed/>
+                    },
+                    {
+                        path:'dispatch-scheduled',
+                        element:<ManageDispatchScheduled/>
+                    },
+                    {
+                        path:"delivery-reports" ,
+                        element:<ManageDeliveryReports />
+                    }
+
                 ]
             }
         ],
