@@ -79,13 +79,19 @@ export default function PrintQuotation() {
 
     const opt = {
       margin: 0.2, // 0.2 inches
-      filename: `Quotation-${
-        editableQuotation?.quotationNumber || "Unknown"
-      }.pdf`,
+      filename: `Quotation-${editableQuotation?.quotationNumber || "Unknown"}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 7, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
     };
+
+    // Add page break before footer if more than 5 items
+    if (editableQuotation.items.length > 5) {
+      const footer = clonedElement.querySelector(".footer-block");
+      if (footer) {
+        footer.style.pageBreakBefore = "always";
+      }
+    }
 
     html2pdf().set(opt).from(clonedElement).save();
   };
@@ -223,7 +229,7 @@ export default function PrintQuotation() {
                       <img
                         src={imageUrl}
                         alt={item.product}
-                        className="h-10 w-auto mx-auto"
+                        className="h-12 w-auto mx-auto"
                         crossOrigin="anonymous"
                       />
                     ) : (
