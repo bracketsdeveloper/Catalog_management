@@ -114,9 +114,7 @@ const jobSheetExportRouter = require("./routes/jobsheetExport.js");
 app.use("/api/admin/jobsheets", jobSheetExportRouter);
 
 // app.use("/api/reports" ,reportRoutes)
-// backend/index.js
-const jobSheetExportPdf = require("./routes/jobSheetExportPdf");
-app.use("/api/admin/jobsheets", jobSheetExportPdf);
+
 
 
 // Start server (original)
