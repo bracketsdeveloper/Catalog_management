@@ -108,7 +108,16 @@ app.use("/api/admin/delivery-reports", deliveryRoutes);
 const deliveryCompletedRoutes = require("./routes/deliveryCompleted");
 app.use("/api/admin/delivery-completed", deliveryCompletedRoutes);
 
+
+// in backend/index.js (or app.js)
+const jobSheetExportRouter = require("./routes/jobsheetExport.js");
+app.use("/api/admin/jobsheets", jobSheetExportRouter);
+
 // app.use("/api/reports" ,reportRoutes)
+// backend/index.js
+const jobSheetExportPdf = require("./routes/jobSheetExportPdf");
+app.use("/api/admin/jobsheets", jobSheetExportPdf);
+
 
 // Start server (original)
 const PORT = process.env.PORT || 5000;
