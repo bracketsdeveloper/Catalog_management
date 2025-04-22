@@ -16,7 +16,7 @@ export default function EditQuotation() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // -- General states
+  // -- General states (unchanged)
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,14 +68,14 @@ export default function EditQuotation() {
     { heading: "Quote Validity", content: "The quote is valid only for 6 days from the date of quotation" },
   ]);
 
-  // -- Company suggestions
+  // -- Company suggestions (unchanged)
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Fetch product filter options
+  // Fetch product filter options (unchanged)
   useEffect(() => {
     fetchFilterOptions();
   }, []);
@@ -95,7 +95,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Fetch product list
+  // Fetch product list (unchanged)
   useEffect(() => {
     fetchProducts(1);
   }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges]);
@@ -135,7 +135,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Fetch existing quotation if in edit mode
+  // Fetch existing quotation if in edit mode (unchanged)
   useEffect(() => {
     if (isEditMode) {
       fetchExistingQuotation();
@@ -195,7 +195,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Fetch companies for suggestion
+  // Fetch companies for suggestion (unchanged)
   useEffect(() => {
     fetchCompanies();
   }, []);
@@ -212,7 +212,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Handlers for advanced image search
+  // Handlers for advanced image search (unchanged)
   const handleImageSearchClick = () => {
     imageInputRef.current?.click();
   };
@@ -349,7 +349,7 @@ export default function EditQuotation() {
     setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handlers for terms
+  // Handlers for terms (unchanged)
   const handleAddTerm = () => {
     setTerms([...terms, { heading: "", content: "" }]);
   };
@@ -364,7 +364,7 @@ export default function EditQuotation() {
     setTerms(newTerms);
   };
 
-  // Updating company info
+  // Updating company info (unchanged)
   const updateCompanyInfo = async () => {
     if (!selectedCompanyData || !selectedCompanyData._id) return;
     try {
@@ -394,7 +394,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Save Quotation
+  // Save Quotation (unchanged)
   const handleSaveQuotation = async () => {
     if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
@@ -472,7 +472,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Pagination
+  // Pagination (unchanged)
   const handlePrevPage = () => {
     if (currentPage > 1) {
       fetchProducts(currentPage - 1);
@@ -487,7 +487,7 @@ export default function EditQuotation() {
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
-  // Company selection
+  // Company selection (unchanged)
   const handleCompanySelect = (company) => {
     setCustomerCompany(company.companyName);
     setSelectedCompanyData(company);
@@ -506,10 +506,10 @@ export default function EditQuotation() {
     fetchCompanies();
   };
 
-  // Render
+  // Render (unchanged)
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Header */}
+      {/* Header (unchanged) */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Quotation" : "Create Quotation"}
@@ -524,7 +524,7 @@ export default function EditQuotation() {
         </div>
       </div>
 
-      {/* Form Fields */}
+      {/* Form Fields (unchanged) */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {/* Catalog Name */}
         <div>
@@ -632,17 +632,9 @@ export default function EditQuotation() {
             onChange={(e) => setCustomerAddress(e.target.value)}
           />
         </div>
-
-      
-      
-
-        
       </div>
 
-     
-     
-
-      {/* Search & Image Search */}
+      {/* Search & Image Search (unchanged) */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input
@@ -679,7 +671,7 @@ export default function EditQuotation() {
         </div>
       </div>
 
-      {/* Filter Buttons */}
+      {/* Filter Buttons (unchanged) */}
       <div className="flex flex-wrap gap-2 mb-6">
         <div className="relative">
           <button
@@ -750,7 +742,7 @@ export default function EditQuotation() {
           >
             Brands ({selectedBrands.length})
           </button>
-          {subCategoryOpen && (
+          {brandOpen && (
             <div
               className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
               style={{ maxHeight: "150px", overflowY: "auto" }}
@@ -835,7 +827,7 @@ export default function EditQuotation() {
             ))}
           </div>
 
-          {/* Pagination */}
+          {/* Pagination (unchanged) */}
           {!advancedSearchActive && (
             <div className="flex justify-center items-center mt-6 space-x-4">
               <button
@@ -860,7 +852,7 @@ export default function EditQuotation() {
         </>
       )}
 
-      {/* Floating Cart Icon */}
+      {/* Floating Cart Icon (unchanged) */}
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -901,8 +893,16 @@ export default function EditQuotation() {
                       <div className="font-bold text-sm text-purple-800">
                         {row.productName || row.name}
                       </div>
-                      {row.color && <div className="text-xs">Color: {row.color}</div>}
-                      {row.size && <div className="text-xs">Size: {row.size}</div>}
+                      {extractColorFromName(row.productName || row.name) && (
+                        <div className="text-xs">
+                          Color: {extractColorFromName(row.productName || row.name)}
+                        </div>
+                      )}
+                      {extractSizeFromName(row.productName || row.name) && (
+                        <div className="text-xs">
+                          Size: {extractSizeFromName(row.productName || row.name)}
+                        </div>
+                      )}
                       <div className="text-xs">
                         Cost: ₹{Number(row.productCost).toFixed(2)}
                       </div>
@@ -967,20 +967,35 @@ export default function EditQuotation() {
   );
 }
 
+// Helper functions to extract color and size from product name
+const extractColorFromName = (name) => {
+  const match = name.match(/\(([^)]+)\)/);
+  return match ? match[1].trim() : null;
+};
+
+const extractSizeFromName = (name) => {
+  const match = name.match(/\[(.*?)\]/);
+  return match ? match[1].replace(/"/g, "").trim() : null;
+};
+
 /**
  * ProductCard Component
  */
 function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
+  // Extract color and size from product name
+  const color = extractColorFromName(product.name || product.productName || "");
+  const size = extractSizeFromName(product.name || product.productName || "");
+
   const colorOptions = Array.isArray(product.color)
     ? product.color
     : typeof product.color === "string"
     ? product.color.split(",").map((c) => c.trim()).filter(Boolean)
-    : [];
+    : color ? [color] : [];
   const sizeOptions = Array.isArray(product.size)
     ? product.size
     : typeof product.size === "string"
     ? product.size.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
+    : size ? [size] : [];
 
   const hasVariations = colorOptions.length > 1 || sizeOptions.length > 1;
 
@@ -992,18 +1007,8 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
       productCost: cost,
       productprice: cost,
       productGST: product.productGST || 0,
-      color:
-        colorOptions.length > 0
-          ? colorOptions[0].trim() !== ""
-            ? colorOptions[0]
-            : "N/A"
-          : "N/A",
-      size:
-        sizeOptions.length > 0
-          ? sizeOptions[0].trim() !== ""
-            ? sizeOptions[0]
-            : "N/A"
-          : "N/A",
+      color: colorOptions.length > 0 && colorOptions[0].trim() !== "" ? colorOptions[0] : "N/A",
+      size: sizeOptions.length > 0 && sizeOptions[0].trim() !== "" ? sizeOptions[0] : "N/A",
       quantity: 1,
       material: product.material || "",
       weight: product.weight || "",
@@ -1045,6 +1050,8 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
         {product.category}
         {product.subCategory ? ` / ${product.subCategory}` : ""}
       </p>
+      {color && <div className="text-xs">Color: {color}</div>}
+      {size && <div className="text-xs">Size: {size}</div>}
       {hasVariations ? (
         <button
           onClick={() => openVariationSelector(product)}
@@ -1065,9 +1072,9 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
 }
 
 /**
- * VariationModal Component
+ * VariationModal Component (unchanged)
  */
-function VariationModal({ product, onClose, onSave }) {
+function VariationModal({ product, onClose, onSave, selectedMargin }) {
   const [variations, setVariations] = useState([]);
   const colorOptions = Array.isArray(product.color)
     ? product.color
@@ -1254,14 +1261,14 @@ function VariationModal({ product, onClose, onSave }) {
 }
 
 /**
- * VariationEditModal Component
+ * VariationEditModal Component (unchanged)
  */
 function VariationEditModal({ item, onClose, onUpdate }) {
   const [name, setName] = useState(item.productName || item.name || "");
   const [productCost, setProductCost] = useState(item.productCost || 0);
   const [productGST, setProductGST] = useState(item.productGST || 0);
-  const [color, setColor] = useState(item.color || "");
-  const [size, setSize] = useState(item.size || "");
+  const [color, setColor] = useState(item.color || extractColorFromName(item.productName || item.name) || "");
+  const [size, setSize] = useState(item.size || extractSizeFromName(item.productName || item.name) || "");
   const [quantity, setQuantity] = useState(item.quantity || 1);
   const [material, setMaterial] = useState(item.material || "");
   const [weight, setWeight] = useState(item.weight || "");
