@@ -1,28 +1,27 @@
-// api/index.js
-const serverless = require("serverless-http");
-const express    = require("express");
-const mongoose   = require("mongoose");
-const dotenv     = require("dotenv");
+// Dependencies
+const express = require("express");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+const cors = require("cors");
+const axios = require("axios");
 
 // Load environment variables
 dotenv.config();
 
-// Create Express app
+// Initialize app
 const app = express();
 app.use(express.json());
 
-// Configure CORS for frontend origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'https://catalog-management.vercel.app'
-];
+// Configure CORS for frontend (localhost:3000)
+const allowedOrigins = ['http://localhost:3000', 'https://catalog-management.vercel.app'];
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Credentials', true);
-  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,PUT,PATCH,DELETE');
+  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS,PUT,PATCH,POST,DELETE');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -30,79 +29,94 @@ app.use((req, res, next) => {
   next();
 });
 
-// Database connection (cached)
-const MONGO_URI = process.env.MONGO_URI;
-let isConnected = false;
-async function connectToDatabase() {
-  if (isConnected) return;
-  await mongoose.connect(MONGO_URI, {
+
+const syncRoutes = require("./routes/syncRoutes");
+app.use("/api", syncRoutes);
+// console.log("SheetDB URL:", process.env.SHEETDB_URL);
+
+
+
+
+// MongoDB connection
+mongoose
+  .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-  });
-  isConnected = true;
-  console.log('MongoDB connected');
-}
-connectToDatabase().catch(err => console.error('MongoDB connection error:', err));
+  })
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
-// Route imports
-const syncRoutes              = require("./routes/syncRoutes");
-const authRoutes              = require("./routes/authRoutes");
+// Import routes
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+
 const emailVerificationRoutes = require("./routes/emailVerification");
-const userRoutes              = require("./routes/userRoutes");
-const adminRoutes             = require("./routes/adminRoutes");
-const subAdminRoutes          = require("./routes/subAdminRoutes");
-const catalogRoutes           = require("./routes/catalogRoutes");
-const advancedSearchRoutes    = require("./routes/advancedSearchRoutes");
-const viewersRoutes           = require("./routes/viewersRoutes");
-const quotationRoutes         = require("./routes/quotationRoutes");
-const adminMeRoutes           = require("./routes/adminMe");
-const jobsheetRoutes          = require("./routes/jobsheetRoutes");
-const companyRoutes           = require("./routes/companyRoutes");
-const erpRoutes               = require("./routes/erpRoutes");
-const opportunityRoutes       = require("./routes/opportunityRoutes");
-const openPurchasesRoutes     = require("./routes/openPurchases");
-const purchaseInvoiceRoutes   = require("./routes/purchaseInvoice");
-const productionJobsheetRoutes= require("./routes/productionJobsheetRoutes");
-const productionInvoiceRoutes = require("./routes/productionInvoice");
-const closedPurchasesRoutes   = require("./routes/closedPurchasesRoutes");
-const productionjsInvoice     = require("./routes/productionjobsheetinvoice");
-const pendingPackingRoutes    = require("./routes/pendingpacking");
-const dispatchScheduleRoutes  = require("./routes/dispatchschedule");
-const deliveryReportsRoutes   = require("./routes/deliveryreports");
-const deliveryCompletedRoutes = require("./routes/deliveryCompleted");
-const jobSheetExportRouter    = require("./routes/jobsheetExport");
-
-// Route mounting
-app.use("/api", syncRoutes);
-app.use("/api", subAdminRoutes);
 
 app.use("/api/auth", authRoutes);
-app.use("/api/auth", emailVerificationRoutes);
 
 app.use("/api/user", userRoutes);
-
 app.use("/api/admin", adminRoutes);
+
+
+app.use("/api/auth", emailVerificationRoutes);
+
+const subAdminRoutes = require('./routes/subAdminRoutes');
+app.use('/api', subAdminRoutes);
+
+const catalogRoutes = require("./routes/catalogRoutes");
 app.use("/api/admin", catalogRoutes);
-app.use("/api/admin", quotationRoutes);
+
+const advancedSearchRoutes = require("./routes/advancedSearchRoutes.js");
+app.use("/api/products", advancedSearchRoutes);
+
+// const viewersmanagerRoutes = ;
+app.use("/api/viewer",require("./routes/viewersRoutes.js"))
+app.use("/api/admin",require("./routes/viewersRoutes.js"))
+app.use("/api/admin",require("./routes/quotationRoutes.js"))
+
+const adminMeRoutes = require("./routes/adminMe");
 app.use("/api/admin", adminMeRoutes);
-app.use("/api/admin", jobsheetRoutes);
-app.use("/api/admin", companyRoutes);
+
+app.use("/api/admin",require("./routes/jobsheetRoutes.js"))
+app.use("/api/admin",require("./routes/companyRoutes.js"))
+
+app.use("/api", require("./routes/erpRoutes.js"));
+
+// after other routes...
+const opportunityRoutes = require("./routes/opportunityRoutes");
 app.use("/api/admin", opportunityRoutes);
-app.use("/api/admin/openPurchases", openPurchasesRoutes);
-app.use("/api/admin/purchaseInvoice", purchaseInvoiceRoutes);
-app.use("/api/admin/productionjobsheets", productionJobsheetRoutes);
-app.use("/api/admin/productionjobsheetinvoice", productionjsInvoice);
-app.use("/api/admin/productionInvoice", productionInvoiceRoutes);
-app.use("/api/admin/closedPurchases", closedPurchasesRoutes);
+app.use("/api/admin/openPurchases", require("./routes/openPurchases.js"));
+app.use("/api/admin/purchaseInvoice", require("./routes/purchaseInvoice")); 
+app.use("/api/admin/productionjobsheets", require("./routes/productionJobsheetRoutes.js"));
+app.use("/api/admin", require('./routes/productionInvoice.js'))
+app.use("/api/admin/closedPurchases", require("./routes/closedPurchasesRoutes.js"));
+
+app.use("/api/admin/productionjobsheetinvoice", require("./routes/productionjobsheetinvoice"));
+
+const pendingPackingRoutes = require("./routes/pendingpacking");
 app.use("/api/admin/packing-pending", pendingPackingRoutes);
-app.use("/api/admin/dispatch-schedule", dispatchScheduleRoutes);
-app.use("/api/admin/delivery-reports", deliveryReportsRoutes);
+
+const dispatchRoutes = require("./routes/dispatchschedule");
+app.use("/api/admin/dispatch-schedule", dispatchRoutes);
+
+
+const deliveryRoutes = require("./routes/deliveryreports");
+app.use("/api/admin/delivery-reports", deliveryRoutes);
+
+
+const deliveryCompletedRoutes = require("./routes/deliveryCompleted");
 app.use("/api/admin/delivery-completed", deliveryCompletedRoutes);
+
+
+// in backend/index.js (or app.js)
+const jobSheetExportRouter = require("./routes/jobsheetExport.js");
 app.use("/api/admin/jobsheets", jobSheetExportRouter);
 
-app.use("/api/products", advancedSearchRoutes);
-app.use("/api/viewer", viewersRoutes);
-app.use("/api/admin", viewersRoutes);
+// app.use("/api/reports" ,reportRoutes)
 
-// Export for Vercel
-module.exports = serverless(app);
+
+
+// Start server (original)
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
