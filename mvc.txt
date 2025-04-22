@@ -1,0 +1,15 @@
+backend
+/models
+/controller
+/routes
+index
+
+frontend
+pages
+components
+routes
+
+
+
+
+http://localhost:5000/api/admin/catalogs
