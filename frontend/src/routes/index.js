@@ -45,6 +45,7 @@ import ManagePendingPackingClosed from "../pages/ManagePendingPackingClosed";
 import ManageDispatchScheduled from "../pages/ManageDispatchScheduled";
 import ManageDeliveryReports from "../pages/ManageDeliveryReports";
 import ManageDeliveryCompleted from "../pages/ManageDeliveryCompleted";
+import EditQuotation from "../pages/EditQuotation";
 
 const router = createBrowserRouter([
     {
@@ -115,6 +116,10 @@ const router = createBrowserRouter([
                     {
                         path:'catalogs/manual/:id',
                         element:<ManageCatalogs/>
+                    },
+                    {
+                        path:'quotation/manual/:id',
+                        element:<EditQuotation/>
                     },
                     {
                         path:'manage-catalogs',

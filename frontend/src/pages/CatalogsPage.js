@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import * as XLSX from "xlsx"; // For Excel export
+import * as XLSX from "xlsx";
 
 // Sub-components
 import RemarksModal from "../components/CatalogManagement/RemarksModal";
@@ -280,16 +280,18 @@ export default function CatalogManagementPage() {
     navigate(`/admin-dashboard/catalogs/manual/${catalog._id}`);
   }
 
+  function handleEditQuotation(quotation) {
+    navigate(`/admin-dashboard/quotation/manual/${quotation._id}`);
+  }
+
   // -------------- CREATE QUOTATION FROM CATALOG --------------
   async function handleCreateQuotationFromCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
-      // Build a new object for the Quotation
       const newQuotationData = {
         catalogNumber: catalog.catalogNumber,
         catalogName: catalog.catalogName,
-        // Include salutation from the catalog
-        salutation: catalog.salutation || "Mr.",  // <-- ADDED
+        salutation: catalog.salutation || "Mr.",
         customerName: catalog.customerName,
         customerEmail: catalog.customerEmail,
         customerCompany: catalog.customerCompany,
@@ -661,7 +663,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-
   // -------------- VIRTUAL LINK --------------
   function handleVirtualLink(item) {
     const link = `${window.location.origin}/catalog/${item._id}`;
@@ -946,64 +947,73 @@ export default function CatalogManagementPage() {
   };
 
   const renderQuotationList = () => {
-    if (quotations.length === 0) {
+    const filteredQuotations = filterData(quotations);
+    if (filteredQuotations.length === 0) {
       return <div className="text-gray-600">Nothing to display.</div>;
     }
-    const groupedQuotations = groupQuotationsByTimePeriod(quotations);
+    const grouped = groupItemsByDate(filteredQuotations);
     return (
       <div>
-        {groupedQuotations.map(({ period, all }) => (
-          <div key={period} className="mb-6">
-            <h3 className="text-lg font-bold mb-2">{period}</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 border">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Quotation No.
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Company Name
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Customer Name
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Items
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {all.map((quotation) => (
-                    <tr key={quotation._id}>
-                      <td className="px-4 py-2">{quotation.quotationNumber}</td>
-                      <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
-                      <td className="px-4 py-2">{quotation.customerName}</td>
-                      <td className="px-4 py-2">{quotation.items?.length || 0}</td>
-                      <td className="px-4 py-2 space-x-2">
-                        <button
-                          onClick={() => navigate(`/admin-dashboard/quotations/${quotation._id}`)}
-                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleDeleteQuotation(quotation)}
-                          className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                        >
-                          Delete
-                        </button>
-                      </td>
+        {Object.entries(grouped).map(([groupName, items]) =>
+          items.length > 0 ? (
+            <div key={groupName} className="mb-6">
+              <h3 className="text-lg font-bold mb-2">{groupName}</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Quotation No.
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Company Name
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Customer Name
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Items
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {items.map((quotation) => (
+                      <tr key={quotation._id}>
+                        <td className="px-4 py-2">{quotation.quotationNumber}</td>
+                        <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
+                        <td className="px-4 py-2">{quotation.customerName}</td>
+                        <td className="px-4 py-2">{quotation.items?.length || 0}</td>
+                        <td className="px-4 py-2 space-x-2">
+                          <button
+                            onClick={() => navigate(`/admin-dashboard/quotations/${quotation._id}`)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleEditQuotation(quotation)}
+                            className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteQuotation(quotation)}
+                            className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ))}
+          ) : null
+        )}
       </div>
     );
   };
@@ -1315,7 +1325,7 @@ function VariationEditModal({ item, onClose, onUpdate }) {
       <div className="flex items-center justify-center min-h-full py-8 px-4">
         <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
           <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900">
-            <span className="text-xl font-bold">&times;</span>
+            <span className="text-xl font-bold">×</span>
           </button>
           <h2 className="text-xl font-bold mb-4 text-purple-700">Edit Cart Item</h2>
           <div className="space-y-4">

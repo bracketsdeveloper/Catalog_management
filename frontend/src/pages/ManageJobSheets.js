@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import DatePicker from "react-datepicker";
-import { format, parse } from "date-fns";
+import { format, parse, isValid, isWithinInterval } from "date-fns";
 import "react-datepicker/dist/react-datepicker.css";
 import { Dropdown } from "react-bootstrap";
 import { FaEllipsisV } from "react-icons/fa";
@@ -21,6 +21,17 @@ export default function ManageJobSheets() {
   // Single search query state
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Date filter states
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [orderFromDate, setOrderFromDate] = useState(null);
+  const [orderToDate, setOrderToDate] = useState(null);
+  const [deliveryFromDate, setDeliveryFromDate] = useState(null);
+  const [deliveryToDate, setDeliveryToDate] = useState(null);
+
+  // Sorting states
+  const [sortField, setSortField] = useState("orderDate"); // Default sort by orderDate
+  const [sortOrder, setSortOrder] = useState("asc"); // asc or desc
+
   // Modal for create
   const [modalOpen, setModalOpen] = useState(false);
   const [createOption, setCreateOption] = useState(null);
@@ -31,19 +42,34 @@ export default function ManageJobSheets() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftError, setDraftError] = useState(null);
 
-  // 1) On mount, fetch normal job sheets (production)
+  // Ref for date filter panel to detect outside clicks
+  const dateFilterRef = useRef(null);
+
+  // Handle outside click to close date filter
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
+        setShowDateFilter(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Fetch job sheets on mount
   useEffect(() => {
     fetchJobSheets(false);
   }, []);
 
-  // 2) The function to fetch job sheets (production or drafts)
   async function fetchJobSheets(draftOnly = false) {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
       let url = `${BACKEND_URL}/api/admin/jobsheets`;
       if (draftOnly) {
-        url += "?draftOnly=true"; // triggers route logic for user's drafts
+        url += "?draftOnly=true";
       }
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -58,7 +84,6 @@ export default function ManageJobSheets() {
     }
   }
 
-  // 3) A separate function to fetch only the user's drafts
   async function fetchMyDrafts() {
     try {
       setDraftLoading(true);
@@ -77,18 +102,13 @@ export default function ManageJobSheets() {
     }
   }
 
-  // Delete job sheet
   async function deleteJobSheet(id, isDraft) {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(`${BACKEND_URL}/api/admin/jobsheets/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      // Refresh the main list (production)
       fetchJobSheets(false);
-
-      // Also refresh the draft list if open
       if (draftPanelOpen) {
         fetchMyDrafts();
       }
@@ -98,44 +118,86 @@ export default function ManageJobSheets() {
     }
   }
 
-  // Filtering logic for main table
-  const filteredJobSheets = jobSheets.filter((js) => {
-    if (!searchQuery) return true;
+  // Filtering logic with date range
+  const filteredJobSheets = jobSheets
+    .filter((js) => {
+      if (!searchQuery) return true;
 
-    const query = searchQuery.toLowerCase();
-    return (
-      (js.clientCompanyName?.toLowerCase().includes(query)) ||
-      (js.eventName?.toLowerCase().includes(query)) ||
-      (js.referenceQuotation?.toLowerCase().includes(query)) ||
-      (js.clientName?.toLowerCase().includes(query)) ||
-      (js.jobSheetNumber?.toLowerCase().includes(query))
-    );
-  });
+      const query = searchQuery.toLowerCase();
+      return (
+        (js.clientCompanyName?.toLowerCase().includes(query)) ||
+        (js.eventName?.toLowerCase().includes(query)) ||
+        (js.referenceQuotation?.toLowerCase().includes(query)) ||
+        (js.clientName?.toLowerCase().includes(query)) ||
+        (js.jobSheetNumber?.toLowerCase().includes(query))
+      );
+    })
+    .filter((js) => {
+      // Order Date filtering
+      let orderDatePass = true;
+      if (orderFromDate || orderToDate) {
+        const orderDate = js.orderDate && isValid(new Date(js.orderDate)) ? new Date(js.orderDate) : null;
+        if (orderDate) {
+          const start = orderFromDate || new Date("1900-01-01");
+          const end = orderToDate || new Date("9999-12-31");
+          orderDatePass = isWithinInterval(orderDate, { start, end });
+        } else {
+          orderDatePass = false;
+        }
+      }
 
-  // Export to Excel
+      // Delivery Date filtering
+      let deliveryDatePass = true;
+      if (deliveryFromDate || deliveryToDate) {
+        const deliveryDate = js.deliveryDate && isValid(new Date(js.deliveryDate)) ? new Date(js.deliveryDate) : null;
+        if (deliveryDate) {
+          const start = deliveryFromDate || new Date("1900-01-01");
+          const end = deliveryToDate || new Date("9999-12-31");
+          deliveryDatePass = isWithinInterval(deliveryDate, { start, end });
+        } else {
+          deliveryDatePass = false;
+        }
+      }
+
+      return orderDatePass && deliveryDatePass;
+    })
+    .sort((a, b) => {
+      const fieldA = sortField === "orderDate" ? new Date(a.orderDate) : new Date(a.deliveryDate);
+      const fieldB = sortField === "orderDate" ? new Date(b.orderDate) : new Date(b.deliveryDate);
+
+      if (!isValid(fieldA) && !isValid(fieldB)) return 0;
+      if (!isValid(fieldA)) return 1;
+      if (!isValid(fieldB)) return -1;
+
+      return sortOrder === "asc" ? fieldA - fieldB : fieldB - fieldA;
+    });
+
   const exportToExcel = () => {
     const exportData = [];
     let serial = 1;
 
     filteredJobSheets.forEach((js) => {
-      // Format the 'Created At' date
       const createdAtFormatted =
         js.createdAt && isValidDate(new Date(js.createdAt))
           ? format(new Date(js.createdAt), "dd/MM/yyyy")
           : "Invalid date";
 
-      // Format the delivery date
+      const orderDateFormatted =
+        js.orderDate && isValidDate(new Date(js.orderDate))
+          ? format(new Date(js.orderDate), "dd/MM/yyyy")
+          : "Invalid date";
+
       const deliveryDateFormatted =
         js.deliveryDate && isValidDate(new Date(js.deliveryDate))
           ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
           : "Invalid date";
 
-      // If the job sheet has items, create one row per item
       if (js.items && js.items.length > 0) {
         js.items.forEach((item) => {
           exportData.push({
             "Sl. No": serial++,
             "Created At": createdAtFormatted,
+            "Order Date": orderDateFormatted, // Added Order Date
             "Quotation Number": js.referenceQuotation || "",
             "Job Sheet Number": js.jobSheetNumber || "",
             "Opportunity Name": js.eventName || "",
@@ -163,10 +225,10 @@ export default function ManageJobSheets() {
           });
         });
       } else {
-        // If no items, push a single row
         exportData.push({
           "Sl. No": serial++,
           "Created At": createdAtFormatted,
+          "Order Date": orderDateFormatted, // Added Order Date
           "Quotation Number": js.referenceQuotation || "",
           "Job Sheet Number": js.jobSheetNumber || "",
           "Opportunity Name": js.eventName || "",
@@ -211,7 +273,6 @@ export default function ManageJobSheets() {
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-4 md:space-y-0">
         <h1 className="text-2xl font-bold">Manage Job Sheets</h1>
         <div className="flex space-x-2">
-          {/* "View My Drafts" */}
           <button
             onClick={() => {
               setDraftPanelOpen(true);
@@ -221,16 +282,12 @@ export default function ManageJobSheets() {
           >
             View My Drafts
           </button>
-
-          {/* "Create JobSheet" */}
           <button
             onClick={() => setModalOpen(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
           >
             Create Jobsheet
           </button>
-
-          {/* Export */}
           <button
             onClick={exportToExcel}
             className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
@@ -240,16 +297,120 @@ export default function ManageJobSheets() {
         </div>
       </div>
 
-      {/* Single Search Field */}
-      <div className="mb-4 p-4 border rounded">
-        <h2 className="font-bold mb-2">Search</h2>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by Company, Event, Quotation, etc."
-          className="border p-2 rounded w-full"
-        />
+      {/* Search and Date Filter Section */}
+      <div className="mb-4 p-4 border rounded relative">
+        <h2 className="font-bold mb-2">Search & Filter</h2>
+        <div className="flex flex-col md:flex-row md:items-center md:space-x-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by Company, Event, Quotation, etc."
+            className="border p-2 rounded w-full md:w-1/2 mb-2 md:mb-0"
+          />
+          <button
+            onClick={() => setShowDateFilter(!showDateFilter)}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded"
+          >
+            {showDateFilter ? "Hide Filters" : "Show Date Filters"}
+          </button>
+        </div>
+
+        {/* Date Filter Panel */}
+        {showDateFilter && (
+          <div
+            ref={dateFilterRef}
+            className="absolute top-0 left-0 right-0 bg-white border rounded p-4 z-10 shadow-lg"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">Date Filters & Sorting</h3>
+              <button
+                onClick={() => setShowDateFilter(false)}
+                className="text-gray-500 hover:text-gray-800 font-bold text-xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Order Date Filter */}
+              <div>
+                <h4 className="font-medium mb-2">Order Date Range</h4>
+                <div className="flex space-x-2">
+                  <DatePicker
+                    selected={orderFromDate}
+                    onChange={(date) => setOrderFromDate(date)}
+                    selectsStart
+                    startDate={orderFromDate}
+                    endDate={orderToDate}
+                    dateFormat="dd/MM/yyyy"
+                    className="border p-2 rounded w-full"
+                    placeholderText="From (DD/MM/YYYY)"
+                  />
+                  <DatePicker
+                    selected={orderToDate}
+                    onChange={(date) => setOrderToDate(date)}
+                    selectsEnd
+                    startDate={orderFromDate}
+                    endDate={orderToDate}
+                    minDate={orderFromDate}
+                    dateFormat="dd/MM/yyyy"
+                    className="border p-2 rounded w-full"
+                    placeholderText="To (DD/MM/YYYY)"
+                  />
+                </div>
+              </div>
+              {/* Delivery Date Filter */}
+              <div>
+                <h4 className="font-medium mb-2">Delivery Date Range</h4>
+                <div className="flex space-x-2">
+                  <DatePicker
+                    selected={deliveryFromDate}
+                    onChange={(date) => setDeliveryFromDate(date)}
+                    selectsStart
+                    startDate={deliveryFromDate}
+                    endDate={deliveryToDate}
+                    dateFormat="dd/MM/yyyy"
+                    className="border p-2 rounded w-full"
+                    placeholderText="From (DD/MM/YYYY)"
+                  />
+                  <DatePicker
+                    selected={deliveryToDate}
+                    onChange={(date) => setDeliveryToDate(date)}
+                    selectsEnd
+                    startDate={deliveryFromDate}
+                    endDate={deliveryToDate}
+                    minDate={deliveryFromDate}
+                    dateFormat="dd/MM/yyyy"
+                    className="border p-2 rounded w-full"
+                    placeholderText="To (DD/MM/YYYY)"
+                  />
+                </div>
+              </div>
+            </div>
+            {/* Sorting Options */}
+            <div className="mt-4">
+              <h4 className="font-medium mb-2">Sort By</h4>
+              <div className="flex space-x-4">
+                <select
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value)}
+                  className="border p-2 rounded"
+                >
+                  <option value="orderDate">Order Date</option>
+                  <option value="deliveryDate">Delivery Date</option>
+                </select>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="border p-2 rounded"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content: Table of Production Sheets */}
@@ -332,7 +493,6 @@ export default function ManageJobSheets() {
           onSelectOption={(option) => setCreateOption(option)}
           onCreated={() => {
             setModalOpen(false);
-            // Refresh normal jobSheets
             fetchJobSheets(false);
           }}
           navigate={navigate}
@@ -340,13 +500,10 @@ export default function ManageJobSheets() {
         />
       )}
 
-      {/* Draft Panel at bottom (like a small window) */}
+      {/* Draft Panel at bottom */}
       {draftPanelOpen && (
         <div
-          className="
-            fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200
-            shadow-lg p-4 z-50
-          "
+          className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50"
           style={{ maxHeight: "40vh", overflowY: "auto" }}
         >
           <div className="flex justify-between items-center mb-3">
@@ -435,7 +592,7 @@ export default function ManageJobSheets() {
 }
 
 /**
- * Updated "CreateJobsheetModal" with "Save as Draft" checkbox
+ * CreateJobsheetModal
  */
 function CreateJobsheetModal({
   onClose,
@@ -465,9 +622,7 @@ function CreateJobsheetModal({
     referenceQuotation: "",
   });
 
-  // New: "Save as Draft" local state
   const [createAsDraft, setCreateAsDraft] = useState(false);
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -484,17 +639,14 @@ function CreateJobsheetModal({
     try {
       setSaving(true);
       const token = localStorage.getItem("token");
-
-      // Merged form data with isDraft
       const body = {
         ...formData,
         isDraft: createAsDraft,
       };
-
       await axios.post(`${BACKEND_URL}/api/admin/jobsheets`, body, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      onCreated(); // Tells parent to close + refresh
+      onCreated();
     } catch (err) {
       console.error("Error creating jobsheet:", err);
       setError("Error creating jobsheet.");
@@ -510,7 +662,6 @@ function CreateJobsheetModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
       <div className="bg-white p-6 rounded w-4/5 max-w-4xl overflow-auto max-h-full">
-
         {!option && (
           <div>
             <h2 className="text-2xl font-bold mb-4">Create Jobsheet</h2>
@@ -534,10 +685,7 @@ function CreateJobsheetModal({
           <div>
             <h2 className="text-2xl font-bold mb-4">New Jobsheet</h2>
             {error && <div className="text-red-500 mb-2">{error}</div>}
-
-            {/* Minimal inline form: you can replace with your own form */}
             <div className="grid grid-cols-2 gap-4">
-              {/* Example fields */}
               <div>
                 <label className="block text-sm font-medium">Order Date *</label>
                 <DatePicker
@@ -600,10 +748,7 @@ function CreateJobsheetModal({
                   className="border p-2 rounded w-full"
                 />
               </div>
-              {/* ... Add more fields as needed */}
             </div>
-
-            {/* The "Save as Draft" checkbox */}
             <div className="mt-4">
               <label className="inline-flex items-center space-x-2 text-sm">
                 <input
@@ -615,7 +760,6 @@ function CreateJobsheetModal({
                 <span>Save as Draft (only visible to me)</span>
               </label>
             </div>
-
             <div className="mt-4 flex justify-end space-x-4">
               <button onClick={onClose} className="px-4 py-2 border rounded">
                 Cancel

@@ -66,31 +66,7 @@ export default function JobSheetView() {
     }
   };
 
-  const exportToPdf = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/jobsheets/${id}/export-pdf`,
-        {
-          responseType: "blob",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-      const link = Object.assign(document.createElement("a"), {
-        href: url,
-        download: `job-sheet-${id}.pdf`,
-      });
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert("PDF export failed");
-    }
-  };
+ 
 
   // ────────────────────────────────────────────────
   // Render
@@ -109,12 +85,6 @@ export default function JobSheetView() {
         >
           Export to Word
         </button>
-        {/* <button
-          onClick={exportToPdf}
-          className="px-4 py-2 bg-green-500 text-white text-xs rounded"
-        >
-          Export to PDF
-        </button> */}
       </div>
 
       {/* Job‑sheet preview (unchanged, still useful in browser) */}

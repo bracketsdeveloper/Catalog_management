@@ -1,4 +1,3 @@
-// ProductManagementPage.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -101,7 +100,10 @@ export default function ProductManagementPage() {
       const params = new URLSearchParams();
       params.append("page", page);
       params.append("limit", limit);
-      if (searchTerm) params.append("search", searchTerm);
+      if (searchTerm) {
+        const searchTerms = searchTerm.toLowerCase().split(" ").filter(term => term);
+        params.append("search", searchTerms.join(",")); // Pass as comma-separated for backend
+      }
       if (selectedCategories.length > 0)
         params.append("categories", selectedCategories.join(","));
       if (selectedSubCategories.length > 0)
