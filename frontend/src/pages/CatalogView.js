@@ -19,7 +19,7 @@ const fieldMapping = {
   brandName: "brandName",
   subCategory: "subCategory",
   size: "size",
-  // no "color" or "weight"
+  // no "color" or "weight",
 };
 
 export default function CatalogView() {
