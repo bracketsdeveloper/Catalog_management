@@ -34,6 +34,7 @@ router.get("/", authenticate, authorizeAdmin, async (_req, res) => {
             product: d.product,
             dispatchQty: d.dispatchQty,
             deliveredSentThrough: d.modeOfDelivery,
+            dcNumber: d.dcNumber || "", // Initialize DC#
             status: "Pending",
           }
     );
@@ -53,7 +54,7 @@ router.post(
   upload.single("excel"),
   async (req, res) => {
     try {
-      const body = JSON.parse(req.body.data); // front‑end sends JSON string
+      const body = JSON.parse(req.body.data); // front-end sends JSON string
       if (req.file) {
         const wb = XLSX.read(req.file.buffer, { type: "buffer" });
         const first = wb.SheetNames[0];

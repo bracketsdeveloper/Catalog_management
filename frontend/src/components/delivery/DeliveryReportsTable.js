@@ -1,3 +1,4 @@
+// components/delivery/DeliveryReportsTable.js
 import React from "react";
 import {
   ArrowUpIcon,
@@ -46,7 +47,8 @@ export default function DeliveryReportsTable({
             <Head label="Product" field="product" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Dispatch Qty" field="dispatchQty" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Sent Through" field="deliveredSentThrough" {...{ sortField, sortOrder, toggleSort }} />
-            <Head label="Latest Follow‑up" field="latestFollowUp" {...{ sortField, sortOrder, toggleSort }} />
+            <Head label="DC#" field="dcNumber" {...{ sortField, sortOrder, toggleSort }} />
+            <Head label="Latest Follow-up" field="latestFollowUp" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Delivered On" field="deliveredOn" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Excel File" field="excelFileName" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Status" field="status" {...{ sortField, sortOrder, toggleSort }} />
@@ -74,6 +76,7 @@ export default function DeliveryReportsTable({
                 <Cell val={r.product} />
                 <Cell val={r.dispatchQty} />
                 <Cell val={r.deliveredSentThrough} />
+                <Cell val={r.dcNumber} />
                 <td
                   className="px-2 py-1 border border-gray-300 text-blue-600 underline cursor-pointer whitespace-nowrap"
                   onClick={() => onShowFollowUps(r)}
@@ -81,7 +84,6 @@ export default function DeliveryReportsTable({
                   {r.latestFollowUp ? date(r.latestFollowUp) : "-"}
                 </td>
                 <Cell val={r.deliveredOn} />
-                {/* Excel link */}
                 <td
                   className="px-2 py-1 border border-gray-300 text-blue-600 underline cursor-pointer"
                   onClick={() => r.excelData?.length && onShowExcel(r)}
@@ -99,7 +101,10 @@ export default function DeliveryReportsTable({
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={12} className="text-center py-4 text-gray-500 border border-gray-300">
+              <td
+                colSpan={13}
+                className="text-center py-4 text-gray-500 border border-gray-300"
+              >
                 No records
               </td>
             </tr>

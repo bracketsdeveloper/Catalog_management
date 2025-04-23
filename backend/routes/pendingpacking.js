@@ -63,6 +63,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       });
   
       res.json(merged);
+      
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Server error fetching packing data" });

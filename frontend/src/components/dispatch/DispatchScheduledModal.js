@@ -1,3 +1,4 @@
+// components/dispatch/DispatchScheduledModal.js
 "use client";
 
 import React, { useState } from "react";
@@ -41,7 +42,7 @@ export default function DispatchScheduledModal({ row, onClose, onSaved }) {
         );
       }
       onSaved();
-      onClose();           // close modal
+      onClose(); // close modal
     } catch (err) {
       console.error(err);
       alert("Save failed");
@@ -103,6 +104,12 @@ export default function DispatchScheduledModal({ row, onClose, onSaved }) {
             label="Mode of Delivery"
             value={form.modeOfDelivery || ""}
             onChange={(v) => set("modeOfDelivery", v)}
+            disabled={!enable}
+          />
+          <Input
+            label="DC#"
+            value={form.dcNumber || ""}
+            onChange={(v) => set("dcNumber", v)}
             disabled={!enable}
           />
           <Select

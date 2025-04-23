@@ -1,3 +1,4 @@
+// pages/ManageDeliveryReports.js
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -19,13 +20,13 @@ export default function ManageDeliveryReports() {
 
   const [editRow, setEditRow] = useState(null);
   const [fuRow, setFuRow] = useState(null);
-  const [excelRow, setExcelRow] = useState(null); // NEW
+  const [excelRow, setExcelRow] = useState(null);
 
   /* ---------------------------------------------------------------- */
   useEffect(() => {
-          fetchRows();
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, []);
+    fetchRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function fetchRows() {
     const res = await axios.get(`${BACKEND}/api/admin/delivery-reports`, {
@@ -76,8 +77,9 @@ export default function ManageDeliveryReports() {
       Product: r.product,
       "Dispatch Qty": r.dispatchQty,
       "Sent Through": r.deliveredSentThrough,
+      "DC#": r.dcNumber,
       "Delivered On": date(r.deliveredOn),
-      "Latest Follow‑up": r.latestFollowUp ? date(r.latestFollowUp) : "",
+      "Latest Follow-up": r.latestFollowUp ? date(r.latestFollowUp) : "",
       Status: r.status,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
@@ -117,7 +119,7 @@ export default function ManageDeliveryReports() {
         toggleSort={toggleSort}
         onEdit={(r) => setEditRow(r)}
         onShowFollowUps={(r) => setFuRow(r)}
-        onShowExcel={(r) => setExcelRow(r)}   // NEW
+        onShowExcel={(r) => setExcelRow(r)}
       />
 
       {editRow && (
@@ -131,10 +133,7 @@ export default function ManageDeliveryReports() {
         <FollowUpsViewerModal row={fuRow} onClose={() => setFuRow(null)} />
       )}
       {excelRow && (
-        <ExcelViewerModal
-          row={excelRow}
-          onClose={() => setExcelRow(null)}
-        />
+        <ExcelViewerModal row={excelRow} onClose={() => setExcelRow(null)} />
       )}
     </div>
   );

@@ -22,7 +22,7 @@ const deliveryReportSchema = new mongoose.Schema(
       unique: true,
     },
 
-    /*  reference info copied from DispatchSchedule */
+    /* reference info copied from DispatchSchedule */
     batchType: String, // Batch / Full Dispatch
     jobSheetNumber: String,
     clientCompanyName: String,
@@ -30,14 +30,15 @@ const deliveryReportSchema = new mongoose.Schema(
     product: String,
     dispatchQty: Number,
     deliveredSentThrough: String, // Mode of Delivery
+    dcNumber: String, // New DC# field
 
-    /* report‑specific fields */
+    /* report-specific fields */
     deliveredOn: Date,
     status: {
-              type: String,
-              enum: ["none", "Delivered", "Pending", "Alert"],
-              default: "none",
-            },
+      type: String,
+      enum: ["none", "Delivered", "Pending", "Alert"],
+      default: "none",
+    },
 
     followUp: { type: [followUpSchema], default: [] },
 

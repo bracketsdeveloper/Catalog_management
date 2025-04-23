@@ -1,3 +1,4 @@
+// pages/ManageDispatchScheduled.js
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -76,6 +77,7 @@ export default function ManageDispatchScheduled() {
       "Dispatch Qty": r.dispatchQty,
       "Sent On": toDate(r.sentOn),
       "Mode of Delivery": r.modeOfDelivery,
+      "DC#": r.dcNumber,
       Status: r.status,
       Remarks: r.remarks,
     }));
@@ -130,8 +132,6 @@ export default function ManageDispatchScheduled() {
             Export to Excel
           </button>
         )}
-
-        
       </div>
 
       {/* Table */}

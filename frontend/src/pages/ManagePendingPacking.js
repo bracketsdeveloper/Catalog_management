@@ -159,16 +159,7 @@ export default function ManagePendingPacking() {
           >
             Open Pending Packing ({openRows.length})
           </button>
-          {/* <button
-            onClick={() => setActiveTab("closed")}
-            className={`px-3 py-1 rounded text-xs ${
-              activeTab === "closed"
-                ? "bg-purple-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
-          >
-            Closed Pending Packing ({closedRows.length})
-          </button> */}
+         
         </div>
       </div>
 

@@ -1,3 +1,4 @@
+// components/delivery/DeliveryReportsModal.js
 "use client";
 
 import React, { useState } from "react";
@@ -14,7 +15,7 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
   /* ---------- local form state ---------- */
   const [form, setForm] = useState({
     ...row,
-    status: row.status || "none", // ← default ‘none’
+    status: row.status || "none",
     deliveredOn: row.deliveredOn
       ? new Date(row.deliveredOn).toISOString().slice(0, 10)
       : "",
@@ -94,6 +95,11 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
             onChange={(v) => set("deliveredSentThrough", v)}
           />
           <InputField
+            label="DC#"
+            value={form.dcNumber || ""}
+            onChange={(v) => set("dcNumber", v)}
+          />
+          <InputField
             label="Delivered On"
             type="date"
             value={form.deliveredOn}
@@ -103,7 +109,7 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
             label="Status"
             value={form.status}
             onChange={(v) => set("status", v)}
-            options={["none", "Delivered", "Pending", "Alert"]} // ← ‘none’ included
+            options={["none", "Delivered", "Pending", "Alert"]}
           />
           <div className="md:col-span-2">
             <label className="font-medium">Excel File</label>
@@ -120,14 +126,14 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
             )}
           </div>
 
-          {/* follow‑up section */}
+          {/* follow-up section */}
           <div className="md:col-span-2 flex justify-between items-center">
-            <span className="font-medium">Follow‑ups</span>
+            <span className="font-medium">Follow-ups</span>
             <button
               className="text-blue-600"
               onClick={() => setFollowUpOpen(true)}
             >
-              + Add Follow‑up
+              + Add Follow-up
             </button>
           </div>
 
@@ -146,7 +152,7 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
                   ))}
               </ul>
             ) : (
-              <p className="text-gray-500">No follow‑ups</p>
+              <p className="text-gray-500">No follow-ups</p>
             )}
           </div>
         </div>

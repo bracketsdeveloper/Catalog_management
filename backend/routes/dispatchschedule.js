@@ -32,6 +32,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         product: p.product,
         batchType: "Batch",
         jobSheetValidated: "No",
+        dcNumber: "", // Initialize DC#
         status: "none",
       };
     });

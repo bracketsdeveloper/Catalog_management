@@ -1,3 +1,4 @@
+// components/dispatch/DispatchScheduledTable.js
 import React from "react";
 import {
   ArrowUpIcon,
@@ -52,6 +53,7 @@ export default function DispatchScheduledTable({
             <HeadCell label="Dispatch Qty" field="dispatchQty" {...{ sortField, sortOrder, toggle: toggleSort }} />
             <HeadCell label="Sent On" field="sentOn" {...{ sortField, sortOrder, toggle: toggleSort }} />
             <HeadCell label="Mode" field="modeOfDelivery" {...{ sortField, sortOrder, toggle: toggleSort }} />
+            <HeadCell label="DC#" field="dcNumber" {...{ sortField, sortOrder, toggle: toggleSort }} />
             <HeadCell label="Status" field="status" {...{ sortField, sortOrder, toggle: toggleSort }} />
             {showEdit && (
               <th className="px-2 py-1 border border-gray-300 bg-gray-50">
@@ -85,8 +87,8 @@ export default function DispatchScheduledTable({
                 <Cell val={r.dispatchQty} />
                 <Cell val={r.sentOn} />
                 <Cell val={r.modeOfDelivery} />
+                <Cell val={r.dcNumber} />
                 <Cell val={r.status} />
-
                 {showEdit && (
                   <td className="px-2 py-1 border border-gray-300">
                     <button onClick={() => onEdit(r)}>
@@ -101,7 +103,7 @@ export default function DispatchScheduledTable({
           {rows.length === 0 && (
             <tr>
               <td
-                colSpan={showEdit ? 13 : 12}
+                colSpan={showEdit ? 14 : 13}
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records

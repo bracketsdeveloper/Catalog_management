@@ -8,7 +8,7 @@ const dispatchScheduleSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "PendingPacking",
       required: true,
-      unique: true, // 1‑to‑1
+      unique: true, // 1-to-1
     },
 
     /* immutable reference data (copied for quick table render) */
@@ -19,7 +19,7 @@ const dispatchScheduleSchema = new mongoose.Schema(
     eventName: String,
     product: String,
 
-    /* dispatch‑workspace fields */
+    /* dispatch-workspace fields */
     batchType: { type: String, enum: ["Batch", "Full Dispatch"], default: "Batch" },
     jobSheetValidated: { type: String, enum: ["Yes", "No"], default: "No" },
 
@@ -27,6 +27,7 @@ const dispatchScheduleSchema = new mongoose.Schema(
     sentOn: Date,
     modeOfDelivery: String,
     remarks: String,
+    dcNumber: String, // New DC# field
     status: { type: String, enum: ["none", "sent", "pending", "alert"], default: "none" },
 
     createdBy: String,
