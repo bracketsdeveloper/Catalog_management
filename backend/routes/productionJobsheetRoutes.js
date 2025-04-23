@@ -57,6 +57,7 @@ router.get("/aggregated", authenticate, authorizeAdmin, async (req, res) => {
 
       return base;
     });
+    
 
     return res.json(aggregated);
   } catch (err) {
