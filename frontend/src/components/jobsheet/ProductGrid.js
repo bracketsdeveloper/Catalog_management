@@ -1,4 +1,3 @@
-// ../components/jobsheet/ProductGrid.js
 import React, { useState } from "react";
 import ProductCard from "./ProductCard";
 
@@ -25,6 +24,15 @@ const FilterPanel = ({
   const [priceRangeOpen, setPriceRangeOpen] = useState(false);
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
+  // Debug filter props
+  console.log("FilterPanel props:", {
+    fullCategories,
+    fullSubCategories,
+    fullBrands,
+    fullPriceRanges,
+    fullVariationHinges,
+  });
+
   const toggleFilter = (value, list, setList) => {
     if (list.includes(value)) {
       setList(list.filter((x) => x !== value));
@@ -50,18 +58,20 @@ const FilterPanel = ({
           >
             {fullCategories.map((cat) => (
               <label
-                key={cat}
+                key={cat.name}
                 className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
               >
                 <input
                   type="checkbox"
                   className="form-checkbox h-4 w-4 text-purple-500"
-                  checked={selectedCategories.includes(cat)}
+                  checked={selectedCategories.includes(cat.name)}
                   onChange={() =>
-                    toggleFilter(cat, selectedCategories, setSelectedCategories)
+                    toggleFilter(cat.name, selectedCategories, setSelectedCategories)
                   }
                 />
-                <span className="truncate">{cat}</span>
+                <span className="truncate">
+                  {cat.name} ({cat.count})
+                </span>
               </label>
             ))}
           </div>
@@ -82,18 +92,20 @@ const FilterPanel = ({
           >
             {fullSubCategories.map((subCat) => (
               <label
-                key={subCat}
+                key={subCat.name}
                 className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
               >
                 <input
                   type="checkbox"
                   className="form-checkbox h-4 w-4 text-purple-500"
-                  checked={selectedSubCategories.includes(subCat)}
+                  checked={selectedSubCategories.includes(subCat.name)}
                   onChange={() =>
-                    toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
+                    toggleFilter(subCat.name, selectedSubCategories, setSelectedSubCategories)
                   }
                 />
-                <span className="truncate">{subCat}</span>
+                <span className="truncate">
+                  {subCat.name} ({subCat.count})
+                </span>
               </label>
             ))}
           </div>
@@ -114,18 +126,20 @@ const FilterPanel = ({
           >
             {fullBrands.map((brand) => (
               <label
-                key={brand}
+                key={brand.name}
                 className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
               >
                 <input
                   type="checkbox"
                   className="form-checkbox h-4 w-4 text-purple-500"
-                  checked={selectedBrands.includes(brand)}
+                  checked={selectedBrands.includes(brand.name)}
                   onChange={() =>
-                    toggleFilter(brand, selectedBrands, setSelectedBrands)
+                    toggleFilter(brand.name, selectedBrands, setSelectedBrands)
                   }
                 />
-                <span className="truncate">{brand}</span>
+                <span className="truncate">
+                  {brand.name} ({brand.count})
+                </span>
               </label>
             ))}
           </div>
@@ -146,18 +160,20 @@ const FilterPanel = ({
           >
             {fullPriceRanges.map((range) => (
               <label
-                key={range}
+                key={range.name}
                 className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
               >
                 <input
                   type="checkbox"
                   className="form-checkbox h-4 w-4 text-purple-500"
-                  checked={selectedPriceRanges.includes(range)}
+                  checked={selectedPriceRanges.includes(range.name)}
                   onChange={() =>
-                    toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
+                    toggleFilter(range.name, selectedPriceRanges, setSelectedPriceRanges)
                   }
                 />
-                <span className="truncate">{range}</span>
+                <span className="truncate">
+                  {range.name} ({range.count})
+                </span>
               </label>
             ))}
           </div>
@@ -178,18 +194,20 @@ const FilterPanel = ({
           >
             {fullVariationHinges.map((hinge) => (
               <label
-                key={hinge}
+                key={hinge.name}
                 className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
               >
                 <input
                   type="checkbox"
                   className="form-checkbox h-4 w-4 text-purple-500"
-                  checked={selectedVariationHinges.includes(hinge)}
+                  checked={selectedVariationHinges.includes(hinge.name)}
                   onChange={() =>
-                    toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)
+                    toggleFilter(hinge.name, selectedVariationHinges, setSelectedVariationHinges)
                   }
                 />
-                <span className="truncate">{hinge}</span>
+                <span className="truncate">
+                  {hinge.name} ({hinge.count})
+                </span>
               </label>
             ))}
           </div>
@@ -205,7 +223,7 @@ const ProductGrid = ({
   advancedSearchActive,
   advancedSearchResults,
   searchTerm,
-  setSearchTerm, // Added setSearchTerm here
+  setSearchTerm,
   handleImageSearchClick,
   imageInputRef,
   handleImageSearch,
@@ -218,7 +236,7 @@ const ProductGrid = ({
   totalPages,
   onAddSelected,
   onOpenVariationModal,
-  // Filter props:
+  // Filter props
   fullCategories,
   selectedCategories,
   setSelectedCategories,

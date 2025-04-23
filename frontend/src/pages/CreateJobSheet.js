@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import JobSheetForm from "../components/jobsheet/JobSheetForm";
-import ProductGrid from "../components/jobsheet/ProductGrid";
+import ProductGrid from "../components/jobsheet/ProductGrid"; // Ensure this path is correct
 import JobSheetCart from "../components/jobsheet/JobSheetCart";
 import JobSheetItemEditModal from "../components/jobsheet/JobSheetItemEditModal";
 import VariationModal from "../components/jobsheet/VariationModal";
@@ -121,6 +121,7 @@ export default function CreateJobSheet() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("Filter options fetched:", res.data); // Debug log
       setFullCategories(res.data.categories || []);
       setFullSubCategories(res.data.subCategories || []);
       setFullBrands(res.data.brands || []);
@@ -397,8 +398,8 @@ export default function CreateJobSheet() {
   };
 
   const handleSaveJobSheet = async (isDraft = false) => {
-    const today = new Date().toISOString().split('T')[0];
-    
+    const today = new Date().toISOString().split("T")[0];
+
     const body = {
       eventName: eventName || ".",
       orderDate: orderDate || today,
@@ -417,7 +418,7 @@ export default function CreateJobSheet() {
       deliveryType: deliveryType || ".",
       deliveryMode: deliveryMode || ".",
       deliveryCharges: deliveryCharges || ".",
-      deliveryAddress: deliveryAddress.filter(addr => addr.trim() !== "") || ["."],
+      deliveryAddress: deliveryAddress.filter((addr) => addr.trim() !== "") || ["."],
       brandingFileName: brandingFileName || ".",
       giftBoxBagsDetails: giftBoxBagsDetails || ".",
       packagingInstructions: packagingInstructions || ".",
@@ -454,7 +455,7 @@ export default function CreateJobSheet() {
     }
   };
 
-  const handleImageSearchClick = () => {
+  const handleImageSearchClick = async () => {
     if (imageInputRef.current) imageInputRef.current.click();
   };
 
@@ -476,11 +477,11 @@ export default function CreateJobSheet() {
           },
         }
       );
-      setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
+      setAdvancedSearchResults(Array.isArray(res.data.products) ? res.data.products : []);
       setAdvancedSearchActive(true);
     } catch (error) {
       console.error("Error in image search:", error);
-      alert("Image search failed. Check console.");
+      alert(`Image search failed: ${error.response?.data?.message || "Check console"}`);
     } finally {
       setAdvancedSearchLoading(false);
     }
@@ -529,7 +530,6 @@ export default function CreateJobSheet() {
               {isEditMode ? "Update as Draft" : "Save Draft"}
             </button>
           )}
-
           <button
             onClick={() => handleSaveJobSheet(false)}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"

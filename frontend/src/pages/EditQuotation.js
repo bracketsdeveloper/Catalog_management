@@ -16,7 +16,7 @@ export default function EditQuotation() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // -- General states (unchanged)
+  // -- General states
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,14 +68,14 @@ export default function EditQuotation() {
     { heading: "Quote Validity", content: "The quote is valid only for 6 days from the date of quotation" },
   ]);
 
-  // -- Company suggestions (unchanged)
+  // -- Company suggestions
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Fetch product filter options (unchanged)
+  // Fetch product filter options
   useEffect(() => {
     fetchFilterOptions();
   }, []);
@@ -86,16 +86,16 @@ export default function EditQuotation() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setFullCategories(res.data.categories || []);
-      setFullSubCategories(res.data.subCategories || []);
-      setFullBrands(res.data.brands || []);
-      setFullPriceRanges(res.data.priceRanges || []);
+      setFullCategories(res.data.categories?.map((item) => item.name) || []);
+      setFullSubCategories(res.data.subCategories?.map((item) => item.name) || []);
+      setFullBrands(res.data.brands?.map((item) => item.name) || []);
+      setFullPriceRanges(res.data.priceRanges?.map((item) => item.name) || []);
     } catch (error) {
       console.error("Error fetching filter options:", error);
     }
   };
 
-  // Fetch product list (unchanged)
+  // Fetch product list
   useEffect(() => {
     fetchProducts(1);
   }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges]);
@@ -135,7 +135,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Fetch existing quotation if in edit mode (unchanged)
+  // Fetch existing quotation if in edit mode
   useEffect(() => {
     if (isEditMode) {
       fetchExistingQuotation();
@@ -195,7 +195,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Fetch companies for suggestion (unchanged)
+  // Fetch companies for suggestion
   useEffect(() => {
     fetchCompanies();
   }, []);
@@ -212,7 +212,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Handlers for advanced image search (unchanged)
+  // Handlers for advanced image search
   const handleImageSearchClick = () => {
     imageInputRef.current?.click();
   };
@@ -349,7 +349,7 @@ export default function EditQuotation() {
     setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handlers for terms (unchanged)
+  // Handlers for terms
   const handleAddTerm = () => {
     setTerms([...terms, { heading: "", content: "" }]);
   };
@@ -364,7 +364,7 @@ export default function EditQuotation() {
     setTerms(newTerms);
   };
 
-  // Updating company info (unchanged)
+  // Updating company info
   const updateCompanyInfo = async () => {
     if (!selectedCompanyData || !selectedCompanyData._id) return;
     try {
@@ -394,7 +394,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Save Quotation (unchanged)
+  // Save Quotation
   const handleSaveQuotation = async () => {
     if (!catalogName) {
       alert("Please enter Catalog Name and Customer Name");
@@ -472,7 +472,7 @@ export default function EditQuotation() {
     }
   };
 
-  // Pagination (unchanged)
+  // Pagination
   const handlePrevPage = () => {
     if (currentPage > 1) {
       fetchProducts(currentPage - 1);
@@ -487,7 +487,7 @@ export default function EditQuotation() {
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
-  // Company selection (unchanged)
+  // Company selection
   const handleCompanySelect = (company) => {
     setCustomerCompany(company.companyName);
     setSelectedCompanyData(company);
@@ -506,10 +506,10 @@ export default function EditQuotation() {
     fetchCompanies();
   };
 
-  // Render (unchanged)
+  // Render
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Header (unchanged) */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Quotation" : "Create Quotation"}
@@ -524,7 +524,7 @@ export default function EditQuotation() {
         </div>
       </div>
 
-      {/* Form Fields (unchanged) */}
+      {/* Form Fields */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {/* Catalog Name */}
         <div>
@@ -634,7 +634,7 @@ export default function EditQuotation() {
         </div>
       </div>
 
-      {/* Search & Image Search (unchanged) */}
+      {/* Search & Image Search */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input
@@ -671,7 +671,7 @@ export default function EditQuotation() {
         </div>
       </div>
 
-      {/* Filter Buttons (unchanged) */}
+      {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
         <div className="relative">
           <button
@@ -827,7 +827,7 @@ export default function EditQuotation() {
             ))}
           </div>
 
-          {/* Pagination (unchanged) */}
+          {/* Pagination */}
           {!advancedSearchActive && (
             <div className="flex justify-center items-center mt-6 space-x-4">
               <button
@@ -852,7 +852,7 @@ export default function EditQuotation() {
         </>
       )}
 
-      {/* Floating Cart Icon (unchanged) */}
+      {/* Floating Cart Icon */}
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer flex items-center justify-center shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -969,11 +969,13 @@ export default function EditQuotation() {
 
 // Helper functions to extract color and size from product name
 const extractColorFromName = (name) => {
+  if (!name) return null;
   const match = name.match(/\(([^)]+)\)/);
   return match ? match[1].trim() : null;
 };
 
 const extractSizeFromName = (name) => {
+  if (!name) return null;
   const match = name.match(/\[(.*?)\]/);
   return match ? match[1].replace(/"/g, "").trim() : null;
 };
@@ -1072,7 +1074,7 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
 }
 
 /**
- * VariationModal Component (unchanged)
+ * VariationModal Component
  */
 function VariationModal({ product, onClose, onSave, selectedMargin }) {
   const [variations, setVariations] = useState([]);
@@ -1261,7 +1263,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
 }
 
 /**
- * VariationEditModal Component (unchanged)
+ * VariationEditModal Component
  */
 function VariationEditModal({ item, onClose, onUpdate }) {
   const [name, setName] = useState(item.productName || item.name || "");

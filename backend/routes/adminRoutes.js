@@ -45,17 +45,30 @@ function getFieldDifferences(oldDoc, newDoc) {
   return changes;
 }
 
-async function computeImageHash(source) {
+async function computeImageHash(source, bitLength = 8) {
   try {
+    let buffer;
     if (/^https?:\/\//i.test(source)) {
       const response = await axios.get(source, { responseType: "arraybuffer" });
-      const buffer = Buffer.from(response.data, "binary");
-      return await imghash.hash(buffer, 16);
+      buffer = Buffer.from(response.data, "binary");
+    } else if (Buffer.isBuffer(source)) {
+      buffer = source;
     } else {
-      return await imghash.hash(source, 16);
+      throw new Error("Invalid source: must be a URL or Buffer");
     }
+
+    // Basic validation of image content
+    if (buffer.length < 100) {
+      throw new Error("Image file is too small or corrupted");
+    }
+
+    const hash = await imghash.hash(buffer, bitLength);
+    if (!hash) {
+      throw new Error("Hash computation returned no result");
+    }
+    return hash;
   } catch (error) {
-    console.error("Error computing hash for:", source, error);
+    console.error("Error computing hash for source:", error.message);
     return null;
   }
 }
@@ -504,29 +517,72 @@ router.get("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// POST /api/products/advanced-search - Advanced Image Search (to be implemented)
-router.post("/products/advanced-search", authenticate, authorizeAdmin, async (req, res) => {
+// Multer configuration for image uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Only JPEG, PNG, or GIF images are allowed"));
+    }
+    cb(null, true);
+  },
+});
+
+// POST /api/products/advanced-search - Advanced Image Search
+router.post("/products/advanced-search", authenticate, upload.single("image"), async (req, res) => {
   try {
-    if (!req.files || !req.files.image) {
+    // Check if an image was uploaded
+    if (!req.file) {
       return res.status(400).json({ message: "No image uploaded" });
     }
 
-    const imageFile = req.files.image;
-    const hash = await computeImageHash(imageFile.data);
+    const imageFile = req.file;
 
-    if (!hash) {
+    // Compute image hash with lower bit length for less strict matching
+    let hash;
+    try {
+      hash = await computeImageHash(imageFile.buffer, 8); // Reduced bit length for broader matches
+    } catch (hashError) {
+      console.error("Error computing image hash:", hashError.message);
       return res.status(500).json({ message: "Failed to compute image hash" });
     }
 
-    // Simple hash-based search (to be enhanced with a proper image similarity algorithm)
+    if (!hash) {
+      return res.status(500).json({ message: "Image hash computation returned no result" });
+    }
+
+    // Search for products with matching image hash
     const products = await Product.find({
       imageHashes: { $in: [hash] },
     }).lean();
 
-    res.status(200).json(products);
+    // Log the search attempt
+    await createLog(
+      "image_search",
+      "imageHashes",
+      null,
+      hash,
+      req.user ? req.user._id : null,
+      req.ip
+    );
+
+    // Return products with a message if no matches found
+    if (products.length === 0) {
+      return res.status(200).json({
+        message: "No products found matching the uploaded image",
+        products: [],
+      });
+    }
+
+    res.status(200).json({
+      message: "Products found",
+      products,
+    });
   } catch (error) {
-    console.error("Error in advanced search:", error);
-    res.status(500).json({ message: "Server error during advanced search" });
+    console.error("Error in advanced search:", error.message);
+    res.status(500).json({ message: "Server error during advanced search", error: error.message });
   }
 });
 
