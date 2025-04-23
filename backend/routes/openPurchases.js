@@ -25,8 +25,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           clientCompanyName: js.clientCompanyName,
           eventName: js.eventName,
           product: item.product,
+          size: item.size || "", // Include size from JobSheet item
           sourcingFrom: item.sourcingFrom,
-          // NEW: Set qtyRequired from item's quantity and default qtyOrdered
           qtyRequired: item.quantity,
           qtyOrdered: 0,
           deliveryDateTime: deliveryDate,
@@ -50,7 +50,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         const index = aggregated.findIndex(rec =>
           rec.jobSheetId &&
           rec.jobSheetId.toString() === updated.jobSheetId.toString() &&
-          rec.product === updated.product
+          rec.product === updated.product &&
+          rec.size === updated.size // Match on size as well
         );
         if (index !== -1) {
           aggregated[index] = { ...updated.toObject(), isTemporary: false };
@@ -62,15 +63,16 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
-    // Remove duplicates then sort
+    // Remove duplicates based on jobSheetNumber, product, and size
     const seen = new Set();
     const finalAggregated = aggregated.filter((rec) => {
-      const key = `${rec.jobSheetNumber}_${rec.product}`;
+      const key = `${rec.jobSheetNumber}_${rec.product}_${rec.size || ""}`; // Include size in the key
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
+    // Sort the final aggregated list
     finalAggregated.sort((a, b) => {
       let aVal = a[sortKey];
       let bVal = b[sortKey];
@@ -95,7 +97,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching open purchases" });
   }
 });
-
 
 // routes/openPurchases.js (snippet from POST endpoint)
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {

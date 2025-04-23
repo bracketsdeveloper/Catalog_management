@@ -253,6 +253,17 @@ const ProductGrid = ({
   selectedVariationHinges,
   setSelectedVariationHinges,
 }) => {
+  // Filter out duplicate products based on a unique key (e.g., product._id or product.name + product.size)
+  const uniqueProducts = finalProducts.reduce((acc, product) => {
+    const key = `${product.name}_${product.size}`; // Adjust this key as needed
+    if (!acc[key]) {
+      acc[key] = product;
+    }
+    return acc;
+  }, {});
+
+  const displayProducts = Object.values(uniqueProducts);
+
   return (
     <div>
       {/* Search & Advanced Image Search */}
@@ -325,7 +336,7 @@ const ProductGrid = ({
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {finalProducts.map((prod) => (
+            {displayProducts.map((prod) => (
               <ProductCard
                 key={prod._id}
                 product={prod}

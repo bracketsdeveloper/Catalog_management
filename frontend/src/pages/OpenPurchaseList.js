@@ -4,13 +4,13 @@ import axios from "axios";
 const statusOptions = ["", "pending", "received", "alert"];
 
 function HeaderFilters({ headerFilters, onFilterChange }) {
-  // Added the new columns "qtyRequired" and "qtyOrdered"
   const columns = [
     { key: "jobSheetCreatedDate", label: "Job Sheet Created Date" },
     { key: "jobSheetNumber", label: "Job Sheet Number" },
     { key: "clientCompanyName", label: "Client Company Name" },
     { key: "eventName", label: "Event Name" },
     { key: "product", label: "Product" },
+    { key: "size", label: "Size" },
     { key: "qtyRequired", label: "Qty Required" },
     { key: "qtyOrdered", label: "Qty Ordered" },
     { key: "sourcingFrom", label: "Sourced From" },
@@ -53,7 +53,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
       followUpDate: newFollowUpDate,
       note: newFollowUpNote,
       done: false,
-      updatedBy: "admin" // Adjust based on your auth system
+      updatedBy: "admin"
     };
     setLocalFollowUps(prev => [...prev, newEntry]);
     setNewFollowUpDate("");
@@ -158,7 +158,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 }
 
 function EditPurchaseModal({ purchase, onClose, onSave }) {
-  // Initialize state with the current purchase object
   const [editedData, setEditedData] = useState({ ...purchase });
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
 
@@ -219,11 +218,15 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 <span>{editedData.product}</span>
               </div>
               <div>
+                <label className="block text-purple-700 font-bold mb-1">Size:</label>
+                <span>{editedData.size || "N/A"}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
                 <label className="block text-purple-700 font-bold mb-1">Sourced From:</label>
                 <span>{editedData.sourcingFrom}</span>
               </div>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Delivery Date:</label>
                 <span>
@@ -232,13 +235,12 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                     : "N/A"}
                 </span>
               </div>
-            </div>
-            {/* New Quantity Fields */}
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Qty Required:</label>
                 <span>{editedData.qtyRequired}</span>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Qty Ordered:</label>
                 <input
@@ -250,9 +252,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                 />
               </div>
-            </div>
-            {/* End new fields */}
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Vendor Contact Number:</label>
                 <input
@@ -262,6 +261,8 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Remarks:</label>
                 <input
@@ -271,8 +272,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Order Confirmed Date:</label>
                 <input
@@ -282,6 +281,8 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Expected Receive Date:</label>
                 <input
@@ -300,8 +301,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-purple-700 font-bold mb-1">Status:</label>
                 <select
@@ -316,15 +315,15 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col justify-end">
-                <button
-                  type="button"
-                  onClick={() => setFollowUpModalOpen(true)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
-                >
-                  View Follow Ups
-                </button>
-              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setFollowUpModalOpen(true)}
+                className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+              >
+                View Follow Ups
+              </button>
             </div>
           </form>
           <div className="mt-6 flex justify-end gap-4">
@@ -364,7 +363,6 @@ export default function OpenPurchases() {
   const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
   const [permissions, setPermissions] = useState([]);
 
-  // Load user permissions from localStorage
   useEffect(() => {
     const permsStr = localStorage.getItem("permissions");
     if (permsStr) {
@@ -376,7 +374,6 @@ export default function OpenPurchases() {
     }
   }, []);
 
-  // Determine if the user has write permission
   const canEdit = permissions.includes("write-purchase");
 
   useEffect(() => {
@@ -403,6 +400,7 @@ export default function OpenPurchases() {
       (purchase.clientCompanyName || "").toLowerCase().includes(searchLower) ||
       (purchase.eventName || "").toLowerCase().includes(searchLower) ||
       (purchase.product || "").toLowerCase().includes(searchLower) ||
+      (purchase.size || "").toLowerCase().includes(searchLower) ||
       (purchase.sourcingFrom || "").toLowerCase().includes(searchLower) ||
       (purchase.vendorContactNumber || "").toLowerCase().includes(searchLower)
     );
@@ -415,6 +413,7 @@ export default function OpenPurchases() {
       "clientCompanyName",
       "eventName",
       "product",
+      "size",
       "qtyRequired",
       "qtyOrdered",
       "sourcingFrom",
@@ -532,7 +531,6 @@ export default function OpenPurchases() {
     setViewFollowUpModalOpen(true);
   };
 
-  // Skeleton loader while loading data
   if (loading) {
     return (
       <div className="p-6">
@@ -612,7 +610,12 @@ export default function OpenPurchases() {
             >
               Product {sortConfig.key === "product" && (sortConfig.direction === "asc" ? "↑" : "↓")}
             </th>
-            {/* New columns for Qty Required and Qty Ordered */}
+            <th
+              className="p-2 border border-gray-300 cursor-pointer"
+              onClick={() => handleSort("size")}
+            >
+              Size {sortConfig.key === "size" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
             <th
               className="p-2 border border-gray-300 cursor-pointer"
               onClick={() => handleSort("qtyRequired")}
@@ -689,7 +692,7 @@ export default function OpenPurchases() {
 
             return (
               <tr
-                key={purchase._id || (purchase.jobSheetNumber + purchase.product)}
+                key={purchase._id || (purchase.jobSheetNumber + purchase.product + (purchase.size || ""))}
                 className={`text-xs ${
                   purchase.status === "alert"
                     ? "bg-red-300"
@@ -707,7 +710,7 @@ export default function OpenPurchases() {
                 <td className="p-2 border border-gray-300">{purchase.clientCompanyName}</td>
                 <td className="p-2 border border-gray-300">{purchase.eventName}</td>
                 <td className="p-2 border border-gray-300">{purchase.product}</td>
-                {/* New Qty Required and Qty Ordered cells */}
+                <td className="p-2 border border-gray-300">{purchase.size || "N/A"}</td>
                 <td className="p-2 border border-gray-300">{purchase.qtyRequired}</td>
                 <td className="p-2 border border-gray-300">{purchase.qtyOrdered}</td>
                 <td className="p-2 border border-gray-300">{purchase.sourcingFrom}</td>
