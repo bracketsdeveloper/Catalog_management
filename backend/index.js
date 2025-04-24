@@ -124,6 +124,8 @@ const invoicesSummaryRoutes = require("./routes/invoiceSummary.js");
 app.use("/api/admin/invoices-summary", invoicesSummaryRoutes);
 
 // ... rest of the server code ...
+const paymentFollowUpRoutes = require("./routes/paymentfollowup");
+app.use("/api/admin/payment-followup", paymentFollowUpRoutes);
 
 
 // Start server (original)

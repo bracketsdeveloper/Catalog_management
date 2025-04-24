@@ -1,6 +1,10 @@
-// components/invoicessummary/InvoicesSummaryTable.js
+// components/invoicesummary/InvoicesSummaryTable.js
 import React from "react";
-import { ArrowUpIcon, ArrowDownIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowUpIcon,
+  ArrowDownIcon,
+  EllipsisVerticalIcon,
+} from "@heroicons/react/24/outline";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -14,13 +18,11 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
 
   return (
     <th
-      className="px-2 py-1 border border-gray-300 bg-gray-50 text-left whitespace-nowrap"
       onClick={() => toggle(field)}
+      className="px-2 py-1 border border-gray-300 bg-gray-50 text-left whitespace-nowrap cursor-pointer"
     >
-      <div className="flex items-center cursor-pointer">
-        {label}
-        {arrow}
-      </div>
+      {label}
+      {arrow}
     </th>
   );
 }
@@ -33,72 +35,59 @@ export default function InvoicesSummaryTable({
   onEdit,
 }) {
   return (
-    <div className="border border-gray-300 rounded-lg overflow-x-auto">
+    <div className="border border-gray-300 rounded-lg">
       <table className="w-full table-auto text-xs">
         <thead>
           <tr>
             <HeadCell
               label="Job Sheet #"
               field="jobSheetNumber"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
-              label="Client Company Name"
+              label="Client"
               field="clientCompanyName"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
-              label="Event Name"
+              label="Event"
               field="eventName"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
               label="Invoice #"
               field="invoiceNumber"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
               label="Invoice Date"
               field="invoiceDate"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
               label="Invoice Amount"
               field="invoiceAmount"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
               label="Invoice Mailed"
               field="invoiceMailed"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
-              label="Invoice Uploaded on Portal"
+              label="Uploaded on Portal"
               field="invoiceUploadedOnPortal"
-              sortField={sortField}
-              sortOrder={sortOrder}
-              toggle={toggleSort}
+              {...{ sortField, sortOrder, toggle: toggleSort }}
             />
-            <th className="px-2 py-1 border border-gray-300 bg-gray-50">Actions</th>
+            <th className="px-2 py-1 border border-gray-300 bg-gray-50">
+              Actions
+            </th>
           </tr>
         </thead>
+
         <tbody>
           {rows.map((r) => (
-            <tr key={r._id} className="hover:bg-gray-100">
+            <tr key={r.dispatchId || r._id} className="hover:bg-gray-100">
               <Cell val={r.jobSheetNumber} />
               <Cell val={r.clientCompanyName} />
               <Cell val={r.eventName} />
@@ -114,6 +103,7 @@ export default function InvoicesSummaryTable({
               </td>
             </tr>
           ))}
+
           {rows.length === 0 && (
             <tr>
               <td
@@ -133,7 +123,7 @@ export default function InvoicesSummaryTable({
 function Cell({ val }) {
   return (
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
-      {val instanceof Date || (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val))
+      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
         ? fmt(val)
         : val ?? "-"}
     </td>

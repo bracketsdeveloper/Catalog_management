@@ -189,16 +189,16 @@ const adminPages = [
         path: "/admin-dashboard/invoice-followup",
         permission: "invoices-followup",
       },
-      // {
-      //   name: "Invoices Summary",
-      //   path: "/admin-dashboard/invoice-summary",
-      //   permission: "invoices-summary",
-      // },
-      // {
-      //   name: "Payment Follow Up",
-      //   path: "/admin-dashboard/payment-followup",
-      //   permission: "payment-followup",
-      // },
+      {
+        name: "Invoices Summary",
+        path: "/admin-dashboard/invoice-summary",
+        permission: "invoices-summary",
+      },
+      {
+        name: "Payment Follow Up",
+        path: "/admin-dashboard/payment-followup",
+        permission: "payment-followup",
+      },
     ],
   },
 ];

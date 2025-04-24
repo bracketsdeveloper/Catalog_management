@@ -1,14 +1,14 @@
-// pages/ManageInvoicesSummary.js
+// pages/ManagePaymentFollowUp.js
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
-import InvoicesSummaryTable from "../components/invoicesummary/InvoiceSummaryTable";
-import InvoicesSummaryModal from "../components/invoicesummary/InvoiceSummaryModal";
+import PaymentFollowUpTable from "../components/paymentfollowup/PaymentFollowUpTable";
+import PaymentFollowUpModal from "../components/paymentfollowup/PaymentFollowUpModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-export default function ManageInvoicesSummary() {
+export default function ManagePaymentFollowUp() {
   const token = localStorage.getItem("token");
 
   /* Raw data */
@@ -26,13 +26,13 @@ export default function ManageInvoicesSummary() {
 
   async function fetchRows() {
     try {
-      const res = await axios.get(`${BACKEND_URL}/api/admin/invoices-summary`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/payment-followup`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRows(res.data || []);
     } catch (err) {
       console.error(err);
-      alert("Failed to fetch Invoices Summary");
+      alert("Failed to fetch Payment Follow-Up");
     }
   }
 
@@ -62,7 +62,7 @@ export default function ManageInvoicesSummary() {
   return (
     <div>
       <h1 className="text-xl md:text-2xl font-bold mb-4 text-purple-700">
-        Invoices Summary
+        Payment Follow-Up
       </h1>
 
       {/* Toolbar */}
@@ -76,7 +76,7 @@ export default function ManageInvoicesSummary() {
       </div>
 
       {/* Table */}
-      <InvoicesSummaryTable
+      <PaymentFollowUpTable
         rows={sorted}
         sortField={sort.field}
         sortOrder={sort.dir}
@@ -86,7 +86,7 @@ export default function ManageInvoicesSummary() {
 
       {/* Edit modal */}
       {editRow && (
-        <InvoicesSummaryModal
+        <PaymentFollowUpModal
           row={editRow}
           onClose={() => setEditRow(null)}
           onSaved={fetchRows}

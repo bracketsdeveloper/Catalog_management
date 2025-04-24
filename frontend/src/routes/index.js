@@ -48,6 +48,7 @@ import ManageDeliveryCompleted from "../pages/ManageDeliveryCompleted";
 import EditQuotation from "../pages/EditQuotation";
 import InvoiceFollowUpPage from "../pages/InvoiceFollowUp";
 import ManageInvoiceSummary from "../pages/ManageInvoiceSummary";
+import ManagePaymentFollowUp from "../pages/ManagePaymentFollowUp";
 
 const router = createBrowserRouter([
     {
@@ -269,6 +270,10 @@ const router = createBrowserRouter([
                     {
                         path:"invoice-summary",
                         element:<ManageInvoiceSummary/>
+                    },
+                    {
+                        path:"payment-followup",
+                        element:<ManagePaymentFollowUp/>
                     }
 
                 ]

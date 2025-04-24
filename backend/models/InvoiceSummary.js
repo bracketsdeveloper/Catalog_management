@@ -9,26 +9,24 @@ const invoicesSummarySchema = new mongoose.Schema(
       required: true,
       unique: true, // 1-to-1 with DispatchSchedule
     },
-    invoiceFollowUpId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "InvoiceFollowUp",
-      required: true,
-    },
-    /* Copied fields */
-    jobSheetNumber: { type: String, required: true }, // From InvoiceFollowUp
-    clientCompanyName: { type: String, required: true }, // From InvoiceFollowUp
-    eventName: { type: String, required: true }, // From InvoiceFollowUp
-    invoiceNumber: { type: String }, // From InvoiceFollowUp
-    /* Manually entered fields */
-    invoiceDate: { type: Date }, // Manually entered
-    invoiceAmount: { type: Number }, // Manually entered
+
+    /* Reference data copied from InvoiceFollowUp */
+    jobSheetNumber: String, // From InvoiceFollowUp
+    clientCompanyName: String, // From InvoiceFollowUp
+    eventName: String, // From InvoiceFollowUp
+    invoiceNumber: String, // From InvoiceFollowUp
+
+    /* Editable fields */
+    invoiceDate: Date, // Manually entered
+    invoiceAmount: Number, // Manually entered
     invoiceMailed: {
       type: String,
       enum: ["Yes", "No"],
       default: "No",
     },
-    invoiceUploadedOnPortal: { type: String }, // Manually entered
-    createdBy: { type: String },
+    invoiceUploadedOnPortal: String, // Manually entered
+
+    createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }

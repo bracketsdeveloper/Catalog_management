@@ -30,7 +30,7 @@ const groupedPermissions = {
     "open-purchase",
     "closed-purchases",
     "manage-purchaseinvoice",
-    "write-purchase", // newly added
+    "write-purchase",
   ],
 
   /* ↓ Production flow */
@@ -38,7 +38,7 @@ const groupedPermissions = {
     "manage-productionjobsheet",
     "closed-productionjobsheet",
     "production-invoice",
-    "write-production", // newly added
+    "write-production",
   ],
 
   /* ↓ Packing & QC */
@@ -46,6 +46,13 @@ const groupedPermissions = {
 
   /* ↓ Delivery & logistics */
   Delivery: ["dispatch-scheduled", "delivery-reports", "delivery-completed"],
+
+  /* ↓ Invoices follow up & summary */
+  "Invoices Follow up & Summary": [
+    "invoices-followup",
+    "invoices-summary",
+    "payment-followup",
+  ],
 };
 
 /* flat list (if needed elsewhere) */
