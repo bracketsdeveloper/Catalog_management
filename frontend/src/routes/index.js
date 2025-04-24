@@ -46,6 +46,8 @@ import ManageDispatchScheduled from "../pages/ManageDispatchScheduled";
 import ManageDeliveryReports from "../pages/ManageDeliveryReports";
 import ManageDeliveryCompleted from "../pages/ManageDeliveryCompleted";
 import EditQuotation from "../pages/EditQuotation";
+import InvoiceFollowUpPage from "../pages/InvoiceFollowUp";
+import ManageInvoiceSummary from "../pages/ManageInvoiceSummary";
 
 const router = createBrowserRouter([
     {
@@ -259,6 +261,14 @@ const router = createBrowserRouter([
                     {
                         path:"delivery-completed",
                         element:<ManageDeliveryCompleted/>
+                    },
+                    {
+                        path:"invoice-followup",
+                        element:<InvoiceFollowUpPage/>
+                    },
+                    {
+                        path:"invoice-summary",
+                        element:<ManageInvoiceSummary/>
                     }
 
                 ]

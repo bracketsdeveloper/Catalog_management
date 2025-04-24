@@ -177,6 +177,30 @@ const adminPages = [
       },
     ],
   },
+
+  /* ------------------- NEW: INVOICES FOLLOW UP & SUMMARY ------------------- */
+  {
+    name: "Invoices Follow up & Summary",
+    defaultPath: "/admin-dashboard/invoices-followup",
+    icon: <BookOpenIcon className="h-6 w-6" />,
+    subItems: [
+      {
+        name: "Invoices Follow Up",
+        path: "/admin-dashboard/invoice-followup",
+        permission: "invoices-followup",
+      },
+      // {
+      //   name: "Invoices Summary",
+      //   path: "/admin-dashboard/invoice-summary",
+      //   permission: "invoices-summary",
+      // },
+      // {
+      //   name: "Payment Follow Up",
+      //   path: "/admin-dashboard/payment-followup",
+      //   permission: "payment-followup",
+      // },
+    ],
+  },
 ];
 
 /* ================================================================== */
@@ -193,6 +217,7 @@ export default function AdminDashboard() {
   const [purchaseHovered, setPurchaseHovered] = useState(false);
   const [productionHovered, setProductionHovered] = useState(false);
   const [packDelHovered, setPackDelHovered] = useState(false);
+  const [invoicesHovered, setInvoicesHovered] = useState(false);
 
   /* ------------------------- AUTH STATE -------------------------- */
   const [permissions, setPermissions] = useState([]);
@@ -239,7 +264,7 @@ export default function AdminDashboard() {
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 80;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered;
+    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
@@ -339,7 +364,21 @@ export default function AdminDashboard() {
                 );
               }
 
-              /* ===== NEW: PACKING / DELIVERY (two‑tier menu) ==== */
+              /* ===== INVOICES FOLLOW UP & SUMMARY (mega‑menu) ==== */
+              if (page.name === "Invoices Follow up & Summary") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={invoicesHovered}
+                    setHovered={setInvoicesHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ===== PACKING / DELIVERY (two‑tier menu) ==== */
               if (page.name === "Packing / Delivery") {
                 /* group leaf pages by `group` key */
                 const grouped = page.subItems.reduce((acc, item) => {
