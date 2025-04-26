@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+//import  logoImg from  '../../public/pacer-logo.jpeg';
 import { CgOrganisation } from "react-icons/cg";
 import {
   UserIcon,
@@ -293,7 +294,7 @@ export default function AdminDashboard() {
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
       {/* ============ LEFT SIDEBAR ============ */}
       <aside
-        className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-purple-500 via-pink-500 to-blue-500 text-white"
+        className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-[#Ff8045] text-white"
         style={{ width: finalSidebarWidth }}
         onMouseEnter={() => {
           if (!sidebarOpen) setSidebarHover(true);
@@ -309,8 +310,10 @@ export default function AdminDashboard() {
         }}
       >
         {/* --- Brand / collapse button --- */}
-        <div className="flex items-center justify-between p-4">
-          <h2 className="font-bold text-lg">Admin</h2>
+        <div className="flex items-center justify-between p-2">
+      <h2 className="font-bold font-sans text-lg">
+        <img src="/pacer-logo.jpeg" alt="Logo" />
+      </h2>
           {sidebarOpen && (
             <button onClick={() => setSidebarOpen(false)}>
               <ArrowLeftOnRectangleIcon className="h-6 w-6" />

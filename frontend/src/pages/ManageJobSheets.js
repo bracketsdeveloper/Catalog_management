@@ -278,19 +278,19 @@ export default function ManageJobSheets() {
               setDraftPanelOpen(true);
               fetchMyDrafts();
             }}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+            className="bg-[#66C3D0] hover:bg-[#66C3D0]/90 text-white px-4 py-2 rounded"
           >
             View My Drafts
           </button>
           <button
             onClick={() => setModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
             Create Jobsheet
           </button>
           <button
             onClick={exportToExcel}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+            className="bg-[#44b977] hover:bg-[#44b977]/90 text-white px-4 py-2 rounded"
           >
             Export to Excel
           </button>
@@ -310,7 +310,7 @@ export default function ManageJobSheets() {
           />
           <button
             onClick={() => setShowDateFilter(!showDateFilter)}
-            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded"
+            className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
             {showDateFilter ? "Hide Filters" : "Show Date Filters"}
           </button>

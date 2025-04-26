@@ -74,7 +74,7 @@ export default function ProductCard({
             e.stopPropagation();
             openSingleProductModal(product);
           }}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 w-20 rounded"
+          className="bg-[#Ff8045] text-white px-3 py-1 w-20 rounded"
         >
           Edit
         </button>
@@ -83,7 +83,7 @@ export default function ProductCard({
             e.stopPropagation();
             handleDeleteProduct(product._id);
           }}
-          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+          className="bg-[#66C3D0] text-white px-3 py-1 w-20 rounded"
         >
           Delete
         </button>

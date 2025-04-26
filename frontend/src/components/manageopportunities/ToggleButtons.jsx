@@ -6,7 +6,7 @@ export default function ToggleButtons({ viewMode, setViewMode }) {
       <button
         onClick={() => setViewMode("list")}
         className={`border border-gray-300 rounded px-2 py-1 text-sm ${
-          viewMode === "list" ? "bg-purple-600 text-white" : "bg-white hover:bg-gray-100"
+          viewMode === "list" ? "bg-[#Ff8045] text-white" : "bg-[#Ff8045] text-white"
         }`}
       >
         <svg

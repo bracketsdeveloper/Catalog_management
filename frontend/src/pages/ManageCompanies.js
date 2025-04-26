@@ -241,7 +241,7 @@ export default function ManageCompanies() {
             onMouseEnter={handleLogsMouseEnter}
             onMouseLeave={handleLogsMouseLeave}
           >
-            <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+            <button className="bg-[#66C3D0] hover:bg-cyan-400 text-white px-4 py-2 rounded">
               Logs
             </button>
             {/* Logs Dropdown */}
@@ -311,7 +311,7 @@ export default function ManageCompanies() {
           {/* Add Company */}
           <button
             onClick={() => setAddModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            className="bg-[#Ff8045]  text-white px-4 py-2 rounded"
           >
             Add Company
           </button>
@@ -319,7 +319,7 @@ export default function ManageCompanies() {
           {/* Bulk Upload */}
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+            className="bg-[#66C3D0] hover:bg-green-700 text-white px-4 py-2 rounded"
           >
             Bulk Upload
           </button>

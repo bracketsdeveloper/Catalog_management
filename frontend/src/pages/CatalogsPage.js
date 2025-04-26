@@ -759,7 +759,7 @@ export default function CatalogManagementPage() {
         <button
           onClick={() => setFilterType("catalogs")}
           className={`px-4 py-2 rounded ${
-            filterType === "catalogs" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-900"
+            filterType === "catalogs" ? "bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white" : "bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white"
           }`}
         >
           Catalogs
@@ -767,7 +767,7 @@ export default function CatalogManagementPage() {
         <button
           onClick={() => setFilterType("quotations")}
           className={`px-4 py-2 rounded ${
-            filterType === "quotations" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-900"
+            filterType === "quotations" ? "bg-[#66C3D0] hover:bg-[#66C3D0]/90 text-white" : "bg-[#66C3D0] hover:bg-[#66C3D0]/90 text-white"
           }`}
         >
           Quotations
@@ -777,7 +777,7 @@ export default function CatalogManagementPage() {
         <button
           onClick={() => setApprovalFilter("all")}
           className={`px-3 py-1 rounded ${
-            approvalFilter === "all" ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-900"
+            approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"
           }`}
         >
           All
@@ -785,7 +785,7 @@ export default function CatalogManagementPage() {
         <button
           onClick={() => setApprovalFilter("approved")}
           className={`px-3 py-1 rounded ${
-            approvalFilter === "approved" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-900"
+            approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-[#44b977] text-white"
           }`}
         >
           Approved
@@ -793,7 +793,7 @@ export default function CatalogManagementPage() {
         <button
           onClick={() => setApprovalFilter("notApproved")}
           className={`px-3 py-1 rounded ${
-            approvalFilter === "notApproved" ? "bg-red-600 text-white" : "bg-gray-200 text-gray-900"
+            approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-[#e73d3e] text-white"
           }`}
         >
           Not Approved
@@ -844,7 +844,7 @@ export default function CatalogManagementPage() {
             className="border p-2"
             placeholder="Company Name"
           />
-          <button onClick={handleSearch} className="ml-2 bg-blue-600 text-white p-2 rounded">
+          <button onClick={handleSearch} className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded">
             Search
           </button>
         </div>
@@ -885,25 +885,25 @@ export default function CatalogManagementPage() {
       <div>
         {Object.entries(grouped).map(([groupName, items]) =>
           items.length > 0 ? (
-            <div key={groupName} className="mb-6">
+            <div key={groupName} className="mb-6 ">
               <h3 className="text-lg font-bold mb-2">{groupName}</h3>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto ">
                 <table className="min-w-full divide-y divide-gray-200 border">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-orange-200 text-Black">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
                         Catalog Number
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
                         Event Name
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Customer Name
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Products
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Actions
                       </th>
                     </tr>
@@ -1038,7 +1038,7 @@ export default function CatalogManagementPage() {
           <div className="relative inline-block text-left">
             <button
               onClick={handleToggleDropdown}
-              className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700 text-white"
+              className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 px-4 py-2 rounded hover:bg-blue-700 text-white"
             >
               Create Catalog
             </button>

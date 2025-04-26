@@ -9,8 +9,8 @@ export default function OpportunityTabs({ activeTab, setActiveTab, isSuperAdmin 
             onClick={() => setActiveTab("my-opportunities")}
             className={`px-4 py-2 text-sm font-semibold rounded-t-md ${
               activeTab === "my-opportunities"
-                ? "bg-purple-600 text-white"
-                : "bg-gray-100 text-gray-700"
+                ? "bg-[#Ff8045] text-white"
+                : "bg-[#Ff8045] text-white"
             }`}
           >
             My Opportunities
@@ -19,8 +19,8 @@ export default function OpportunityTabs({ activeTab, setActiveTab, isSuperAdmin 
             onClick={() => setActiveTab("team-opportunities")}
             className={`px-4 py-2 text-sm font-semibold rounded-t-md ${
               activeTab === "team-opportunities"
-                ? "bg-purple-600 text-white"
-                : "bg-gray-100 text-gray-700"
+                ? "bg-[#66C3D0] text-white"
+                : "bg-[#66C3D0] text-white"
             }`}
           >
             Team Opportunities
@@ -30,7 +30,7 @@ export default function OpportunityTabs({ activeTab, setActiveTab, isSuperAdmin 
             className={`px-4 py-2 text-sm font-semibold rounded-t-md ${
               activeTab === "all-opportunities"
                 ? "bg-purple-600 text-white"
-                : "bg-gray-100 text-gray-700"
+                : "bg-[#Ff8045] text-white"
             }`}
           >
             All Opportunities

@@ -774,7 +774,7 @@ export default function ReviewDashboard() {
         <button
           onClick={() => setFilterType("catalogs")}
           className={`px-4 py-2 rounded ${
-            filterType === "catalogs" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-900"
+            filterType === "catalogs" ? "bg-[#Ff8045] text-white" : "bg-[#Ff8045] text-white"
           }`}
         >
           Catalogs
@@ -782,7 +782,7 @@ export default function ReviewDashboard() {
         <button
           onClick={() => setFilterType("quotations")}
           className={`px-4 py-2 rounded ${
-            filterType === "quotations" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-900"
+            filterType === "quotations" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"
           }`}
         >
           Quotations
@@ -792,7 +792,7 @@ export default function ReviewDashboard() {
         <button
           onClick={() => setApprovalFilter("all")}
           className={`px-3 py-1 rounded ${
-            approvalFilter === "all" ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-900"
+            approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"
           }`}
         >
           All
@@ -800,7 +800,7 @@ export default function ReviewDashboard() {
         <button
           onClick={() => setApprovalFilter("approved")}
           className={`px-3 py-1 rounded ${
-            approvalFilter === "approved" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-900"
+            approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-[#44b977] text-white"
           }`}
         >
           Approved
@@ -808,7 +808,7 @@ export default function ReviewDashboard() {
         <button
           onClick={() => setApprovalFilter("notApproved")}
           className={`px-3 py-1 rounded ${
-            approvalFilter === "notApproved" ? "bg-red-600 text-white" : "bg-gray-200 text-gray-900"
+            approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-[#e73d3e] text-white"
           }`}
         >
           Not Approved
@@ -849,7 +849,7 @@ export default function ReviewDashboard() {
               className="border p-2"
               placeholder="Company Name"
             />
-            <button onClick={handleSearch} className="ml-2 bg-blue-600 text-white p-2 rounded">
+            <button onClick={handleSearch} className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded">
               Search
             </button>
           </div>

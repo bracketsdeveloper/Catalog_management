@@ -330,7 +330,7 @@ export default function ManageOpportunity() {
           {/* Logs dropdown */}
           <div className="relative">
             <button
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+              className="bg-[#66C3D0] text-white text-white px-4 py-2 rounded"
               onMouseEnter={() => handleLogsToggle(true)}
               onMouseLeave={() => handleLogsToggle(false)}
             >
@@ -414,7 +414,7 @@ export default function ManageOpportunity() {
 
           <Link
             to="/admin-dashboard/create-opportunity"
-            className="bg-purple-600 hover:bg-purple-700 text-white rounded-md p-2 focus:outline-none"
+            className="bg-[#Ff8045] text-white text-white rounded-md p-2 focus:outline-none"
             aria-label="Create new opportunity"
           >
             <svg

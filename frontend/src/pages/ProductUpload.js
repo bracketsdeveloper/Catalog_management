@@ -590,7 +590,7 @@ export default function ProductManagementPage() {
             />
             <div
               {...advGetRootProps()}
-              className="flex items-center px-3 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded cursor-pointer hover:opacity-90"
+              className="flex items-center px-3 py-2 bg-[#Ff8045] text-white rounded cursor-pointer hover:opacity-90"
             >
               <input {...advGetInputProps()} />
               {advancedSearchLoading ? (
@@ -611,13 +611,13 @@ export default function ProductManagementPage() {
           <div className="space-x-2">
             <button
               onClick={() => openSingleProductModal()}
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90"
+              className="px-4 py-2 bg-[#Ff8045] text-white rounded hover:opacity-90"
             >
               Upload Single Product
             </button>
             <button
               onClick={() => setBulkUploadOpen(true)}
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90"
+              className="px-4 py-2 bg-[#66C3D0] text-white rounded hover:opacity-90"
             >
               Bulk Upload
             </button>

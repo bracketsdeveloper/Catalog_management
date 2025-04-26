@@ -677,13 +677,13 @@ export default function CreateManualCatalog() {
         <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={handleSaveCatalog}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+            className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
             {isEditMode ? "Update Catalog" : "Create Catalog"}
           </button>
           <button
             onClick={handleCreateQuotation}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
             Create Quotation
           </button>

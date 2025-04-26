@@ -278,7 +278,7 @@ const ProductGrid = ({
           />
           <button
             onClick={handleImageSearchClick}
-            className="px-3 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 flex items-center"
+            className="px-3 py-2 bg-[#Ff8045] text-white rounded hover:opacity-90 flex items-center"
           >
             {advancedSearchLoading && (
               <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin mr-1"></div>
