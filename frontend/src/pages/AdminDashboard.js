@@ -310,9 +310,9 @@ export default function AdminDashboard() {
         }}
       >
         {/* --- Brand / collapse button --- */}
-        <div className="flex items-center justify-between p-2">
+        <div className="flex items-center justify-between pt-2">
       <h2 className="font-bold font-sans text-lg">
-        <img src="/pacer-logo.jpeg" alt="Logo" />
+        <img src="/pacer-logo.jpeg" alt="Logo"  className="h-10 w-full" />  
       </h2>
           {sidebarOpen && (
             <button onClick={() => setSidebarOpen(false)}>

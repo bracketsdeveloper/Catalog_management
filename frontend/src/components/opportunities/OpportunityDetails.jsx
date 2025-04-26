@@ -390,7 +390,7 @@ export default function OpportunityDetails({
           </div>
 
           {/* Gross Profit */}
-          <div>
+          {/* <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Gross Profit
             </label>
@@ -402,7 +402,7 @@ export default function OpportunityDetails({
               className="border rounded w-full px-2 py-1 text-sm"
               placeholder="Optional"
             />
-          </div>
+          </div> */}
         </div>
 
         {/* Row: Opportunity Priority, isRecurring, Deal Registration # */}
