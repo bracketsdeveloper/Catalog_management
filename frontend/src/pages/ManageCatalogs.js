@@ -69,6 +69,13 @@ export default function CreateManualCatalog() {
   const [customGst, setCustomGst] = useState("");
   const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [filterCounts, setFilterCounts] = useState({
+    categories: {},
+    subCategories: {},
+    brands: {},
+    priceRanges: {},
+    variationHinges: {}
+  });
 
   // -- Company suggestions
   const [companies, setCompanies] = useState([]);
@@ -111,30 +118,29 @@ export default function CreateManualCatalog() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Extract 'name' property from objects, handle strings for priceRanges/variationHinges
       setFullCategories(
         Array.isArray(res.data.categories)
-          ? res.data.categories.map((cat) => (cat.name ? cat.name : cat))
+          ? res.data.categories.map((cat) => (cat.name ? cat.name : cat)).sort()
           : []
       );
       setFullSubCategories(
         Array.isArray(res.data.subCategories)
-          ? res.data.subCategories.map((subCat) => (subCat.name ? subCat.name : subCat))
+          ? res.data.subCategories.map((subCat) => (subCat.name ? subCat.name : subCat)).sort()
           : []
       );
       setFullBrands(
         Array.isArray(res.data.brands)
-          ? res.data.brands.map((brand) => (brand.name ? brand.name : brand))
+          ? res.data.brands.map((brand) => (brand.name ? brand.name : brand)).sort()
           : []
       );
       setFullPriceRanges(
         Array.isArray(res.data.priceRanges)
-          ? res.data.priceRanges.map((range) => (range.name ? range.name : range))
+          ? res.data.priceRanges.map((range) => (range.name ? range.name : range)).sort((a, b) => a - b)
           : []
       );
       setFullVariationHinges(
         Array.isArray(res.data.variationHinges)
-          ? res.data.variationHinges.map((hinge) => (hinge.name ? hinge.name : hinge))
+          ? res.data.variationHinges.map((hinge) => (hinge.name ? hinge.name : hinge)).sort()
           : []
       );
     } catch (error) {
@@ -166,7 +172,10 @@ export default function CreateManualCatalog() {
       const params = new URLSearchParams();
       params.append("page", page);
       params.append("limit", limit);
-      if (searchTerm) params.append("search", searchTerm);
+      if (searchTerm) {
+        const searchTerms = searchTerm.toLowerCase().split(" ").filter(term => term);
+        params.append("search", searchTerms.join(","));
+      }
       if (selectedCategories.length > 0) {
         params.append("categories", selectedCategories.join(","));
       }
@@ -179,6 +188,9 @@ export default function CreateManualCatalog() {
       if (selectedPriceRanges.length > 0) {
         params.append("priceRanges", selectedPriceRanges.join(","));
       }
+      if (selectedVariationHinges.length > 0) {
+        params.append("variationHinges", selectedVariationHinges.join(","));
+      }
 
       const url = `${BACKEND_URL}/api/admin/products?${params.toString()}`;
       const res = await axios.get(url, {
@@ -187,12 +199,53 @@ export default function CreateManualCatalog() {
       setProducts(Array.isArray(res.data.products) ? res.data.products : []);
       setCurrentPage(res.data.currentPage || 1);
       setTotalPages(res.data.totalPages || 1);
+      updateFilterCounts(res.data.products);
     } catch (error) {
       console.error("Error fetching products:", error);
       setProducts([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Update filter counts
+  const updateFilterCounts = (products) => {
+    const counts = {
+      categories: {},
+      subCategories: {},
+      brands: {},
+      priceRanges: {},
+      variationHinges: {}
+    };
+
+    products.forEach(product => {
+      if (product.category) counts.categories[product.category] = (counts.categories[product.category] || 0) + 1;
+      if (product.subCategory) counts.subCategories[product.subCategory] = (counts.subCategories[product.subCategory] || 0) + 1;
+      if (product.brandName) counts.brands[product.brandName] = (counts.brands[product.brandName] || 0) + 1;
+      if (product.priceRange) counts.priceRanges[product.priceRange] = (counts.priceRanges[product.priceRange] || 0) + 1;
+      if (product.variationHinge) counts.variationHinges[product.variationHinge] = (counts.variationHinges[product.variationHinge] || 0) + 1;
+    });
+
+    setFilterCounts(counts);
+  };
+
+  // Toggle filter helper
+  const toggleFilter = (value, list, setList) => {
+    if (list.includes(value)) {
+      setList(list.filter((x) => x !== value));
+    } else {
+      setList([...list, value]);
+    }
+  };
+
+  // Clear filters
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCategories([]);
+    setSelectedSubCategories([]);
+    setSelectedBrands([]);
+    setSelectedPriceRanges([]);
+    setSelectedVariationHinges([]);
   };
 
   // If editing an existing catalog, load it
@@ -304,7 +357,7 @@ export default function CreateManualCatalog() {
           "Content-Type": "multipart/form-data",
         },
       });
-      setAdvancedSearchResults(Array.isArray(res.data) ? res.data : []);
+      setAdvancedSearchResults(Array.isArray(res.data.products) ? res.data.products : []);
       setAdvancedSearchActive(true);
     } catch (error) {
       console.error("Error in advanced image search:", error);
@@ -320,24 +373,6 @@ export default function CreateManualCatalog() {
   };
 
   // Handlers for product selection + variations
-  const toggleFilter = (value, list, setList) => {
-    if (list.includes(value)) {
-      setList(list.filter((x) => x !== value));
-    } else {
-      setList([...list, value]);
-    }
-  };
-
-  const openVariationSelector = (product) => {
-    setVariationModalProduct(product);
-    setVariationModalOpen(true);
-  };
-
-  const closeVariationModal = () => {
-    setVariationModalOpen(false);
-    setVariationModalProduct(null);
-  };
-
   function isDuplicate(prodId, color, size) {
     return selectedProducts.some(
       (sp) =>
@@ -620,6 +655,17 @@ export default function CreateManualCatalog() {
     fetchCompanies();
   };
 
+  // Open variation selector
+  const openVariationSelector = (product) => {
+    setVariationModalProduct(product);
+    setVariationModalOpen(true);
+  };
+
+  const closeVariationModal = () => {
+    setVariationModalOpen(false);
+    setVariationModalProduct(null);
+  };
+
   // RENDER
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
@@ -825,7 +871,7 @@ export default function CreateManualCatalog() {
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input
             type="text"
-            placeholder="Search products..."
+            placeholder="Search by any field..."
             className="flex-grow px-3 py-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -857,6 +903,30 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
+      {/* Clear Filters Button */}
+      {(searchTerm ||
+        selectedCategories.length > 0 ||
+        selectedSubCategories.length > 0 ||
+        selectedBrands.length > 0 ||
+        selectedPriceRanges.length > 0 ||
+        selectedVariationHinges.length > 0) && (
+        <div className="mb-4">
+          <button
+            onClick={clearFilters}
+            className="px-4 py-2 bg-red-500 text-white text-xs rounded"
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
+      {/* Search Results Feedback */}
+      {searchTerm && (
+        <div className="mb-4 text-sm text-gray-600">
+          Found {finalProducts.length} products with "{searchTerm}"
+        </div>
+      )}
+
       {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
         <div className="relative">
@@ -884,7 +954,7 @@ export default function CreateManualCatalog() {
                       toggleFilter(cat, selectedCategories, setSelectedCategories)
                     }
                   />
-                  <span className="truncate">{cat}</span>
+                  <span className="truncate">{cat} ({filterCounts.categories[cat] || 0})</span>
                 </label>
               ))}
             </div>
@@ -915,7 +985,7 @@ export default function CreateManualCatalog() {
                       toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
                     }
                   />
-                  <span className="truncate">{subCat}</span>
+                  <span className="truncate">{subCat} ({filterCounts.subCategories[subCat] || 0})</span>
                 </label>
               ))}
             </div>
@@ -946,7 +1016,7 @@ export default function CreateManualCatalog() {
                       toggleFilter(brand, selectedBrands, setSelectedBrands)
                     }
                   />
-                  <span className="truncate">{brand}</span>
+                  <span className="truncate">{brand} ({filterCounts.brands[brand] || 0})</span>
                 </label>
               ))}
             </div>
@@ -977,7 +1047,38 @@ export default function CreateManualCatalog() {
                       toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
                     }
                   />
-                  <span className="truncate">{range}</span>
+                  <span className="truncate">{range} ({filterCounts.priceRanges[range] || 0})</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setVariationHingeOpen(!variationHingeOpen)}
+            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+          >
+            Variation Hinge ({selectedVariationHinges.length})
+          </button>
+          {variationHingeOpen && (
+            <div
+              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
+              style={{ maxHeight: "150px", overflowY: "auto" }}
+            >
+              {fullVariationHinges.map((hinge) => (
+                <label
+                  key={hinge}
+                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-purple-500"
+                    checked={selectedVariationHinges.includes(hinge)}
+                    onChange={() =>
+                      toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)
+                    }
+                  />
+                  <span className="truncate">{hinge} ({filterCounts.variationHinges[hinge] || 0})</span>
                 </label>
               ))}
             </div>
@@ -997,7 +1098,7 @@ export default function CreateManualCatalog() {
           )}
           {!advancedSearchActive && searchTerm && (
             <div className="text-gray-600 mb-2 text-sm">
-              Searching for "{searchTerm}"...
+              Found {finalProducts.length} products with "{searchTerm}"
             </div>
           )}
 

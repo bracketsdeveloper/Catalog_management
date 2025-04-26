@@ -1,8 +1,10 @@
+
+"use client";
+
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const statusOptions = ["", "pending", "received", "alert"];
-
+/* ───────────────── Header Filters ───────────────── */
 function HeaderFilters({ headerFilters, onFilterChange }) {
   const columns = [
     { key: "jobSheetCreatedDate", label: "Job Sheet Created Date" },
@@ -25,14 +27,14 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
 
   return (
     <tr className="bg-gray-100">
-      {columns.map(col => (
-        <th key={col.key} className="p-1 border border-gray-300">
+      {columns.map((c) => (
+        <th key={c.key} className="p-1 border border-gray-300">
           <input
-            type="text"
-            placeholder={`Filter ${col.label}`}
-            value={headerFilters[col.key] || ""}
-            onChange={(e) => onFilterChange(col.key, e.target.value)}
             className="w-full p-1 text-xs border rounded"
+            placeholder={`Filter ${c.label}`}
+            value={headerFilters[c.key] || ""}
+            onChange={(e) => onFilterChange(c.key, e.target.value)}
+            type="text"
           />
         </th>
       ))}
@@ -41,88 +43,85 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
   );
 }
 
+/* ───────────────── Follow-Up Modal ───────────────── */
 function FollowUpModal({ followUps, onUpdate, onClose }) {
-  const [localFollowUps, setLocalFollowUps] = useState(followUps || []);
-  const [newFollowUpDate, setNewFollowUpDate] = useState("");
-  const [newFollowUpNote, setNewFollowUpNote] = useState("");
+  const [local, setLocal] = useState(followUps || []);
+  const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
 
-  const handleAdd = () => {
-    if (!newFollowUpDate.trim() || !newFollowUpNote.trim()) return;
-    const newEntry = {
-      updatedAt: new Date(),
-      followUpDate: newFollowUpDate,
-      note: newFollowUpNote,
-      done: false,
-      updatedBy: "admin"
-    };
-    setLocalFollowUps(prev => [...prev, newEntry]);
-    setNewFollowUpDate("");
-    setNewFollowUpNote("");
+  const add = () => {
+    if (!date.trim() || !note.trim()) return;
+    setLocal((p) => [
+      ...p,
+      { updatedAt: new Date(), followUpDate: date, note, done: false, updatedBy: "admin" }
+    ]);
+    setDate("");
+    setNote("");
   };
 
-  const handleRemove = (index) => {
-    setLocalFollowUps(prev => {
-      const updated = [...prev];
-      updated.splice(index, 1);
-      return updated;
+  const remove = (i) =>
+    setLocal((p) => {
+      const u = [...p];
+      u.splice(i, 1);
+      return u;
     });
-  };
 
-  const handleMarkDone = (index) => {
-    setLocalFollowUps(prev => {
-      const updated = [...prev];
-      updated[index].done = true;
-      return updated;
+  const markDone = (i) =>
+    setLocal((p) => {
+      const u = [...p];
+      u[i].done = true;
+      return u;
     });
-  };
 
-  const handleClose = () => {
-    onUpdate(localFollowUps);
+  const close = () => {
+    onUpdate(local);
     onClose();
   };
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
       <div className="bg-white p-6 rounded w-full max-w-lg">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-purple-700">Manage Follow Ups</h3>
-          <button onClick={handleClose} className="text-gray-600 hover:text-gray-900 text-2xl">
-            ×
+          <button onClick={close} className="text-2xl">
+            &times;
           </button>
         </div>
-        <div className="mb-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-bold">Add New Follow Up:</label>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={newFollowUpDate}
-                onChange={(e) => setNewFollowUpDate(e.target.value)}
-                className="p-1 border rounded text-sm"
-              />
-              <input
-                type="text"
-                placeholder="Enter follow up note"
-                value={newFollowUpNote}
-                onChange={(e) => setNewFollowUpNote(e.target.value)}
-                className="p-1 border rounded text-sm flex-grow"
-              />
-              <button onClick={handleAdd} className="bg-blue-500 text-white px-2 py-1 rounded text-sm">
-                Add
-              </button>
-            </div>
+
+        <div className="mb-4 space-y-2">
+          <label className="text-sm font-bold">Add New Follow Up:</label>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="p-1 border rounded text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Enter note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="p-1 border rounded text-sm flex-grow"
+            />
+            <button onClick={add} className="bg-blue-600 text-white px-2 py-1 rounded text-sm">
+              Add
+            </button>
           </div>
         </div>
+
         <div className="max-h-64 overflow-y-auto border p-2 mb-4">
-          {localFollowUps.length === 0 && <p className="text-gray-600 text-sm">No follow ups yet.</p>}
-          {localFollowUps.map((fu, index) => {
-            const isOverdue = !fu.done && fu.followUpDate < todayStr;
+          {local.length === 0 && <p className="text-sm text-gray-600">No follow ups.</p>}
+          {local.map((fu, i) => {
+            const overdue = !fu.done && fu.followUpDate < today;
             return (
               <div
-                key={index}
-                className={`flex items-center justify-between text-xs border-b py-1 ${isOverdue ? "bg-red-200" : ""}`}
+                key={i}
+                className={`flex justify-between items-center text-xs border-b py-1 ${
+                  overdue ? "bg-red-200" : ""
+                }`}
               >
                 <span>
                   {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
@@ -130,13 +129,13 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
                 <div className="flex gap-2">
                   {!fu.done && (
                     <button
-                      onClick={() => handleMarkDone(index)}
-                      className="bg-green-500 text-white px-2 py-1 rounded text-xs"
+                      onClick={() => markDone(i)}
+                      className="bg-green-600 text-white px-2 py-0.5 rounded text-xs"
                     >
-                      Mark as Done
+                      Done
                     </button>
                   )}
-                  <button onClick={() => handleRemove(index)} className="text-red-500 text-xs">
+                  <button onClick={() => remove(i)} className="text-red-600 text-xs">
                     Remove
                   </button>
                 </div>
@@ -144,11 +143,9 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
             );
           })}
         </div>
+
         <div className="flex justify-end">
-          <button
-            onClick={handleClose}
-            className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700"
-          >
+          <button onClick={close} className="bg-green-700 text-white px-4 py-1.5 rounded text-sm">
             Close
           </button>
         </div>
@@ -157,30 +154,19 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
   );
 }
 
+/* ───────────────── Edit Modal ───────────────── */
+const statusOptions = ["", "pending", "received", "alert"];
+
 function EditPurchaseModal({ purchase, onClose, onSave }) {
-  const [editedData, setEditedData] = useState({ ...purchase });
-  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [data, setData] = useState({ ...purchase });
+  const [fuModal, setFuModal] = useState(false);
 
-  const handleFieldChange = (field, value) => {
-    setEditedData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleFollowUpUpdate = (newFollowUps) => {
-    setEditedData(prev => ({
-      ...prev,
-      followUp: newFollowUps,
-    }));
-  };
-
-  const handleSave = () => {
-    if (editedData.status === "received") {
-      const confirmMsg = "You have marked this record as RECEIVED. Once saved, it cannot be edited further.";
-      if (!window.confirm(confirmMsg)) return;
+  const change = (f, v) => setData((p) => ({ ...p, [f]: v }));
+  const save = () => {
+    if (data.status === "received") {
+      if (!window.confirm("Marked RECEIVED. Save changes?")) return;
     }
-    onSave(editedData);
+    onSave(data);
   };
 
   return (
@@ -189,225 +175,221 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
         <div className="bg-white p-6 rounded w-full max-w-3xl">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-gray-600 hover:text-gray-900 text-2xl">
-              ×
+            <button onClick={onClose} className="text-2xl">
+              &times;
             </button>
           </div>
-          <form className="space-y-4">
+
+          <form className="space-y-4 text-sm">
+            {/* Row 1 */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Job Sheet Number:</label>
-                <span>{editedData.jobSheetNumber}</span>
+                <label className="font-bold">Job Sheet Number:</label> {data.jobSheetNumber}
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Job Sheet Date:</label>
-                <span>{new Date(editedData.jobSheetCreatedDate).toLocaleDateString()}</span>
+                <label className="font-bold">Job Sheet Date:</label>{" "}
+                {new Date(data.jobSheetCreatedDate).toLocaleDateString()}
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Client Company Name:</label>
-                <span>{editedData.clientCompanyName}</span>
+                <label className="font-bold">Client Company Name:</label> {data.clientCompanyName}
               </div>
             </div>
+
+            {/* Row 2 */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Event Name:</label>
-                <span>{editedData.eventName}</span>
+                <label className="font-bold">Event Name:</label> {data.eventName}
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Product:</label>
-                <span>{editedData.product}</span>
+                <label className="font-bold">Product:</label> {data.product}
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Size:</label>
-                <span>{editedData.size || "N/A"}</span>
+                <label className="font-bold">Size:</label> {data.size || "N/A"}
               </div>
             </div>
+
+            {/* Row 3 */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Sourced From:</label>
-                <span>{editedData.sourcingFrom}</span>
+                <label className="font-bold">Sourced From:</label> {data.sourcingFrom}
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Delivery Date:</label>
-                <span>
-                  {editedData.deliveryDateTime
-                    ? new Date(editedData.deliveryDateTime).toLocaleDateString()
-                    : "N/A"}
-                </span>
+                <label className="font-bold">Delivery Date:</label>{" "}
+                {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : "N/A"}
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Qty Required:</label>
-                <span>{editedData.qtyRequired}</span>
+                <label className="font-bold">Qty Required:</label> {data.qtyRequired}
               </div>
             </div>
+
+            {/* Editable Row 4 */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Qty Ordered:</label>
+                <label className="font-bold">Qty Ordered:</label>
                 <input
                   type="number"
-                  value={editedData.qtyOrdered || ""}
-                  onChange={(e) =>
-                    handleFieldChange("qtyOrdered", parseInt(e.target.value) || 0)
-                  }
+                  value={data.qtyOrdered || ""}
+                  onChange={(e) => change("qtyOrdered", parseInt(e.target.value) || 0)}
                   className="w-full border p-1"
                 />
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Vendor Contact Number:</label>
+                <label className="font-bold">Vendor Contact Number:</label>
                 <input
                   type="text"
-                  value={editedData.vendorContactNumber || ""}
-                  onChange={(e) => handleFieldChange("vendorContactNumber", e.target.value)}
+                  value={data.vendorContactNumber || ""}
+                  onChange={(e) => change("vendorContactNumber", e.target.value)}
                   className="w-full border p-1"
                 />
               </div>
             </div>
+
+            {/* Editable Row 5 */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Remarks:</label>
+                <label className="font-bold">Remarks:</label>
                 <input
                   type="text"
-                  value={editedData.remarks || ""}
-                  onChange={(e) => handleFieldChange("remarks", e.target.value)}
+                  value={data.remarks || ""}
+                  onChange={(e) => change("remarks", e.target.value)}
                   className="w-full border p-1"
                 />
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Order Confirmed Date:</label>
+                <label className="font-bold">Order Confirmed Date:</label>
                 <input
                   type="date"
-                  value={editedData.orderConfirmedDate ? editedData.orderConfirmedDate.substring(0, 10) : ""}
-                  onChange={(e) => handleFieldChange("orderConfirmedDate", e.target.value)}
+                  value={data.orderConfirmedDate ? data.orderConfirmedDate.substring(0, 10) : ""}
+                  onChange={(e) => change("orderConfirmedDate", e.target.value)}
                   className="w-full border p-1"
                 />
               </div>
             </div>
+
+            {/* Editable Row 6 */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Expected Receive Date:</label>
+                <label className="font-bold">Expected Receive Date:</label>
                 <input
                   type="date"
-                  value={editedData.expectedReceiveDate ? editedData.expectedReceiveDate.substring(0, 10) : ""}
-                  onChange={(e) => handleFieldChange("expectedReceiveDate", e.target.value)}
+                  value={data.expectedReceiveDate ? data.expectedReceiveDate.substring(0, 10) : ""}
+                  onChange={(e) => change("expectedReceiveDate", e.target.value)}
                   className="w-full border p-1"
                 />
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Schedule Pick Up:</label>
+                <label className="font-bold">Schedule Pick Up:</label>
                 <input
                   type="datetime-local"
-                  value={editedData.schedulePickUp ? editedData.schedulePickUp.substring(0, 16) : ""}
-                  onChange={(e) => handleFieldChange("schedulePickUp", e.target.value)}
+                  value={data.schedulePickUp ? data.schedulePickUp.substring(0, 16) : ""}
+                  onChange={(e) => change("schedulePickUp", e.target.value)}
                   className="w-full border p-1"
                 />
               </div>
               <div>
-                <label className="block text-purple-700 font-bold mb-1">Status:</label>
+                <label className="font-bold">Status:</label>
                 <select
-                  value={editedData.status}
-                  onChange={(e) => handleFieldChange("status", e.target.value)}
+                  value={data.status}
+                  onChange={(e) => change("status", e.target.value)}
                   className="w-full border p-1"
                 >
-                  {statusOptions.map((option, i) => (
-                    <option key={i} value={option}>
-                      {option === "" ? "Empty" : option}
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s === "" ? "Empty" : s}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setFollowUpModalOpen(true)}
-                className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+                onClick={() => setFuModal(true)}
+                className="bg-blue-600 text-white px-2 py-1 rounded text-sm"
               >
                 View Follow Ups
               </button>
             </div>
           </form>
-          <div className="mt-6 flex justify-end gap-4">
+
+          <div className="flex justify-end gap-4 mt-6">
             <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-100">
               Cancel
             </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-            >
+            <button onClick={save} className="px-4 py-2 bg-green-700 text-white rounded">
               Save
             </button>
           </div>
         </div>
       </div>
-      {followUpModalOpen && (
+
+      {fuModal && (
         <FollowUpModal
-          followUps={editedData.followUp}
-          onUpdate={handleFollowUpUpdate}
-          onClose={() => setFollowUpModalOpen(false)}
+          followUps={data.followUp}
+          onUpdate={(f) => change("followUp", f)}
+          onClose={() => setFuModal(false)}
         />
       )}
     </>
   );
 }
 
+/* ───────────────── Main Component ───────────────── */
 export default function OpenPurchases() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [currentEditPurchase, setCurrentEditPurchase] = useState(null);
-  const [viewFollowUpModalOpen, setViewFollowUpModalOpen] = useState(false);
-  const [currentViewFollowId, setCurrentViewFollowId] = useState(null);
-  const [searchText, setSearchText] = useState("");
-  const [headerFilters, setHeaderFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
-  const [permissions, setPermissions] = useState([]);
+  const [editModal, setEditModal] = useState(false);
+  const [currentEdit, setCurrentEdit] = useState(null);
+  const [viewFuModal, setViewFuModal] = useState(false);
+  const [viewFuId, setViewFuId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({});
+  const [sort, setSort] = useState({ key: "deliveryDateTime", direction: "asc" });
+  const [perms, setPerms] = useState([]);
 
   useEffect(() => {
-    const permsStr = localStorage.getItem("permissions");
-    if (permsStr) {
+    const str = localStorage.getItem("permissions");
+    if (str) {
       try {
-        setPermissions(JSON.parse(permsStr));
-      } catch (err) {
-        console.error("Error parsing permissions:", err);
-      }
+        setPerms(JSON.parse(str));
+      } catch (_) {}
     }
   }, []);
+  const canEdit = perms.includes("write-purchase");
 
-  const canEdit = permissions.includes("write-purchase");
-
-  useEffect(() => {
-    async function fetchPurchases() {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem("token");
-        const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases?sortKey=${sortConfig.key}&sortDirection=${sortConfig.direction}`;
-        const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
-        setPurchases(res.data);
-      } catch (error) {
-        console.error("Error fetching open purchases:", error);
-      } finally {
-        setLoading(false);
-      }
+  const fetchPurchases = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases?sortKey=${sort.key}&sortDirection=${sort.direction}`;
+      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      setPurchases(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
+  };
+  useEffect(() => {
     fetchPurchases();
-  }, [sortConfig]);
+  }, [sort]);
 
-  const globalFiltered = purchases.filter((purchase) => {
-    const searchLower = searchText.toLowerCase();
+  const globalFiltered = purchases.filter((p) => {
+    const s = search.toLowerCase();
     return (
-      (purchase.jobSheetNumber || "").toLowerCase().includes(searchLower) ||
-      (purchase.clientCompanyName || "").toLowerCase().includes(searchLower) ||
-      (purchase.eventName || "").toLowerCase().includes(searchLower) ||
-      (purchase.product || "").toLowerCase().includes(searchLower) ||
-      (purchase.size || "").toLowerCase().includes(searchLower) ||
-      (purchase.sourcingFrom || "").toLowerCase().includes(searchLower) ||
-      (purchase.vendorContactNumber || "").toLowerCase().includes(searchLower)
+      (p.jobSheetNumber || "").toLowerCase().includes(s) ||
+      (p.clientCompanyName || "").toLowerCase().includes(s) ||
+      (p.eventName || "").toLowerCase().includes(s) ||
+      (p.product || "").toLowerCase().includes(s) ||
+      (p.size || "").toLowerCase().includes(s) ||
+      (p.sourcingFrom || "").toLowerCase().includes(s) ||
+      (p.vendorContactNumber || "").toLowerCase().includes(s)
     );
   });
 
-  const headerFiltered = globalFiltered.filter((record) => {
-    const filterKeys = [
+  const headerFiltered = globalFiltered.filter((r) => {
+    const keys = [
       "jobSheetCreatedDate",
       "jobSheetNumber",
       "clientCompanyName",
@@ -425,367 +407,284 @@ export default function OpenPurchases() {
       "remarks",
       "status"
     ];
-    return filterKeys.every((key) => {
-      if (!headerFilters[key]) return true;
-      let value = "";
-      if (record[key]) {
-        if (key.includes("Date") || key === "schedulePickUp" || key === "deliveryDateTime") {
-          value = new Date(record[key]).toLocaleDateString();
+    return keys.every((k) => {
+      if (!filters[k]) return true;
+      let v = "";
+      if (r[k]) {
+        if (k.includes("Date") || k === "schedulePickUp" || k === "deliveryDateTime") {
+          v = new Date(r[k]).toLocaleDateString();
         } else {
-          value = String(record[key]);
+          v = String(r[k]);
         }
       }
-      return value.toLowerCase().includes(headerFilters[key].toLowerCase());
+      return v.toLowerCase().includes(filters[k].toLowerCase());
     });
   });
 
-  const groupAndFilter = (records) => {
-    const groups = {};
-    records.forEach((record) => {
-      const key = record.jobSheetNumber;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(record);
+  const groupFilter = (recs) => {
+    const g = {};
+    recs.forEach((r) => {
+      const k = r.jobSheetNumber;
+      (g[k] = g[k] || []).push(r);
     });
-    const finalList = [];
-    Object.keys(groups).forEach((key) => {
-      const group = groups[key];
-      if (!group.every(item => item.status === "received")) {
-        finalList.push(...group);
+    const out = [];
+    Object.values(g).forEach((arr) => {
+      if (!arr.every((a) => a.status === "received")) out.push(...arr);
+    });
+    return out;
+  };
+
+  const filterNA = (recs) => {
+    const g = {};
+    recs.forEach((r) => {
+      const k = `${r.jobSheetNumber}_${r.product}`;
+      (g[k] = g[k] || []).push(r);
+    });
+    const out = [];
+    Object.values(g).forEach((arr) => {
+      const hasReal = arr.some((a) => a.size && a.size.toLowerCase() !== "n/a");
+      if (hasReal) {
+        out.push(...arr.filter((a) => a.size && a.size.toLowerCase() !== "n/a"));
+      } else {
+        out.push(...arr);
       }
     });
-    return finalList;
+    return out;
   };
 
-  const openPurchasesToShow = groupAndFilter(headerFiltered);
+  const rows = filterNA(groupFilter(headerFiltered));
 
-  const handleHeaderFilterChange = (key, value) => {
-    setHeaderFilters(prev => ({ ...prev, [key]: value }));
+  const changeFilter = (k, v) => setFilters((p) => ({ ...p, [k]: v }));
+
+  const sortBy = (k) =>
+    setSort((p) => ({ key: k, direction: p.key === k && p.direction === "asc" ? "desc" : "asc" }));
+
+  const openEdit = (p) => {
+    if (!canEdit) return alert("No permission.");
+    setCurrentEdit(p);
+    setEditModal(true);
   };
 
-  const handleSort = (key) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc"
-    }));
-  };
-
-  const handleOpenEditModal = (purchase) => {
-    if (!canEdit) {
-      alert("You don't have permission to edit purchases.");
-      return;
-    }
-    setCurrentEditPurchase(purchase);
-    setEditModalOpen(true);
-  };
-
-  const handleCloseEditModal = () => {
-    setEditModalOpen(false);
-    setCurrentEditPurchase(null);
-  };
-
-  const handleSaveEdit = async (updatedData) => {
-    if (updatedData.status === "received") {
-      const confirmMsg =
-        "You have marked this record as RECEIVED. Once saved, it cannot be edited further and the entire job sheet group will be removed if all items are received. Do you wish to proceed?";
-      if (!window.confirm(confirmMsg)) return;
-    }
+  const saveEdit = async (u) => {
     try {
       const token = localStorage.getItem("token");
-      let returnedData;
-      const isTempId = updatedData._id && updatedData._id.startsWith("temp_");
-      const dataToSend = { ...updatedData };
-      if (isTempId || updatedData.isTemporary) {
-        delete dataToSend._id;
-      }
-      if (updatedData._id && !isTempId && !updatedData.isTemporary) {
-        const res = await axios.put(
-          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${updatedData._id}`,
-          dataToSend,
+      const tmp = u._id && u._id.startsWith("temp_");
+      const body = { ...u };
+      if (tmp || u.isTemporary) delete body._id;
+
+      if (!tmp && !u.isTemporary) {
+        await axios.put(
+          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
+          body,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        returnedData = res.data.purchase;
       } else {
-        const res = await axios.post(
+        await axios.post(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-          dataToSend,
+          body,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        returnedData = res.data.purchase;
       }
-      const res = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases?sortKey=${sortConfig.key}&sortDirection=${sortConfig.direction}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setPurchases(res.data);
-      setEditModalOpen(false);
-      setCurrentEditPurchase(null);
-      alert("Record saved successfully!");
-    } catch (error) {
-      console.error("Error saving open purchase edit:", error);
-      alert("Error saving open purchase edit; check console.");
+      await fetchPurchases();
+      setEditModal(false);
+      setCurrentEdit(null);
+      alert("Saved.");
+    } catch (err) {
+      console.error(err);
+      alert("Error saving.");
     }
   };
 
-  const handleOpenViewFollowModal = (purchase) => {
-    setCurrentViewFollowId(purchase._id);
-    setViewFollowUpModalOpen(true);
+  const deletePurchase = async (p) => {
+    if (!canEdit) return alert("No permission.");
+    if (p.isTemporary || (p._id && p._id.startsWith("temp_"))) return;
+    if (!window.confirm("Delete this purchase?")) return;
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPurchases((prev) => prev.filter((x) => x._id !== p._id));
+      alert("Deleted.");
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting.");
+    }
   };
 
-  if (loading) {
+  if (loading)
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
-        <div className="animate-pulse">
-          <div className="mb-4 h-8 bg-gray-300 rounded"></div>
-          <table className="min-w-full border-collapse border border-gray-300">
-            <thead className="bg-gray-50">
-              <tr>
-                {Array(17).fill(0).map((_, i) => (
-                  <th key={i} className="p-2 border border-gray-300 h-4 bg-gray-300"></th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array(5).fill(0).map((_, rowIdx) => (
-                <tr key={rowIdx}>
-                  {Array(17).fill(0).map((_, colIdx) => (
-                    <td key={colIdx} className="p-2 border border-gray-300 h-4 bg-gray-300"></td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-300 rounded"></div>
+          <div className="h-64 bg-gray-300 rounded"></div>
         </div>
       </div>
     );
-  }
 
   return (
     <div className="p-6">
       {!canEdit && (
-        <div className="mb-4 p-2 text-red-700 bg-red-200 border border-red-400 rounded">
+        <div className="mb-4 p-2 bg-red-200 text-red-800 border border-red-400 rounded">
           You don't have permission to edit purchase records.
         </div>
       )}
+
       <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Search open purchases..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          className="w-full p-2 border rounded"
-        />
-      </div>
-      <table className="min-w-full border-collapse border border-gray-300">
+
+      <input
+        className="w-full p-2 border rounded mb-4"
+        placeholder="Search…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        type="text"
+      />
+
+      <table className="min-w-full border-collapse border border-gray-300 text-xs">
         <thead className="bg-gray-50">
-          <tr className="text-xs">
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("jobSheetCreatedDate")}
-            >
-              Job Sheet Created Date {sortConfig.key === "jobSheetCreatedDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+          <tr>
+            {[
+              { k: "jobSheetCreatedDate", l: "Job Sheet Created Date" },
+              { k: "jobSheetNumber", l: "Job Sheet Number" },
+              { k: "clientCompanyName", l: "Client Company Name" },
+              { k: "eventName", l: "Event Name" },
+              { k: "product", l: "Product" },
+              { k: "size", l: "Size" },
+              { k: "qtyRequired", l: "Qty Required" },
+              { k: "qtyOrdered", l: "Qty Ordered" },
+              { k: "sourcingFrom", l: "Sourced From" },
+              { k: "deliveryDateTime", l: "Delivery Date" },
+              { k: "vendorContactNumber", l: "Vendor Contact Number" },
+              { k: "orderConfirmedDate", l: "Order Confirmed Date" },
+              { k: "expectedReceiveDate", l: "Expected Receive Date" },
+              { k: "schedulePickUp", l: "Schedule Pick Up" }
+            ].map(({ k, l }) => (
+              <th key={k} onClick={() => sortBy(k)} className="p-2 border cursor-pointer">
+                {l} {sort.key === k ? (sort.direction === "asc" ? "↑" : "↓") : ""}
+              </th>
+            ))}
+            <th className="p-2 border">Follow Up</th>
+            <th onClick={() => sortBy("remarks")} className="p-2 border cursor-pointer">
+              Remarks {sort.key === "remarks" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("jobSheetNumber")}
-            >
-              Job Sheet Number {sortConfig.key === "jobSheetNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            <th onClick={() => sortBy("status")} className="p-2 border cursor-pointer">
+              Status {sort.key === "status" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
             </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("clientCompanyName")}
-            >
-              Client Company Name {sortConfig.key === "clientCompanyName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("eventName")}
-            >
-              Event Name {sortConfig.key === "eventName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("product")}
-            >
-              Product {sortConfig.key === "product" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("size")}
-            >
-              Size {sortConfig.key === "size" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("qtyRequired")}
-            >
-              Qty Required {sortConfig.key === "qtyRequired" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("qtyOrdered")}
-            >
-              Qty Ordered {sortConfig.key === "qtyOrdered" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("sourcingFrom")}
-            >
-              Sourced From {sortConfig.key === "sourcingFrom" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("deliveryDateTime")}
-            >
-              Delivery Date {sortConfig.key === "deliveryDateTime" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("vendorContactNumber")}
-            >
-              Vendor Contact Number {sortConfig.key === "vendorContactNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("orderConfirmedDate")}
-            >
-              Order Confirmed Date {sortConfig.key === "orderConfirmedDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("expectedReceiveDate")}
-            >
-              Expected Receive Date {sortConfig.key === "expectedReceiveDate" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("schedulePickUp")}
-            >
-              Schedule Pick Up {sortConfig.key === "schedulePickUp" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th className="p-2 border border-gray-300">Follow Up</th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("remarks")}
-            >
-              Remarks {sortConfig.key === "remarks" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th
-              className="p-2 border border-gray-300 cursor-pointer"
-              onClick={() => handleSort("status")}
-            >
-              Status {sortConfig.key === "status" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-            </th>
-            <th className="p-2 border border-gray-300">Actions</th>
+            <th className="p-2 border">Actions</th>
           </tr>
-          <HeaderFilters headerFilters={headerFilters} onFilterChange={handleHeaderFilterChange} />
+          <HeaderFilters headerFilters={filters} onFilterChange={changeFilter} />
         </thead>
+
         <tbody>
-          {openPurchasesToShow.map((purchase) => {
-            const latestFollowUp =
-              purchase.followUp && purchase.followUp.length > 0
-                ? purchase.followUp.reduce((latest, fu) =>
-                    new Date(fu.updatedAt) > new Date(latest.updatedAt) ? fu : latest
-                  )
+          {rows.map((p) => {
+            const latest =
+              p.followUp && p.followUp.length
+                ? p.followUp.reduce((l, fu) => (new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l))
                 : null;
 
             return (
               <tr
-                key={purchase._id || (purchase.jobSheetNumber + purchase.product + (purchase.size || ""))}
-                className={`text-xs ${
-                  purchase.status === "alert"
+                key={p._id || `${p.jobSheetNumber}_${p.product}_${p.size || ""}`}
+                className={
+                  p.status === "alert"
                     ? "bg-red-300"
-                    : purchase.status === "pending"
+                    : p.status === "pending"
                     ? "bg-orange-300"
-                    : purchase.status === "received"
+                    : p.status === "received"
                     ? "bg-green-300"
                     : ""
-                }`}
+                }
               >
-                <td className="p-2 border border-gray-300">
-                  {new Date(purchase.jobSheetCreatedDate).toLocaleDateString()}
+                <td className="p-2 border">{new Date(p.jobSheetCreatedDate).toLocaleDateString()}</td>
+                <td className="p-2 border">{p.jobSheetNumber}</td>
+                <td className="p-2 border">{p.clientCompanyName}</td>
+                <td className="p-2 border">{p.eventName}</td>
+                <td className="p-2 border">{p.product}</td>
+                <td className="p-2 border">{p.size || "N/A"}</td>
+                <td className="p-2 border">{p.qtyRequired}</td>
+                <td className="p-2 border">{p.qtyOrdered}</td>
+                <td className="p-2 border">{p.sourcingFrom}</td>
+                <td className="p-2 border">
+                  {p.deliveryDateTime ? new Date(p.deliveryDateTime).toLocaleDateString() : ""}
                 </td>
-                <td className="p-2 border border-gray-300">{purchase.jobSheetNumber}</td>
-                <td className="p-2 border border-gray-300">{purchase.clientCompanyName}</td>
-                <td className="p-2 border border-gray-300">{purchase.eventName}</td>
-                <td className="p-2 border border-gray-300">{purchase.product}</td>
-                <td className="p-2 border border-gray-300">{purchase.size || "N/A"}</td>
-                <td className="p-2 border border-gray-300">{purchase.qtyRequired}</td>
-                <td className="p-2 border border-gray-300">{purchase.qtyOrdered}</td>
-                <td className="p-2 border border-gray-300">{purchase.sourcingFrom}</td>
-                <td className="p-2 border border-gray-300">
-                  {purchase.deliveryDateTime ? new Date(purchase.deliveryDateTime).toLocaleDateString() : ""}
+                <td className="p-2 border">{p.vendorContactNumber}</td>
+                <td className="p-2 border">
+                  {p.orderConfirmedDate ? new Date(p.orderConfirmedDate).toLocaleDateString() : ""}
                 </td>
-                <td className="p-2 border border-gray-300">{purchase.vendorContactNumber}</td>
-                <td className="p-2 border border-gray-300">
-                  {purchase.orderConfirmedDate ? new Date(purchase.orderConfirmedDate).toLocaleDateString() : ""}
+                <td className="p-2 border">
+                  {p.expectedReceiveDate ? new Date(p.expectedReceiveDate).toLocaleDateString() : ""}
                 </td>
-                <td className="p-2 border border-gray-300">
-                  {purchase.expectedReceiveDate ? new Date(purchase.expectedReceiveDate).toLocaleDateString() : ""}
+                <td className="p-2 border">
+                  {p.schedulePickUp ? new Date(p.schedulePickUp).toLocaleString() : ""}
                 </td>
-                <td className="p-2 border border-gray-300">
-                  {purchase.schedulePickUp ? new Date(purchase.schedulePickUp).toLocaleString() : ""}
-                </td>
-                <td className="p-2 border border-gray-300">
-                  {latestFollowUp ? (
+                <td className="p-2 border">
+                  {latest ? (
                     <button
-                      onClick={() => handleOpenViewFollowModal(purchase)}
-                      className="text-blue-600 hover:underline"
-                      title="View all follow-ups"
+                      className="text-blue-600 underline"
+                      onClick={() => {
+                        setViewFuId(p._id);
+                        setViewFuModal(true);
+                      }}
                     >
-                      {latestFollowUp.note} ({latestFollowUp.followUpDate}
-                      {latestFollowUp.done ? ", Done" : ""})
+                      {latest.note} ({latest.followUpDate}
+                      {latest.done ? ", Done" : ""})
                     </button>
                   ) : (
-                    <span>No follow-ups</span>
+                    "No follow-ups"
                   )}
                 </td>
-                <td className="p-2 border border-gray-300">{purchase.remarks}</td>
-                <td className="p-2 border border-gray-300">{purchase.status}</td>
-                <td className="p-2 border border-gray-300">
+                <td className="p-2 border">{p.remarks}</td>
+                <td className="p-2 border">{p.status}</td>
+                <td className="p-2 border space-y-1">
                   <button
-                    onClick={() => handleOpenEditModal(purchase)}
-                    className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] w-full"
-                    disabled={!canEdit || purchase.status === "received"}
+                    className="bg-blue-700 text-white w-full rounded py-0.5 text-[10px]"
+                    disabled={!canEdit || p.status === "received"}
                     title={
                       !canEdit
-                        ? "You do not have permission to edit."
-                        : purchase.status === "received"
-                        ? "Record marked as received cannot be edited."
+                        ? "No permission"
+                        : p.status === "received"
+                        ? "Cannot edit received"
                         : ""
                     }
+                    onClick={() => openEdit(p)}
                   >
                     Edit
                   </button>
+                  {!p.isTemporary && !(p._id || "").startsWith("temp_") && (
+                    <button
+                      className="bg-red-700 text-white w-full rounded py-0.5 text-[10px]"
+                      disabled={!canEdit}
+                      onClick={() => deletePurchase(p)}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      {editModalOpen && currentEditPurchase && (
+
+      {editModal && currentEdit && (
         <EditPurchaseModal
-          purchase={currentEditPurchase}
-          onClose={handleCloseEditModal}
-          onSave={handleSaveEdit}
+          purchase={currentEdit}
+          onClose={() => setEditModal(false)}
+          onSave={saveEdit}
         />
       )}
-      {viewFollowUpModalOpen && currentViewFollowId !== null && (
+
+      {viewFuModal && viewFuId && (
         <FollowUpModal
-          followUps={
-            purchases.find((p) => p._id === currentViewFollowId)?.followUp || []
+          followUps={purchases.find((x) => x._id === viewFuId)?.followUp || []}
+          onUpdate={(f) =>
+            setPurchases((prev) => prev.map((x) => (x._id === viewFuId ? { ...x, followUp: f } : x)))
           }
-          onUpdate={(newFUs) => {
-            setPurchases((prev) =>
-              prev.map((p) =>
-                p._id === currentViewFollowId ? { ...p, followUp: newFUs } : p
-              )
-            );
-          }}
           onClose={() => {
-            setViewFollowUpModalOpen(false);
-            setCurrentViewFollowId(null);
+            setViewFuModal(false);
+            setViewFuId(null);
           }}
         />
       )}
