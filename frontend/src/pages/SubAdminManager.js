@@ -53,6 +53,11 @@ const groupedPermissions = {
     "invoices-summary",
     "payment-followup",
   ],
+  "Samples":[
+    "manage-samples",
+    "sample-out",
+    "sample-status"
+  ]
 };
 
 /* flat list (if needed elsewhere) */

@@ -468,12 +468,12 @@ export default function ManageJobSheets() {
                       >
                         Edit
                       </Dropdown.Item>
-                      <Dropdown.Item
+                      {/* <Dropdown.Item
                         onClick={() => deleteJobSheet(js._id, false)}
                         className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
                       >
                         Delete
-                      </Dropdown.Item>
+                      </Dropdown.Item> */}
                     </Dropdown.Menu>
                   </Dropdown>
                 </td>

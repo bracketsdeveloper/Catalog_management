@@ -49,6 +49,9 @@ import EditQuotation from "../pages/EditQuotation";
 import InvoiceFollowUpPage from "../pages/InvoiceFollowUp";
 import ManageInvoiceSummary from "../pages/ManageInvoiceSummary";
 import ManagePaymentFollowUp from "../pages/ManagePaymentFollowUp";
+import Samples from "../pages/Samples";
+import SamplesOut from "../pages/SamplesOut";
+import SampleStatus from "../pages/SampleStatus";
 
 const router = createBrowserRouter([
     {
@@ -274,6 +277,18 @@ const router = createBrowserRouter([
                     {
                         path:"payment-followup",
                         element:<ManagePaymentFollowUp/>
+                    },
+                    {
+                        path:"manage-samples",
+                        element:<Samples/>
+                    },
+                    {
+                        path:"samples-out",
+                        element:<SamplesOut/>
+                    },
+                    {
+                        path:"sample-status",
+                        element:<SampleStatus/>
                     }
 
                 ]

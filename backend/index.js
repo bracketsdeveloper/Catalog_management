@@ -129,6 +129,12 @@ app.use("/api/admin/invoices-summary", invoicesSummaryRoutes);
 const paymentFollowUpRoutes = require("./routes/paymentfollowup");
 app.use("/api/admin/payment-followup", paymentFollowUpRoutes);
 
+// ... other imports
+const samplesRouter = require("./routes/samples");
+app.use("/api/admin/samples", samplesRouter);
+
+const sampleOutRoutes  = require("./routes/sampleOutRoutes"); // the “Samples Out” routes
+app.use("/api/admin/sample-outs", sampleOutRoutes);
 
 // Start server (original)
 const PORT = process.env.PORT || 5000;
