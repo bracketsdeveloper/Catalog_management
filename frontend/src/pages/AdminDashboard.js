@@ -88,7 +88,9 @@ const adminPages = [
   {
     name: "PURCHASE",
     defaultPath: "/admin-dashboard/manage-openpurchase",
-    icon: <ShoppingBagIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/purchase.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     subItems: [
       {
         name: "Manage Purchase",
@@ -117,8 +119,9 @@ const adminPages = [
     ),
 
     defaultPath: "/admin-dashboard/manage-productionjobsheet",
-    icon: <CurrencyDollarIcon className="h-6 w-6" />,
-   //>>>>>>> dbd73deca67279de54594922ded0dec5dffc723d
+    icon: (
+       <img src="/production.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     subItems: [
       {
         name: "Manage Production Jobsheets",
@@ -148,8 +151,9 @@ const adminPages = [
     ),
 //=======
     defaultPath: "/admin-dashboard/pending-packing",
-    icon: <CubeIcon className="h-6 w-6" />,
-//>>>>>>> dbd73deca67279de54594922ded0dec5dffc723d
+    icon: (
+       <img src="/packing.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     /* 
        We keep every leaf page in subItems; a `group` key lets
        the menu renderer show the two mid‑level subsections.
@@ -201,8 +205,9 @@ const adminPages = [
     ),
 //=======
     defaultPath: "/admin-dashboard/invoice-followup",
-    icon: <BookOpenIcon className="h-6 w-6" />,
-//>>>>>>> dbd73deca67279de54594922ded0dec5dffc723d
+    icon: (
+      <img src="/invoice.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     subItems: [
       {
         name: "Invoices Follow Up",
