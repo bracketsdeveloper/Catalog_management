@@ -306,10 +306,11 @@ export default function OpportunityDetails({
               value={data.opportunityValue}
               onChange={handleChange}
               onBlur={(e) => validateField('opportunityValue', e.target.value)}
-              className={`border rounded w-full px-2 py-1 text-sm ${
+              className={`border rounded w-full px-2 py-1 text-sm required  ${
                 errors.opportunityValue ? 'border-red-500' : ''
               }`}
               placeholder="e.g., 10000"
+            srequired 
             />
             {errors.opportunityValue && (
               <div className="text-red-500 text-xs mt-1">{errors.opportunityValue}</div>
