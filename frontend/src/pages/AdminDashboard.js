@@ -34,7 +34,9 @@ const adminPages = [
     name: "Review Catalog",
     path: "/admin-dashboard/review-catalog",
     permission: "review-catalog",
-    icon: <PencilIcon className="h-6 w-6" />,
+    icon:(
+      <img src="/catalog.webp" alt="Logo"  className="h-10 w-10 mx-1" />
+    ),
   },
   {
     name: "Add Viewers",
@@ -115,12 +117,12 @@ const adminPages = [
     name: "Production",
     defaultPath: "/admin-dashboard/",
     icon: (
-      <img src="/production.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+      <img src="/packing.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
     ),
 
     defaultPath: "/admin-dashboard/manage-productionjobsheet",
     icon: (
-       <img src="/production.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+       <img src="/packing.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
     ),
     subItems: [
       {
@@ -147,12 +149,12 @@ const adminPages = [
 //<<<<<<< HEAD
     defaultPath: "/admin-dashboard/packing-pending",
     icon: (
-      <img src="/packing.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+      <img src="/delivery.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
     ),
 //=======
     defaultPath: "/admin-dashboard/pending-packing",
     icon: (
-       <img src="/packing.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+       <img src="/delivery.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
     ),
     /* 
        We keep every leaf page in subItems; a `group` key lets
