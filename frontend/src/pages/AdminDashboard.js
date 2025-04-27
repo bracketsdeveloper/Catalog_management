@@ -88,7 +88,7 @@ const adminPages = [
   /* ----------------------- PURCHASE ------------------------------ */
   {
     name: "PURCHASE",
-    defaultPath: "/admin-dashboard/",
+    defaultPath: "/admin-dashboard/manage-openpurchase",
     icon: <ShoppingBagIcon className="h-6 w-6" />,
     subItems: [
       {
@@ -112,7 +112,7 @@ const adminPages = [
   /* ----------------------- PRODUCTION ---------------------------- */
   {
     name: "Production",
-    defaultPath: "/admin-dashboard/",
+    defaultPath: "/admin-dashboard/manage-productionjobsheet",
     icon: <CurrencyDollarIcon className="h-6 w-6" />,
     subItems: [
       {
@@ -136,7 +136,7 @@ const adminPages = [
   /* ------------------- NEW: PACKING / DELIVERY ------------------- */
   {
     name: "Packing / Delivery",
-    defaultPath: "/admin-dashboard/packing-pending",
+    defaultPath: "/admin-dashboard/pending-packing",
     icon: <CubeIcon className="h-6 w-6" />,
     /* 
        We keep every leaf page in subItems; a `group` key lets
@@ -182,7 +182,7 @@ const adminPages = [
   /* ------------------- NEW: INVOICES FOLLOW UP & SUMMARY ------------------- */
   {
     name: "Invoices Follow up & Summary",
-    defaultPath: "/admin-dashboard/invoices-followup",
+    defaultPath: "/admin-dashboard/invoice-followup",
     icon: <BookOpenIcon className="h-6 w-6" />,
     subItems: [
       {
@@ -202,6 +202,31 @@ const adminPages = [
       },
     ],
   },
+
+  /* ----------------------- SAMPLES ------------------------------ */
+  {
+    name: "Samples",
+    defaultPath: "/admin-dashboard/manage-samples",
+    icon: <BriefcaseIcon className="h-6 w-6" />,
+    subItems: [
+      {
+        name: "Manage Samples",
+        path: "/admin-dashboard/manage-samples",
+        permission: "manage-samples",
+      },
+      {
+        name: "Samples-Out Report",
+        path: "/admin-dashboard/samples-out",
+        permission: "sample-out",
+      },
+      {
+        name: "Sample Status",
+        path: "/admin-dashboard/sample-status",
+        permission: "sample-status",
+      },
+      
+    ],
+  },
 ];
 
 /* ================================================================== */
@@ -219,6 +244,7 @@ export default function AdminDashboard() {
   const [productionHovered, setProductionHovered] = useState(false);
   const [packDelHovered, setPackDelHovered] = useState(false);
   const [invoicesHovered, setInvoicesHovered] = useState(false);
+  const [samplesHovered, setSamplesHovered] = useState(false);
 
   /* ------------------------- AUTH STATE -------------------------- */
   const [permissions, setPermissions] = useState([]);
@@ -265,7 +291,7 @@ export default function AdminDashboard() {
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 80;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered;
+    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
@@ -375,6 +401,20 @@ export default function AdminDashboard() {
                     page={page}
                     hovered={invoicesHovered}
                     setHovered={setInvoicesHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ===== SAMPLES (mega‑menu) ==== */
+              if (page.name === "Samples") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={samplesHovered}
+                    setHovered={setSamplesHovered}
                     sidebarOpen={sidebarOpen}
                     sidebarHover={sidebarHover}
                   />
