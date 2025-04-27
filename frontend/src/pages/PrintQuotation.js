@@ -178,9 +178,9 @@ export default function PrintQuotation() {
         </div>
         <div className="text-xs">{editableQuotation.customerCompany}</div>
         <div className="text-xs">{editableQuotation.customerAddress}</div>
-        <div className="text-xs">
+        {/* <div className="text-xs">
           Email: {editableQuotation.customerEmail || "N/A"}
-        </div>
+        </div> */}
       </div>
 
       {/* Quotation Title */}
@@ -201,6 +201,7 @@ export default function PrintQuotation() {
               <th className="border px-1 py-1">Sl. No.</th>
               <th className="border px-1 py-1">Image</th>
               <th className="border px-1 py-1">Product</th>
+              <th className="border px-1 py-1">HSN</th>
               <th className="border px-1 py-1">Quantity</th>
               <th className="border px-1 py-1 text-right">Rate</th>
               <th className="border px-1 py-1 text-right">Amount</th>
@@ -221,6 +222,10 @@ export default function PrintQuotation() {
               const total = amount + gstAmt;
 
               const imageUrl = getImageUrl(item);
+                const hsnCode =
+              (item.productId && item.productId.hsnCode) ||
+              item.hsnCode ||
+              "N/A";
 
               return (
                 <tr key={idx}>
@@ -238,6 +243,7 @@ export default function PrintQuotation() {
                     )}
                   </td>
                   <td className="border px-1 py-1">{item.product}</td>
+                  <td className="border px-1 py-1 text-center">{hsnCode}</td>
                   <td className="border px-1 py-1 text-center">{qty}</td>
                   <td className="border px-1 py-1 text-right">
                     ₹{rate.toFixed(2)}

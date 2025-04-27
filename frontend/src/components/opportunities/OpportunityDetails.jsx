@@ -132,6 +132,38 @@ export default function OpportunityDetails({
     setOwnerSuggestions([]);
   };
 
+const opportunityTypes = [
+  "Annual Gifts",
+  "Awards & Trophies",
+  "Bags / Suitcases",
+  "C-Level Gifts",
+  "Campus Giveaways",
+  "Client Gifts",
+  "Conference Gifts",
+  "Cultural Gifts",
+  "Dealers Meet Gifts",
+  "Doctors Gifts",
+  "Exhibition Giveaways",
+  "Farewell Gifts",
+  "Festive Gifts",
+  "Get Well Soon Gifts",
+  "Gifts Under 500",
+  "Gifts under 1000",
+  "Gifts under 2000",
+  "Hoodies",
+  "Joining Kit",
+  "Luxury Gifts",
+  "New Parents Gifts",
+  "Offsite Gifts",
+  "Others",
+  "Pre Joininers Kit",
+  "Team Giveaways",
+  "T-shirts",
+  "Travel Gifts",
+  "Work Anniversary Gifts"
+];
+
+
   return (
     <div className="flex flex-col md:flex-row gap-6">
       {/* LEFT: Form Fields */}
@@ -143,17 +175,21 @@ export default function OpportunityDetails({
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Opportunity Name <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              name="opportunityName"
-              value={data.opportunityName}
-              onChange={handleChange}
-              onBlur={(e) => validateField('opportunityName', e.target.value)}
-              className={`border rounded w-full px-2 py-1 text-sm ${
-                errors.opportunityName ? 'border-red-500' : ''
-              }`}
-              placeholder="Enter Opportunity Name"
-            />
+         
+            <select
+                name="opportunityType"
+                value={data.opportunityType}
+                onChange={handleChange}
+                className="border rounded w-full px-2 py-1 text-sm"
+              >
+                <option value="">Select Opportunity Type</option>
+                {opportunityTypes.map((type, index) => (
+                  <option key={index} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+
             {errors.opportunityName && (
               <div className="text-red-500 text-xs mt-1">{errors.opportunityName}</div>
             )}
