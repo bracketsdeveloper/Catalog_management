@@ -336,9 +336,9 @@ export default function AdminDashboard() {
         }}
       >
         {/* --- Brand / collapse button --- */}
-        <div className="flex items-center justify-between pt-2">
-      <h2 className="font-bold font-sans text-lg">
-        <img src="/pacer-logo.jpeg" alt="Logo"  className="h-10 w-full" />  
+      <div className="flex items-center justify-between pt-2">
+      <h2 className="font-bold font-sans text-lg ">
+        <img src="/pacer-logo.jpeg" alt="Logo"  className="h-8 w-20 ml-1" />  
       </h2>
           {sidebarOpen && (
             <button onClick={() => setSidebarOpen(false)}>
@@ -533,12 +533,6 @@ function MegaMenu({
   setHovered,
   sidebarOpen,
   sidebarHover,
-}: {
-  page: any;
-  hovered: boolean;
-  setHovered: (v: boolean) => void;
-  sidebarOpen: boolean;
-  sidebarHover: boolean;
 }) {
   return (
     <li

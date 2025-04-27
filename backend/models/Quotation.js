@@ -5,6 +5,8 @@ const quotationItemSchema = new mongoose.Schema({
   slNo: { type: Number, required: true },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   product: { type: String, required: true }, // Display name
+  hsnCode: { type: String, required: true },     // HSN
+  //IMAGE
   quantity: { type: Number, required: true },
   rate: { type: Number, required: true },    // Original base rate
   productprice: { type: Number, required: true }, // Updated product price from catalog

@@ -64,6 +64,7 @@ app.use("/api/auth", emailVerificationRoutes);
 const subAdminRoutes = require('./routes/subAdminRoutes');
 app.use('/api', subAdminRoutes);
 
+//update 
 const catalogRoutes = require("./routes/catalogRoutes");
 app.use("/api/admin", catalogRoutes);
 
@@ -73,6 +74,7 @@ app.use("/api/products", advancedSearchRoutes);
 // const viewersmanagerRoutes = ;
 app.use("/api/viewer",require("./routes/viewersRoutes.js"))
 app.use("/api/admin",require("./routes/viewersRoutes.js"))
+//editable
 app.use("/api/admin",require("./routes/quotationRoutes.js"))
 
 const adminMeRoutes = require("./routes/adminMe");

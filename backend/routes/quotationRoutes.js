@@ -102,6 +102,14 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
           .status(400)
           .json({ message: `Invalid product GST for item #${i + 1}` });
       }
+      //hsn code
+      const hsnCode = item.hsnCode;
+      if (isNaN(hsnCode)) {
+        return res
+          .status(400)
+          .json({ message: `Invalid hsn code for item #${i + 1}` });
+      }
+      
       // Quantity
       let quantity = parseInt(item.quantity);
       if (isNaN(quantity)) {
@@ -124,6 +132,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
         product: productName,
         quantity,
         rate: baseRate,
+        hsnCode,
         productprice: updatedPrice,
         amount,
         productGST,
@@ -204,6 +213,8 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
     const {
       catalogName,
       salutation, // <-- NEW
+      //image
+      //quations
       customerName,
       customerEmail,
       customerCompany,
@@ -252,14 +263,21 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           quantity = 1;
         }
 
+        const hsnCode = item.hsnCode;
+        if (isNaN(hsnCode)) {
+          hsnCode = 0;
+        }
+
         const amount = updatedPrice * quantity;
         const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
         const total = parseFloat((amount + gstValue).toFixed(2));
+         
 
         newItems.push({
           slNo: item.slNo || i + 1,
           productId: item.productId,
           product: productName,
+          hsnCode,
           quantity,
           rate: baseRate,
           productprice: updatedPrice,

@@ -11,6 +11,7 @@ function OpportunityTableRow({ oppty, formatClosureDate }) {
         {oppty.account}
       </td>
       <td className="py-2 px-3">{oppty.opportunityName}</td>
+      <td className="py-2 px-3 text-blue-500 font-medium">{oppty.opportunityOwner}</td>
       <td className="py-2 px-3">
         {oppty.opportunityValue?.toLocaleString()}
       </td>
@@ -46,6 +47,7 @@ export default function OpportunityTable({ data, formatClosureDate }) {
             <th className="py-2 px-3 text-left">Opportunity Code</th>
             <th className="py-2 px-3 text-left">Account</th>
             <th className="py-2 px-3 text-left">Opportunity Name</th>
+           <th className="py-2 px-3 text-left">opportunity Owner</th>
             <th className="py-2 px-3 text-left">Opportunity Value</th>
             <th className="py-2 px-3 text-left">Closure Date</th>
             <th className="py-2 px-3 text-left">Opportunity Stage</th>

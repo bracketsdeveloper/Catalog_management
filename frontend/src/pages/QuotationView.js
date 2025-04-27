@@ -421,10 +421,8 @@ export default function QuotationView() {
                 : "https://via.placeholder.com/150");
 
             // HSN Code: try to get from the populated productId, or fallback to item.hsnCode
-            const hsnCode =
-              (item.productId && item.productId.hsnCode) ||
-              item.hsnCode ||
-              "N/A";
+             const hsnCode = (item.productId && item.productId.hsnCode) ||
+              item.hsnCode || "N/A";
 
             return (
               <tr key={index} className="border-b">
@@ -446,7 +444,18 @@ export default function QuotationView() {
                     onSave={(newVal) => updateItemField(index, "product", newVal)}
                   />
                 </td>
-                <td className="p-2">{hsnCode}</td>
+                <td className="p-2">
+                   <EditableField
+                    value={hsnCode}
+                    onSave={(newVal) => {
+                      const newHsnCode = parseFloat(newVal);
+                      if (!isNaN(newHsnCode)) {
+                        updateItemField(index, "hsnCode", newHsnCode);
+                      }
+                    }}
+                    />
+                  </td>
+
                 <td className="p-2">
                   <EditableField
                     value={item.quantity.toString()}

@@ -91,6 +91,8 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
           p.productCost !== undefined ? p.productCost : productDoc.productCost || 0,
         productGST:
           p.productGST !== undefined ? p.productGST : productDoc.productGST || 0,
+        hsnCode: 
+         p.hsnCode !== undefined ? p.hsnCode : productDoc.hsnCode || 0,
       });
     }
 
@@ -256,6 +258,7 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
           existingProduct.color = p.color || existingProduct.color;
           existingProduct.size = p.size || existingProduct.size;
           existingProduct.quantity = p.quantity || existingProduct.quantity;
+          existingProduct.hsnCode = p.hsnCode || existingProduct.hsnCode;   // added hsncode
           existingProduct.productCost =
             p.productCost !== undefined ? p.productCost : existingProduct.productCost;
           existingProduct.productGST =

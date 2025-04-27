@@ -93,7 +93,7 @@ export default function UserManagement() {
 
   return (
     <div className="p-6 bg-white text-gray-900 rounded-md shadow-md">
-      <h1 className="text-2xl font-bold mb-4 text-purple-700">User Management</h1>
+      <h1 className="text-2xl font-bold mb-4 text-[#Ff8045]">User Management</h1>
       <div className="flex items-center mb-4 gap-2">
         <label htmlFor="roleFilter" className="text-sm font-medium">
           Filter by Role:
@@ -110,7 +110,7 @@ export default function UserManagement() {
         </select>
         <button
           onClick={handleExportExcel}
-          className="ml-auto bg-blue-600 text-white px-4 py-1 rounded-lg hover:bg-blue-700 text-sm"
+          className="ml-auto bg-[#44b977] text-white px-4 py-1 rounded-lg hover:bg-blue-700 text-sm"
         >
           Export to Excel
         </button>
@@ -180,7 +180,7 @@ export default function UserManagement() {
                         setEditingRole(user._id);
                         setUpdatedRole(user.role);
                       }}
-                      className="bg-purple-600 text-white px-3 py-1 rounded-md hover:bg-purple-700"
+                      className="bg-[#66C3D0] text-white px-3 py-1 rounded-md hower:bg-[#44b977]/70"
                     >
                       Edit
                     </button>
