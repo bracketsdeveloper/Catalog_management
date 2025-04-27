@@ -4,16 +4,11 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { CgOrganisation } from "react-icons/cg";
 import {
   UserIcon,
-  UserGroupIcon,
-  CubeIcon,
-  BookOpenIcon,
   EyeIcon,
   ArrowLeftOnRectangleIcon,
   PencilIcon,
   BriefcaseIcon,
   ChevronRightIcon,
-  ShoppingBagIcon,
-  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 
 /* ------------------------------------------------------------------ */
@@ -31,7 +26,9 @@ const adminPages = [
     name: "Manage Sub-Admins",
     path: "/admin-dashboard/subadmin-manager",
     permission: "sub-admins",
-    icon: <UserGroupIcon className="h-6 w-6" />,
+    icon:(
+        <img src="/user.webp" alt="Logo"  className="h-10 w-10 mx-1" />
+    ),
   },
   {
     name: "Review Catalog",
@@ -50,7 +47,9 @@ const adminPages = [
   {
     name: "CRM",
     defaultPath: "/admin-dashboard/manage-companies",
-    icon: <UserGroupIcon className="h-6 w-6" />,
+    icon: (
+       <img src="/user.webp" alt="Logo"  className="h-10 w-10 mx-1" />
+    ),
     subItems: [
       {
         name: "Manage Client/Company Details",
@@ -89,7 +88,9 @@ const adminPages = [
   {
     name: "PURCHASE",
     defaultPath: "/admin-dashboard/",
-    icon: <ShoppingBagIcon className="h-6 w-6" />,
+    icon:(
+      <img src="/purchase.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     subItems: [
       {
         name: "Manage Purchase",
@@ -113,7 +114,9 @@ const adminPages = [
   {
     name: "Production",
     defaultPath: "/admin-dashboard/",
-    icon: <CurrencyDollarIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/production.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     subItems: [
       {
         name: "Manage Production Jobsheets",
@@ -137,7 +140,9 @@ const adminPages = [
   {
     name: "Packing / Delivery",
     defaultPath: "/admin-dashboard/packing-pending",
-    icon: <CubeIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/packing.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     /* 
        We keep every leaf page in subItems; a `group` key lets
        the menu renderer show the two mid‑level subsections.
@@ -183,7 +188,9 @@ const adminPages = [
   {
     name: "Invoices Follow up & Summary",
     defaultPath: "/admin-dashboard/invoices-followup",
-    icon: <BookOpenIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/invoice.webp" alt="Logo"  className="h-10 w-10 mx-1 text-white" />
+    ),
     subItems: [
       {
         name: "Invoices Follow Up",
@@ -312,7 +319,7 @@ export default function AdminDashboard() {
         {/* --- Brand / collapse button --- */}
       <div className="flex items-center justify-between pt-2">
       <h2 className="font-bold font-sans text-lg ">
-        <img src="/pacer-logo.jpeg" alt="Logo"  className="h-8 w-20 ml-1" />  
+        <img src="/pacer-logo.jpeg" alt="Logo"  className="h-8 w-22 mx-1" />  
       </h2>
           {sidebarOpen && (
             <button onClick={() => setSidebarOpen(false)}>
