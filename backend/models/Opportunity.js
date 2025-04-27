@@ -31,7 +31,7 @@ const opportunitySchema = new mongoose.Schema({
 
   // Opportunity Type, Stage, Status
   opportunityType: { type: String },
-  opportunityStage: { type: String, required: true },
+  opportunityStage: { type: String, required: true }, 
   opportunityStatus: { type: String },
 
   // More fields

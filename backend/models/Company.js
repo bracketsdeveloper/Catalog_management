@@ -1,17 +1,20 @@
+// backend/models/Company.js
 const mongoose = require("mongoose");
 
 const clientSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  department: { type: String },
+  email: { type: String },
   contactNumber: { type: String, required: true },
 });
 
 const logSchema = new mongoose.Schema({
-  action: { type: String, required: true }, // 'create', 'update', 'delete'
-  field: { type: String }, // Which field was modified (for updates)
-  oldValue: { type: mongoose.Schema.Types.Mixed }, // Previous value
-  newValue: { type: mongoose.Schema.Types.Mixed }, // New value
-  performedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  performedAt: { type: Date, default: Date.now }, // <-- FIXED (Renamed from timestamp to performedAt)
+  action: { type: String, required: true },
+  field: { type: String },
+  oldValue: mongoose.Schema.Types.Mixed,
+  newValue: mongoose.Schema.Types.Mixed,
+  performedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  performedAt: { type: Date, default: Date.now },
   ipAddress: { type: String },
 });
 
@@ -19,28 +22,20 @@ const companySchema = new mongoose.Schema({
   companyName: { type: String, required: true, unique: true },
   brandName: { type: String },
   GSTIN: { type: String },
-  companyEmail: { type: String },
-  clients: { type: [clientSchema], default: [] },
   companyAddress: { type: String },
+  clients: { type: [clientSchema], default: [] },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updatedAt: Date,
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  deleted: { type: Boolean, default: false },
+  deletedAt: Date,
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   logs: { type: [logSchema], default: [] },
-
-  // For Soft Delete:
-  deleted: { type: Boolean, default: false }, // <-- FIXED
-  deletedAt: { type: Date },                 // <-- FIXED
-  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // <-- FIXED
 });
 
-// Add middleware to handle timestamps
-companySchema.pre('save', function(next) {
-  if (this.isNew) {
-    this.createdAt = new Date();
-  } else {
-    this.updatedAt = new Date();
-  }
+companySchema.pre("save", function (next) {
+  this.updatedAt = new Date();
   next();
 });
 

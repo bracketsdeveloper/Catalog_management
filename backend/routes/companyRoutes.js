@@ -1,18 +1,15 @@
-// routes/companyRoutes.js
+// backend/routes/companyRoutes.js
 const express = require("express");
 const router = express.Router();
-const Company = require("../models/Company");
-const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const XLSX = require("xlsx");
 const multer = require("multer");
+const Company = require("../models/Company");
+const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// Configure multer for file uploads
+// multer setup
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-    files: 1,
-  },
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype ===
@@ -21,263 +18,262 @@ const upload = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type. Only Excel files are allowed."), false);
+      cb(new Error("Invalid file type. Only Excel files allowed."), false);
     }
   },
 });
 
-// Helper function to create log entry
-const createLogEntry = (req, action, field, oldValue, newValue) => {
-  return {
-    action,
-    field,
-    oldValue,
-    newValue,
-    performedBy: req.user.id,
-    ipAddress: req.ip,
-    performedAt: new Date(),
-  };
-};
+// log helper
+const createLogEntry = (req, action, field, oldValue, newValue) => ({
+  action,
+  field,
+  oldValue,
+  newValue,
+  performedBy: req.user.id,
+  ipAddress: req.ip,
+  performedAt: new Date(),
+});
 
-// Helper function to compare values
-function isEqual(a, b) {
+// deep equality helper
+const isEqual = (a, b) => {
   if (a === b) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
-  if (!a || !b || (typeof a !== "object" && typeof b !== "object"))
-    return a === b;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return a === b;
   if (a.prototype !== b.prototype) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => isEqual(a[k], b[k]));
+};
 
-  const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
-
-  return keys.every((k) => isEqual(a[k], b[k]));
-}
-
-// Create a new company
-router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const { companyName, brandName, GSTIN, companyEmail, clients, companyAddress } =
-      req.body;
-
-    if (!companyName) {
-      return res.status(400).json({ message: "Company name is required" });
-    }
-
-    const newCompany = new Company({
-      companyName,
-      brandName,
-      GSTIN,
-      companyEmail,
-      clients,
-      companyAddress,
-      createdBy: req.user.id,
-      logs: [createLogEntry(req, "create", null, null, null)],
-    });
-
-    await newCompany.save();
-
-    res.status(201).json({
-      message: "Company created successfully",
-      company: newCompany,
-    });
-  } catch (error) {
-    console.error("Error creating company:", error);
-    res.status(500).json({
-      message: "Failed to create company",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-});
-
-// Get all companies (if query param all=true, fetch all companies without pagination)
-// routes/companyRoutes.js
-router.get("/companies", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const companies = await Company.find({ deleted: { $ne: true } })
-      .sort({ createdAt: -1 })
-      .populate("createdBy", "name email")
-      .populate("updatedBy", "name email");
-
-    res.json(companies);
-  } catch (error) {
-    console.error("Error fetching companies:", error);
-    res.status(500).json({ message: "Failed to fetch companies" });
-  }
-});
-
-// Get single company
-router.get("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const company = await Company.findById(req.params.id)
-      .populate("createdBy", "name email")
-      .populate("updatedBy", "name email")
-      .populate("deletedBy", "name email");
-
-    if (!company) {
-      return res.status(404).json({ message: "Company not found" });
-    }
-
-    res.json(company);
-  } catch (error) {
-    console.error("Error fetching company:", error);
-    res.status(500).json({ message: "Failed to fetch company" });
-  }
-});
-
-// Update company
-router.put("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const { companyName, brandName, GSTIN, companyEmail, clients, companyAddress } =
-      req.body;
-    const company = await Company.findById(req.params.id);
-
-    if (!company) {
-      return res.status(404).json({ message: "Company not found" });
-    }
-
-    const updates = {};
-    const logs = [];
-
-    const fieldsToCheck = [
-      { name: "companyName", value: companyName },
-      { name: "brandName", value: brandName },
-      { name: "GSTIN", value: GSTIN },
-      { name: "companyEmail", value: companyEmail },
-      { name: "companyAddress", value: companyAddress },
-      { name: "clients", value: clients },
-    ];
-
-    fieldsToCheck.forEach((field) => {
-      if (field.value !== undefined && !isEqual(field.value, company[field.name])) {
-        logs.push(
-          createLogEntry(req, "update", field.name, company[field.name], field.value)
-        );
-        updates[field.name] = field.value;
+/* ------------------------- create ------------------------- */
+router.post(
+  "/companies",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const { companyName, brandName, GSTIN, companyAddress, clients } = req.body;
+      if (!companyName) {
+        return res.status(400).json({ message: "Company name is required" });
       }
-    });
 
-    if (Object.keys(updates).length === 0) {
-      return res.status(200).json({ message: "No changes detected", company });
+      const doc = new Company({
+        companyName,
+        brandName,
+        GSTIN,
+        companyAddress,
+        clients,
+        createdBy: req.user.id,
+        logs: [createLogEntry(req, "create")],
+      });
+
+      await doc.save();
+      res.status(201).json({ message: "Company created", company: doc });
+    } catch (e) {
+      res.status(500).json({ message: "Create failed" });
     }
-
-    updates.updatedBy = req.user.id;
-    const updateQuery = {
-      ...updates,
-      $push: { logs: { $each: logs } },
-    };
-
-    const updatedCompany = await Company.findByIdAndUpdate(
-      req.params.id,
-      updateQuery,
-      { new: true }
-    );
-
-    res.json({
-      message: "Company updated successfully",
-      company: updatedCompany,
-      changes: logs,
-    });
-  } catch (error) {
-    console.error("Error updating company:", error);
-    res.status(500).json({ message: "Failed to update company" });
   }
-});
+);
 
-// Delete (soft delete) company
-router.delete("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const company = await Company.findById(req.params.id);
-    if (!company) {
-      return res.status(404).json({ message: "Company not found" });
+/* ------------------------- list ------------------------- */
+router.get(
+  "/companies",
+  authenticate,
+  authorizeAdmin,
+  async (_req, res) => {
+    try {
+      const list = await Company.find({ deleted: { $ne: true } })
+        .sort({ createdAt: -1 })
+        .populate("createdBy", "name email")
+        .populate("updatedBy", "name email");
+      res.json(list);
+    } catch {
+      res.status(500).json({ message: "Fetch failed" });
     }
-
-    company.deleted = true;
-    company.deletedAt = new Date();
-    company.deletedBy = req.user.id;
-    company.logs.push(createLogEntry(req, "delete", null, company, null));
-    await company.save();
-
-    res.json({ message: "Company deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting company:", error);
-    res.status(500).json({ message: "Failed to delete company" });
   }
-});
+);
 
-// Get company logs
-router.get("/companies/:id/logs", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const company = await Company.findById(req.params.id)
-      .populate("logs.performedBy", "name email")
-      .populate("createdBy", "name email")
-      .populate("updatedBy", "name email")
-      .populate("deletedBy", "name email");
-
-    if (!company) {
-      return res.status(404).json({ message: "Company not found" });
+/* ------------------------- single ------------------------- */
+router.get(
+  "/companies/:id",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const c = await Company.findById(req.params.id)
+        .populate("createdBy", "name email")
+        .populate("updatedBy", "name email")
+        .populate("deletedBy", "name email");
+      if (!c) return res.status(404).json({ message: "Not found" });
+      res.json(c);
+    } catch {
+      res.status(500).json({ message: "Fetch failed" });
     }
-
-    res.json({
-      company: {
-        _id: company._id,
-        companyName: company.companyName,
-        brandName: company.brandName,
-        GSTIN: company.GSTIN,
-        createdAt: company.createdAt,
-        createdBy: company.createdBy,
-        updatedAt: company.updatedAt,
-        updatedBy: company.updatedBy,
-        deleted: company.deleted,
-        deletedAt: company.deletedAt,
-        deletedBy: company.deletedBy,
-      },
-      logs: company.logs,
-    });
-  } catch (error) {
-    console.error("Error fetching company logs:", error);
-    res.status(500).json({ message: "Failed to fetch logs" });
   }
-});
+);
 
-// Download template
-router.get("/companies/template", authenticate, authorizeAdmin, (req, res) => {
-  try {
-    const templateData = [
-      {
-        "Company Name*": "Example Company",
-        "Brand Name": "Example Brand",
-        GSTIN: "22AAAAA0000A1Z5",
-        "Company Email": "example@company.com",
-        "Company Address": "123 Main St",
-        "Client 1 Name": "Client One",
-        "Client 1 Contact": "1234567890",
-        "Client 2 Name": "Client Two",
-        "Client 2 Contact": "0987654321",
-      },
-    ];
+/* ------------------------- update ------------------------- */
+router.put(
+  "/companies/:id",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const { companyName, brandName, GSTIN, companyAddress, clients } = req.body;
+      const doc = await Company.findById(req.params.id);
+      if (!doc) return res.status(404).json({ message: "Not found" });
 
-    const worksheet = XLSX.utils.json_to_sheet(templateData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Companies");
+      const fields = [
+        { name: "companyName", value: companyName },
+        { name: "brandName", value: brandName },
+        { name: "GSTIN", value: GSTIN },
+        { name: "companyAddress", value: companyAddress },
+        { name: "clients", value: clients },
+      ];
 
-    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+      const updates = {};
+      const logs = [];
 
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=companies_template.xlsx"
-    );
-    res.send(excelBuffer);
-  } catch (error) {
-    console.error("Error generating template:", error);
-    res.status(500).json({ message: "Failed to generate template" });
+      fields.forEach(({ name, value }) => {
+        if (value !== undefined && !isEqual(value, doc[name])) {
+          updates[name] = value;
+          logs.push(createLogEntry(req, "update", name, doc[name], value));
+        }
+      });
+
+      if (!Object.keys(updates).length) {
+        return res.status(200).json({ message: "No changes", company: doc });
+      }
+
+      updates.updatedBy = req.user.id;
+      const updated = await Company.findByIdAndUpdate(
+        req.params.id,
+        { ...updates, $push: { logs: { $each: logs } } },
+        { new: true }
+      );
+
+      res.json({ message: "Updated", company: updated, changes: logs });
+    } catch {
+      res.status(500).json({ message: "Update failed" });
+    }
   }
-});
+);
 
-// Bulk upload
+/* ------------------------- delete (soft) ------------------------- */
+router.delete(
+  "/companies/:id",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const doc = await Company.findById(req.params.id);
+      if (!doc) return res.status(404).json({ message: "Not found" });
+
+      doc.deleted = true;
+      doc.deletedAt = new Date();
+      doc.deletedBy = req.user.id;
+      doc.logs.push(createLogEntry(req, "delete", null, doc, null));
+      await doc.save();
+
+      res.json({ message: "Deleted" });
+    } catch {
+      res.status(500).json({ message: "Delete failed" });
+    }
+  }
+);
+
+/* ------------------------- logs for single company ------------------------- */
+router.get(
+  "/companies/:id/logs",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const c = await Company.findById(req.params.id)
+        .populate("logs.performedBy", "name email")
+        .populate("createdBy", "name email")
+        .populate("updatedBy", "name email")
+        .populate("deletedBy", "name email");
+      if (!c) return res.status(404).json({ message: "Not found" });
+
+      res.json({
+        company: {
+          _id: c._id,
+          companyName: c.companyName,
+          brandName: c.brandName,
+          GSTIN: c.GSTIN,
+          createdAt: c.createdAt,
+          createdBy: c.createdBy,
+          updatedAt: c.updatedAt,
+          updatedBy: c.updatedBy,
+          deleted: c.deleted,
+          deletedAt: c.deletedAt,
+          deletedBy: c.deletedBy,
+        },
+        logs: c.logs,
+      });
+    } catch {
+      res.status(500).json({ message: "Fetch logs failed" });
+    }
+  }
+);
+
+/* ------------------------- all logs ------------------------- */
+router.get(
+  "/logs",
+  authenticate,
+  authorizeAdmin,
+  async (_req, res) => {
+    try {
+      const companies = await Company.find().select("companyName logs").lean();
+      const logs = companies.flatMap((c) =>
+        (c.logs || []).map((l) => ({ ...l, companyName: c.companyName }))
+      );
+      logs.sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt));
+      res.json({ logs });
+    } catch {
+      res.status(500).json({ message: "Fetch logs failed" });
+    }
+  }
+);
+
+/* ------------------------- template download ------------------------- */
+router.get(
+  "/companies/template",
+  authenticate,
+  authorizeAdmin,
+  (_req, res) => {
+    try {
+      const data = [
+        {
+          "Company Name*": "Example Co",
+          "Brand Name": "Example Brand",
+          GSTIN: "22AAAAA0000A1Z5",
+          "Company Address": "123 Main St",
+          "Client 1 Name": "Alice",
+          "Client 1 Department": "Procurement",
+          "Client 1 Email": "alice@example.com",
+          "Client 1 Contact": "9876543210",
+        },
+      ];
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Companies");
+      const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+      res
+        .set({
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": "attachment; filename=companies_template.xlsx",
+        })
+        .send(buf);
+    } catch {
+      res.status(500).json({ message: "Template gen failed" });
+    }
+  }
+);
+
+/* ------------------------- bulk upload ------------------------- */
 router.post(
   "/companies/bulk",
   authenticate,
@@ -285,87 +281,51 @@ router.post(
   upload.single("file"),
   async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
+      if (!req.file) return res.status(400).json({ message: "No file" });
 
-      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
 
-      const companiesToCreate = [];
+      const toCreate = [];
       const errors = [];
 
-      jsonData.forEach((row, index) => {
-        if (!row["Company Name*"]) {
-          errors.push(`Row ${index + 2}: Company Name is required`);
+      rows.forEach((r, i) => {
+        if (!r["Company Name*"]) {
+          errors.push(`Row ${i + 2}: Company Name required`);
           return;
         }
 
         const clients = [];
-        for (let i = 1; i <= 5; i++) {
-          const clientName = row[`Client ${i} Name`];
-          const clientContact = row[`Client ${i} Contact`];
-          if (clientName && clientContact) {
-            clients.push({
-              name: clientName,
-              contactNumber: clientContact.toString(),
-            });
+        for (let n = 1; n <= 5; n++) {
+          const name = r[`Client ${n} Name`];
+          const dept = r[`Client ${n} Department`];
+          const email = r[`Client ${n} Email`];
+          const contact = r[`Client ${n} Contact`];
+          if (name && contact) {
+            clients.push({ name, department: dept, email, contactNumber: contact.toString() });
           }
         }
 
-        companiesToCreate.push({
-          companyName: row["Company Name*"],
-          brandName: row["Brand Name"] || "",
-          GSTIN: row["GSTIN"] || "",
-          companyEmail: row["Company Email"] || "",
-          companyAddress: row["Company Address"] || "",
+        toCreate.push({
+          companyName: r["Company Name*"],
+          brandName: r["Brand Name"] || "",
+          GSTIN: r["GSTIN"] || "",
+          companyAddress: r["Company Address"] || "",
           clients,
           createdBy: req.user.id,
-          logs: [createLogEntry(req, "create", null, null, null)],
+          logs: [createLogEntry(req, "create")],
         });
       });
 
-      if (errors.length > 0) {
-        return res.status(400).json({
-          message: "Validation errors in uploaded file",
-          errors,
-        });
-      }
+      if (errors.length) return res.status(400).json({ message: "Errors", errors });
 
-      const result = await Company.insertMany(companiesToCreate);
-      res.status(201).json({
-        message: "Bulk upload completed successfully",
-        count: result.length,
-        companies: result,
-      });
-    } catch (error) {
-      console.error("Error in bulk upload:", error);
-      res.status(500).json({
-        message: error.message || "Failed to process bulk upload",
-        error:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
-      });
+      const inserted = await Company.insertMany(toCreate);
+      res.status(201).json({ message: "Bulk upload done", count: inserted.length });
+    } catch {
+      res.status(500).json({ message: "Bulk upload failed" });
     }
   }
 );
-
-// Example route for returning all logs from all companies in descending order:
-router.get("/logs", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const companies = await Company.find().select("companyName logs").lean();
-    let allLogs = companies.flatMap((company) =>
-      (company.logs || []).map((log) => ({
-        ...log,
-        companyName: company.companyName,
-      }))
-    );
-    allLogs.sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt));
-    res.json({ logs: allLogs });
-  } catch (error) {
-    console.error("Error fetching logs:", error);
-    res.status(500).json({ message: "Failed to fetch logs" });
-  }
-});
 
 module.exports = router;

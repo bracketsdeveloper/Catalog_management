@@ -68,6 +68,7 @@ export default function SubAdminManager() {
   const [subAdmins, setSubAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   /* create modal */
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -106,6 +107,13 @@ export default function SubAdminManager() {
     permListSetter((prev) =>
       prev.includes(perm) ? prev.filter((x) => x !== perm) : [...prev, perm]
     );
+
+  /* ───── filtered and sorted sub-admins ───── */
+  const filteredSubAdmins = subAdmins
+    .filter((admin) =>
+      admin.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   /* ───── create ───── */
   async function handleCreate(e) {
@@ -158,6 +166,17 @@ export default function SubAdminManager() {
         </button>
       </header>
 
+      {/* ───────── Search Bar ───────── */}
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Search by name..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full bg-gray-100 border border-purple-300 rounded px-3 py-2"
+        />
+      </div>
+
       {/* ───────── Create Modal ───────── */}
       {createModalOpen && (
         <Modal title="Create Sub‑Admin" onClose={() => setCreateModalOpen(false)}>
@@ -197,7 +216,7 @@ export default function SubAdminManager() {
 
       {/* ───────── List ───────── */}
       <div className="bg-white border border-purple-200 rounded p-4">
-        {subAdmins.length === 0 ? (
+        {filteredSubAdmins.length === 0 ? (
           <p>No sub‑admins found.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -212,7 +231,7 @@ export default function SubAdminManager() {
                 </tr>
               </thead>
               <tbody>
-                {subAdmins.map((a) => (
+                {filteredSubAdmins.map((a) => (
                   <tr key={a._id} className="border-b">
                     <td className="px-4 py-2">{a.name}</td>
                     <td className="px-4 py-2">{a.email}</td>

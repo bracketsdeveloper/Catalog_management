@@ -74,7 +74,7 @@ export default function CreateManualCatalog() {
     subCategories: {},
     brands: {},
     priceRanges: {},
-    variationHinges: {}
+    variationHinges: {},
   });
 
   // -- Company suggestions
@@ -83,6 +83,8 @@ export default function CreateManualCatalog() {
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [clients, setClients] = useState([]);
 
   // Fetch full list of Opportunity codes for suggestion
   useEffect(() => {
@@ -125,7 +127,9 @@ export default function CreateManualCatalog() {
       );
       setFullSubCategories(
         Array.isArray(res.data.subCategories)
-          ? res.data.subCategories.map((subCat) => (subCat.name ? subCat.name : subCat)).sort()
+          ? res.data.subCategories
+              .map((subCat) => (subCat.name ? subCat.name : subCat))
+              .sort()
           : []
       );
       setFullBrands(
@@ -135,12 +139,16 @@ export default function CreateManualCatalog() {
       );
       setFullPriceRanges(
         Array.isArray(res.data.priceRanges)
-          ? res.data.priceRanges.map((range) => (range.name ? range.name : range)).sort((a, b) => a - b)
+          ? res.data.priceRanges
+              .map((range) => (range.name ? range.name : range))
+              .sort((a, b) => a - b)
           : []
       );
       setFullVariationHinges(
         Array.isArray(res.data.variationHinges)
-          ? res.data.variationHinges.map((hinge) => (hinge.name ? hinge.name : hinge)).sort()
+          ? res.data.variationHinges
+              .map((hinge) => (hinge.name ? hinge.name : hinge))
+              .sort()
           : []
       );
     } catch (error) {
@@ -173,7 +181,7 @@ export default function CreateManualCatalog() {
       params.append("page", page);
       params.append("limit", limit);
       if (searchTerm) {
-        const searchTerms = searchTerm.toLowerCase().split(" ").filter(term => term);
+        const searchTerms = searchTerm.toLowerCase().split(" ").filter((term) => term);
         params.append("search", searchTerms.join(","));
       }
       if (selectedCategories.length > 0) {
@@ -215,15 +223,24 @@ export default function CreateManualCatalog() {
       subCategories: {},
       brands: {},
       priceRanges: {},
-      variationHinges: {}
+      variationHinges: {},
     };
 
-    products.forEach(product => {
-      if (product.category) counts.categories[product.category] = (counts.categories[product.category] || 0) + 1;
-      if (product.subCategory) counts.subCategories[product.subCategory] = (counts.subCategories[product.subCategory] || 0) + 1;
-      if (product.brandName) counts.brands[product.brandName] = (counts.brands[product.brandName] || 0) + 1;
-      if (product.priceRange) counts.priceRanges[product.priceRange] = (counts.priceRanges[product.priceRange] || 0) + 1;
-      if (product.variationHinge) counts.variationHinges[product.variationHinge] = (counts.variationHinges[product.variationHinge] || 0) + 1;
+    products.forEach((product) => {
+      if (product.category)
+        counts.categories[product.category] =
+          (counts.categories[product.category] || 0) + 1;
+      if (product.subCategory)
+        counts.subCategories[product.subCategory] =
+          (counts.subCategories[product.subCategory] || 0) + 1;
+      if (product.brandName)
+        counts.brands[product.brandName] = (counts.brands[product.brandName] || 0) + 1;
+      if (product.priceRange)
+        counts.priceRanges[product.priceRange] =
+          (counts.priceRanges[product.priceRange] || 0) + 1;
+      if (product.variationHinge)
+        counts.variationHinges[product.variationHinge] =
+          (counts.variationHinges[product.variationHinge] || 0) + 1;
     });
 
     setFilterCounts(counts);
@@ -338,6 +355,57 @@ export default function CreateManualCatalog() {
     }
   };
 
+  // Fetch company and client details when opportunity is selected
+  useEffect(() => {
+    if (opportunityNumber) {
+      const selectedOpp = opportunityCodes.find(
+        (opp) => opp.opportunityCode === opportunityNumber
+      );
+      if (selectedOpp && selectedOpp.account) {
+        setCustomerCompany(selectedOpp.account);
+        fetchCompanyDetails(selectedOpp.account);
+      }
+    }
+  }, [opportunityNumber, opportunityCodes]);
+
+  const fetchCompanyDetails = async (companyName) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { companyName },
+      });
+      const company = Array.isArray(res.data) ? res.data[0] : res.data;
+      if (company) {
+        setSelectedCompanyData(company);
+        setCustomerAddress(company.companyAddress || "");
+        setClients(company.clients || []);
+        setCustomerName("");
+        setCustomerEmail(company.companyEmail || "");
+      } else {
+        setSelectedCompanyData(null);
+        setCustomerAddress("");
+        setClients([]);
+        setCustomerName("");
+        setCustomerEmail("");
+      }
+    } catch (error) {
+      console.error("Error fetching company details:", error);
+      setSelectedCompanyData(null);
+      setCustomerAddress("");
+      setClients([]);
+      setCustomerName("");
+      setCustomerEmail("");
+    }
+  };
+
+  // Handle client selection
+  const handleClientSelect = (client) => {
+    setCustomerName(client.name || "");
+    setCustomerEmail(client.email || "");
+    setClientDropdownOpen(false);
+  };
+
   // Handlers for advanced image search
   const handleImageSearchClick = () => {
     imageInputRef.current?.click();
@@ -351,12 +419,16 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const res = await axios.post(
+        `${BACKEND_URL}/api/products/advanced-search`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
       setAdvancedSearchResults(Array.isArray(res.data.products) ? res.data.products : []);
       setAdvancedSearchActive(true);
     } catch (error) {
@@ -479,10 +551,11 @@ export default function CreateManualCatalog() {
                 {
                   name: customerName,
                   contactNumber: selectedCompanyData.clients[0].contactNumber,
+                  email: customerEmail,
                 },
                 ...selectedCompanyData.clients.slice(1),
               ]
-            : [{ name: customerName, contactNumber: "" }],
+            : [{ name: customerName, contactNumber: "", email: customerEmail }],
       };
       await axios.put(
         `${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`,
@@ -540,9 +613,13 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       let response;
       if (isEditMode) {
-        response = await axios.put(`${BACKEND_URL}/api/admin/catalogs/${id}`, catalogData, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        response = await axios.put(
+          `${BACKEND_URL}/api/admin/catalogs/${id}`,
+          catalogData,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         alert("Catalog updated successfully!");
         navigate(`/admin-dashboard/manage-catalogs`);
       } else {
@@ -640,9 +717,10 @@ export default function CreateManualCatalog() {
   const handleCompanySelect = (company) => {
     setCustomerCompany(company.companyName || "");
     setSelectedCompanyData(company);
-    setCustomerName(company.clients && company.clients[0]?.name || "");
-    setCustomerEmail(company.companyEmail || "");
     setCustomerAddress(company.companyAddress || "");
+    setClients(company.clients || []);
+    setCustomerName("");
+    setCustomerEmail(company.companyEmail || "");
     setDropdownOpen(false);
   };
 
@@ -752,38 +830,13 @@ export default function CreateManualCatalog() {
             type="text"
             className="border border-purple-300 rounded w-full p-2"
             value={customerCompany}
-            onChange={(e) => setCustomerCompany(e.target.value)}
-            onFocus={() => setDropdownOpen(true)}
-            onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+            readOnly
             required
           />
-          {dropdownOpen && customerCompany && (
-            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
-              {companies
-                .filter((company) =>
-                  company.companyName?.toLowerCase().includes(customerCompany.toLowerCase())
-                )
-                .map((company) => (
-                  <div
-                    key={company._id}
-                    className="p-2 cursor-pointer hover:bg-gray-100"
-                    onMouseDown={() => handleCompanySelect(company)}
-                  >
-                    {company.companyName || "Unknown Company"}
-                  </div>
-                ))}
-              <div
-                className="p-2 cursor-pointer hover:bg-gray-100"
-                onMouseDown={handleOpenCompanyModal}
-              >
-                + Create Company
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Customer Name + Salutation */}
-        <div>
+        <div className="relative">
           <label className="block mb-1 font-medium text-purple-700">
             Customer Name *
           </label>
@@ -800,11 +853,32 @@ export default function CreateManualCatalog() {
               type="text"
               className="border border-purple-300 rounded w-full p-2"
               value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              onBlur={updateCompanyInfo}
+              onChange={(e) => {
+                setCustomerName(e.target.value);
+                setClientDropdownOpen(true);
+              }}
+              onFocus={() => setClientDropdownOpen(true)}
+              onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
               required
             />
           </div>
+          {clientDropdownOpen && clients.length > 0 && (
+            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto">
+              {clients
+                .filter((client) =>
+                  client.name?.toLowerCase().includes(customerName.toLowerCase())
+                )
+                .map((client) => (
+                  <div
+                    key={client._id || client.name}
+                    className="p-2 cursor-pointer hover:bg-gray-100"
+                    onMouseDown={() => handleClientSelect(client)}
+                  >
+                    {client.name || "Unknown Client"}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         {/* Customer Email */}
@@ -954,7 +1028,9 @@ export default function CreateManualCatalog() {
                       toggleFilter(cat, selectedCategories, setSelectedCategories)
                     }
                   />
-                  <span className="truncate">{cat} ({filterCounts.categories[cat] || 0})</span>
+                  <span className="truncate">
+                    {cat} ({filterCounts.categories[cat] || 0})
+                  </span>
                 </label>
               ))}
             </div>
@@ -985,7 +1061,9 @@ export default function CreateManualCatalog() {
                       toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
                     }
                   />
-                  <span className="truncate">{subCat} ({filterCounts.subCategories[subCat] || 0})</span>
+                  <span className="truncate">
+                    {subCat} ({filterCounts.subCategories[subCat] || 0})
+                  </span>
                 </label>
               ))}
             </div>
@@ -1012,11 +1090,11 @@ export default function CreateManualCatalog() {
                     type="checkbox"
                     className="form-checkbox h-4 w-4 text-purple-500"
                     checked={selectedBrands.includes(brand)}
-                    onChange={() =>
-                      toggleFilter(brand, selectedBrands, setSelectedBrands)
-                    }
+                    onChange={() => toggleFilter(brand, selectedBrands, setSelectedBrands)}
                   />
-                  <span className="truncate">{brand} ({filterCounts.brands[brand] || 0})</span>
+                  <span className="truncate">
+                    {brand} ({filterCounts.brands[brand] || 0})
+                  </span>
                 </label>
               ))}
             </div>
@@ -1047,7 +1125,9 @@ export default function CreateManualCatalog() {
                       toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
                     }
                   />
-                  <span className="truncate">{range} ({filterCounts.priceRanges[range] || 0})</span>
+                  <span className="truncate">
+                    {range} ({filterCounts.priceRanges[range] || 0})
+                  </span>
                 </label>
               ))}
             </div>
@@ -1078,7 +1158,9 @@ export default function CreateManualCatalog() {
                       toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)
                     }
                   />
-                  <span className="truncate">{hinge} ({filterCounts.variationHinges[hinge] || 0})</span>
+                  <span className="truncate">
+                    {hinge} ({filterCounts.variationHinges[hinge] || 0})
+                  </span>
                 </label>
               ))}
             </div>
