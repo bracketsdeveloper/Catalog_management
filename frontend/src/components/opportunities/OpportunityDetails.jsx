@@ -132,7 +132,7 @@ export default function OpportunityDetails({
     setOwnerSuggestions([]);
   };
 
-const opportunityTypes = [
+const opportunityName = [
   "Annual Gifts",
   "Awards & Trophies",
   "Bags / Suitcases",
@@ -177,13 +177,13 @@ const opportunityTypes = [
             </label>
          
             <select
-                name="opportunityType"
-                value={data.opportunityType}
+                name="opportunityName"
+                value={data.opportunityName}
                 onChange={handleChange}
                 className="border rounded w-full px-2 py-1 text-sm"
               >
                 <option value="">Select Opportunity Type</option>
-                {opportunityTypes.map((type, index) => (
+                {opportunityName.map((type, index) => (
                   <option key={index} value={type}>
                     {type}
                   </option>
