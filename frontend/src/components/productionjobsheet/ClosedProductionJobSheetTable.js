@@ -2,53 +2,86 @@
 import React from "react";
 import * as XLSX from "xlsx";
 
-const displayText = (v) => (v && v !== "-" ? v : "");
-const displayDate = (v) => {
-  if (!v || v === "-") return "";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
-};
+/* util */
+const t = (v) => (v && v !== "-" ? v : "");
+const d = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).toLocaleDateString());
 
+/* header filter row */
+function FilterRow({ filters, onChange }) {
+  const cols = [
+    "jobSheetCreatedDate",
+    "jobSheetNumber",
+    "deliveryDateTime",
+    "clientCompanyName",
+    "eventName",
+    "product",
+    "qtyRequired",
+    "qtyOrdered",
+    "expectedReceiveDate",
+    "brandingType",
+    "brandingVendor",
+    "expectedPostBranding",
+    "schedulePickUp",
+    "remarks",
+    "status",
+  ];
+  return (
+    <tr className="bg-gray-100">
+      {cols.map((k) => (
+        <th key={k} className="border px-1 py-0.5">
+          <input
+            value={filters[k] || ""}
+            onChange={(e) => onChange(k, e.target.value)}
+            className="w-full border p-0.5 text-[10px] rounded"
+            placeholder="filter…"
+          />
+        </th>
+      ))}
+    </tr>
+  );
+}
+
+/* export */
 const exportToExcel = (data) => {
-  const exportData = data.map((r) => ({
-    "Order Date": displayDate(r.jobSheetCreatedDate),
-    "Job Sheet Number": displayText(r.jobSheetNumber),
-    "Delivery Date": displayDate(r.deliveryDateTime),
-    "Client Company Name": displayText(r.clientCompanyName),
-    "Event Name": displayText(r.eventName),
-    "Product": displayText(r.product),
-    "Qty Required": r.qtyRequired ?? "",
-    "Qty Ordered": r.qtyOrdered ?? "",
-    "Product Expected In Hand": displayDate(r.expectedReceiveDate),
-    "Branding Type": displayText(r.brandingType),
-    "Branding Vendor": displayText(r.brandingVendor),
-    "Expected Post Branding in Ace": displayText(r.expectedPostBranding),
-    "Schedule Pick Up Date": displayDate(r.schedulePickUp),
-    Remarks: displayText(r.remarks),
-    Status: displayText(r.status),
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(exportData);
+  const ws = XLSX.utils.json_to_sheet(
+    data.map((r) => ({
+      "Order Date": d(r.jobSheetCreatedDate),
+      "Job Sheet": t(r.jobSheetNumber),
+      "Delivery Date": d(r.deliveryDateTime),
+      Client: t(r.clientCompanyName),
+      Event: t(r.eventName),
+      Product: t(r.product),
+      "Qty Req": r.qtyRequired,
+      "Qty Ord": r.qtyOrdered,
+      "Expected In-Hand": d(r.expectedReceiveDate),
+      "Branding Type": t(r.brandingType),
+      "Branding Vendor": t(r.brandingVendor),
+      "Expected Post Brand": t(r.expectedPostBranding),
+      "Schedule Pick-Up": d(r.schedulePickUp),
+      Remarks: t(r.remarks),
+      Status: t(r.status),
+    }))
+  );
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Closed Sheets");
+  XLSX.utils.book_append_sheet(wb, ws, "Closed");
   XLSX.writeFile(wb, "ClosedProductionJobSheets.xlsx");
 };
 
-const ClosedProductionJobSheetTable = ({
+export default function ClosedProductionJobSheetTable({
   data,
   sortField,
   sortOrder,
   onSortChange,
-}) => {
-  const renderSortIcon = (field) =>
-    sortField === field ? (
-      sortOrder === "asc" ? (
-        <span className="ml-1 text-xs">▲</span>
-      ) : (
-        <span className="ml-1 text-xs">▼</span>
-      )
+  headerFilters,
+  onHeaderFilterChange,
+}) {
+  const icon = (f) =>
+    sortField !== f ? (
+      <span className="opacity-50 ml-0.5 text-xs">↕</span>
+    ) : sortOrder === "asc" ? (
+      <span className="ml-0.5 text-xs">▲</span>
     ) : (
-      <span className="ml-1 opacity-50 text-xs">↕</span>
+      <span className="ml-0.5 text-xs">▼</span>
     );
 
   return (
@@ -56,112 +89,90 @@ const ClosedProductionJobSheetTable = ({
       <div className="flex justify-end mb-4">
         <button
           onClick={() => exportToExcel(data)}
-          className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+          className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
         >
-          Export to Excel
+          Export&nbsp;to&nbsp;Excel
         </button>
       </div>
+
       <table className="min-w-full border-collapse text-xs">
         <thead className="bg-gray-50">
           <tr>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("jobSheetCreatedDate")}
-            >
-              Order Date {renderSortIcon("jobSheetCreatedDate")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("jobSheetNumber")}
-            >
-              Job Sheet Number {renderSortIcon("jobSheetNumber")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("deliveryDateTime")}
-            >
-              Delivery Date {renderSortIcon("deliveryDateTime")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("clientCompanyName")}
-            >
-              Client Company Name {renderSortIcon("clientCompanyName")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("eventName")}
-            >
-              Event Name {renderSortIcon("eventName")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("product")}
-            >
-              Product {renderSortIcon("product")}
-            </th>
-            <th className="p-2 border">Qty Required</th>
-            <th className="p-2 border">Qty Ordered</th>
-            <th className="p-2 border">Product Expected In Hand</th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("brandingType")}
-            >
-              Branding Type {renderSortIcon("brandingType")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("brandingVendor")}
-            >
-              Branding Vendor {renderSortIcon("brandingVendor")}
-            </th>
-            <th className="p-2 border">Expected Post Branding in Ace</th>
+            {[
+              ["jobSheetCreatedDate", "Order Date"],
+              ["jobSheetNumber", "Job Sheet"],
+              ["deliveryDateTime", "Delivery Date"],
+              ["clientCompanyName", "Client"],
+              ["eventName", "Event"],
+              ["product", "Product"],
+            ].map(([k, l]) => (
+              <th
+                key={k}
+                onClick={() => onSortChange(k)}
+                className="p-2 border cursor-pointer"
+              >
+                {l} {icon(k)}
+              </th>
+            ))}
+            <th className="p-2 border">Qty Req</th>
+            <th className="p-2 border">Qty Ord</th>
+            <th className="p-2 border">Expected In-Hand</th>
+            {[
+              ["brandingType", "Branding Type"],
+              ["brandingVendor", "Branding Vendor"],
+            ].map(([k, l]) => (
+              <th
+                key={k}
+                onClick={() => onSortChange(k)}
+                className="p-2 border cursor-pointer"
+              >
+                {l} {icon(k)}
+              </th>
+            ))}
+            <th className="p-2 border">Expected Post Brand</th>
             <th
               className="p-2 border cursor-pointer"
               onClick={() => onSortChange("schedulePickUp")}
             >
-              Schedule Pick Up Date {renderSortIcon("schedulePickUp")}
+              Schedule Pick-Up {icon("schedulePickUp")}
             </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("remarks")}
-            >
-              Remarks {renderSortIcon("remarks")}
-            </th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("status")}
-            >
-              Status {renderSortIcon("status")}
-            </th>
+            {[
+              ["remarks", "Remarks"],
+              ["status", "Status"],
+            ].map(([k, l]) => (
+              <th
+                key={k}
+                onClick={() => onSortChange(k)}
+                className="p-2 border cursor-pointer"
+              >
+                {l} {icon(k)}
+              </th>
+            ))}
           </tr>
+          <FilterRow filters={headerFilters} onChange={onHeaderFilterChange} />
         </thead>
         <tbody>
           {data.map((r) => (
             <tr key={r._id} className="bg-green-200">
-              <td className="p-2 border">{displayDate(r.jobSheetCreatedDate)}</td>
-              <td className="p-2 border">{displayText(r.jobSheetNumber)}</td>
-              <td className="p-2 border">{displayDate(r.deliveryDateTime)}</td>
-              <td className="p-2 border">{displayText(r.clientCompanyName)}</td>
-              <td className="p-2 border">{displayText(r.eventName)}</td>
-              <td className="p-2 border">{displayText(r.product)}</td>
-              <td className="p-2 border">{r.qtyRequired ?? ""}</td>
-              <td className="p-2 border">{r.qtyOrdered ?? ""}</td>
-              <td className="p-2 border">{displayDate(r.expectedReceiveDate)}</td>
-              <td className="p-2 border">{displayText(r.brandingType)}</td>
-              <td className="p-2 border">{displayText(r.brandingVendor)}</td>
-              <td className="p-2 border">
-                {displayText(r.expectedPostBranding)}
-              </td>
-              <td className="p-2 border">{displayDate(r.schedulePickUp)}</td>
-              <td className="p-2 border">{displayText(r.remarks)}</td>
-              <td className="p-2 border">{displayText(r.status)}</td>
+              <td className="p-2 border">{d(r.jobSheetCreatedDate)}</td>
+              <td className="p-2 border">{t(r.jobSheetNumber)}</td>
+              <td className="p-2 border">{d(r.deliveryDateTime)}</td>
+              <td className="p-2 border">{t(r.clientCompanyName)}</td>
+              <td className="p-2 border">{t(r.eventName)}</td>
+              <td className="p-2 border">{t(r.product)}</td>
+              <td className="p-2 border">{r.qtyRequired}</td>
+              <td className="p-2 border">{r.qtyOrdered}</td>
+              <td className="p-2 border">{d(r.expectedReceiveDate)}</td>
+              <td className="p-2 border">{t(r.brandingType)}</td>
+              <td className="p-2 border">{t(r.brandingVendor)}</td>
+              <td className="p-2 border">{t(r.expectedPostBranding)}</td>
+              <td className="p-2 border">{d(r.schedulePickUp)}</td>
+              <td className="p-2 border">{t(r.remarks)}</td>
+              <td className="p-2 border">{t(r.status)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-};
-
-export default ClosedProductionJobSheetTable;
+}
