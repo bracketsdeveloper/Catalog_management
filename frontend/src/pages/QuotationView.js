@@ -1,3 +1,4 @@
+// frontend/src/pages/QuotationView.js
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -19,7 +20,6 @@ export default function QuotationView() {
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [editingTermIdx, setEditingTermIdx] = useState(null);
 
-  // Default terms preset
   const defaultTerms = [
     {
       heading: "Delivery",
@@ -45,7 +45,6 @@ export default function QuotationView() {
     // eslint-disable-next-line
   }, [id]);
 
-  // Preset default terms if none exist
   useEffect(() => {
     if (editableQuotation && (!editableQuotation.terms || editableQuotation.terms.length === 0)) {
       setEditableQuotation((prev) => ({
@@ -83,7 +82,6 @@ export default function QuotationView() {
     try {
       const token = localStorage.getItem("token");
       const updatedMargin = parseFloat(editableQuotation.margin) || 0;
-      // Destructure salutation (new), plus the other existing fields
       const {
         catalogName,
         salutation,
@@ -93,12 +91,13 @@ export default function QuotationView() {
         customerAddress,
         items,
         terms,
-        displayTotals, // This field controls totals display
+        displayTotals,
+        displayHSNCodes, // New field
       } = editableQuotation;
 
       const body = {
         catalogName,
-        salutation, // Include salutation in the payload
+        salutation,
         customerName,
         customerEmail,
         customerCompany,
@@ -107,6 +106,7 @@ export default function QuotationView() {
         items,
         terms,
         displayTotals,
+        displayHSNCodes, // New field
       };
 
       console.log("Before saving, updated quotation data:", body);
@@ -139,7 +139,6 @@ export default function QuotationView() {
   }
 
   function handleHeaderBlur(field, e) {
-    // Use e.target.innerText to get the text from contentEditable
     setEditableQuotation((prev) => ({
       ...prev,
       [field]: e.target.innerText,
@@ -154,7 +153,6 @@ export default function QuotationView() {
     });
   }
 
-  // New helper to remove an item from the items list
   function removeItem(index) {
     setEditableQuotation((prev) => ({
       ...prev,
@@ -205,7 +203,6 @@ export default function QuotationView() {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
-  // Updated computed functions to check for either "quantity" or "qty"
   function computedAmount(quotation) {
     let sum = 0;
     quotation.items.forEach((item) => {
@@ -243,12 +240,10 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
 
-  // Compute margin factor for items table display
   const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
 
   return (
     <div className="p-6 bg-white text-black min-h-screen">
-      {/* Top Buttons */}
       <div className="flex justify-between items-center mb-4">
         <button
           onClick={handleExportPDF}
@@ -263,7 +258,6 @@ export default function QuotationView() {
           >
             Save Changes
           </button>
-          {/* Toggle displayTotals: this updates the document's displayTotals field */}
           <button
             onClick={() =>
               setEditableQuotation((prev) => ({
@@ -275,12 +269,21 @@ export default function QuotationView() {
           >
             {editableQuotation.displayTotals ? "Hide Totals" : "Show Totals"}
           </button>
+          <button
+            onClick={() =>
+              setEditableQuotation((prev) => ({
+                ...prev,
+                displayHSNCodes: !prev.displayHSNCodes,
+              }))
+            }
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
+          >
+            {editableQuotation.displayHSNCodes ? "Hide HSN Codes" : "Show HSN Codes"}
+          </button>
         </div>
       </div>
 
-      {/* Editable Header Fields */}
       <div className="mb-4 space-y-2 text-xs">
-        {/* Display the salutation before the customer name */}
         <div>
           <span
             contentEditable
@@ -306,7 +309,6 @@ export default function QuotationView() {
             {editableQuotation.customerCompany}
           </span>
         </div>
-        {/* Display company address next to company name */}
         {editableQuotation.companyAddress && (
           <div>
             <span className="font-bold uppercase">Company Address:</span>{" "}
@@ -315,7 +317,6 @@ export default function QuotationView() {
         )}
       </div>
 
-      {/* Terms Section */}
       <div className="mb-6">
         <button
           onClick={() => setTermModalOpen(true)}
@@ -337,7 +338,6 @@ export default function QuotationView() {
         ))}
       </div>
 
-      {/* Terms Modal */}
       {termModalOpen && (
         <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50">
           <div className="bg-white p-6 rounded w-1/3">
@@ -384,14 +384,15 @@ export default function QuotationView() {
         </div>
       )}
 
-      {/* Items Table */}
       <table className="w-full border-collapse mb-6 text-xs">
         <thead>
           <tr className="border-b">
             <th className="p-2 text-left">Sl. No.</th>
             <th className="p-2 text-left">Image</th>
             <th className="p-2 text-left">Product</th>
-            <th className="p-2 text-left">HSN</th>
+            {editableQuotation.displayHSNCodes && (
+              <th className="p-2 text-left">HSN</th>
+            )}
             <th className="p-2 text-left">Quantity</th>
             <th className="p-2 text-left">Rate (with margin)</th>
             <th className="p-2 text-left">Amount</th>
@@ -420,9 +421,7 @@ export default function QuotationView() {
                 ? item.productId.images[0]
                 : "https://via.placeholder.com/150");
 
-            // HSN Code: try to get from the populated productId, or fallback to item.hsnCode
-             const hsnCode = (item.productId && item.productId.hsnCode) ||
-              item.hsnCode || "N/A";
+            const hsnCode = item.hsnCode || (item.productId && item.productId.hsnCode) || "N/A";
 
             return (
               <tr key={index} className="border-b">
@@ -444,9 +443,14 @@ export default function QuotationView() {
                     onSave={(newVal) => updateItemField(index, "product", newVal)}
                   />
                 </td>
-                <td className="p-2">
-                  {hsnCode}
+                {editableQuotation.displayHSNCodes && (
+                  <td className="p-2">
+                    <EditableField
+                      value={hsnCode}
+                      onSave={(newVal) => updateItemField(index, "hsnCode", newVal)}
+                    />
                   </td>
+                )}
                 <td className="p-2">
                   <EditableField
                     value={item.quantity.toString()}
@@ -499,7 +503,6 @@ export default function QuotationView() {
         </tbody>
       </table>
 
-      {/* Totals Section - Only display if displayTotals is true */}
       {editableQuotation.displayTotals && (
         <div className="mb-6 text-lg font-bold text-xs">
           <p>Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}</p>
@@ -514,7 +517,6 @@ export default function QuotationView() {
   );
 }
 
-// Reusable inline editing component
 function EditableField({ value, onSave }) {
   const [editing, setEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
@@ -558,7 +560,7 @@ function EditableField({ value, onSave }) {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
+            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a join 2 2 0 002 2z"
           />
         </svg>
       </button>

@@ -320,7 +320,7 @@ export default function AdminDashboard() {
   });
 
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
-  const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 80;
+  const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 100;
   const megaOpen =
     crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
