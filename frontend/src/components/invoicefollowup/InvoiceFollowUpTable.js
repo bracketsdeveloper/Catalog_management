@@ -1,6 +1,10 @@
 // components/invoicefollowup/InvoiceFollowUpTable.js
 import React from "react";
-import { ArrowUpIcon, ArrowDownIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowUpIcon,
+  ArrowDownIcon,
+  EllipsisVerticalIcon,
+} from "@heroicons/react/24/outline";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -135,7 +139,9 @@ export default function InvoiceFollowUpTable({
               sortOrder={sortOrder}
               toggle={toggleSort}
             />
-            <th className="px-2 py-1 border border-gray-300 bg-gray-50">Actions</th>
+            <th className="px-2 py-1 border border-gray-300 bg-gray-50">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -181,9 +187,7 @@ export default function InvoiceFollowUpTable({
 function Cell({ val }) {
   return (
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
-      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
-        ? fmt(val)
-        : val ?? "-"}
+      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val) ? fmt(val) : val ?? "-"}
     </td>
   );
 }
