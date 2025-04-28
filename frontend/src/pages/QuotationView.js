@@ -446,9 +446,7 @@ export default function QuotationView() {
                 </td>
                 <td className="p-2">
                   {hsnCode}
-  
                   </td>
-
                 <td className="p-2">
                   <EditableField
                     value={item.quantity.toString()}

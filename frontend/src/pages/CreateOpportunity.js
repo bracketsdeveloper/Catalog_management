@@ -152,14 +152,16 @@ export default function CreateOpportunity() {
     }
   }
 
-  // Handlers
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const { name, value, type, checked } = e.target;
+
     setOpportunityData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === "checkbox" ? checked : value, // Standard handling for other fields
     }));
-  };
+  
+};
+
 
   const handleSliderChange = (e) => {
     const val = Number(e.target.value);

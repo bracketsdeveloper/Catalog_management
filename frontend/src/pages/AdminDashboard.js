@@ -23,11 +23,12 @@ import {
 
 
 const adminPages = [
-
    {
     name: "User Management",
     defaultPath: "/admin-dashboard/manage-users",
-    icon: <UserIcon  className="w-8 h-8" />,
+    icon: (
+      <img src="/UM.png" className="h-12 w-12" alt="User Management" />
+    ),
     subItems: [
       {
         name: "Manage Users",
@@ -45,13 +46,17 @@ const adminPages = [
     name: "Review Catalog",
     path: "/admin-dashboard/review-catalog",
     permission: "review-catalog",
-    icon: <PencilIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/Review_catalog.png" className="h-12 w-12" alt="Review Catalog" />
+    ),
   },
   {
     name: "Add Viewers",
     path: "/admin-dashboard/viewer-manager",
     permission: "viewers-manager",
-    icon: <EyeIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/Add_Viewers.png" className="h-12 w-12" alt="Viewers" />
+    ),
   },
 
   /* ----------------------- CRM ----------------------------------- */
@@ -228,7 +233,9 @@ const adminPages = [
   {
     name: "Samples",
     defaultPath: "/admin-dashboard/manage-samples",
-    icon: <BriefcaseIcon className="h-6 w-6" />,
+    icon: (
+      <img src="/Sample.png" className="h-12 w-12" alt="Samples" />
+    ),
     subItems: [
       {
         name: "Manage Samples",
@@ -547,7 +554,7 @@ export default function AdminDashboard() {
             onClick={handleSignOut}
             className="flex items-center w-full p-2 rounded-md hover:bg-white/10 transition"
           >
-            <ArrowLeftOnRectangleIcon className="h-6 w-6" />
+            <ArrowLeftOnRectangleIcon className="h-8 w-8" />
             {(sidebarOpen || sidebarHover) && (
               <span className="ml-3 text-sm font-medium">Logout</span>
             )}

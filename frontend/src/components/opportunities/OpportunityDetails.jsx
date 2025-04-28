@@ -35,6 +35,7 @@ export default function OpportunityDetails({
   const validateField = (fieldName, value) => {
     const requiredFields = {
       opportunityName: 'Opportunity Name',
+      customOpportunityName: 'CustomOpportunity Name',
       account: 'Account',
       opportunityValue: 'Opportunity Value',
       currency: 'Currency',
@@ -47,6 +48,8 @@ export default function OpportunityDetails({
       [fieldName]: !value ? `${requiredFields[fieldName]} is required` : ''
     }));
   };
+
+ 
 
   // When user picks a stage from the funnel
   const handleStageSelect = (stage) => {
@@ -143,6 +146,7 @@ const opportunityName = [
   "Cultural Gifts",
   "Dealers Meet Gifts",
   "Doctors Gifts",
+  "Evolve",
   "Exhibition Giveaways",
   "Farewell Gifts",
   "Festive Gifts",
@@ -155,10 +159,10 @@ const opportunityName = [
   "Luxury Gifts",
   "New Parents Gifts",
   "Offsite Gifts",
-  "Others",
   "Pre Joininers Kit",
   "Team Giveaways",
   "T-shirts",
+  "Training Giveaways",
   "Travel Gifts",
   "Work Anniversary Gifts"
 ];
@@ -182,13 +186,25 @@ const opportunityName = [
                 onChange={handleChange}
                 className="border rounded w-full px-2 py-1 text-sm"
               >
-                <option value="">Select Opportunity Type</option>
+                <option value="">Select Opportunity Name</option>
                 {opportunityName.map((type, index) => (
                   <option key={index} value={type}>
                     {type}
                   </option>
                 ))}
-              </select>
+                 <option value="Other">Other</option> {/* <-- Add "Other" option */}
+            </select>
+
+              {/* {data.opportunityName === "Other" && (
+                  <input 
+                    name="customOpportunityName"
+                    value={data.customOpportunityName}
+                    onChange={handleChange}
+                    className="border rounded w-full px-2 py-1 text-sm"
+                    placeholder="Enter custom name..."
+                  /> 
+              )} */} 
+          
 
             {errors.opportunityName && (
               <div className="text-red-500 text-xs mt-1">{errors.opportunityName}</div>
