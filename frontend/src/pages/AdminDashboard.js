@@ -26,9 +26,7 @@ const adminPages = [
    {
     name: "User Management",
     defaultPath: "/admin-dashboard/manage-users",
-    icon: (
-      <img src="/UM.png" className="h-12 w-12" alt="User Management" />
-    ),
+    icon: <UserIcon  className="w-8 h-8 flex justify-center items-center" />,
     subItems: [
       {
         name: "Manage Users",
@@ -234,7 +232,7 @@ const adminPages = [
     name: "Samples",
     defaultPath: "/admin-dashboard/manage-samples",
     icon: (
-      <img src="/Sample.png" className="h-12 w-12" alt="Samples" />
+      <img src="/Sample.png" className="h-8 w-8" alt="Samples" />
     ),
     subItems: [
       {
@@ -381,7 +379,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* ------------- NAVIGATION ------------- */}
-        <nav className="mt-4 px-2">
+        <nav className="mt-2 px-2">
           <ul className="space-y-2">
             {accessiblePages.map((page) => {
               /* ---------------- USER MANAGEMENT (mega‑menu) ---------------- */
@@ -549,12 +547,12 @@ export default function AdminDashboard() {
         </nav>
 
         {/* ---------- FOOTER: LOGOUT ---------- */}
-        <div className="mt-auto p-4">
+        <div className="mt-2 p-2">
           <button
             onClick={handleSignOut}
             className="flex items-center w-full p-2 rounded-md hover:bg-white/10 transition"
           >
-            <ArrowLeftOnRectangleIcon className="h-8 w-8" />
+            <ArrowLeftOnRectangleIcon className="h-6 w-6" />
             {(sidebarOpen || sidebarHover) && (
               <span className="ml-3 text-sm font-medium">Logout</span>
             )}
