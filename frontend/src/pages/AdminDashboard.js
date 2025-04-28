@@ -20,18 +20,26 @@ import {
 /* TOP‑LEVEL NAVIGATION CONFIG                                        */
 /* ------------------------------------------------------------------ */
 
+
+
 const adminPages = [
-  {
-    name: "Users",
-    path: "/admin-dashboard/manage-users",
-    permission: "manage-users",
-    icon: <UserIcon className="h-6 w-6" />,
-  },
-  {
-    name: "Manage Sub-Admins",
-    path: "/admin-dashboard/subadmin-manager",
-    permission: "sub-admins",
-    icon: <UserGroupIcon className="h-6 w-6" />,
+
+   {
+    name: "User Management",
+    defaultPath: "/admin-dashboard/manage-users",
+    icon: <UserIcon  className="w-8 h-8" />,
+    subItems: [
+      {
+        name: "Manage Users",
+        path: "/admin-dashboard/manage-users",
+        permission: "manage-users",
+      },
+      {
+        name: "Manage Permissions",
+        path: "/admin-dashboard/subadmin-manager",
+        permission: "sub-admins",
+      },
+    ],
   },
   {
     name: "Review Catalog",
@@ -47,10 +55,15 @@ const adminPages = [
   },
 
   /* ----------------------- CRM ----------------------------------- */
+
+   
+
   {
     name: "CRM",
     defaultPath: "/admin-dashboard/manage-companies",
-    icon: <UserGroupIcon className="h-6 w-6" />,
+    icon: (
+      <img src='/CRM.png' alt="CRM Icon" className="h-12 w-12" />
+    ),
     subItems: [
       {
         name: "Manage Client/Company Details",
@@ -89,7 +102,9 @@ const adminPages = [
   {
     name: "PURCHASE",
     defaultPath: "/admin-dashboard/manage-openpurchase",
-    icon: <ShoppingBagIcon className="h-6 w-6" />,
+    icon: (
+      <img src='/Purchase.png' alt="Purchase Icon" className="h-12 w-12" />
+    ),
     subItems: [
       {
         name: "Manage Purchase",
@@ -113,7 +128,9 @@ const adminPages = [
   {
     name: "Production",
     defaultPath: "/admin-dashboard/manage-productionjobsheet",
-    icon: <CurrencyDollarIcon className="h-6 w-6" />,
+    icon: (
+      <img src='/Production.png' alt="Production Icon" className="h-12 w-12" />
+    ),
     subItems: [
       {
         name: "Manage Production Jobsheets",
@@ -137,7 +154,9 @@ const adminPages = [
   {
     name: "Packing / Delivery",
     defaultPath: "/admin-dashboard/pending-packing",
-    icon: <CubeIcon className="h-6 w-6" />,
+    icon:(
+       <img src='/Packing.png' alt="Packing Icon" className="h-12 w-12" />
+    ),
     /* 
        We keep every leaf page in subItems; a `group` key lets
        the menu renderer show the two mid‑level subsections.
@@ -183,7 +202,9 @@ const adminPages = [
   {
     name: "Invoices Follow up & Summary",
     defaultPath: "/admin-dashboard/invoice-followup",
-    icon: <BookOpenIcon className="h-6 w-6" />,
+    icon: (
+      <img src='/Invoices.png' alt="Invoices Icon" className="h-12 w-12" />
+    ),
     subItems: [
       {
         name: "Invoices Follow Up",
@@ -245,6 +266,11 @@ export default function AdminDashboard() {
   const [packDelHovered, setPackDelHovered] = useState(false);
   const [invoicesHovered, setInvoicesHovered] = useState(false);
   const [samplesHovered, setSamplesHovered] = useState(false);
+
+  //user management
+  const [userManagementHovered, setUserManagementHovered] = useState(false);
+  
+
 
   /* ------------------------- AUTH STATE -------------------------- */
   const [permissions, setPermissions] = useState([]);
@@ -351,6 +377,19 @@ export default function AdminDashboard() {
         <nav className="mt-4 px-2">
           <ul className="space-y-2">
             {accessiblePages.map((page) => {
+              /* ---------------- USER MANAGEMENT (mega‑menu) ---------------- */
+              if (page.name === "User Management") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={userManagementHovered}
+                    setHovered={setUserManagementHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
               /* ---------------- CRM (mega‑menu) ---------------- */
               if (page.name === "CRM") {
                 return (
