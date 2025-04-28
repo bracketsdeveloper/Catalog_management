@@ -7,7 +7,7 @@ const productSubSchema = new mongoose.Schema({
   productName: { type: String },
   // New fields added:
   //product image
-  hsnCode: { type: String },
+  //hsnCode: { type: String },
   ProductDescription: { type: String },
   ProductBrand: { type: String },
   color: { type: String },

@@ -445,15 +445,8 @@ export default function QuotationView() {
                   />
                 </td>
                 <td className="p-2">
-                   <EditableField
-                    value={hsnCode}
-                    onSave={(newVal) => {
-                      const newHsnCode = parseFloat(newVal);
-                      if (!isNaN(newHsnCode)) {
-                        updateItemField(index, "hsnCode", newHsnCode);
-                      }
-                    }}
-                    />
+                  {hsnCode}
+  
                   </td>
 
                 <td className="p-2">
