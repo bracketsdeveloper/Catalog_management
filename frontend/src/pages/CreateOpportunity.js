@@ -25,6 +25,7 @@ export default function CreateOpportunity() {
   // Master object for "Opportunity" main fields
   const [opportunityData, setOpportunityData] = useState({
     opportunityName: "",
+    customOpportunityName: "",
     account: "",
     contact: "",
     opportunityType: "Non-Tender",
@@ -152,15 +153,20 @@ export default function CreateOpportunity() {
     }
   }
 
-  const handleChange = (e) => {
+
+const handleChange = (e) => {
   const { name, value, type, checked } = e.target;
 
     setOpportunityData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value, // Standard handling for other fields
+      [name]: type === "checkbox" ? checked : value,
     }));
   
 };
+
+
+
+
 
 
   const handleSliderChange = (e) => {

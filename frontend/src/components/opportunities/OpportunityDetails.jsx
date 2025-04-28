@@ -27,9 +27,20 @@ export default function OpportunityDetails({
   const [accountSuggestions, setAccountSuggestions] = useState([]);
   const [contactSuggestions, setContactSuggestions] = useState([]);
   const [ownerSuggestions, setOwnerSuggestions] = useState([]);
-
+  const [isOpportunityName, setIsOpportunityName] = useState(false);
+ 
+    
   // Add error state
   const [errors, setErrors] = useState({});
+
+
+  const openModal = () => {
+    setIsOpportunityName(true);
+  }
+
+  const closeModal = () => {
+    setIsOpportunityName(false)
+  }
 
   // Add validation handler
   const validateField = (fieldName, value) => {
@@ -164,7 +175,8 @@ const opportunityName = [
   "T-shirts",
   "Training Giveaways",
   "Travel Gifts",
-  "Work Anniversary Gifts"
+  "Work Anniversary Gifts",
+  "Others"
 ];
 
 
@@ -176,39 +188,72 @@ const opportunityName = [
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Opportunity Name */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Opportunity Name <span className="text-red-500">*</span>
-            </label>
-         
+            
+            
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          Opportunity Name <span className="text-red-500">*</span>
+        </label>
+         <div className="flex">
+          <div>
             <select
-                name="opportunityName"
-                value={data.opportunityName}
-                onChange={handleChange}
-                className="border rounded w-full px-2 py-1 text-sm"
-              >
-                <option value="">Select Opportunity Name</option>
-                {opportunityName.map((type, index) => (
-                  <option key={index} value={type}>
-                    {type}
-                  </option>
-                ))}
-                 <option value="Other">Other</option> {/* <-- Add "Other" option */}
+              name="opportunityName"
+              value={data.opportunityName}
+              onChange={handleChange}
+              className="border rounded w-full px-2 py-1 text-sm"
+            > 
+              <option value="">Select Opportunity Type</option>
+              {opportunityName.map((type, index) => (
+                <option key={index} value={type}>
+                  {type}
+                </option>
+              ))}
             </select>
+            </div>
 
-              {/* {data.opportunityName === "Other" && (
-                  <input 
-                    name="customOpportunityName"
-                    value={data.customOpportunityName}
-                    onChange={handleChange}
-                    className="border rounded w-full px-2 py-1 text-sm"
-                    placeholder="Enter custom name..."
-                  /> 
-              )} */} 
+            <div>
+             <label>
+                  <button
+                type="button"
+                onClick={openModal}
+                className="bg-blue-500 text-white px-2 py-1 rounded-r text-sm"
+                >
+                +
+              </button>
+             </label>
+            </div>
+            </div>
+        
           
+            {/* Modal structure */}
+      {isOpportunityName && (
+        
+          <div>
+            {/* Opportunity Name Input */}
+            <input
+              type="text"
+              name="opportunityName"
+              value={data.opportunityName}
+              onChange={handleChange}
+              onBlur={(e) => validateField('opportunityName', e.target.value)}
+              className={`border rounded w-full px-2 py-1 text-sm ${
+                errors.opportunityName ? 'border-red-500' : ''
+              }`}
+              placeholder="Enter Opportunity Name"
+            />
+
+            {/* Submit and Close Button */}
+            <div className="flex justify-between mt-4">
+              <button onClick={closeModal} className="btn btn-secondary">
+                Close
+              </button>
+            </div>
+           </div>
+      )}
 
             {errors.opportunityName && (
               <div className="text-red-500 text-xs mt-1">{errors.opportunityName}</div>
             )}
+
           </div>
           {/* Account with suggestions and Create button */}
           <div className="relative">

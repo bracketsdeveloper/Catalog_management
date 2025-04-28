@@ -894,11 +894,14 @@ export default function CatalogManagementPage() {
                       <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
                         Catalog Number
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
-                        Event Name
+                       <th className="px-4 py-2 text-left text-xs font-medium uppercase">
+                        Company Name
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Customer Name
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
+                        Event Name
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Products
@@ -909,16 +912,19 @@ export default function CatalogManagementPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {items.map((cat) => (
-                      <tr key={cat._id}>
-                        <td className="px-4 py-2">{cat.catalogNumber}</td>
-                        <td
+                   {[...items]
+                      .sort((a, b) => (a.catalogNumber < b.catalogNumber ? 1 : -1)) // Descending order
+                      .map((cat) => (
+                        <tr key={cat._id}>
+                          <td className="px-4 py-2">{cat.catalogNumber}</td>
+                          <td className="px-4 py-2">{cat.customerCompany}</td> 
+                         <td className="px-4 py-2">{cat.customerName}</td>
+                          <td
                           className="px-4 py-2 underline cursor-pointer"
                           onClick={() => handleVirtualLink(cat)}
                         >
                           {cat.catalogName}
                         </td>
-                        <td className="px-4 py-2">{cat.customerName}</td>
                         <td className="px-4 py-2">{cat.products?.length || 0}</td>
                         <td className="px-4 py-2">
                           <button
