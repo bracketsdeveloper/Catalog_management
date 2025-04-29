@@ -517,14 +517,23 @@ function Section({ rows }) {
             {filteredJobSheets.map((js) => (
               <tr key={js._id} className="border-b">
                 <td className="p-2">
-                   <button onClick={() => handleOpenModal(js)}>
-                    {js.jobSheetNumber || "(No Number)"}
-                  </button>
+                  <a 
+                  href="#"
+                  className="border-b text-blue-500 hover:text-blue-700"
+                  onClick={(e) => { 
+                    e.preventDefault(); // Prevent default behavior of anchor
+                    handleOpenModal(js); 
+                  }}
+                >
+                  {js.jobSheetNumber || "(No Number)"}
+                </a>
                   </td>
                   {/* Modal */}
               {showModal && (
-                    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center px-4 overflow-auto">
-                      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-xl w-full max-w-4xl">
+                   <div className="p-54">
+
+                    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center px-4 overflow-auto h-screen pt-56">
+                      <div className="m-4 p-10 mx-auto bg-white border border-black text-xs">
                         <h2 className="text-lg sm:text-xl font-semibold mb-4">Job Sheet Details</h2>
                         <p><strong>Job Sheet Number:</strong> {jobSheet?.jobSheetNumber || "(No Number)"}</p>
                         <p><strong>ID:</strong> {jobSheet?._id}</p>
@@ -622,7 +631,9 @@ function Section({ rows }) {
                         </div>
                       </div>
                     </div>
+                   </div>
                   )}
+                  
 
                 <td className="p-2">{js.clientName}</td>
                 <td className="p-2">{js.clientCompanyName}</td>
