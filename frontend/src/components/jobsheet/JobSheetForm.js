@@ -35,10 +35,8 @@ const JobSheetForm = ({
   setDeliveryCharges,
   deliveryAddress,
   setDeliveryAddress,
-  // New top-level brandingFileName
   brandingFileName,
   setBrandingFileName,
-
   giftBoxBagsDetails,
   setGiftBoxBagsDetails,
   packagingInstructions,
@@ -60,6 +58,10 @@ const JobSheetForm = ({
   handleInlineUpdate,
   handleRemoveSelectedItem,
   handleEditItem,
+  clients,
+  clientDropdownOpen,
+  setClientDropdownOpen,
+  handleClientSelect,
   brandingTypeOptions = [
     "Screen Printing",
     "Embroidery",
@@ -69,14 +71,9 @@ const JobSheetForm = ({
     "Other",
   ],
 }) => {
-  // We keep addresses as an array of strings locally too:
   const [addresses, setAddresses] = useState(
-    deliveryAddress && deliveryAddress.length > 0
-      ? deliveryAddress
-      : [""]
+    deliveryAddress && deliveryAddress.length > 0 ? deliveryAddress : [""]
   );
-
-  // For custom type/mode
   const [customDeliveryType, setCustomDeliveryType] = useState("");
   const [customDeliveryMode, setCustomDeliveryMode] = useState("");
 
@@ -90,7 +87,6 @@ const JobSheetForm = ({
   const deliveryModeOptions = ["Surface", "Air", "Other"];
   const deliveryChargesOptions = ["Included in cost", "Additional at actual"];
 
-  // Convert string dates to Date objects for react-datepicker
   const orderDateObj = orderDate
     ? parse(orderDate, "yyyy-MM-dd", new Date())
     : null;
@@ -100,7 +96,6 @@ const JobSheetForm = ({
 
   const syncWithParent = (newArray) => {
     setAddresses(newArray);
-    // Filter out empty strings
     const filtered = newArray.filter((addr) => addr.trim() !== "");
     setDeliveryAddress(filtered);
   };
@@ -115,7 +110,6 @@ const JobSheetForm = ({
     setDeliveryDate(formattedDate);
   };
 
-  // Manage array of string addresses
   const handleAddAddress = () => {
     const newArr = [...addresses, ""];
     syncWithParent(newArr);
@@ -258,9 +252,9 @@ const JobSheetForm = ({
         )}
       </div>
 
-      {/* Row: Client Name and Contact Number */}
+      {/* Row: Client Name and Contact Number with Client Dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+        <div className="relative">
           <label className="block mb-1 font-medium text-purple-700">
             Client Name *
           </label>
@@ -268,9 +262,25 @@ const JobSheetForm = ({
             type="text"
             className="border border-purple-300 rounded w-full p-2"
             value={clientName}
-            onChange={(e) => setClientName(e.target.value)}
+            onChange={(e) => {
+              setClientName(e.target.value);
+              setClientDropdownOpen(true);
+            }}
             required
           />
+          {clientDropdownOpen && clients.length > 0 && (
+            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
+              {clients.map((client, index) => (
+                <div
+                  key={index}
+                  className="p-2 cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleClientSelect(client)}
+                >
+                  {client.name} ({client.contactNumber})
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <label className="block mb-1 font-medium text-purple-700">
@@ -547,7 +557,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row: Delivery Addresses (array of strings) */}
+      {/* Row: Delivery Addresses */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Delivery Addresses
@@ -580,7 +590,7 @@ const JobSheetForm = ({
         </button>
       </div>
 
-      {/* NEW row: Branding File Name (top-level) */}
+      {/* Row: Branding File Name */}
       <div>
         <label className="block mb-1 font-medium text-purple-700">
           Branding File Name
