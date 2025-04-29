@@ -7,8 +7,8 @@ import React, { useState, useEffect } from "react";
 import axios          from "axios";
 import * as XLSX      from "xlsx";
 
-import SampleTable    from "../components/samples/SampleTable";
-import AddSampleModal from "../components/samples/AddSampleModal";
+import SampleTable    from "../components/samples/SampleTable.js";
+import AddSampleModal from "../components/samples/AddSampleModal.js";
 
 export default function Samples() {
   /* ------------------------------------------------------------ state */
