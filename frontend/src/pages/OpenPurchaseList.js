@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { TrashIcon } from '@heroicons/react/24/solid'; // or `/outline` for outlined style
 
 /* ───────────────── Header Filters ───────────────── */
 function HeaderFilters({ headerFilters, onFilterChange }) {
@@ -358,6 +359,64 @@ export default function OpenPurchases() {
   }, []);
   const canEdit = perms.includes("write-purchase");
 
+
+  //sorceby logic
+const handleSourcedByChange = async (e, id) => {
+  const selectedSourcedBy = e.target.value;
+  
+  const token = localStorage.getItem('token'); // Or sessionStorage, wherever you saved after login
+
+  try {
+    await axios.put(
+      `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${id}`,
+      { sourcedBy: selectedSourcedBy },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setPurchases((prevPurchases) =>
+      prevPurchases.map((purchase) =>
+        purchase._id === id
+          ? { ...purchase, sourcedBy: selectedSourcedBy }
+          : purchase
+      )
+    );
+  } catch (error) {
+    console.error("Error updating sourcedBy:", error);
+    alert("Failed to update sourcedBy!");
+  }
+};
+
+const handleSourcedByDelete = async (id) => {
+  const token = localStorage.getItem("token");
+
+  try {
+    await axios.put(
+           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${id}`,
+      { sourcedBy: "" }, // Clear the sourcedBy field
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setPurchases((prevPurchases) =>
+      prevPurchases.map((purchase) =>
+        purchase._id === id ? { ...purchase, sourcedBy: "" } : purchase
+      )
+    );
+  } catch (error) {
+    console.error("Error deleting sourcedBy:", error);
+    alert("Failed to delete sourcedBy");
+  }
+};
+
+
+
   const fetchPurchases = async () => {
     try {
       setLoading(true);
@@ -554,6 +613,7 @@ export default function OpenPurchases() {
               { k: "size", l: "Size" },
               { k: "qtyRequired", l: "Qty Required" },
               { k: "qtyOrdered", l: "Qty Ordered" },
+              { k: "sourcingBy", l: "Sourced By" },
               { k: "sourcingFrom", l: "Sourced From" },
               { k: "deliveryDateTime", l: "Delivery Date" },
               { k: "vendorContactNumber", l: "Vendor Contact Number" },
@@ -605,6 +665,38 @@ export default function OpenPurchases() {
                 <td className="p-2 border">{p.size || "N/A"}</td>
                 <td className="p-2 border">{p.qtyRequired}</td>
                 <td className="p-2 border">{p.qtyOrdered}</td>
+                 <td className="p-2 border">
+                    {p.sourcedBy ? (
+                      <div className="flex justify-between">
+                       <div>
+                      <span className="text-sm font-medium text-gray-700">{p.sourcedBy}</span>
+                        </div>
+                        <div>
+                       <button
+                        onClick={() => handleSourcedByDelete(p._id)}
+                        className="text-red-600 text-sm underline"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        </button>
+                        </div>
+                    </div>
+                    ) : (
+                      <select
+                        name="sourcedBy"
+                        value={p.sourcedBy}
+                        onChange={(e) => handleSourcedByChange(e, p._id)}
+                        className="border rounded px-2 py-1 text-sm"
+                      >
+                        <option value="">Select</option>
+                        <option value="Mohan">Mohan</option>
+                        <option value="Neeraj">Neeraj</option>
+                        <option value="Sathya">Sathya</option>
+                        <option value="Vijaylakshmi">Vijaylakshmi</option>
+                      </select>
+                    )}
+
+                  </td>
+
                 <td className="p-2 border">{p.sourcingFrom}</td>
                 <td className="p-2 border">
                   {p.deliveryDateTime ? new Date(p.deliveryDateTime).toLocaleDateString() : ""}

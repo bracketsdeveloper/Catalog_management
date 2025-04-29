@@ -15,6 +15,7 @@ const openPurchaseSchema = new mongoose.Schema({
   eventName: { type: String },
   product: { type: String },
   size: { type: String, default: "" }, // Added size field
+  sourcedBy: {type: String, default: ""},
   sourcingFrom: { type: String },
   qtyRequired: { type: Number },
   qtyOrdered: { type: Number, default: 0 },

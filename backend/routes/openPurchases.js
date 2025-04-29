@@ -26,6 +26,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           eventName: js.eventName,
           product: item.product,
           size: item.size || "", // Include size from JobSheet item
+          sorucedBy: item.sorucedBy,
           sourcingFrom: item.sourcingFrom,
           qtyRequired: item.quantity,
           qtyOrdered: 0,
@@ -180,6 +181,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               clientCompanyName: p.clientCompanyName,
               eventName: p.eventName,
               product: p.product,
+              sourcedBy : p.sourcedBy,
               sourcingFrom: p.sourcingFrom,
               vendorContactNumber: p.vendorContactNumber,
               orderConfirmedDate: p.orderConfirmedDate,
