@@ -1,16 +1,16 @@
+// backend/routes/quotations.js
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
 const path = require("path");
-const request = require("sync-request"); // For fetching images synchronously
+const request = require("sync-request");
 const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 const ImageModule = require("docxtemplater-image-module-free");
 const Quotation = require("../models/Quotation");
-const Log = require("../models/Log"); // Ensure you have a Log model
+const Log = require("../models/Log");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// Helper to create logs
 async function createLog(action, oldValue, newValue, user, ip) {
   try {
     await Log.create({
@@ -27,7 +27,6 @@ async function createLog(action, oldValue, newValue, user, ip) {
   }
 }
 
-// 1) CREATE QUOTATION
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
     console.log("Request body received for quotation creation:");
@@ -35,15 +34,16 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
 
     const {
       catalogName,
-      salutation,        // <-- NEW FIELD
+      salutation,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
       margin,
-      items,             // Items array from manual catalog
-      terms,             // Dynamic terms field (headings & content)
-      displayTotals,     // Whether to show totals (true/false)
+      items,
+      terms,
+      displayTotals,
+      displayHSNCodes, // New field
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -51,7 +51,6 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(400).json({ message: "No items provided" });
     }
 
-    // Default fallback terms if none are supplied
     const defaultTerms = [
       {
         heading: "Delivery",
@@ -67,60 +66,43 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       },
     ];
 
-    // If terms are not provided or empty, we fall back to default
     const quotationTerms = terms && terms.length > 0 ? terms : defaultTerms;
 
-    // Transform items payload into new items for the Quotation doc
     const newItems = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      // Product name check
       const productName = item.productName || item.product;
       if (!productName) {
         return res
           .status(400)
           .json({ message: `Product name is required for item #${i + 1}` });
       }
-      // Base cost or fallback
       const baseRate = parseFloat(item.productCost || item.productprice);
       if (isNaN(baseRate)) {
         return res
           .status(400)
           .json({ message: `Invalid product cost for item #${i + 1}` });
       }
-      // Updated price
       const updatedPrice = parseFloat(item.productprice);
       if (isNaN(updatedPrice)) {
         return res
           .status(400)
           .json({ message: `Invalid product price for item #${i + 1}` });
       }
-      // GST
       const productGST = parseFloat(item.productGST);
       if (isNaN(productGST)) {
         return res
           .status(400)
           .json({ message: `Invalid product GST for item #${i + 1}` });
       }
-      //hsn code
-      // const hsnCode = item.hsnCode;
-      // if (isNaN(hsnCode)) {
-      //   return res
-      //     .status(400)
-      //     .json({ message: `Invalid hsn code for item #${i + 1}` });
-      // }
-      
-      // Quantity
       let quantity = parseInt(item.quantity);
       if (isNaN(quantity)) {
         quantity = 1;
       }
-      // Calculation
       const amount = updatedPrice * quantity;
       const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
       const total = parseFloat((amount + gstValue).toFixed(2));
 
-      // Extract productId
       const productId =
         typeof item.productId === "object" && item.productId._id
           ? item.productId._id
@@ -130,9 +112,9 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
         slNo: i + 1,
         productId,
         product: productName,
+        hsnCode: item.hsnCode, // Store HSN code
         quantity,
         rate: baseRate,
-       // hsnCode,
         productprice: updatedPrice,
         amount,
         productGST,
@@ -141,14 +123,12 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       newItems.push(newItem);
     }
 
-    // Summaries
     const totalAmount = newItems.reduce((acc, curr) => acc + curr.amount, 0);
     const grandTotal = newItems.reduce((acc, curr) => acc + curr.total, 0);
 
-    // Create Quotation doc
     const newQuotation = new Quotation({
       catalogName,
-      salutation, // <-- storing salutation
+      salutation,
       customerName,
       customerEmail,
       customerCompany,
@@ -159,6 +139,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       totalAmount,
       grandTotal,
       displayTotals: !!displayTotals,
+      displayHSNCodes: !!displayHSNCodes, // New field
       createdBy: req.user.email,
     });
 
@@ -172,7 +153,6 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// 2) GET ALL QUOTATIONS
 router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotations = await Quotation.find()
@@ -188,7 +168,6 @@ router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// 3) GET A SINGLE QUOTATION
 router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotation = await Quotation.findById(req.params.id)
@@ -207,14 +186,11 @@ router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-// 4) UPDATE A QUOTATION
 router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       catalogName,
-      salutation, // <-- NEW
-      //image
-      //quations
+      salutation,
       customerName,
       customerEmail,
       customerCompany,
@@ -223,6 +199,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       items,
       terms,
       displayTotals,
+      displayHSNCodes, // New field
     } = req.body;
 
     const existingQuotation = await Quotation.findById(req.params.id);
@@ -262,22 +239,15 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         if (isNaN(quantity)) {
           quantity = 1;
         }
-
-        // const hsnCode = item.hsnCode;
-        // if (isNaN(hsnCode)) {
-        //   hsnCode = 0;
-        // }
-
         const amount = updatedPrice * quantity;
         const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
         const total = parseFloat((amount + gstValue).toFixed(2));
-         
 
         newItems.push({
           slNo: item.slNo || i + 1,
           productId: item.productId,
           product: productName,
-        //  hsnCode,
+          hsnCode: item.hsnCode, // Store updated HSN code
           quantity,
           rate: baseRate,
           productprice: updatedPrice,
@@ -297,7 +267,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
 
     const updatedData = {
       catalogName,
-      salutation,  // <-- store updated salutation
+      salutation,
       customerName,
       customerEmail,
       customerCompany,
@@ -305,6 +275,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       margin,
       terms,
       displayTotals,
+      displayHSNCodes, // New field
     };
 
     if (newItems.length) {
@@ -327,7 +298,6 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-// 5) DELETE A QUOTATION
 router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotationToDelete = await Quotation.findById(req.params.id);
@@ -343,7 +313,6 @@ router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) 
   }
 });
 
-// 6) EXPORT QUOTATION TO WORD
 router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotation = await Quotation.findById(req.params.id)
@@ -386,7 +355,6 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       modules: [imageModule],
     });
 
-    // Map Quotation items to template
     const itemsData = quotation.items.map((item, index) => {
       const quantity = parseFloat(item.quantity) || 0;
       const rate = parseFloat(item.rate) || 0;
@@ -398,6 +366,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
         slNo: item.slNo?.toString() || (index + 1).toString(),
         image,
         product: item.product || "",
+        hsnCode: item.hsnCode || item.productId?.hsnCode || "N/A",
         quantity: quantity.toString(),
         rate: rate.toFixed(2),
         amount: amount.toFixed(2),
@@ -408,7 +377,6 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     const totalAmount = itemsData.reduce((sum, i) => sum + parseFloat(i.amount), 0);
     const grandTotal = itemsData.reduce((sum, i) => sum + parseFloat(i.total), 0);
 
-    // Prepare data for Word template
     const docData = {
       date: new Date(quotation.createdAt).toLocaleDateString("en-US", {
         weekday: "long",
@@ -417,10 +385,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
         day: "numeric",
       }),
       quotationNumber: quotation.quotationNumber || "NoNumber",
-
-      // If you want to display salutation in your DOCX, pass it here:
       salutation: quotation.salutation || "",
-
       customerName: quotation.customerName || "",
       companyName: quotation.customerCompany || "",
       state: quotation.customerAddress || "",
@@ -429,6 +394,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       terms: quotation.terms || [],
       grandTotalAmount: totalAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2),
+      displayHSNCodes: quotation.displayHSNCodes, // New field
     };
 
     doc.render(docData);
@@ -444,11 +410,10 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     res.send(buffer);
   } catch (err) {
     console.error("Export error:", err);
-    res.status(500).json({ message: "Error generating Word document" });
+    res=status(500).json({ message: "Error generating Word document" });
   }
 });
 
-// 7) APPROVE A QUOTATION
 router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const updatedQuotation = await Quotation.findByIdAndUpdate(
@@ -462,13 +427,10 @@ router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, 
     res.json({ message: "Quotation approved", quotation: updatedQuotation });
   } catch (error) {
     console.error("Error approving quotation:", error);
-    res
-      .status(500)
-      .json({ message: "Server error approving quotation" });
+    res.status(500).json({ message: "Server error approving quotation" });
   }
 });
 
-// 8) UPDATE REMARKS FOR A QUOTATION
 router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { remarks } = req.body;
@@ -483,9 +445,7 @@ router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, 
     res.json({ message: "Remarks updated", quotation: updatedQuotation });
   } catch (error) {
     console.error("Error updating remarks for quotation:", error);
-    res
-      .status(500)
-      .json({ message: "Server error updating remarks for quotation" });
+    res.status(500).json({ message: "Server error updating remarks for quotation" });
   }
 });
 

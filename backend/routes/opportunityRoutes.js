@@ -100,36 +100,43 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
     const { filter, searchTerm } = req.query;
     const userName = req.user.name;
 
-    let query = {};
+    const andConditions = [];
 
     switch (filter) {
       case "my":
-        query.opportunityOwner = userName;
+        andConditions.push({ opportunityOwner: userName });
         break;
+
       case "team":
-        query.$or = [{ "teamMembers.userName": userName }];
+        andConditions.push(
+          { "teamMembers.userName": userName },
+          { opportunityOwner: { $ne: userName } }
+        );
         break;
-      // 'all' case remains default
+
+      // “all” => no additional conditions
     }
 
-    // Add search functionality across all relevant fields
     if (searchTerm) {
       const regex = new RegExp(searchTerm, "i");
-      query.$or = [
-        { opportunityCode: regex },
-        { opportunityName: regex },
-        { account: regex },
-        { contact: regex },
-        { opportunityStage: regex },
-        { opportunityStatus: regex },
-        { opportunityDetail: regex },
-        { opportunityOwner: regex },
-        { createdBy: regex },
-        { dealRegistrationNumber: regex },
-        { freeTextField: regex },
-        // Add other fields as needed
-      ];
+      andConditions.push({
+        $or: [
+          { opportunityCode: regex },
+          { opportunityName: regex },
+          { account: regex },
+          { contact: regex },
+          { opportunityStage: regex },
+          { opportunityStatus: regex },
+          { opportunityDetail: regex },
+          { opportunityOwner: regex },
+          { createdBy: regex },
+          { dealRegistrationNumber: regex },
+          { freeTextField: regex },
+        ],
+      });
     }
+
+    const query = andConditions.length ? { $and: andConditions } : {};
 
     const opportunities = await Opportunity.find(query)
       .sort({ createdAt: -1 })

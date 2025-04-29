@@ -35,7 +35,7 @@ export default function InvoicesSummaryTable({
   onEdit,
 }) {
   return (
-    <div className="border border-gray-300 rounded-lg">
+    <div className="border border-gray-300 rounded-lg overflow-x-auto">
       <table className="w-full table-auto text-xs">
         <thead>
           <tr>
@@ -87,7 +87,7 @@ export default function InvoicesSummaryTable({
 
         <tbody>
           {rows.map((r) => (
-            <tr key={r.dispatchId || r._id} className="hover:bg-gray-100">
+            <tr key={r._id} className="hover:bg-gray-100">
               <Cell val={r.jobSheetNumber} />
               <Cell val={r.clientCompanyName} />
               <Cell val={r.eventName} />

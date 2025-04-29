@@ -37,7 +37,7 @@ export default function PaymentFollowUpTable({
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
 
   return (
-    <div className="border border-gray-300 rounded-lg">
+    <div className="border border-gray-300 rounded-lg overflow-x-auto">
       <table className="w-full table-auto text-xs">
         <thead>
           <tr>
@@ -89,7 +89,6 @@ export default function PaymentFollowUpTable({
 
         <tbody>
           {rows.map((r) => {
-            // Find the latest follow-up by updatedOn
             const latestFollowUp = r.followUps?.length
               ? r.followUps.reduce((latest, current) =>
                   new Date(current.updatedOn) > new Date(latest.updatedOn)
@@ -99,7 +98,7 @@ export default function PaymentFollowUpTable({
               : null;
 
             return (
-              <tr key={r.dispatchId || r._id} className="hover:bg-gray-100">
+              <tr key={r._id} className="hover:bg-gray-100">
                 <Cell val={r.invoiceNumber} />
                 <Cell val={r.invoiceDate} />
                 <Cell val={r.invoiceAmount} />

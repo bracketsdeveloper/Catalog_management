@@ -1,3 +1,4 @@
+// backend/models/Quotation.js
 const mongoose = require("mongoose");
 const Counter = require("./Counter"); // Adjust the path as needed
 
@@ -5,8 +6,7 @@ const quotationItemSchema = new mongoose.Schema({
   slNo: { type: Number, required: true },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   product: { type: String, required: true }, // Display name
-  //hsnCode: { type: String, required: true },     // HSN
-  //IMAGE
+  hsnCode: { type: String },     // HSN
   quantity: { type: Number, required: true },
   rate: { type: Number, required: true },    // Original base rate
   productprice: { type: Number, required: true }, // Updated product price from catalog
@@ -24,10 +24,7 @@ const remarkSchema = new mongoose.Schema({
 const quotationSchema = new mongoose.Schema({
   quotationNumber: { type: String, unique: true },
   catalogName: { type: String },
-
-  // NEW: Salutation field
   salutation: { type: String, default: "Mr." },
-
   customerName: { type: String, required: true },
   customerEmail: { type: String },
   customerCompany: { type: String },
@@ -38,7 +35,8 @@ const quotationSchema = new mongoose.Schema({
   items: [quotationItemSchema],
   totalAmount: { type: Number, default: 0 },
   grandTotal: { type: Number, default: 0 },
-  displayTotals: { type: Boolean, default: false },  // Field to conditionally display totals
+  displayTotals: { type: Boolean, default: false },
+  displayHSNCodes: { type: Boolean, default: true }, // New field for HSN code display
   createdBy: { type: String },
   createdAt: { type: Date, default: Date.now },
   terms: [
@@ -53,7 +51,6 @@ const quotationSchema = new mongoose.Schema({
 quotationSchema.pre("save", async function (next) {
   if (this.isNew && !this.quotationNumber) {
     try {
-      // Ensure the counter starts at 9000 if not already
       await Counter.findOneAndUpdate(
         { id: "quotationNumber", seq: { $lt: 9000 } },
         { $set: { seq: 9000 } },

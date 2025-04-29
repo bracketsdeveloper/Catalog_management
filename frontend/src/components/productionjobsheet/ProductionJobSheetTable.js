@@ -1,166 +1,161 @@
-// src/components/productionjobsheet/ProductionJobSheetTable.js
 import React, { useState } from "react";
 
-function displayText(value) {
-  return !value || value === "-" ? "" : value;
-}
-function displayDate(v) {
-  if (!v || v === "-") return "";
-  const d = new Date(v);
-  return isNaN(d) ? "" : d.toLocaleDateString();
-}
-function displayDateTime(v) {
-  if (!v || v === "-") return "";
-  const d = new Date(v);
-  return isNaN(d) ? "" : d.toLocaleString();
+/* utility fns (unchanged) */
+const t = (v) => (!v || v === "-" ? "" : v);
+const d = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).toLocaleDateString());
+const dt = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).toLocaleString());
+
+/* header filter row */
+function FilterRow({ filters, onChange }) {
+  const cols = [
+    "jobSheetCreatedDate",
+    "jobSheetNumber",
+    "deliveryDateTime",
+    "clientCompanyName",
+    "eventName",
+    "product",
+    "qtyRequired",
+    "qtyOrdered",
+    "expectedReceiveDate",
+    "brandingType",
+    "brandingVendor",
+    "expectedPostBranding",
+    "schedulePickUp",
+    "remarks",
+    "status",
+  ];
+  return (
+    <tr className="bg-gray-100">
+      {cols.map((k) => (
+        <th key={k} className="border px-1 py-0.5">
+          <input
+            value={filters[k] || ""}
+            onChange={(e) => onChange(k, e.target.value)}
+            className="w-full border p-0.5 text-[10px] rounded"
+            placeholder="filter…"
+          />
+        </th>
+      ))}
+      <th className="border px-1 py-0.5"></th>
+    </tr>
+  );
 }
 
-const ProductionJobSheetTable = ({
+export default function ProductionJobSheetTable({
   data,
   onActionClick,
   sortField,
   sortOrder,
   onSortChange,
-}) => {
-  const [followUpModalData, setFollowUpModalData] = useState(null);
+  headerFilters,
+  onHeaderFilterChange,
+}) {
+  const [fuModal, setFuModal] = useState(null);
 
-  const getRowClass = (status) => {
-    if (!status) return "bg-white";
-    switch (status) {
-      case "pending":
-        return "bg-orange-200";
-      case "received":
-        return "bg-green-300";
-      case "alert":
-        return "bg-red-200";
-      default:
-        return "bg-white";
-    }
-  };
+  const rowCls = (s) =>
+    !s
+      ? ""
+      : s === "pending"
+      ? "bg-orange-200"
+      : s === "received"
+      ? "bg-green-300"
+      : s === "alert"
+      ? "bg-red-200"
+      : "";
 
-  const renderSortIcon = (field) => {
-    if (sortField !== field) return <span className="ml-1 opacity-50">↕</span>;
-    return sortOrder === "asc" ? <span className="ml-1">▲</span> : <span className="ml-1">▼</span>;
-  };
-
-  // find the latest follow‑up object by date, safely
-  const latestFollowUpObj = (arr = []) => {
-    if (!Array.isArray(arr) || arr.length === 0) return null;
-    return arr.reduce((prev, curr) =>
-      new Date(prev.followUpDate) > new Date(curr.followUpDate) ? prev : curr
+  const icon = (f) =>
+    sortField !== f ? (
+      <span className="opacity-50 ml-0.5">↕</span>
+    ) : sortOrder === "asc" ? (
+      <span className="ml-0.5">▲</span>
+    ) : (
+      <span className="ml-0.5">▼</span>
     );
-  };
 
-  const handleFollowUpClick = (arr) => {
-    const latest = latestFollowUpObj(arr);
-    if (latest) setFollowUpModalData(latest);
-  };
+  const latestFU = (arr = []) =>
+    arr.reduce(
+      (p, c) => ((new Date(c.followUpDate) > new Date(p.followUpDate) ? c : p)),
+      { followUpDate: 0 }
+    );
 
   return (
     <>
       <table className="min-w-full table-auto border-collapse text-xs">
         <thead className="bg-gray-50">
           <tr>
+            {[
+              ["jobSheetCreatedDate", "Order Date"],
+              ["jobSheetNumber", "Job Sheet"],
+              ["deliveryDateTime", "Delivery Date"],
+              ["clientCompanyName", "Client"],
+              ["eventName", "Event"],
+              ["product", "Product"],
+            ].map(([k, l]) => (
+              <th
+                key={k}
+                className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
+                onClick={() => onSortChange(k)}
+              >
+                {l} {icon(k)}
+              </th>
+            ))}
+            <th className="border px-2 py-1 font-semibold">Qty Req</th>
+            <th className="border px-2 py-1 font-semibold">Qty Ord</th>
+            <th className="border px-2 py-1 font-semibold">Expected In-Hand</th>
+            {[
+              ["brandingType", "Branding Type"],
+              ["brandingVendor", "Branding Vendor"],
+            ].map(([k, l]) => (
+              <th
+                key={k}
+                className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
+                onClick={() => onSortChange(k)}
+              >
+                {l} {icon(k)}
+              </th>
+            ))}
+            <th className="border px-2 py-1 font-semibold">Expected Post Branding</th>
             <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("jobSheetCreatedDate")}
-            >
-              Order Date {renderSortIcon("jobSheetCreatedDate")}
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("jobSheetNumber")}
-            >
-              Job Sheet {renderSortIcon("jobSheetNumber")}
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("deliveryDateTime")}
-            >
-              Delivery Date {renderSortIcon("deliveryDateTime")}
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("clientCompanyName")}
-            >
-              Client {renderSortIcon("clientCompanyName")}
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("eventName")}
-            >
-              Event {renderSortIcon("eventName")}
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("product")}
-            >
-              Product {renderSortIcon("product")}
-            </th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">Qty Req</th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">Qty Ord</th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">
-              Product Expected In Hand
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("brandingType")}
-            >
-              Branding Type {renderSortIcon("brandingType")}
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
-              onClick={() => onSortChange("brandingVendor")}
-            >
-              Branding Vendor {renderSortIcon("brandingVendor")}
-            </th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">
-              Expected Post Branding
-            </th>
-            <th
-              className="border px-2 py-1 text-blue-800 font-semibold cursor-pointer"
+              className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
               onClick={() => onSortChange("schedulePickUp")}
             >
-              Schedule Pick Up {renderSortIcon("schedulePickUp")}
+              Schedule Pick-Up {icon("schedulePickUp")}
             </th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">Follow Up</th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">Remarks</th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">Status</th>
-            <th className="border px-2 py-1 text-blue-800 font-semibold">Action</th>
+            <th className="border px-2 py-1 font-semibold">Follow Up</th>
+            <th className="border px-2 py-1 font-semibold">Remarks</th>
+            <th className="border px-2 py-1 font-semibold">Status</th>
+            <th className="border px-2 py-1 font-semibold">Action</th>
           </tr>
+          <FilterRow filters={headerFilters} onChange={onHeaderFilterChange} />
         </thead>
         <tbody>
           {data.map((r) => {
-            const latestFU = latestFollowUpObj(r.followUp);
+            const fu = latestFU(r.followUp);
             return (
-              <tr key={r._id} className={getRowClass(r.status)}>
-                <td className="border px-2 py-1">{displayDate(r.jobSheetCreatedDate)}</td>
-                <td className="border px-2 py-1">{displayText(r.jobSheetNumber)}</td>
-                <td className="border px-2 py-1">{displayDate(r.deliveryDateTime)}</td>
-                <td className="border px-2 py-1">{displayText(r.clientCompanyName)}</td>
-                <td className="border px-2 py-1">{displayText(r.eventName)}</td>
-                <td className="border px-2 py-1">{displayText(r.product)}</td>
-                <td className="border px-2 py-1">{displayText(r.qtyRequired)}</td>
-                <td className="border px-2 py-1">{displayText(r.qtyOrdered)}</td>
-                <td className="border px-2 py-1">{displayDate(r.expectedReceiveDate)}</td>
-                <td className="border px-2 py-1">{displayText(r.brandingType)}</td>
-                <td className="border px-2 py-1">{displayText(r.brandingVendor)}</td>
-                <td className="border px-2 py-1">{displayDate(r.expectedPostBranding)}</td>
-                <td className="border px-2 py-1">{displayDateTime(r.schedulePickUp)}</td>
+              <tr key={r._id} className={rowCls(r.status)}>
+                <td className="border px-2 py-1">{d(r.jobSheetCreatedDate)}</td>
+                <td className="border px-2 py-1">{t(r.jobSheetNumber)}</td>
+                <td className="border px-2 py-1">{d(r.deliveryDateTime)}</td>
+                <td className="border px-2 py-1">{t(r.clientCompanyName)}</td>
+                <td className="border px-2 py-1">{t(r.eventName)}</td>
+                <td className="border px-2 py-1">{t(r.product)}</td>
+                <td className="border px-2 py-1">{t(r.qtyRequired)}</td>
+                <td className="border px-2 py-1">{t(r.qtyOrdered)}</td>
+                <td className="border px-2 py-1">{d(r.expectedReceiveDate)}</td>
+                <td className="border px-2 py-1">{t(r.brandingType)}</td>
+                <td className="border px-2 py-1">{t(r.brandingVendor)}</td>
+                <td className="border px-2 py-1">{d(r.expectedPostBranding)}</td>
+                <td className="border px-2 py-1">{dt(r.schedulePickUp)}</td>
                 <td
-                  className="border px-2 py-1 cursor-pointer text-blue-600 underline"
-                  onClick={() => handleFollowUpClick(r.followUp)}
+                  className="border px-2 py-1 text-blue-600 underline cursor-pointer"
+                  onClick={() => fu.followUpDate && setFuModal(fu)}
                 >
-                  {latestFU?.followUpDate
-                    ? new Date(latestFU.followUpDate).toLocaleDateString()
-                    : ""}
+                  {fu.followUpDate ? new Date(fu.followUpDate).toLocaleDateString() : ""}
                 </td>
-                <td className="border px-2 py-1">{displayText(r.remarks)}</td>
-                <td className="border px-2 py-1">{displayText(r.status)}</td>
+                <td className="border px-2 py-1">{t(r.remarks)}</td>
+                <td className="border px-2 py-1">{t(r.status)}</td>
                 <td className="border px-2 py-1 text-center">
-                  <button onClick={() => onActionClick(r)} className="focus:outline-none">
-                    &#8942;
-                  </button>
+                  <button onClick={() => onActionClick(r)}>&#8942;</button>
                 </td>
               </tr>
             );
@@ -168,20 +163,19 @@ const ProductionJobSheetTable = ({
         </tbody>
       </table>
 
-      {followUpModalData && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white p-4 rounded shadow-lg max-w-md">
-            <h2 className="text-xl font-bold mb-2">Follow Up Details</h2>
+      {/* follow-up pop-up */}
+      {fuModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+          <div className="bg-white p-4 rounded max-w-md text-xs">
+            <h3 className="font-bold mb-2">Follow Up Details</h3>
             <p>
-              <strong>Date:</strong> {new Date(followUpModalData.followUpDate).toLocaleString()}
+              <strong>Date:</strong>{" "}
+              {new Date(fuModal.followUpDate).toLocaleString()}
             </p>
             <p>
-              <strong>Note:</strong> {followUpModalData.note}
+              <strong>Note:</strong> {fuModal.note}
             </p>
-            <button
-              onClick={() => setFollowUpModalData(null)}
-              className="mt-4 px-4 py-2 border rounded bg-gray-300"
-            >
+            <button onClick={() => setFuModal(null)} className="mt-4 border px-3 py-1 rounded">
               Close
             </button>
           </div>
@@ -189,6 +183,4 @@ const ProductionJobSheetTable = ({
       )}
     </>
   );
-};
-
-export default ProductionJobSheetTable;
+}

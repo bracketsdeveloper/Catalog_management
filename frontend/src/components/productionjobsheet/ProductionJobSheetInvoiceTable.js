@@ -1,45 +1,80 @@
-// components/productionjobsheet/ProductionJobSheetInvoiceTable.jsx
 import React from "react";
 import * as XLSX from "xlsx";
 
-const txt = (v) => (v && v !== "-" ? v : "");
-const dte = (v) => (!v || v === "-" ? "" : new Date(v).toLocaleDateString());
+/* utils */
+const t = (v) => (v && v !== "-" ? v : "");
+const d = (v) => (!v || v === "-" ? "" : new Date(v).toLocaleDateString());
 
-const ProductionJobSheetInvoiceTable = ({
+/* header filter row */
+function FilterRow({ filters, onChange }) {
+  const cols = [
+    "orderConfirmationDate",
+    "jobSheetNumber",
+    "clientCompanyName",
+    "eventName",
+    "product",
+    "qtyRequired",
+    "qtyOrdered",
+    "sourceFrom",
+    "cost",
+    "negotiatedCost",
+    "vendorInvoiceNumber",
+    "vendorInvoiceReceived",
+  ];
+  return (
+    <tr className="bg-gray-100">
+      {cols.map((k) => (
+        <th key={k} className="border px-1 py-0.5">
+          <input
+            value={filters[k] || ""}
+            onChange={(e) => onChange(k, e.target.value)}
+            className="w-full border p-0.5 text-[10px] rounded"
+            placeholder="filter…"
+          />
+        </th>
+      ))}
+      <th className="border px-1 py-0.5"></th>
+    </tr>
+  );
+}
+
+export default function ProductionJobSheetInvoiceTable({
   data,
   sortConfig,
   onSortChange,
   onActionClick,
-}) => {
-  const sortIcon = (f) =>
+  headerFilters,
+  onHeaderFilterChange,
+}) {
+  const icon = (f) =>
     sortConfig.key === f ? (
       sortConfig.direction === "asc" ? (
-        <span className="ml-1 text-xs">▲</span>
+        <span className="ml-0.5 text-xs">▲</span>
       ) : (
-        <span className="ml-1 text-xs">▼</span>
+        <span className="ml-0.5 text-xs">▼</span>
       )
     ) : (
-      <span className="ml-1 opacity-50 text-xs">↕</span>
+      <span className="ml-0.5 opacity-50 text-xs">↕</span>
     );
 
-  const exportToExcel = () => {
-    const exp = data.map((i) => ({
-      "Order Confirmation Date": dte(i.orderConfirmationDate),
-      "Job Sheet": txt(i.jobSheetNumber),
-      "Client Name": txt(i.clientCompanyName),
-      "Event Name": txt(i.eventName),
-      "Product Name": txt(i.product),
-      "Qty Required": i.qtyRequired ?? "",
-      "Qty Ordered": i.qtyOrdered ?? "",
-      "Source From": txt(i.sourceFrom),
-      Cost: i.cost ?? "",
-      "Negotiated Cost": i.negotiatedCost ?? "",
-      "Payment Modes":
-        i.paymentModes?.length ? i.paymentModes.map((p) => p.mode).join(", ") : "",
-      "Vendor Invoice Number": txt(i.vendorInvoiceNumber),
-      "Vendor Invoice Received": txt(i.vendorInvoiceReceived),
-    }));
-    const ws = XLSX.utils.json_to_sheet(exp);
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(
+      data.map((i) => ({
+        "Order Confirm": d(i.orderConfirmationDate),
+        "Job Sheet": i.jobSheetNumber,
+        Client: i.clientCompanyName,
+        Event: i.eventName,
+        Product: i.product,
+        "Qty Req": i.qtyRequired,
+        "Qty Ord": i.qtyOrdered,
+        "Source From": i.sourceFrom,
+        Cost: i.cost,
+        "Negotiated Cost": i.negotiatedCost,
+        "Payment Modes": i.paymentModes?.map((p) => p.mode).join(", "),
+        "Vendor Inv #": i.vendorInvoiceNumber,
+        "Inv Received": i.vendorInvoiceReceived,
+      }))
+    );
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Invoices");
     XLSX.writeFile(wb, "ProductionJobSheetInvoice.xlsx");
@@ -48,87 +83,83 @@ const ProductionJobSheetInvoiceTable = ({
   return (
     <>
       <div className="mb-2">
-        <button
-          onClick={exportToExcel}
-          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-        >
-          Export to Excel
+        <button onClick={exportExcel} className="bg-green-600 text-white text-xs px-4 py-2 rounded">
+          Export&nbsp;to&nbsp;Excel
         </button>
       </div>
+
       <table className="min-w-full border-collapse text-xs">
         <thead className="bg-gray-50">
           <tr>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("orderConfirmationDate")}>
-              Order Confirmation Date {sortIcon("orderConfirmationDate")}
-            </th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("jobSheetNumber")}>
-              Job Sheet {sortIcon("jobSheetNumber")}
-            </th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("clientCompanyName")}>
-              Client Name {sortIcon("clientCompanyName")}
-            </th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("eventName")}>
-              Event Name {sortIcon("eventName")}
-            </th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("product")}>
-              Product Name {sortIcon("product")}
-            </th>
+            {[
+              ["orderConfirmationDate", "Order Confirmation Date"],
+              ["jobSheetNumber", "Job Sheet"],
+              ["clientCompanyName", "Client Name"],
+              ["eventName", "Event Name"],
+              ["product", "Product Name"],
+            ].map(([k, l]) => (
+              <th key={k} className="p-2 border cursor-pointer" onClick={() => onSortChange(k)}>
+                {l} {icon(k)}
+              </th>
+            ))}
             <th className="p-2 border">Qty Req</th>
             <th className="p-2 border">Qty Ord</th>
             <th className="p-2 border">Source From</th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("cost")}>
-              Cost {sortIcon("cost")}
-            </th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("negotiatedCost")}>
-              Negotiated Cost {sortIcon("negotiatedCost")}
-            </th>
+            {[
+              ["cost", "Cost"],
+              ["negotiatedCost", "Negotiated Cost"],
+            ].map(([k, l]) => (
+              <th key={k} className="p-2 border cursor-pointer" onClick={() => onSortChange(k)}>
+                {l} {icon(k)}
+              </th>
+            ))}
             <th className="p-2 border">Payment Mode</th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("vendorInvoiceNumber")}>
-              Vendor Invoice Number {sortIcon("vendorInvoiceNumber")}
-            </th>
-            <th className="p-2 border cursor-pointer" onClick={() => onSortChange("vendorInvoiceReceived")}>
-              Vendor Invoice Received {sortIcon("vendorInvoiceReceived")}
-            </th>
+            {[
+              ["vendorInvoiceNumber", "Vendor Invoice Number"],
+              ["vendorInvoiceReceived", "Vendor Invoice Received"],
+            ].map(([k, l]) => (
+              <th key={k} className="p-2 border cursor-pointer" onClick={() => onSortChange(k)}>
+                {l} {icon(k)}
+              </th>
+            ))}
             <th className="p-2 border">Actions</th>
           </tr>
+          <FilterRow filters={headerFilters} onChange={onHeaderFilterChange} />
         </thead>
         <tbody>
-          {data.map((i) => {
-            const bg =
-              i.vendorInvoiceReceived?.toLowerCase() === "yes"
-                ? "bg-green-100"
-                : "bg-white";
-            return (
-              <tr key={i._id} className={bg}>
-                <td className="p-2 border">{dte(i.orderConfirmationDate)}</td>
-                <td className="p-2 border">{txt(i.jobSheetNumber)}</td>
-                <td className="p-2 border">{txt(i.clientCompanyName)}</td>
-                <td className="p-2 border">{txt(i.eventName)}</td>
-                <td className="p-2 border">{txt(i.product)}</td>
-                <td className="p-2 border">{i.qtyRequired ?? ""}</td>
-                <td className="p-2 border">{i.qtyOrdered ?? ""}</td>
-                <td className="p-2 border">{txt(i.sourceFrom)}</td>
-                <td className="p-2 border">{i.cost ?? ""}</td>
-                <td className="p-2 border">{i.negotiatedCost ?? ""}</td>
-                <td className="p-2 border">
-                  {i.paymentModes?.length
-                    ? i.paymentModes.map((p) => p.mode).join(", ")
-                    : ""}
-                </td>
-                <td className="p-2 border">{txt(i.vendorInvoiceNumber)}</td>
-                <td className="p-2 border">{txt(i.vendorInvoiceReceived)}</td>
-                <td className="p-2 border text-center">
-                  <button onClick={() => onActionClick(i)} className="focus:outline-none">
-                    ⋮
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+          {data.map((i) => (
+            <tr
+              key={i._id}
+              className={
+                (i.vendorInvoiceReceived || "no").toLowerCase() === "yes"
+                  ? "bg-green-100"
+                  : ""
+              }
+            >
+              <td className="p-2 border">{d(i.orderConfirmationDate)}</td>
+              <td className="p-2 border">{i.jobSheetNumber}</td>
+              <td className="p-2 border">{t(i.clientCompanyName)}</td>
+              <td className="p-2 border">{t(i.eventName)}</td>
+              <td className="p-2 border">{t(i.product)}</td>
+              <td className="p-2 border">{i.qtyRequired}</td>
+              <td className="p-2 border">{i.qtyOrdered}</td>
+              <td className="p-2 border">{t(i.sourceFrom)}</td>
+              <td className="p-2 border">{i.cost}</td>
+              <td className="p-2 border">{i.negotiatedCost}</td>
+              <td className="p-2 border">
+                {i.paymentModes?.map((p) => p.mode).join(", ")}
+              </td>
+              <td className="p-2 border">{t(i.vendorInvoiceNumber)}</td>
+              <td className="p-2 border">{t(i.vendorInvoiceReceived)}</td>
+              <td className="p-2 border text-center">
+                <button onClick={() => onActionClick(i)} className="focus:outline-none">
+                  ⋮
+                </button>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </>
   );
-};
-
-export default ProductionJobSheetInvoiceTable;
+}

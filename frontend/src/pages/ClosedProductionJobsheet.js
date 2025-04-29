@@ -1,96 +1,273 @@
 // src/pages/ClosedProductionJobsheet.js
-import React, { useState, useEffect } from "react";
+"use client";
+
+import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+import * as XLSX from "xlsx";
 import ClosedProductionJobSheetTable from "../components/productionjobsheet/ClosedProductionJobSheetTable";
 
-const ClosedProductionJobsheet = () => {
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-  const token = localStorage.getItem("token");
+/* ───────────────────── helpers ───────────────────── */
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const token = localStorage.getItem("token");
 
-  const [data, setData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState("");
-  const [sortOrder, setSortOrder] = useState("asc");
+const dateKeys = [
+  "jobSheetCreatedDate",
+  "deliveryDateTime",
+  "expectedReceiveDate",
+  "schedulePickUp",
+];
+const toDate = (d) => (d ? new Date(d) : new Date(0));
+const cmp = (a, b, t) =>
+  t === "date"
+    ? toDate(a) - toDate(b)
+    : String(a ?? "").localeCompare(String(b ?? ""), "en", {
+        sensitivity: "base",
+      });
 
-  const fetchData = async () => {
+/* ─────────── initial adv-filter shape ─────── */
+const initRange = { from: "", to: "" };
+const initAdv = {
+  jobSheetNumber: { ...initRange },
+  jobSheetCreatedDate: { ...initRange },
+  deliveryDateTime: { ...initRange },
+  expectedReceiveDate: { ...initRange },
+  schedulePickUp: { ...initRange },
+};
+
+export default function ClosedProductionJobsheet() {
+  /* --------------- state --------------- */
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [search, setSearch] = useState("");
+  const [headerFilters, setHeader] = useState({});
+  const [advFilters, setAdv] = useState(initAdv);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const [sort, setSort] = useState({
+    key: "jobSheetCreatedDate",
+    direction: "asc",
+    type: "date",
+  });
+
+  /* --------------- fetch --------------- */
+  const fetchRows = async () => {
     try {
+      setLoading(true);
       const res = await axios.get(
         `${BACKEND_URL}/api/admin/productionjobsheets/aggregated`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const closedRecords = res.data.filter((r) => r.status === "received");
-      setData(closedRecords);
-    } catch (error) {
-      console.error("Error fetching closed production job sheets", error);
+      setRows(res.data.filter((r) => (r.status || "").toLowerCase() === "received"));
+    } catch (e) {
+      console.error("Fetch closed prod-jobsheets failed:", e);
+    } finally {
+      setLoading(false);
     }
   };
-
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line
+    fetchRows();
   }, []);
 
-  const filteredData = data.filter((record) =>
-    JSON.stringify(record).toLowerCase().includes(searchTerm.toLowerCase())
+  /* --------------- filtering pipeline --------------- */
+  const global = useMemo(
+    () =>
+      rows.filter((r) =>
+        JSON.stringify(r).toLowerCase().includes(search.toLowerCase())
+      ),
+    [rows, search]
   );
 
-  const sortedData = [...filteredData].sort((a, b) => {
-    if (!sortField) return 0;
+  const headered = useMemo(
+    () =>
+      global.filter((r) =>
+        Object.entries(headerFilters).every(([k, v]) => {
+          if (!v) return true;
+          let val = r[k] ?? "";
+          if (dateKeys.includes(k) && val) val = new Date(val).toLocaleDateString();
+          return String(val).toLowerCase().includes(v.toLowerCase());
+        })
+      ),
+    [global, headerFilters]
+  );
 
-    let aVal = a[sortField];
-    let bVal = b[sortField];
+  const adv = useMemo(() => {
+    const inRange = (d, { from, to }) => {
+      if (!from && !to) return true;
+      if (!d) return false;
+      const dt = new Date(d);
+      if (from && dt < new Date(from)) return false;
+      if (to && dt > new Date(to)) return false;
+      return true;
+    };
+    return headered.filter(
+      (r) =>
+        (!advFilters.jobSheetNumber.from ||
+          r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
+        (!advFilters.jobSheetNumber.to ||
+          r.jobSheetNumber <= advFilters.jobSheetNumber.to) &&
+        inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
+        inRange(r.deliveryDateTime, advFilters.deliveryDateTime) &&
+        inRange(r.expectedReceiveDate, advFilters.expectedReceiveDate) &&
+        inRange(r.schedulePickUp, advFilters.schedulePickUp)
+    );
+  }, [headered, advFilters]);
 
-    const dateFields = [
-      "jobSheetCreatedDate",
-      "deliveryDateTime",
-      "expectedReceiveDate",
-      "schedulePickUp",
-    ];
+  const sorted = useMemo(
+    () =>
+      [...adv].sort(
+        (a, b) => cmp(a[sort.key], b[sort.key], sort.type) * (sort.direction === "asc" ? 1 : -1)
+      ),
+    [adv, sort]
+  );
 
-    if (dateFields.includes(sortField)) {
-      aVal = aVal ? new Date(aVal) : new Date(0);
-      bVal = bVal ? new Date(bVal) : new Date(0);
-    } else {
-      aVal = aVal !== undefined && aVal !== null ? aVal.toString().toLowerCase() : "";
-      bVal = bVal !== undefined && bVal !== null ? bVal.toString().toLowerCase() : "";
-    }
+  /* --------------- handlers --------------- */
+  const setHeaderFilter = (k, v) => setHeader((p) => ({ ...p, [k]: v }));
+  const setAdvFilter = (f, k, v) => setAdv((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
+  const sortBy = (k, t = "string") =>
+    setSort((p) => ({
+      key: k,
+      type: t,
+      direction: p.key === k && p.direction === "asc" ? "desc" : "asc",
+    }));
 
-    if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
-    if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  const handleSortChange = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortOrder("asc");
-    }
+  /* --------------- export --------------- */
+  const exportXlsx = () => {
+    const wb = XLSX.utils.book_new();
+    const sheet = sorted.map((r) => ({
+      "Order Date": r.jobSheetCreatedDate
+        ? new Date(r.jobSheetCreatedDate).toLocaleDateString()
+        : "",
+      "Job Sheet": r.jobSheetNumber,
+      "Delivery Date": r.deliveryDateTime
+        ? new Date(r.deliveryDateTime).toLocaleDateString()
+        : "",
+      Client: r.clientCompanyName,
+      Event: r.eventName,
+      Product: r.product,
+      "Qty Req": r.qtyRequired,
+      "Qty Ord": r.qtyOrdered,
+      "Expected In-Hand": r.expectedReceiveDate
+        ? new Date(r.expectedReceiveDate).toLocaleDateString()
+        : "",
+      "Branding Type": r.brandingType,
+      "Branding Vendor": r.brandingVendor,
+      "Expected Post Brand": r.expectedPostBranding,
+      "Schedule Pick-Up": r.schedulePickUp
+        ? new Date(r.schedulePickUp).toLocaleString()
+        : "",
+      Remarks: r.remarks,
+      Status: r.status,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheet), "Closed");
+    XLSX.writeFile(wb, "ClosedProductionJobSheets.xlsx");
   };
 
+  /* --------------- UI --------------- */
   return (
-    <div className="p-4 bg-white min-h-screen">
+    <div className="p-4">
       <h1 className="text-2xl text-purple-700 font-bold mb-4">
         Closed Production Job Sheet
       </h1>
-      <div className="mb-4">
+
+      {/* toolbar */}
+      <div className="flex flex-wrap gap-2 mb-4">
         <input
-          type="text"
-          placeholder="Search closed production jobsheets..."
-          className="p-2 border rounded w-full"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border p-2 rounded flex-grow md:flex-none md:w-1/3"
+          placeholder="Global search…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
         />
+        <button
+          onClick={() => setShowFilters((p) => !p)}
+          className="bg-purple-600 text-white text-xs px-4 py-2 rounded"
+        >
+          Filters
+        </button>
+        <button
+          onClick={exportXlsx}
+          className="bg-green-600 text-white text-xs px-4 py-2 rounded"
+        >
+          Export&nbsp;to&nbsp;Excel
+        </button>
       </div>
+
+      {showFilters && (
+        <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {["from", "to"].map((k) => (
+              <div key={`js-${k}`}>
+                <label className="block font-semibold mb-1">
+                  Job Sheet #{k === "from" ? "From" : "To"}
+                </label>
+                <input
+                  type="text"
+                  className="w-full border p-1 rounded"
+                  value={advFilters.jobSheetNumber[k]}
+                  onChange={(e) => setAdvFilter("jobSheetNumber", k, e.target.value.trim())}
+                />
+              </div>
+            ))}
+
+            {[
+              ["jobSheetCreatedDate", "Order Date"],
+              ["deliveryDateTime", "Delivery Date"],
+              ["expectedReceiveDate", "Expected Receive"],
+              ["schedulePickUp", "Schedule Pick-Up"],
+            ].flatMap(([key, label]) => [
+              <div key={`${key}-from`}>
+                <label className="block font-semibold mb-1">{label} From</label>
+                <input
+                  type={key === "schedulePickUp" ? "datetime-local" : "date"}
+                  className="w-full border p-1 rounded"
+                  value={advFilters[key].from}
+                  onChange={(e) => setAdvFilter(key, "from", e.target.value)}
+                />
+              </div>,
+              <div key={`${key}-to`}>
+                <label className="block font-semibold mb-1">{label} To</label>
+                <input
+                  type={key === "schedulePickUp" ? "datetime-local" : "date"}
+                  className="w-full border p-1 rounded"
+                  value={advFilters[key].to}
+                  onChange={(e) => setAdvFilter(key, "to", e.target.value)}
+                />
+              </div>,
+            ])}
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setShowFilters(false)}
+              className="bg-purple-600 text-white px-3 py-1 rounded"
+            >
+              Apply
+            </button>
+            <button
+              onClick={() => setAdv(initAdv)}
+              className="bg-gray-400 text-white px-3 py-1 rounded"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       <ClosedProductionJobSheetTable
-        data={sortedData}
-        sortField={sortField}
-        sortOrder={sortOrder}
-        onSortChange={handleSortChange}
+        data={sorted}
+        sortField={sort.key}
+        sortOrder={sort.direction}
+        onSortChange={(fld) =>
+          sortBy(
+            fld,
+            dateKeys.includes(fld) ? "date" : ["qtyRequired", "qtyOrdered"].includes(fld)
+              ? "number"
+              : "string"
+          )
+        }
+        headerFilters={headerFilters}
+        onHeaderFilterChange={setHeaderFilter}
       />
     </div>
   );
-};
-
-export default ClosedProductionJobsheet;
+}
