@@ -373,6 +373,8 @@ const handleSourcedByChange = async (e, id) => {
           : purchase
       )
     );
+
+    alert("Successfully updated sourcedBy!");
   } catch (error) {
     console.error("Error updating sourcedBy:", error);
     alert("Failed to update sourcedBy!");
@@ -398,6 +400,8 @@ const handleSourcedByDelete = async (id) => {
         purchase._id === id ? { ...purchase, sourcedBy: "" } : purchase
       )
     );
+
+    alert("Successfully deleted sourcedBy!");
   } catch (error) {
     console.error("Error deleting sourcedBy:", error);
     alert("Failed to delete sourcedBy");
