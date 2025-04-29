@@ -268,7 +268,7 @@ const handleChange = (e) => {
           label="Contact"
           active={activeTab === "contact"}
           onClick={() => setActiveTab("contact")}
-        />
+        /> 
         <TabButton
           label="Media"
           active={activeTab === "media"}

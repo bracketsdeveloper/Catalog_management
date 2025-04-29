@@ -16,6 +16,7 @@ function HeaderFilters({ filters, onChange }) {
     "product",
     "qtyRequired",
     "qtyOrdered",
+     "sourcedBy",
     "sourcingFrom",
     "vendorContactNumber",
     "orderConfirmedDate",
@@ -116,6 +117,7 @@ export default function ClosedPurchases() {
         "clientCompanyName",
         "eventName",
         "product",
+        "sourcedBy",
         "sourcingFrom",
         "vendorContactNumber",
       ].some((f) => (p[f] || "").toLowerCase().includes(s))
@@ -341,6 +343,7 @@ export default function ClosedPurchases() {
               ["product", "Product", "string"],
               ["qtyRequired", "Qty Required", "number"],
               ["qtyOrdered", "Qty Ordered", "number"],
+              ["sourcedBy", "Sourced By", "string"],
               ["sourcingFrom", "Sourced From", "string"],
               ["vendorContactNumber", "Vendor Contact", "string"],
               ["orderConfirmedDate", "Order Confirmed Date", "date"],
@@ -382,6 +385,7 @@ export default function ClosedPurchases() {
               <td className="p-2 border">{p.product}</td>
               <td className="p-2 border">{p.qtyRequired}</td>
               <td className="p-2 border">{p.qtyOrdered}</td>
+               <td className="p-2 border">{p.sourcedBy}</td>
               <td className="p-2 border">{p.sourcingFrom}</td>
               <td className="p-2 border">{p.vendorContactNumber}</td>
               <td className="p-2 border">

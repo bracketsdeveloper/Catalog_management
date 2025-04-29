@@ -455,6 +455,7 @@ const handleSourcedByDelete = async (id) => {
       "remarks",
       "status",
     ];
+    
     return globalFiltered.filter((r) =>
       keys.every((k) => {
         if (!headerFilters[k]) return true;
@@ -501,6 +502,7 @@ const handleSourcedByDelete = async (id) => {
       arr.every((a) => a.status === "received") ? [] : arr
     );
   };
+
   const filterNA = (recs) => {
     const g = {};
     recs.forEach(

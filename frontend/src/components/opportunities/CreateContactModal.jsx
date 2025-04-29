@@ -6,6 +6,8 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000"
 export default function CreateContactModal({ onClose, onContactCreated, companyName }) {
   const [name, setName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
+  const [department, setDepartment] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
   // This function assumes you have an endpoint to add a new contact to a company.
@@ -23,11 +25,11 @@ export default function CreateContactModal({ onClose, onContactCreated, companyN
         `${BACKEND_URL}/api/admin/companies/add-contact`,
         {
           companyName,
-          contact: { name, contactNumber },
+          contact: { name, department, email,  contactNumber },
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      onContactCreated({ name, contactNumber });
+      onContactCreated({ name, department, email, contactNumber });
     } catch (error) {
       console.error("Error creating contact:", error);
       alert("Error creating contact.");
@@ -41,24 +43,40 @@ export default function CreateContactModal({ onClose, onContactCreated, companyN
       <div className="bg-white p-4 rounded shadow-md w-80">
         <h2 className="text-lg font-semibold mb-4">Create Contact</h2>
         <form onSubmit={handleSubmit}>
-          <div className="mb-2">
-            <label className="block text-sm font-medium">Contact Name *</label>
+               <div className="mb-2">
+            <label className="block text-sm font-medium">Contact Name </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="border rounded w-full px-2 py-1 text-sm"
-              required
             />
           </div>
-          <div className="mb-2">
-            <label className="block text-sm font-medium">Contact Number *</label>
+            <div className="mb-2">
+            <label className="block text-sm font-medium">Contact Number </label>
             <input
               type="text"
               value={contactNumber}
               onChange={(e) => setContactNumber(e.target.value)}
               className="border rounded w-full px-2 py-1 text-sm"
-              required
+            />
+          </div>
+           <div className="mb-2">
+            <label className="block text-sm font-medium">Department</label>
+            <input
+              type="text"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="border rounded w-full px-2 py-1 text-sm"
+            />
+          </div>
+           <div className="mb-2">
+            <label className="block text-sm font-medium">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="border rounded w-full px-2 py-1 text-sm"
             />
           </div>
           <div className="flex justify-end space-x-2 mt-4">
