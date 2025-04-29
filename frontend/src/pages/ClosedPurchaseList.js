@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 
-/* ───────────────────── Header Filters Row ───────────────────── */
+/* ─────────── Header Filters ─────────── */
 function HeaderFilters({ filters, onChange }) {
   const cols = [
     "jobSheetCreatedDate",
@@ -16,7 +16,7 @@ function HeaderFilters({ filters, onChange }) {
     "product",
     "qtyRequired",
     "qtyOrdered",
-     "sourcedBy",
+    "sourcedBy",
     "sourcingFrom",
     "vendorContactNumber",
     "orderConfirmedDate",
@@ -42,7 +42,7 @@ function HeaderFilters({ filters, onChange }) {
   );
 }
 
-/* ───────────────────── Date-range helpers ───────────────────── */
+/* ─────────── Date helpers ─────────── */
 const initRange = { from: "", to: "" };
 const initAdv = {
   jobSheetNumber: { ...initRange },
@@ -53,12 +53,11 @@ const initAdv = {
   schedulePickUp: { ...initRange },
 };
 
-/* ───────────────────── Main Component ───────────────────── */
+/* ─────────── Main ─────────── */
 export default function ClosedPurchases() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  /* UI state */
   const [search, setSearch] = useState("");
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
@@ -69,7 +68,7 @@ export default function ClosedPurchases() {
     type: "date",
   });
 
-  /* Fetch */
+  /* -------- fetch closed purchases -------- */
   useEffect(() => {
     (async () => {
       try {
@@ -87,31 +86,22 @@ export default function ClosedPurchases() {
     })();
   }, []);
 
-  /* ---------- utility ---------- */
-  const isDateField = (k) =>
+  const isDate = (k) =>
     k.includes("Date") || k === "schedulePickUp" || k === "deliveryDateTime";
 
-  const cmp = (a, b, type) => {
-    if (type === "number") return (a ?? 0) - (b ?? 0);
-    if (type === "date") return new Date(a || 0) - new Date(b || 0);
-    return String(a ?? "").localeCompare(String(b ?? ""), "en", {
-      sensitivity: "base",
-    });
-  };
+  const cmp = (a, b, type) =>
+    type === "number"
+      ? (a ?? 0) - (b ?? 0)
+      : type === "date"
+      ? new Date(a || 0) - new Date(b || 0)
+      : String(a ?? "").localeCompare(String(b ?? ""), "en", {
+          sensitivity: "base",
+        });
 
-  /* ---------- closed filter ---------- */
-  const closedOnly = useMemo(() => {
-    const g = {};
-    rows.forEach((r) => (g[r.jobSheetNumber] = g[r.jobSheetNumber] || []).push(r));
-    return Object.values(g).flatMap((arr) =>
-      arr.every((x) => x.status === "received") ? arr : []
-    );
-  }, [rows]);
-
-  /* ---------- global search ---------- */
+  /* -------- global search -------- */
   const globalFiltered = useMemo(() => {
     const s = search.toLowerCase();
-    return closedOnly.filter((p) =>
+    return rows.filter((p) =>
       [
         "jobSheetNumber",
         "clientCompanyName",
@@ -122,21 +112,23 @@ export default function ClosedPurchases() {
         "vendorContactNumber",
       ].some((f) => (p[f] || "").toLowerCase().includes(s))
     );
-  }, [closedOnly, search]);
+  }, [rows, search]);
 
-  /* ---------- header filters ---------- */
-  const headerFiltered = useMemo(() => {
-    return globalFiltered.filter((r) =>
-      Object.entries(headerFilters).every(([k, v]) => {
-        if (!v) return true;
-        let val = r[k] ?? "";
-        if (isDateField(k) && val) val = new Date(val).toLocaleDateString();
-        return String(val).toLowerCase().includes(v.toLowerCase());
-      })
-    );
-  }, [globalFiltered, headerFilters]);
+  /* -------- header filters -------- */
+  const headerFiltered = useMemo(
+    () =>
+      globalFiltered.filter((r) =>
+        Object.entries(headerFilters).every(([k, v]) => {
+          if (!v) return true;
+          let val = r[k] ?? "";
+          if (isDate(k) && val) val = new Date(val).toLocaleDateString();
+          return String(val).toLowerCase().includes(v.toLowerCase());
+        })
+      ),
+    [globalFiltered, headerFilters]
+  );
 
-  /* ---------- advanced filters ---------- */
+  /* -------- advanced filters -------- */
   const advFiltered = useMemo(() => {
     const inRange = (d, { from, to }) => {
       if (!from && !to) return true;
@@ -147,13 +139,13 @@ export default function ClosedPurchases() {
       return true;
     };
     return headerFiltered.filter((r) => {
-      const numOk =
+      const numOK =
         (!advFilters.jobSheetNumber.from ||
           r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
         (!advFilters.jobSheetNumber.to ||
           r.jobSheetNumber <= advFilters.jobSheetNumber.to);
       return (
-        numOk &&
+        numOK &&
         inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
         inRange(r.deliveryDateTime, advFilters.deliveryDateTime) &&
         inRange(r.orderConfirmedDate, advFilters.orderConfirmedDate) &&
@@ -163,16 +155,18 @@ export default function ClosedPurchases() {
     });
   }, [headerFiltered, advFilters]);
 
-  /* ---------- sort ---------- */
-  const sorted = useMemo(() => {
-    return [...advFiltered].sort((a, b) => {
-      const res = cmp(a[sort.key], b[sort.key], sort.type);
-      return sort.direction === "asc" ? res : -res;
-    });
-  }, [advFiltered, sort]);
+  /* -------- sort -------- */
+  const sorted = useMemo(
+    () =>
+      [...advFiltered].sort((a, b) => {
+        const res = cmp(a[sort.key], b[sort.key], sort.type);
+        return sort.direction === "asc" ? res : -res;
+      }),
+    [advFiltered, sort]
+  );
 
-  /* ---------- handlers ---------- */
-  const changeHeaderFilter = (k, v) =>
+  /* -------- handlers -------- */
+  const changeHeader = (k, v) =>
     setHeaderFilters((p) => ({ ...p, [k]: v }));
   const changeAdv = (f, k, v) =>
     setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
@@ -183,7 +177,7 @@ export default function ClosedPurchases() {
       type,
     }));
 
-  /* ---------- export ---------- */
+  /* -------- export -------- */
   const exportToExcel = () => {
     const data = sorted.map((r) => ({
       "Job Sheet Created": r.jobSheetCreatedDate
@@ -198,6 +192,7 @@ export default function ClosedPurchases() {
       Product: r.product,
       "Qty Required": r.qtyRequired,
       "Qty Ordered": r.qtyOrdered,
+      "Sourced By": r.sourcedBy,
       "Sourced From": r.sourcingFrom,
       "Vendor Contact": r.vendorContactNumber,
       "Order Confirmed": r.orderConfirmedDate
@@ -217,7 +212,7 @@ export default function ClosedPurchases() {
     XLSX.writeFile(wb, "Closed_Purchases.xlsx");
   };
 
-  /* ---------- skeleton ---------- */
+  /* -------- skeleton -------- */
   if (loading)
     return (
       <div className="p-6">
@@ -231,7 +226,7 @@ export default function ClosedPurchases() {
       </div>
     );
 
-  /* ---------- UI ---------- */
+  /* -------- UI -------- */
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-purple-700 mb-4">
@@ -265,12 +260,16 @@ export default function ClosedPurchases() {
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block font-semibold mb-1">Job Sheet # From</label>
+              <label className="block font-semibold mb-1">
+                Job Sheet # From
+              </label>
               <input
                 type="text"
                 className="w-full border p-1 rounded"
                 value={advFilters.jobSheetNumber.from}
-                onChange={(e) => changeAdv("jobSheetNumber", "from", e.target.value.trim())}
+                onChange={(e) =>
+                  changeAdv("jobSheetNumber", "from", e.target.value.trim())
+                }
               />
             </div>
             <div>
@@ -279,7 +278,9 @@ export default function ClosedPurchases() {
                 type="text"
                 className="w-full border p-1 rounded"
                 value={advFilters.jobSheetNumber.to}
-                onChange={(e) => changeAdv("jobSheetNumber", "to", e.target.value.trim())}
+                onChange={(e) =>
+                  changeAdv("jobSheetNumber", "to", e.target.value.trim())
+                }
               />
             </div>
 
@@ -292,7 +293,9 @@ export default function ClosedPurchases() {
             ].map(([k, label]) => (
               <React.Fragment key={k}>
                 <div>
-                  <label className="block font-semibold mb-1">{label} From</label>
+                  <label className="block font-semibold mb-1">
+                    {label} From
+                  </label>
                   <input
                     type={k === "schedulePickUp" ? "datetime-local" : "date"}
                     className="w-full border p-1 rounded"
@@ -301,7 +304,9 @@ export default function ClosedPurchases() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">{label} To</label>
+                  <label className="block font-semibold mb-1">
+                    {label} To
+                  </label>
                   <input
                     type={k === "schedulePickUp" ? "datetime-local" : "date"}
                     className="w-full border p-1 rounded"
@@ -357,27 +362,26 @@ export default function ClosedPurchases() {
                 onClick={() => sortBy(k, t)}
                 className="p-2 border cursor-pointer"
               >
-                {l} {sort.key === k ? (sort.direction === "asc" ? "↑" : "↓") : ""}
+                {l}{" "}
+                {sort.key === k ? (sort.direction === "asc" ? "↑" : "↓") : ""}
               </th>
             ))}
           </tr>
-          <HeaderFilters filters={headerFilters} onChange={changeHeaderFilter} />
+          <HeaderFilters filters={headerFilters} onChange={changeHeader} />
         </thead>
         <tbody>
           {sorted.map((p) => (
             <tr
-              key={p._id || `${p.jobSheetNumber}_${p.product}`}
-              className={
-                p.status === "alert"
-                  ? "bg-red-300"
-                  : p.status === "pending"
-                  ? "bg-orange-300"
-                  : "bg-green-300"
-              }
+              key={p._id}
+              className="bg-green-300"
             >
-              <td className="p-2 border">{new Date(p.jobSheetCreatedDate).toLocaleDateString()}</td>
               <td className="p-2 border">
-                {p.deliveryDateTime ? new Date(p.deliveryDateTime).toLocaleDateString() : ""}
+                {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
+              </td>
+              <td className="p-2 border">
+                {p.deliveryDateTime
+                  ? new Date(p.deliveryDateTime).toLocaleDateString()
+                  : ""}
               </td>
               <td className="p-2 border">{p.jobSheetNumber}</td>
               <td className="p-2 border">{p.clientCompanyName}</td>
@@ -385,17 +389,23 @@ export default function ClosedPurchases() {
               <td className="p-2 border">{p.product}</td>
               <td className="p-2 border">{p.qtyRequired}</td>
               <td className="p-2 border">{p.qtyOrdered}</td>
-               <td className="p-2 border">{p.sourcedBy}</td>
+              <td className="p-2 border">{p.sourcedBy}</td>
               <td className="p-2 border">{p.sourcingFrom}</td>
               <td className="p-2 border">{p.vendorContactNumber}</td>
               <td className="p-2 border">
-                {p.orderConfirmedDate ? p.orderConfirmedDate.substring(0, 10) : ""}
+                {p.orderConfirmedDate
+                  ? p.orderConfirmedDate.substring(0, 10)
+                  : ""}
               </td>
               <td className="p-2 border">
-                {p.expectedReceiveDate ? p.expectedReceiveDate.substring(0, 10) : ""}
+                {p.expectedReceiveDate
+                  ? p.expectedReceiveDate.substring(0, 10)
+                  : ""}
               </td>
               <td className="p-2 border">
-                {p.schedulePickUp ? p.schedulePickUp.substring(0, 16) : ""}
+                {p.schedulePickUp
+                  ? p.schedulePickUp.substring(0, 16)
+                  : ""}
               </td>
               <td className="p-2 border">{p.remarks}</td>
               <td className="p-2 border">{p.status}</td>
