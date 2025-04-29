@@ -80,14 +80,25 @@ router.get(
   "/companies",
   authenticate,
   authorizeAdmin,
-  async (_req, res) => {
+  async (req, res) => {
     try {
-      const list = await Company.find({ deleted: { $ne: true } })
+      const { companyName, all } = req.query;
+      let query = { deleted: { $ne: true } };
+
+      // If companyName is provided, filter by exact companyName (case-insensitive)
+      if (companyName) {
+        query.companyName = { $regex: `^${companyName}$`, $options: "i" };
+      }
+
+      // If 'all' is provided, ignore pagination or specific filtering unless specified
+      const companies = await Company.find(query)
         .sort({ createdAt: -1 })
         .populate("createdBy", "name email")
         .populate("updatedBy", "name email");
-      res.json(list);
-    } catch {
+
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
       res.status(500).json({ message: "Fetch failed" });
     }
   }
