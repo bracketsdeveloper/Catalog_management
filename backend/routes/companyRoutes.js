@@ -6,7 +6,7 @@ const multer = require("multer");
 const Company = require("../models/Company");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// multer setup
+/* ===== Multer ===== */
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -23,8 +23,14 @@ const upload = multer({
   },
 });
 
-// log helper
-const createLogEntry = (req, action, field, oldValue, newValue) => ({
+/* ===== Helpers ===== */
+const createLogEntry = (
+  req,
+  action,
+  field = null,
+  oldValue = null,
+  newValue = null
+) => ({
   action,
   field,
   oldValue,
@@ -34,7 +40,6 @@ const createLogEntry = (req, action, field, oldValue, newValue) => ({
   performedAt: new Date(),
 });
 
-// deep equality helper
 const isEqual = (a, b) => {
   if (a === b) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
@@ -45,132 +50,155 @@ const isEqual = (a, b) => {
   return ka.every((k) => isEqual(a[k], b[k]));
 };
 
-/* ------------------------- create ------------------------- */
-router.post(
-  "/companies",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const { companyName, brandName, GSTIN, companyAddress, clients } = req.body;
-      if (!companyName) {
-        return res.status(400).json({ message: "Company name is required" });
+const sanitiseClients = (raw = []) =>
+  Array.isArray(raw)
+    ? raw
+        .filter((c) => c && c.name && c.contactNumber)
+        .map((c) => ({
+          name: c.name,
+          department: c.department || "",
+          email: c.email || "",
+          contactNumber: c.contactNumber.toString(),
+        }))
+    : [];
+
+/* ===== Create ===== */
+router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const {
+      companyName,
+      brandName,
+      GSTIN,
+      companyAddress,
+      clients: rawClients = [],
+    } = req.body;
+
+    if (!companyName)
+      return res.status(400).json({ message: "Company name is required" });
+
+    if (
+      await Company.findOne({
+        companyName: new RegExp(`^${companyName}$`, "i"),
+      })
+    )
+      return res.status(400).json({ message: "Company already exists" });
+
+    const doc = await Company.create({
+      companyName,
+      brandName,
+      GSTIN,
+      companyAddress,
+      clients: sanitiseClients(rawClients),
+      createdBy: req.user.id,
+      logs: [createLogEntry(req, "create")],
+    });
+
+    res.status(201).json({ message: "Company created", company: doc });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Create failed" });
+  }
+});
+
+/* ===== List ===== */
+router.get("/companies", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { companyName } = req.query;
+    const query = { deleted: { $ne: true } };
+    if (companyName)
+      query.companyName = { $regex: `^${companyName}$`, $options: "i" };
+
+    const companies = await Company.find(query)
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email");
+
+    res.json(companies);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Fetch failed" });
+  }
+});
+
+/* ===== Single ===== */
+router.get("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const c = await Company.findById(req.params.id)
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email")
+      .populate("deletedBy", "name email");
+    if (!c) return res.status(404).json({ message: "Not found" });
+    res.json(c);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Fetch failed" });
+  }
+});
+
+/* ===== Update ===== */
+router.put("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const {
+      companyName,
+      brandName,
+      GSTIN,
+      companyAddress,
+      clients: rawClients,
+    } = req.body;
+
+    const doc = await Company.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Not found" });
+
+    /* -- Unique name check -- */
+    if (
+      companyName &&
+      !isEqual(companyName, doc.companyName) &&
+      (await Company.findOne({
+        companyName: new RegExp(`^${companyName}$`, "i"),
+        _id: { $ne: doc._id },
+      }))
+    )
+      return res.status(400).json({ message: "Company name already exists" });
+
+    const updates = {};
+    const logs = [];
+
+    const check = (field, value) => {
+      if (value !== undefined && !isEqual(value, doc[field])) {
+        updates[field] = value;
+        logs.push(createLogEntry(req, "update", field, doc[field], value));
       }
+    };
 
-      const doc = new Company({
-        companyName,
-        brandName,
-        GSTIN,
-        companyAddress,
-        clients,
-        createdBy: req.user.id,
-        logs: [createLogEntry(req, "create")],
-      });
+    check("companyName", companyName);
+    check("brandName", brandName);
+    check("GSTIN", GSTIN);
+    check("companyAddress", companyAddress);
 
-      await doc.save();
-      res.status(201).json({ message: "Company created", company: doc });
-    } catch (e) {
-      res.status(500).json({ message: "Create failed" });
-    }
+    if (rawClients !== undefined) check("clients", sanitiseClients(rawClients));
+
+    if (!Object.keys(updates).length)
+      return res.status(200).json({ message: "No changes", company: doc });
+
+    updates.updatedAt = new Date();
+    updates.updatedBy = req.user.id;
+
+    const updated = await Company.findByIdAndUpdate(
+      req.params.id,
+      { $set: updates, $push: { logs: { $each: logs } } },
+      { new: true, runValidators: true }
+    )
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email");
+
+    res.json({ message: "Updated", company: updated, changes: logs });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Update failed" });
   }
-);
+});
 
-/* ------------------------- list ------------------------- */
-router.get(
-  "/companies",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const { companyName, all } = req.query;
-      let query = { deleted: { $ne: true } };
-
-      // If companyName is provided, filter by exact companyName (case-insensitive)
-      if (companyName) {
-        query.companyName = { $regex: `^${companyName}$`, $options: "i" };
-      }
-
-      // If 'all' is provided, ignore pagination or specific filtering unless specified
-      const companies = await Company.find(query)
-        .sort({ createdAt: -1 })
-        .populate("createdBy", "name email")
-        .populate("updatedBy", "name email");
-
-      res.json(companies);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-      res.status(500).json({ message: "Fetch failed" });
-    }
-  }
-);
-
-/* ------------------------- single ------------------------- */
-router.get(
-  "/companies/:id",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const c = await Company.findById(req.params.id)
-        .populate("createdBy", "name email")
-        .populate("updatedBy", "name email")
-        .populate("deletedBy", "name email");
-      if (!c) return res.status(404).json({ message: "Not found" });
-      res.json(c);
-    } catch {
-      res.status(500).json({ message: "Fetch failed" });
-    }
-  }
-);
-
-/* ------------------------- update ------------------------- */
-router.put(
-  "/companies/:id",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const { companyName, brandName, GSTIN, companyAddress, clients } = req.body;
-      const doc = await Company.findById(req.params.id);
-      if (!doc) return res.status(404).json({ message: "Not found" });
-
-      const fields = [
-        { name: "companyName", value: companyName },
-        { name: "brandName", value: brandName },
-        { name: "GSTIN", value: GSTIN },
-        { name: "companyAddress", value: companyAddress },
-        { name: "clients", value: clients },
-      ];
-
-      const updates = {};
-      const logs = [];
-
-      fields.forEach(({ name, value }) => {
-        if (value !== undefined && !isEqual(value, doc[name])) {
-          updates[name] = value;
-          logs.push(createLogEntry(req, "update", name, doc[name], value));
-        }
-      });
-
-      if (!Object.keys(updates).length) {
-        return res.status(200).json({ message: "No changes", company: doc });
-      }
-
-      updates.updatedBy = req.user.id;
-      const updated = await Company.findByIdAndUpdate(
-        req.params.id,
-        { ...updates, $push: { logs: { $each: logs } } },
-        { new: true }
-      );
-
-      res.json({ message: "Updated", company: updated, changes: logs });
-    } catch {
-      res.status(500).json({ message: "Update failed" });
-    }
-  }
-);
-
-/* ------------------------- delete (soft) ------------------------- */
+/* ===== Delete (soft) ===== */
 router.delete(
   "/companies/:id",
   authenticate,
@@ -183,17 +211,18 @@ router.delete(
       doc.deleted = true;
       doc.deletedAt = new Date();
       doc.deletedBy = req.user.id;
-      doc.logs.push(createLogEntry(req, "delete", null, doc, null));
+      doc.logs.push(createLogEntry(req, "delete"));
       await doc.save();
 
       res.json({ message: "Deleted" });
-    } catch {
+    } catch (e) {
+      console.error(e);
       res.status(500).json({ message: "Delete failed" });
     }
   }
 );
 
-/* ------------------------- logs for single company ------------------------- */
+/* ===== Logs (single) ===== */
 router.get(
   "/companies/:id/logs",
   authenticate,
@@ -223,32 +252,29 @@ router.get(
         },
         logs: c.logs,
       });
-    } catch {
+    } catch (e) {
+      console.error(e);
       res.status(500).json({ message: "Fetch logs failed" });
     }
   }
 );
 
-/* ------------------------- all logs ------------------------- */
-router.get(
-  "/logs",
-  authenticate,
-  authorizeAdmin,
-  async (_req, res) => {
-    try {
-      const companies = await Company.find().select("companyName logs").lean();
-      const logs = companies.flatMap((c) =>
-        (c.logs || []).map((l) => ({ ...l, companyName: c.companyName }))
-      );
-      logs.sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt));
-      res.json({ logs });
-    } catch {
-      res.status(500).json({ message: "Fetch logs failed" });
-    }
+/* ===== Logs (all) ===== */
+router.get("/logs", authenticate, authorizeAdmin, async (_req, res) => {
+  try {
+    const companies = await Company.find().select("companyName logs").lean();
+    const logs = companies.flatMap((c) =>
+      (c.logs || []).map((l) => ({ ...l, companyName: c.companyName }))
+    );
+    logs.sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt));
+    res.json({ logs });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Fetch logs failed" });
   }
-);
+});
 
-/* ------------------------- template download ------------------------- */
+/* ===== Template ===== */
 router.get(
   "/companies/template",
   authenticate,
@@ -278,13 +304,14 @@ router.get(
           "Content-Disposition": "attachment; filename=companies_template.xlsx",
         })
         .send(buf);
-    } catch {
+    } catch (e) {
+      console.error(e);
       res.status(500).json({ message: "Template gen failed" });
     }
   }
 );
 
-/* ------------------------- bulk upload ------------------------- */
+/* ===== Bulk Upload ===== */
 router.post(
   "/companies/bulk",
   authenticate,
@@ -314,7 +341,12 @@ router.post(
           const email = r[`Client ${n} Email`];
           const contact = r[`Client ${n} Contact`];
           if (name && contact) {
-            clients.push({ name, department: dept, email, contactNumber: contact.toString() });
+            clients.push({
+              name,
+              department: dept,
+              email,
+              contactNumber: contact.toString(),
+            });
           }
         }
 
@@ -329,11 +361,15 @@ router.post(
         });
       });
 
-      if (errors.length) return res.status(400).json({ message: "Errors", errors });
+      if (errors.length)
+        return res.status(400).json({ message: "Errors", errors });
 
       const inserted = await Company.insertMany(toCreate);
-      res.status(201).json({ message: "Bulk upload done", count: inserted.length });
-    } catch {
+      res
+        .status(201)
+        .json({ message: "Bulk upload done", count: inserted.length });
+    } catch (e) {
+      console.error(e);
       res.status(500).json({ message: "Bulk upload failed" });
     }
   }
