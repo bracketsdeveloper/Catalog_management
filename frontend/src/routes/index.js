@@ -52,6 +52,7 @@ import ManagePaymentFollowUp from "../pages/ManagePaymentFollowUp";
 import Samples from "../pages/Samples";
 import SamplesOut from "../pages/SamplesOut";
 import SampleStatus from "../pages/SampleStatus";
+import ManageExpenses from "../pages/ManageExpenses";
 
 const router = createBrowserRouter([
     {
@@ -289,6 +290,10 @@ const router = createBrowserRouter([
                     {
                         path:"sample-status",
                         element:<SampleStatus/>
+                    },
+                    {
+                        path:"manage-expenses",
+                        element:<ManageExpenses/>
                     }
 
                 ]

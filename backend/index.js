@@ -136,6 +136,9 @@ app.use("/api/admin/samples", samplesRouter);
 const sampleOutRoutes  = require("./routes/sampleOutRoutes"); // the “Samples Out” routes
 app.use("/api/admin/sample-outs", sampleOutRoutes);
 
+const expenseRoutes = require("./routes/expenseRoutes");
+app.use("/api/admin", expenseRoutes);
+
 // Start server (original)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

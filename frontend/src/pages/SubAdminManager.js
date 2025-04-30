@@ -57,6 +57,9 @@ const groupedPermissions = {
     "manage-samples",
     "sample-out",
     "sample-status"
+  ],
+  "Expenses Records" :[
+    "manage-expenses"
   ]
 };
 

@@ -253,6 +253,22 @@ const adminPages = [
       
     ],
   },
+
+  {
+    name: "Expense Recording",
+    defaultPath: "/admin-dashboard/manage-expenses",
+    icon: (
+      <img src="/Sample.png" className="h-8 w-8" alt="Samples" />
+    ),
+    subItems: [
+      {
+        name: "Manage Expenses",
+        path: "/admin-dashboard/manage-expenses",
+        permission: "manage-expenses",
+      },
+    ],
+  },
+
 ];
 
 /* ================================================================== */
@@ -271,6 +287,7 @@ export default function AdminDashboard() {
   const [packDelHovered, setPackDelHovered] = useState(false);
   const [invoicesHovered, setInvoicesHovered] = useState(false);
   const [samplesHovered, setSamplesHovered] = useState(false);
+  const [expenseHovered, setExpenseHovered] = useState(false);
 
   //user management
   const [userManagementHovered, setUserManagementHovered] = useState(false);
@@ -322,7 +339,7 @@ export default function AdminDashboard() {
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 100;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered;
+    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
@@ -363,6 +380,7 @@ export default function AdminDashboard() {
             setPurchaseHovered(false);
             setProductionHovered(false);
             setPackDelHovered(false);
+            setExpenseHovered(false);
           }
         }}
       >
@@ -459,6 +477,20 @@ export default function AdminDashboard() {
                     page={page}
                     hovered={samplesHovered}
                     setHovered={setSamplesHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ===== EXPENSE RECORDING (mega‑menu) ==== */
+              if (page.name === "Expense Recording") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={expenseHovered}
+                    setHovered={setExpenseHovered}
                     sidebarOpen={sidebarOpen}
                     sidebarHover={sidebarHover}
                   />
