@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { TrashIcon } from '@heroicons/react/24/solid'; // or `/outline` for outlined style
 import * as XLSX from "xlsx";
+import JobSheetModal from "../components/jobsheet/JobNumberView";
 
 
 /* ───────────────── Header Filters ───────────────── */
@@ -339,6 +340,21 @@ export default function OpenPurchases() {
   const [sort, setSort] = useState({ key: "deliveryDateTime", direction: "asc" });
   const [perms, setPerms] = useState([]);
   const canEdit = perms.includes("write-purchase");
+
+  const [showModal, setShowModal] = useState(false);
+  const [jobSheet, setSelectedJobSheet] = useState(null);
+
+   const handleOpenModal = (p) => {
+    setSelectedJobSheet(p);
+    setShowModal(true);
+  };
+  
+    const handleCloseModal = () => {
+      setShowModal(false);
+      setSelectedJobSheet(null);
+    };
+  
+  
 
   useEffect(() => {
     const str = localStorage.getItem("permissions");
@@ -720,7 +736,16 @@ const handleSourcedByDelete = async (id) => {
                 <td className="p-2 border">
                   {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
                 </td>
-                <td className="p-2 border">{p.jobSheetNumber}</td>
+                <td className="p-2 border">
+                  <button
+                  className="border-b text-blue-500 hover:text-blue-700"
+                  onClick={(e) => { 
+                    e.preventDefault(); // Prevent default behavior of anchor
+                    handleOpenModal(p); 
+                  }}
+                  >{p.jobSheetNumber || "(No Number)"}
+               </button>
+                </td>
                 <td className="p-2 border">{p.clientCompanyName}</td>
                 <td className="p-2 border">{p.eventName}</td>
                 <td className="p-2 border">{p.product}</td>
@@ -832,6 +857,15 @@ const handleSourcedByDelete = async (id) => {
           })}
         </tbody>
       </table>
+
+      
+                  {showModal && (
+                    <div className="p-54">
+                      <div className="p-54">
+                      <JobSheetModal jobSheet={jobSheet} onClose={handleCloseModal} />
+                    </div>
+                    </div>
+                  )}
 
       {editModal && currentEdit && (
         <EditPurchaseModal

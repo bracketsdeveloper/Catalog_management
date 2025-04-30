@@ -52,8 +52,8 @@ export const JobSheetModal = ({ jobSheet, onClose }) => {
    if (!jobSheet) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-start justify-center px-2 sm:px-6 md:px-10 overflow-auto pt-24 sm:pt-32">
-      <div className="w-full max-w-5xl bg-white border border-black text-xs sm:text-sm p-4 sm:p-6 md:p-10 mx-auto rounded-lg">
+<div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 md:p-6">
+  <div className="w-full max-w-5xl max-h-[95vh] overflow-y-auto bg-white border border-black text-xs sm:text-sm p-4 sm:p-6 md:p-10 rounded-lg">
         <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-4 text-center">
           Job Sheet Details
         </h2>

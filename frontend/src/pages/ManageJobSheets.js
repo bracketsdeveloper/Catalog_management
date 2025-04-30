@@ -472,26 +472,17 @@ export default function ManageJobSheets() {
             {filteredJobSheets.map((js) => (
               <tr key={js._id} className="border-b">
                 <td className="p-2">
-                  <a 
-                  href="#"
+                 <button
                   className="border-b text-blue-500 hover:text-blue-700"
                   onClick={(e) => { 
                     e.preventDefault(); // Prevent default behavior of anchor
                     handleOpenModal(js); 
                   }}
-                >
-                  {js.jobSheetNumber || "(No Number)"}
-                </a>
+                  >{js.jobSheetNumber || "(No Number)"}
+               </button>
                   </td>
                   {/* Modal */}
-              {showModal && (
-                   <div className="p-54">
-                     <div className="p-54">
-                      <JobSheetModal jobSheet={jobSheet} onClose={handleCloseModal} />
-                    </div>
-                   </div>
-                  )}
-                  
+            
 
                 <td className="p-2">{js.clientName}</td>
                 <td className="p-2">{js.clientCompanyName}</td>
@@ -542,6 +533,12 @@ export default function ManageJobSheets() {
         </table>
       )}
 
+            {showModal && (
+                     <div className="p-10">
+                      <JobSheetModal jobSheet={jobSheet} onClose={handleCloseModal} />
+                    </div>
+                  )}
+                  
       {/* The Modal for "Create Jobsheet" */}
       {modalOpen && (
         <CreateJobsheetModal
