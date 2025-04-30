@@ -6,7 +6,19 @@ const Sample    = require("../models/Sample");
 const User      = require("../models/User");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// CREATE
+// ─── READ SINGLE ─────────────────────────────────────────────────────
+router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const so = await SampleOut.findById(req.params.id).lean();
+    if (!so) return res.status(404).json({ message: "Sample Out not found" });
+    res.json(so);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error fetching Sample Out" });
+  }
+});
+
+// ─── CREATE ──────────────────────────────────────────────────────────
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const b = req.body;
@@ -17,7 +29,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     const client = comp.clients.find(c => c.name === b.clientName);
     if (!client) return res.status(400).json({ message: "Invalid client name" });
 
-    // 2) User lookup for sentBy
+    // 2) User lookup
     const usr = await User.findOne({ name: b.sentBy });
     if (!usr) return res.status(400).json({ message: "Invalid sentBy user" });
 
@@ -58,7 +70,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// READ ALL
+// ─── READ ALL ─────────────────────────────────────────────────────────
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { search = "" } = req.query;
@@ -75,32 +87,36 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// UPDATE
+// ─── UPDATE ───────────────────────────────────────────────────────────
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const b = req.body;
     const so = await SampleOut.findById(req.params.id);
-    if (!so) return res.status(404).json({ message: "Not found" });
+    if (!so) return res.status(404).json({ message: "Sample Out not found" });
 
-    // repeat lookups if key fields changed
+    // Company & client if changed
     if (b.clientCompanyName && b.clientName) {
       const comp = await Company.findOne({ companyName: b.clientCompanyName });
       if (!comp) return res.status(400).json({ message: "Invalid company" });
       const client = comp.clients.find(c => c.name === b.clientName);
       if (!client) return res.status(400).json({ message: "Invalid client" });
+
+      // ✏️ **FIX HERE**: comp._id (not comp._1)
       so.clientCompanyId   = comp._id;
       so.clientCompanyName = comp.companyName;
       so.clientName        = client.name;
       so.contactNumber     = client.contactNumber;
     }
 
+    // sentBy if changed
     if (b.sentBy) {
       const usr = await User.findOne({ name: b.sentBy });
-      if (!usr) return res.status(400).json({ message: "Invalid user" });
+      if (!usr) return res.status(400).json({ message: "Invalid sentBy user" });
       so.sentById   = usr._id;
       so.sentByName = usr.name;
     }
 
+    // sampleReferenceCode if changed
     if (b.sampleReferenceCode) {
       const samp = await Sample.findOne({ sampleReferenceCode: b.sampleReferenceCode });
       if (!samp) return res.status(400).json({ message: "Invalid sample reference" });
@@ -113,28 +129,28 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       so.color               = samp.color;
     }
 
-    // other manual fields
+    // Other updatable fields
     [
       "sampleOutDate","qty","sentThrough","sampleDCNumber",
       "sampleOutStatus","qtyReceivedBack","receivedBack","sampleBackDate"
-    ].forEach(f => {
-      if (typeof b[f] !== "undefined") so[f] = b[f];
+    ].forEach(field => {
+      if (typeof b[field] !== "undefined") so[field] = b[field];
     });
 
     await so.save();
-    res.json({ message: "Updated", sampleOut: so });
+    res.json({ message: "Sample Out updated", sampleOut: so });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error updating Sample Out" });
   }
 });
 
-// DELETE
+// ─── DELETE ───────────────────────────────────────────────────────────
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const del = await SampleOut.findByIdAndDelete(req.params.id);
-    if (!del) return res.status(404).json({ message: "Not found" });
-    res.json({ message: "Deleted" });
+    const deleted = await SampleOut.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Sample Out not found" });
+    res.json({ message: "Sample Out deleted" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error deleting Sample Out" });

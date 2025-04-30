@@ -6,7 +6,10 @@ import axios from "axios";
 
 export default function SampleOutModal({ initialData, onClose, onSave }) {
   const isEdit = Boolean(initialData);
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  const token = localStorage.getItem("token");
 
+  // form state
   const [form, setForm] = useState({
     sampleOutDate:       new Date(),
     clientCompanyName:   "",
@@ -29,26 +32,23 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     sampleQty:           0,
   });
 
-  // list of existing "outs" for this ref
+  // suggestions & lists
+  const [companySug, setCompanySug] = useState([]);
+  const [clientList, setClientList] = useState([]);
+  const [userSug, setUserSug] = useState([]);
+  const [sampleSug, setSampleSug] = useState([]);
+
+  // availability & validation
   const [existingOuts, setExistingOuts] = useState([]);
-  // how many are still available to send
   const [availableQty, setAvailableQty] = useState(0);
-
-  const [companySug, setCompanySug]   = useState([]);
-  const [clientList, setClientList]   = useState([]);
-  const [userSug, setUserSug]         = useState([]);
-  const [sampleSug, setSampleSug]     = useState([]);
-
-  const [qtyError, setQtyError]                   = useState("");
+  const [qtyError, setQtyError] = useState("");
   const [receivedBackError, setReceivedBackError] = useState("");
 
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-  const token       = localStorage.getItem("token");
-
-  // Prefill when editing
+  // 1) prefill basic fields when editing
   useEffect(() => {
     if (!initialData) return;
-    setForm({
+    setForm(f => ({
+      ...f,
       sampleOutDate:       new Date(initialData.sampleOutDate),
       clientCompanyName:   initialData.clientCompanyName,
       clientName:          initialData.clientName,
@@ -66,79 +66,114 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       sampleOutStatus:     initialData.sampleOutStatus,
       qtyReceivedBack:     initialData.qtyReceivedBack,
       receivedBack:        initialData.receivedBack,
-      sampleBackDate:      initialData.sampleBackDate ? new Date(initialData.sampleBackDate) : null,
-      sampleQty:           initialData.sampleQty || 0,
-    });
-    // load that company's clients from the record
-    setClientList(initialData.clients || []);
+      sampleBackDate:      initialData.sampleBackDate
+        ? new Date(initialData.sampleBackDate)
+        : null,
+      // leave sampleQty at 0; we'll fetch it next
+    }));
   }, [initialData]);
 
-  // company suggestions
+  // 2) fetch sampleQty, clients, and existing outs after prefill
+  useEffect(() => {
+    if (!initialData) return;
+
+    // fetch client list for this company
+    axios.get(
+      `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
+        initialData.clientCompanyName
+      )}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => {
+      const c = r.data.find(x => x.companyName === initialData.clientCompanyName);
+      if (c) setClientList(c.clients || []);
+    }).catch(console.error);
+
+    // fetch this sample's details to get sampleQty
+    axios.get(
+      `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
+        initialData.sampleReferenceCode
+      )}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => {
+      const list = r.data.products ?? r.data;
+      const s = list.find(x => x.sampleReferenceCode === initialData.sampleReferenceCode);
+      if (s) setForm(f => ({ ...f, sampleQty: s.qty }));
+    }).catch(console.error);
+
+    // fetch existing outs for availability
+    axios.get(
+      `${BACKEND_URL}/api/admin/sample-outs?search=${encodeURIComponent(
+        initialData.sampleReferenceCode
+      )}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => setExistingOuts(r.data))
+     .catch(console.error);
+
+  }, [initialData]);
+
+  // 3) recalc availableQty whenever sampleQty or existingOuts change
+  useEffect(() => {
+    const totalSent = existingOuts.reduce((sum, o) => sum + Number(o.qty), 0);
+    const totalRet  = existingOuts.reduce((sum, o) => sum + Number(o.qtyReceivedBack), 0);
+    setAvailableQty(form.sampleQty - totalSent + totalRet);
+  }, [form.sampleQty, existingOuts]);
+
+  // 4) company suggestions
   useEffect(() => {
     if (!form.clientCompanyName) {
       setCompanySug([]);
       return;
     }
-    axios
-      .get(
-        `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
-          form.clientCompanyName
-        )}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      .then((r) => setCompanySug(r.data))
-      .catch(console.error);
+    axios.get(
+      `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
+        form.clientCompanyName
+      )}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => setCompanySug(r.data))
+     .catch(console.error);
   }, [form.clientCompanyName]);
 
-  // select a company -> clear client, set clientList from c.clients
-  const selectCompany = (c) => {
-    setForm((f) => ({
+  const selectCompany = c => {
+    setForm(f => ({
       ...f,
       clientCompanyName: c.companyName,
       clientName:        "",
       contactNumber:     "",
     }));
-    setCompanySug([]);
     setClientList(c.clients || []);
+    setCompanySug([]);
   };
 
-  // user suggestions for "sentBy"
+  // 5) user suggestions
   useEffect(() => {
     if (!form.sentBy) {
       setUserSug([]);
       return;
     }
-    axios
-      .get(
-        `${BACKEND_URL}/api/admin/users?search=${encodeURIComponent(
-          form.sentBy
-        )}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      .then((r) => setUserSug(r.data))
-      .catch(console.error);
+    axios.get(
+      `${BACKEND_URL}/api/admin/users?search=${encodeURIComponent(form.sentBy)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => setUserSug(r.data))
+     .catch(console.error);
   }, [form.sentBy]);
 
-  // sample suggestions
+  // 6) sample suggestions
   useEffect(() => {
     if (!form.sampleReferenceCode) {
       setSampleSug([]);
       return;
     }
-    axios
-      .get(
-        `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
-          form.sampleReferenceCode
-        )}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      .then((r) => setSampleSug(r.data.products ?? r.data))
-      .catch(console.error);
+    axios.get(
+      `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
+        form.sampleReferenceCode
+      )}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => setSampleSug(r.data.products ?? r.data))
+     .catch(console.error);
   }, [form.sampleReferenceCode]);
 
-  // when picking a sample, fill form and load sampleQty
-  const selectSample = (s) => {
-    setForm((f) => ({
+  const selectSample = s => {
+    setForm(f => ({
       ...f,
       sampleReferenceCode: s.sampleReferenceCode,
       productCode:         s.productId,
@@ -155,36 +190,9 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     setReceivedBackError("");
   };
 
-  // fetch existing outs for this ref to compute availability
-  useEffect(() => {
-    if (!form.sampleReferenceCode) {
-      setExistingOuts([]);
-      return;
-    }
-    axios
-      .get(
-        `${BACKEND_URL}/api/admin/sample-outs?search=${encodeURIComponent(
-          form.sampleReferenceCode
-        )}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      .then((r) => setExistingOuts(r.data))
-      .catch(console.error);
-  }, [form.sampleReferenceCode]);
-
-  // recalc availableQty whenever sampleQty or existingOuts change
-  useEffect(() => {
-    const totalSent = existingOuts.reduce((sum, o) => sum + Number(o.qty), 0);
-    const totalRet  = existingOuts.reduce(
-      (sum, o) => sum + Number(o.qtyReceivedBack),
-      0
-    );
-    setAvailableQty(form.sampleQty - totalSent + totalRet);
-  }, [form.sampleQty, existingOuts]);
-
-  // handle changes + validation
+  // 7) handleChange + validation
   const handleChange = (key, val) => {
-    setForm((f) => ({ ...f, [key]: val }));
+    setForm(f => ({ ...f, [key]: val }));
 
     if (key === "qty") {
       const out = Number(val);
@@ -203,25 +211,26 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     }
 
     if (key === "qtyReceivedBack") {
-      const ret = Number(val),
-        out = Number(form.qty) || 0;
+      const ret = Number(val);
+      const out = Number(form.qty) || 0;
       setReceivedBackError(
         ret > out ? `Must be ≤ out qty (${out})` : ""
       );
     }
   };
 
-  // submit (create or update)
+  // 8) submit handler
   const handleSubmit = async () => {
     if (qtyError || receivedBackError) return;
     try {
       const payload = {
         ...form,
-        sampleOutDate:  form.sampleOutDate.toISOString(),
+        sampleOutDate: form.sampleOutDate.toISOString(),
         sampleBackDate: form.sampleBackDate
           ? form.sampleBackDate.toISOString()
           : null,
       };
+
       if (isEdit) {
         await axios.put(
           `${BACKEND_URL}/api/admin/sample-outs/${initialData._id}`,
@@ -242,21 +251,21 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     }
   };
 
-  // helper to format date inputs as yyyy-MM-dd
-  const toDateInput = (date) =>
+  // helper for <input type="date">
+  const toDateInput = date =>
     date ? new Date(date).toISOString().slice(0, 10) : "";
 
-  // filter suggestions locally
-  const filteredCompanySug = companySug.filter((c) =>
+  // filter suggestion lists
+  const filteredCompanySug = companySug.filter(c =>
     c.companyName.toLowerCase().includes(form.clientCompanyName.toLowerCase())
   );
-  const filteredClientSug = clientList.filter((c) =>
+  const filteredClientSug = clientList.filter(c =>
     c.name.toLowerCase().includes(form.clientName.toLowerCase())
   );
-  const filteredUserSug = userSug.filter((u) =>
+  const filteredUserSug = userSug.filter(u =>
     u.name.toLowerCase().includes(form.sentBy.toLowerCase())
   );
-  const filteredSampleSug = sampleSug.filter((s) =>
+  const filteredSampleSug = sampleSug.filter(s =>
     s.sampleReferenceCode
       .toLowerCase()
       .includes(form.sampleReferenceCode.toLowerCase())
@@ -277,7 +286,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
               type="date"
               className="border rounded p-2 w-full"
               value={toDateInput(form.sampleOutDate)}
-              onChange={(e) =>
+              onChange={e =>
                 handleChange("sampleOutDate", new Date(e.target.value))
               }
             />
@@ -289,13 +298,13 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.clientCompanyName}
-              onChange={(e) =>
+              onChange={e =>
                 handleChange("clientCompanyName", e.target.value)
               }
             />
             {filteredCompanySug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredCompanySug.map((c) => (
+                {filteredCompanySug.map(c => (
                   <li
                     key={c._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -314,11 +323,11 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.clientName}
-              onChange={(e) => handleChange("clientName", e.target.value)}
+              onChange={e => handleChange("clientName", e.target.value)}
             />
             {filteredClientSug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredClientSug.map((c) => (
+                {filteredClientSug.map(c => (
                   <li
                     key={c.name}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -350,11 +359,11 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sentBy}
-              onChange={(e) => handleChange("sentBy", e.target.value)}
+              onChange={e => handleChange("sentBy", e.target.value)}
             />
             {filteredUserSug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredUserSug.map((u) => (
+                {filteredUserSug.map(u => (
                   <li
                     key={u._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -373,13 +382,13 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sampleReferenceCode}
-              onChange={(e) =>
+              onChange={e =>
                 handleChange("sampleReferenceCode", e.target.value)
               }
             />
             {filteredSampleSug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredSampleSug.map((s) => (
+                {filteredSampleSug.map(s => (
                   <li
                     key={s._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -448,7 +457,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
                 qtyError ? "border-red-500" : ""
               }`}
               value={form.qty}
-              onChange={(e) => handleChange("qty", e.target.value)}
+              onChange={e => handleChange("qty", e.target.value)}
             />
             {qtyError && (
               <p className="text-red-600 text-sm mt-1">{qtyError}</p>
@@ -471,7 +480,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sentThrough}
-              onChange={(e) => handleChange("sentThrough", e.target.value)}
+              onChange={e => handleChange("sentThrough", e.target.value)}
             />
           </div>
 
@@ -481,17 +490,17 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sampleDCNumber}
-              onChange={(e) => handleChange("sampleDCNumber", e.target.value)}
+              onChange={e => handleChange("sampleDCNumber", e.target.value)}
             />
           </div>
 
           {/* Sample Out Status */}
           <div>
-            <label className="block mb-1">Sample Out</label>
+            <label className="block mb-1">Sample Out Status</label>
             <select
               className="border rounded p-2 w-full"
               value={form.sampleOutStatus}
-              onChange={(e) =>
+              onChange={e =>
                 handleChange("sampleOutStatus", e.target.value)
               }
             >
@@ -510,7 +519,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
                 receivedBackError ? "border-red-500" : ""
               }`}
               value={form.qtyReceivedBack}
-              onChange={(e) =>
+              onChange={e =>
                 handleChange("qtyReceivedBack", e.target.value)
               }
             />
@@ -527,7 +536,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <select
               className="border rounded p-2 w-full"
               value={form.receivedBack}
-              onChange={(e) =>
+              onChange={e =>
                 handleChange("receivedBack", e.target.value === "true")
               }
             >
@@ -544,7 +553,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
                 type="date"
                 className="border rounded p-2 w-full"
                 value={toDateInput(form.sampleBackDate)}
-                onChange={(e) =>
+                onChange={e =>
                   handleChange("sampleBackDate", new Date(e.target.value))
                 }
               />
@@ -570,9 +579,4 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       </div>
     </div>
   );
-}
-
-// helper for date inputs
-function toDateInput(date) {
-  return date ? new Date(date).toISOString().slice(0, 10) : "";
 }
