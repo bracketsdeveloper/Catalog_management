@@ -43,10 +43,12 @@ const JobSheetCart = ({
             <p className="text-gray-600">No products selected.</p>
           )}
           {selectedItems.map((item, idx) => (
+            
             <div key={idx} className="flex flex-col border border-purple-200 rounded p-2 mb-2">
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-bold text-sm text-purple-800">{item.product}</div>
+                    
                   {item.color && <div className="text-xs">Color: {item.color}</div>}
                   {item.size && <div className="text-xs">Size: {item.size}</div>}
                   <div className="text-xs">Qty: {item.quantity}</div>

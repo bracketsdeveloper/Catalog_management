@@ -291,11 +291,6 @@ export default function CreateManualCatalog() {
       setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
       setSalutation(data.salutation || "Mr.");
 
-      // Fetch company details for the catalog's customerCompany
-      if (data.customerCompany) {
-        fetchCompanyDetails(data.customerCompany);
-      }
-
       const existingMargin = data.margin || presetMarginOptions[0];
       if (presetMarginOptions.includes(existingMargin)) {
         setMarginOption("preset");
@@ -368,76 +363,46 @@ export default function CreateManualCatalog() {
       );
       if (selectedOpp && selectedOpp.account) {
         setCustomerCompany(selectedOpp.account);
-        setSelectedCompany(selectedOpp.account);
         fetchCompanyDetails(selectedOpp.account);
-      } else {
-        // Clear fields if no valid opportunity is selected
-        setCustomerCompany("");
-        setSelectedCompany("");
-        setCustomerAddress("");
-        setCustomerEmail("");
-        setCustomerName("");
-        setClients([]);
-        setSelectedCompanyData(null);
       }
     }
   }, [opportunityNumber, opportunityCodes]);
 
   const fetchCompanyDetails = async (companyName) => {
-    if (!companyName) {
-      console.log("No company name provided, skipping fetch");
-      setSelectedCompanyData(null);
-      setCustomerAddress("");
-      setCustomerEmail("");
-      setCustomerName("");
-      setClients([]);
-      return;
-    }
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
         headers: { Authorization: `Bearer ${token}` },
-        params: { companyName: companyName.trim() },
+        params: { companyName },
       });
-      console.log("Fetched company response:", res.data);
-  
-      const company = Array.isArray(res.data) && res.data.length > 0 ? res.data[0] : null;
-  
-      if (company && company.companyName.toLowerCase() === companyName.trim().toLowerCase()) {
+      const company = Array.isArray(res.data) ? res.data[0] : res.data;
+      if (company) {
         setSelectedCompanyData(company);
         setCustomerAddress(company.companyAddress || "");
-        setClients(Array.isArray(company.clients) ? company.clients : []);
-        
-        // Set customerEmail and customerName based on the first client, if available
-        if (company.clients && company.clients.length > 0) {
-          setCustomerEmail(company.clients[0].email || "");
-          setCustomerName(company.clients[0].name || "");
-        } else {
-          setCustomerEmail(""); // No email field in Company model; rely on clients
-          setCustomerName("");
-        }
+        setClients(company.clients || []);
+        setCustomerName("");
+        setCustomerEmail(company.companyEmail || "");
       } else {
-        console.warn("No matching company found for:", companyName);
         setSelectedCompanyData(null);
         setCustomerAddress("");
-        setCustomerEmail("");
-        setCustomerName("");
         setClients([]);
+        setCustomerName("");
+        setCustomerEmail("");
       }
     } catch (error) {
       console.error("Error fetching company details:", error);
       setSelectedCompanyData(null);
       setCustomerAddress("");
-      setCustomerEmail("");
-      setCustomerName("");
       setClients([]);
+      setCustomerName("");
+      setCustomerEmail("");
     }
   };
 
   // Handle client selection
   const handleClientSelect = (client) => {
     setCustomerName(client.name || "");
-    setCustomerEmail(client.email || selectedCompanyData?.companyEmail || "");
+    setCustomerEmail(client.email || "");
     setClientDropdownOpen(false);
   };
 
@@ -580,13 +545,12 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const updatedData = {
         companyEmail: customerEmail,
-        companyAddress: customerAddress,
         clients:
           selectedCompanyData.clients && selectedCompanyData.clients.length > 0
             ? [
                 {
                   name: customerName,
-                  contactNumber: selectedCompanyData.clients[0]?.contactNumber || "",
+                  contactNumber: selectedCompanyData.clients[0].contactNumber,
                   email: customerEmail,
                 },
                 ...selectedCompanyData.clients.slice(1),
@@ -600,7 +564,6 @@ export default function CreateManualCatalog() {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      console.log("Company info updated successfully");
     } catch (error) {
       console.error("Error updating company info:", error);
     }
@@ -753,14 +716,12 @@ export default function CreateManualCatalog() {
   // Company selection
   const handleCompanySelect = (company) => {
     setCustomerCompany(company.companyName || "");
-    setSelectedCompany(company.companyName || "");
     setSelectedCompanyData(company);
     setCustomerAddress(company.companyAddress || "");
+    setClients(company.clients || []);
+    setCustomerName("");
     setCustomerEmail(company.companyEmail || "");
-    setClients(Array.isArray(company.clients) ? company.clients : []);
-    setCustomerName(company.clients && company.clients.length > 0 ? company.clients[0].name || "" : "");
     setDropdownOpen(false);
-    console.log("Selected company:", company);
   };
 
   const handleOpenCompanyModal = () => {
@@ -861,7 +822,7 @@ export default function CreateManualCatalog() {
         </div>
 
         {/* Customer Company */}
-        <div className="relative">
+        <div>
           <label className="block mb-1 font-medium text-purple-700">
             Customer Company *
           </label>
@@ -869,34 +830,9 @@ export default function CreateManualCatalog() {
             type="text"
             className="border border-purple-300 rounded w-full p-2"
             value={customerCompany}
-            onChange={(e) => {
-              setCustomerCompany(e.target.value);
-              setSelectedCompany(e.target.value);
-              setDropdownOpen(true);
-            }}
-            onFocus={() => setDropdownOpen(true)}
-            onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+            readOnly
             required
           />
-          {dropdownOpen && (
-            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto">
-              {companies
-                .filter((company) =>
-                  company.companyName
-                    ?.toLowerCase()
-                    .includes(customerCompany.toLowerCase())
-                )
-                .map((company) => (
-                  <div
-                    key={company._id}
-                    className="p-2 cursor-pointer hover:bg-gray-100"
-                    onMouseDown={() => handleCompanySelect(company)}
-                  >
-                    {company.companyName || "Unknown Company"}
-                  </div>
-                ))}
-            </div>
-          )}
         </div>
 
         {/* Customer Name + Salutation */}
@@ -959,7 +895,7 @@ export default function CreateManualCatalog() {
           />
         </div>
 
-        {/* Customer Address */}
+        {/* Customer Address (Read-Only) */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Customer Address
@@ -968,8 +904,7 @@ export default function CreateManualCatalog() {
             type="text"
             className="border border-purple-300 rounded w-full p-2"
             value={customerAddress}
-            onChange={(e) => setCustomerAddress(e.target.value)}
-            onBlur={updateCompanyInfo}
+            readOnly
           />
         </div>
       </div>

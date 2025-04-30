@@ -1,8 +1,10 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import JobSheetForm from "../components/jobsheet/JobSheetForm";
-import ProductGrid from "../components/jobsheet/ProductGrid";
+import ProductGrid from "../components/jobsheet/ProductGrid"; // Ensure this path is correct
 import JobSheetCart from "../components/jobsheet/JobSheetCart";
 import JobSheetItemEditModal from "../components/jobsheet/JobSheetItemEditModal";
 import VariationModal from "../components/jobsheet/VariationModal";
@@ -65,9 +67,6 @@ export default function CreateJobSheet() {
   const [companies, setCompanies] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
-  const [selectedCompanyData, setSelectedCompanyData] = useState(null);
-  const [clients, setClients] = useState([]);
-  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
   useEffect(() => {
     fetchFilterOptions();
@@ -104,21 +103,6 @@ export default function CreateJobSheet() {
     }
   }, [referenceQuotation]);
 
-  // New useEffect to fetch company details when clientCompanyName changes
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (clientCompanyName.trim()) {
-        fetchCompanyDetails(clientCompanyName.trim());
-      } else {
-        setSelectedCompanyData(null);
-        setClients([]);
-        setClientName("");
-        setContactNumber("");
-      }
-    }, 300);
-    return () => clearTimeout(delayDebounceFn);
-  }, [clientCompanyName]);
-
   async function fetchQuotationSuggestions(query) {
     try {
       const token = localStorage.getItem("token");
@@ -137,6 +121,7 @@ export default function CreateJobSheet() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("Filter options fetched:", res.data); // Debug log
       setFullCategories(res.data.categories || []);
       setFullSubCategories(res.data.subCategories || []);
       setFullBrands(res.data.brands || []);
@@ -194,41 +179,6 @@ export default function CreateJobSheet() {
       setCompanies(res.data || []);
     } catch (error) {
       console.error("Error fetching companies:", error);
-    }
-  }
-
-  async function fetchCompanyDetails(companyName) {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { companyName },
-      });
-      console.log("Fetched company response:", res.data);
-      const company = Array.isArray(res.data) && res.data.length > 0 ? res.data[0] : null;
-      if (company && company.companyName.toLowerCase() === companyName.toLowerCase()) {
-        setSelectedCompanyData(company);
-        setClients(Array.isArray(company.clients) ? company.clients : []);
-        // Set clientName and contactNumber to first client, if available
-        if (company.clients && company.clients.length > 0) {
-          setClientName(company.clients[0].name || "");
-          setContactNumber(company.clients[0].contactNumber || "");
-        } else {
-          setClientName("");
-          setContactNumber("");
-        }
-      } else {
-        setSelectedCompanyData(null);
-        setClients([]);
-        setClientName("");
-        setContactNumber("");
-      }
-    } catch (error) {
-      console.error("Error fetching company details:", error);
-      setSelectedCompanyData(null);
-      setClients([]);
-      setClientName("");
-      setContactNumber("");
     }
   }
 
@@ -543,23 +493,15 @@ export default function CreateJobSheet() {
   };
 
   const handleCompanySelect = (company) => {
-    setClientCompanyName(company.companyName || "");
-    setSelectedCompanyData(company);
-    setClients(Array.isArray(company.clients) ? company.clients : []);
+    setClientCompanyName(company.companyName);
     if (company.clients && company.clients.length > 0) {
-      setClientName(company.clients[0].name || "");
-      setContactNumber(company.clients[0].contactNumber || "");
+      setClientName(company.clients[0].name);
+      setContactNumber(company.clients[0].contactNumber);
     } else {
       setClientName("");
       setContactNumber("");
     }
     setDropdownOpen(false);
-  };
-
-  const handleClientSelect = (client) => {
-    setClientName(client.name || "");
-    setContactNumber(client.contactNumber || "");
-    setClientDropdownOpen(false);
   };
 
   const handleOpenCompanyModal = () => {
@@ -650,10 +592,6 @@ export default function CreateJobSheet() {
         handleInlineUpdate={handleInlineUpdate}
         handleRemoveSelectedItem={handleRemoveSelectedItem}
         handleEditItem={handleEditItem}
-        clients={clients}
-        clientDropdownOpen={clientDropdownOpen}
-        setClientDropdownOpen={setClientDropdownOpen}
-        handleClientSelect={handleClientSelect}
       />
 
       <ProductGrid
