@@ -1,8 +1,7 @@
-// client/src/components/expenses/FilterPanel.jsx
 import React from "react";
 
 export default function FilterPanel({ filters, setFilters }) {
-  const onChange = (e) =>
+  const onChange = e =>
     setFilters({ ...filters, [e.target.name]: e.target.value });
 
   return (
@@ -84,7 +83,30 @@ export default function FilterPanel({ filters, setFilters }) {
             className="border p-1 rounded w-full text-xs"
           />
         </div>
+        <div>
+          <label className="block">CRM Name</label>
+          <input
+            name="crmName"
+            value={filters.crmName}
+            onChange={onChange}
+            className="border p-1 rounded w-full text-xs"
+          />
+        </div>
+        <div>
+          <label className="block">Order Confirmed</label>
+          <select
+            name="orderConfirmed"
+            value={filters.orderConfirmed}
+            onChange={onChange}
+            className="border p-1 rounded w-full text-xs"
+          >
+            <option value="">All</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
       </div>
     </div>
   );
 }
+ 
