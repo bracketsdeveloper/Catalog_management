@@ -347,7 +347,10 @@ export default function OpenPurchases() {
    const handleOpenModal = (p) => {
     setSelectedJobSheet(p);
     setShowModal(true);
+    alert("Jobsheet created successfully", p._id);
   };
+  
+
   
     const handleCloseModal = () => {
       setShowModal(false);
@@ -742,6 +745,7 @@ const handleSourcedByDelete = async (id) => {
                   onClick={(e) => { 
                     e.preventDefault(); // Prevent default behavior of anchor
                     handleOpenModal(p); 
+                    
                   }}
                   >{p.jobSheetNumber || "(No Number)"}
                </button>

@@ -63,93 +63,96 @@ export default function SignIn() {
   };
 
   return (
-    <section className="bg-gradient-to-tr from-[#ff80b5] to-[#9089fc] m-4 rounded-md">
-      <div className="flex flex-col items-center justify-center px-6 py-8 mx-auto md:h-screen lg:py-0">
-        <div className="w-full bg-white rounded-lg shadow sm:max-w-md xl:p-0 dark:bg-gray-800">
-          <div className="p-6 space-y-4 md:space-y-6 sm:p-8">
-            <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
-              Sign in to your account
-            </h1>
-            <form className="space-y-4 md:space-y-6" onSubmit={handleSubmit}>
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Your email
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-pink-500 focus:border-pink-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  placeholder="name@company.com"
-                  required
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Password
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-pink-500 focus:border-pink-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      id="remember"
-                      aria-describedby="remember"
-                      type="checkbox"
-                      className="w-4 h-4 border border-gray-300 rounded bg-gray-50 focus:ring-3 focus:ring-primary-300 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-primary-600 dark:ring-offset-gray-800"
-                    />
-                  </div>
-                  <div className="ml-3 text-sm">
-                    <label
-                      htmlFor="remember"
-                      className="text-gray-500 dark:text-gray-300"
-                    >
-                      Remember me
-                    </label>
-                  </div>
-                </div>
-                <Link
-                  to="/forgot-password"
-                  className="text-sm font-medium text-pink-600 hover:underline dark:text-pink-500"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <button
-                type="submit"
-                className="w-full text-white bg-pink-600 hover:bg-pink-700 focus:ring-4 focus:outline-none focus:ring-pink-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-pink-400 dark:hover:bg-pink-600"
+   <section
+  className="h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center bg-white"
+  style={{ backgroundImage: "url('/Login_page.png')" }} // Replace with your actual image path
+>
+  <div className="bg-white m-4 rounded-md w-full max-w-md shadow-lg">
+    <div className="flex flex-col items-center justify-center px-6 py-8">
+      <div className="w-full bg-white rounded-lg shadow dark:bg-white">
+        <div className="p-6 space-y-4 md:space-y-6 sm:p-8">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-black">
+            Sign in to your account
+          </h1>
+          <form className="space-y-4 md:space-y-6" onSubmit={handleSubmit}>
+            {/* Email Field */}
+            <div>
+              <label
+                htmlFor="email"
+                className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
               >
-                Login
-              </button>
-              <p className="text-sm font-light text-gray-500 dark:text-gray-400">
-                Don't have an account yet?{" "}
-                <Link
-                  to="/signup"
-                  className="font-medium text-pink-400 hover:underline dark:text-pink-500"
-                >
-                  Sign up
-                </Link>
-              </p>
-            </form>
-          </div>
+                Your email
+              </label>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-gray-50 border border-gray-200 text-gray-900 rounded-lg focus:ring-pink-500 focus:border-pink-500 block w-full p-2.5"
+                placeholder="name@company.com"
+                required
+              />
+            </div>
+            {/* Password Field */}
+            <div>
+              <label
+                htmlFor="password"
+                className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
+              >
+                Password
+              </label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-pink-500 focus:border-pink-500 block w-full p-2.5"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+            {/* Remember + Forgot Password */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-start">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  className="w-4 h-4 border border-gray-300 rounded bg-gray-50 focus:ring-3 focus:ring-primary-300"
+                />
+                <label htmlFor="remember" className="ml-2 text-sm text-gray-500">
+                  Remember me
+                </label>
+              </div>
+              <Link
+                to="/forgot-password"
+                className="text-sm font-medium text-[#ff8045] hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="w-full text-white bg-[#Ff8045] hover:bg-pink-600 focus:ring-4 focus:outline-none focus:ring-pink-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+            >
+              Login
+            </button>
+            {/* Sign Up Link */}
+            <p className="text-sm font-light text-gray-500">
+              Don't have an account yet?{" "}
+              <Link
+                to="/signup"
+                className="font-medium text-pink-400 hover:underline"
+              >
+                Sign up
+              </Link>
+            </p>
+          </form>
         </div>
       </div>
-    </section>
+    </div>
+  </div>
+</section>
+
   );
 }

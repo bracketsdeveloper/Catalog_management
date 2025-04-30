@@ -43,7 +43,7 @@ export default function Header() {
   if (isLoggedIn) return null;
 
   return (
-    <header className="inset-x-0 top-4 z-50 m-4 rounded-md sticky bg-gradient-to-tr from-[#af235e] to-[#241d88]">
+    <header className="inset-x-0 top-4 z-50 m-4 rounded-md sticky bg-[#Ff8045] shadow-lg">
       <nav
         aria-label="Global"
         className="flex items-center justify-between p-6 lg:px-8"
@@ -53,10 +53,12 @@ export default function Header() {
             <span className="sr-only">Your Company</span>
             <img
               alt="Your Company Logo"
-              src="https://tailwindui.com/plus/img/logos/mark.svg?color=indigo&shade=600"
+              src="/pacer-logo.jpeg"
               className="h-8 w-auto"
             />
+
           </Link>
+
         </div>
 
         <div className="flex lg:hidden">

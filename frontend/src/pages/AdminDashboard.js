@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 //import  logoImg from  '../../public/pacer-logo.jpeg';
 import { CgOrganisation } from "react-icons/cg";
+
 import {
   UserIcon,
   UserGroupIcon,
@@ -293,6 +294,7 @@ export default function AdminDashboard() {
   const [userManagementHovered, setUserManagementHovered] = useState(false);
   
 
+   
 
   /* ------------------------- AUTH STATE -------------------------- */
   const [permissions, setPermissions] = useState([]);
@@ -301,6 +303,8 @@ export default function AdminDashboard() {
 
   const navigate = useNavigate();
   const location = useLocation();
+
+    const isAdminDashboard = location.pathname === "/admin-dashboard" || location.pathname === "/admin-dashboard/";
 
   /* fetch role / permissions from localStorage once */
   useEffect(() => {
@@ -576,6 +580,7 @@ export default function AdminDashboard() {
               );
             })}
           </ul>
+   
         </nav>
 
         {/* ---------- FOOTER: LOGOUT ---------- */}
@@ -593,8 +598,18 @@ export default function AdminDashboard() {
       </aside>
 
       {/* ============ MAIN CONTENT ============ */}
-      <main className="flex-1 overflow-y-auto p-4">
+      <main className="flex-1 overflow-y-auto p-1">
+         {isAdminDashboard ? (
+           <div className="flex items-center justify-center h-full">
+          <img
+            src='/pacer-loader.jpeg'
+            alt="Admin Dashboard Background"
+            className="w-full h-full"
+          />
+        </div>
+      ) : (
         <Outlet />
+      )}
       </main>
     </div>
   );
