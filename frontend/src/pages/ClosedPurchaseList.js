@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 /* ─────────── Header Filters ─────────── */
 function HeaderFilters({ filters, onChange }) {
@@ -67,6 +68,22 @@ export default function ClosedPurchases() {
     direction: "asc",
     type: "date",
   });
+
+  // calling jobsheet global
+
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
+  
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
   /* -------- fetch closed purchases -------- */
   useEffect(() => {
@@ -383,7 +400,17 @@ export default function ClosedPurchases() {
                   ? new Date(p.deliveryDateTime).toLocaleDateString()
                   : ""}
               </td>
-              <td className="p-2 border">{p.jobSheetNumber}</td>
+              <td className="p-2 border">
+                   <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(p.jobSheetNumber);
+                    }}
+                  >
+                    {p.jobSheetNumber || "(No Number)"}
+                  </button>
+              </td>
               <td className="p-2 border">{p.clientCompanyName}</td>
               <td className="p-2 border">{p.eventName}</td>
               <td className="p-2 border">{p.product}</td>
@@ -413,6 +440,14 @@ export default function ClosedPurchases() {
           ))}
         </tbody>
       </table>
+
+       
+                <JobSheetGlobal
+                  jobSheetNumber={selectedJobSheetNumber} 
+                  isOpen={isModalOpen}
+                  onClose={handleCloseModal}
+                />
+              
     </div>
   );
 }

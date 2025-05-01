@@ -1,10 +1,11 @@
 // components/delivery/DeliveryReportsTable.js
-import React from "react";
+import React, { useState } from "react";
 import {
   ArrowUpIcon,
   ArrowDownIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 function Head({ label, field, sortField, sortOrder, toggleSort }) {
   const arrow =
@@ -35,6 +36,19 @@ export default function DeliveryReportsTable({
   onShowFollowUps,
   onShowExcel,
 }) {
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+const [isModalOpen, setIsModalOpen] = useState(false);
+
+
+const handleOpenModal = (jobSheetNumber) => {
+  setSelectedJobSheetNumber(jobSheetNumber);
+  setIsModalOpen(true);
+};
+
+const handleCloseModal = () => {
+  setIsModalOpen(false);
+  setSelectedJobSheetNumber(null);
+};
   return (
     <div className="border border-gray-300 rounded-lg">
       <table className="w-full table-auto text-xs">
@@ -70,7 +84,18 @@ export default function DeliveryReportsTable({
             return (
               <tr key={key} className={`${bg} hover:bg-opacity-80`}>
                 <Cell val={r.batchType} />
-                <Cell val={r.jobSheetNumber} />
+                   <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(r.jobSheetNumber);
+                    }}
+                  >
+                    <Cell val= 
+                    {(r.jobSheetNumber) || "No Number" }
+                    />
+                  </button>
+               
                 <Cell val={r.clientCompanyName} />
                 <Cell val={r.eventName} />
                 <Cell val={r.product} />
@@ -111,6 +136,12 @@ export default function DeliveryReportsTable({
           )}
         </tbody>
       </table>
+
+          <JobSheetGlobal
+            jobSheetNumber={selectedJobSheetNumber} 
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+          />
     </div>
   );
 }

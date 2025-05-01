@@ -6,6 +6,7 @@ import axios from "axios";
 import { TrashIcon } from '@heroicons/react/24/solid'; // or `/outline` for outlined style
 import * as XLSX from "xlsx";
 import JobSheetModal from "../components/jobsheet/JobNumberView";
+import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 
 /* ───────────────── Header Filters ───────────────── */
@@ -341,22 +342,20 @@ export default function OpenPurchases() {
   const [perms, setPerms] = useState([]);
   const canEdit = perms.includes("write-purchase");
 
-  const [showModal, setShowModal] = useState(false);
-  const [jobSheet, setSelectedJobSheet] = useState(null);
+const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+const [isModalOpen, setIsModalOpen] = useState(false);
 
-   const handleOpenModal = (p) => {
-    setSelectedJobSheet(p);
-    setShowModal(true);
-    alert("Jobsheet created successfully", p._id);
-  };
-  
 
-  
-    const handleCloseModal = () => {
-      setShowModal(false);
-      setSelectedJobSheet(null);
-    };
-  
+const handleOpenModal = (jobSheetNumber) => {
+  setSelectedJobSheetNumber(jobSheetNumber);
+  setIsModalOpen(true);
+};
+
+const handleCloseModal = () => {
+  setIsModalOpen(false);
+  setSelectedJobSheetNumber(null);
+};
+
   
 
   useEffect(() => {
@@ -715,6 +714,7 @@ const handleSourcedByDelete = async (id) => {
           <HeaderFilters headerFilters={headerFilters} onFilterChange={changeHeaderFilter} />
         </thead>
         <tbody>
+
           {rows.map((p) => {
             const latest =
               p.followUp?.length
@@ -736,19 +736,20 @@ const handleSourcedByDelete = async (id) => {
                     : ""
                 }
               >
-                <td className="p-2 border">
-                  {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
+            <td className="p-2 border">
+                {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
                 </td>
-                <td className="p-2 border">
-                  <button
-                  className="border-b text-blue-500 hover:text-blue-700"
-                  onClick={(e) => { 
-                    e.preventDefault(); // Prevent default behavior of anchor
-                    handleOpenModal(p); 
-                    
-                  }}
-                  >{p.jobSheetNumber || "(No Number)"}
-               </button>
+                <td  className="p-2 border">
+                 <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(p.jobSheetNumber);
+                    }}
+                  >
+                    {p.jobSheetNumber || "(No Number)"}
+                  </button>
+
                 </td>
                 <td className="p-2 border">{p.clientCompanyName}</td>
                 <td className="p-2 border">{p.eventName}</td>
@@ -863,13 +864,14 @@ const handleSourcedByDelete = async (id) => {
       </table>
 
       
-                  {showModal && (
-                    <div className="p-54">
-                      <div className="p-54">
-                      <JobSheetModal jobSheet={jobSheet} onClose={handleCloseModal} />
-                    </div>
-                    </div>
-                  )}
+        
+          <JobSheetGlobal
+            jobSheetNumber={selectedJobSheetNumber} 
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+          />
+        
+
 
       {editModal && currentEdit && (
         <EditPurchaseModal

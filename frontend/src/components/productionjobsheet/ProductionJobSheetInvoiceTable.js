@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import * as XLSX from "xlsx";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 /* utils */
 const t = (v) => (v && v !== "-" ? v : "");
@@ -46,6 +47,21 @@ export default function ProductionJobSheetInvoiceTable({
   headerFilters,
   onHeaderFilterChange,
 }) {
+
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+        const [isModalOpen, setIsModalOpen] = useState(false);
+        
+        
+        const handleOpenModal = (jobSheetNumber) => {
+          setSelectedJobSheetNumber(jobSheetNumber);
+          setIsModalOpen(true);
+        };
+        
+        const handleCloseModal = () => {
+          setIsModalOpen(false);
+          setSelectedJobSheetNumber(null);
+        };
+
   const icon = (f) =>
     sortConfig.key === f ? (
       sortConfig.direction === "asc" ? (
@@ -137,7 +153,17 @@ export default function ProductionJobSheetInvoiceTable({
               }
             >
               <td className="p-2 border">{d(i.orderConfirmationDate)}</td>
-              <td className="p-2 border">{i.jobSheetNumber}</td>
+              <td className="p-2 border">
+                 <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(i.jobSheetNumber);
+                    }}
+                  >
+                    {t(i.jobSheetNumber) || "(No Number)"}
+                  </button>
+              </td>
               <td className="p-2 border">{t(i.clientCompanyName)}</td>
               <td className="p-2 border">{t(i.eventName)}</td>
               <td className="p-2 border">{t(i.product)}</td>
@@ -160,6 +186,13 @@ export default function ProductionJobSheetInvoiceTable({
           ))}
         </tbody>
       </table>
+
+         <JobSheetGlobal
+                jobSheetNumber={selectedJobSheetNumber} 
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+              />
+      
     </>
   );
 }

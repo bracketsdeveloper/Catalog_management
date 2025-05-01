@@ -481,9 +481,7 @@ export default function ManageJobSheets() {
                   >{js.jobSheetNumber || "(No Number)"}
                </button>
                   </td>
-                  {/* Modal */}
-            
-
+              
                 <td className="p-2">{js.clientName}</td>
                 <td className="p-2">{js.clientCompanyName}</td>
                 <td className="p-2">

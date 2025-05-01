@@ -69,6 +69,7 @@ export default function ManageProductionJobsheet() {
   const [modalOpen, setModalOpen] = useState(false);
   const [current, setCurrent] = useState(null);
 
+  
   /* --------------- permissions --------------- */
   useEffect(() => {
     try {

@@ -1,6 +1,7 @@
 // src/components/productionjobsheet/ClosedProductionJobSheetTable.js
-import React from "react";
+import React, { useState } from "react";
 import * as XLSX from "xlsx";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 /* util */
 const t = (v) => (v && v !== "-" ? v : "");
@@ -75,6 +76,22 @@ export default function ClosedProductionJobSheetTable({
   headerFilters,
   onHeaderFilterChange,
 }) {
+
+    const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      
+      
+      const handleOpenModal = (jobSheetNumber) => {
+        setSelectedJobSheetNumber(jobSheetNumber);
+        setIsModalOpen(true);
+      };
+      
+      const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedJobSheetNumber(null);
+      };
+
+
   const icon = (f) =>
     sortField !== f ? (
       <span className="opacity-50 ml-0.5 text-xs">↕</span>
@@ -155,7 +172,17 @@ export default function ClosedProductionJobSheetTable({
           {data.map((r) => (
             <tr key={r._id} className="bg-green-200">
               <td className="p-2 border">{d(r.jobSheetCreatedDate)}</td>
-              <td className="p-2 border">{t(r.jobSheetNumber)}</td>
+              <td className="p-2 border">
+                 <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(r.jobSheetNumber);
+                    }}
+                  >
+                    {t(r.jobSheetNumber) || "(No Number)"}
+                  </button>
+              </td>
               <td className="p-2 border">{d(r.deliveryDateTime)}</td>
               <td className="p-2 border">{t(r.clientCompanyName)}</td>
               <td className="p-2 border">{t(r.eventName)}</td>
@@ -173,6 +200,15 @@ export default function ClosedProductionJobSheetTable({
           ))}
         </tbody>
       </table>
+
+        <JobSheetGlobal
+          jobSheetNumber={selectedJobSheetNumber} 
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+        />
+
+            
+
     </div>
   );
 }

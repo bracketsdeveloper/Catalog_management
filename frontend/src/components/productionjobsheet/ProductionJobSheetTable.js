@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 /* utility fns (unchanged) */
 const t = (v) => (!v || v === "-" ? "" : v);
@@ -51,6 +52,21 @@ export default function ProductionJobSheetTable({
   onHeaderFilterChange,
 }) {
   const [fuModal, setFuModal] = useState(null);
+
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    
+    const handleOpenModal = (jobSheetNumber) => {
+      setSelectedJobSheetNumber(jobSheetNumber);
+      setIsModalOpen(true);
+    };
+    
+    const handleCloseModal = () => {
+      setIsModalOpen(false);
+      setSelectedJobSheetNumber(null);
+    };
+  
 
   const rowCls = (s) =>
     !s
@@ -134,7 +150,17 @@ export default function ProductionJobSheetTable({
             return (
               <tr key={r._id} className={rowCls(r.status)}>
                 <td className="border px-2 py-1">{d(r.jobSheetCreatedDate)}</td>
-                <td className="border px-2 py-1">{t(r.jobSheetNumber)}</td>
+                <td className="border px-2 py-1">
+                   <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(r.jobSheetNumber);
+                    }}
+                  >
+                    {t(r.jobSheetNumber) || "(No Number)"}
+                  </button>
+                  </td>
                 <td className="border px-2 py-1">{d(r.deliveryDateTime)}</td>
                 <td className="border px-2 py-1">{t(r.clientCompanyName)}</td>
                 <td className="border px-2 py-1">{t(r.eventName)}</td>
@@ -162,6 +188,14 @@ export default function ProductionJobSheetTable({
           })}
         </tbody>
       </table>
+
+      
+                <JobSheetGlobal
+                  jobSheetNumber={selectedJobSheetNumber} 
+                  isOpen={isModalOpen}
+                  onClose={handleCloseModal}
+                />
+              
 
       {/* follow-up pop-up */}
       {fuModal && (

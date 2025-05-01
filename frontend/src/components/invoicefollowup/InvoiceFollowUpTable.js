@@ -1,10 +1,11 @@
 // components/invoicefollowup/InvoiceFollowUpTable.js
-import React from "react";
+import React, { useState } from "react";
 import {
   ArrowUpIcon,
   ArrowDownIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -36,6 +37,21 @@ export default function InvoiceFollowUpTable({
   toggleSort,
   onEdit,
 }) {
+
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+const [isModalOpen, setIsModalOpen] = useState(false);
+
+
+const handleOpenModal = (jobSheetNumber) => {
+  setSelectedJobSheetNumber(jobSheetNumber);
+  setIsModalOpen(true);
+};
+
+const handleCloseModal = () => {
+  setIsModalOpen(false);
+  setSelectedJobSheetNumber(null);
+};
+
   return (
     <div className="border border-gray-300 rounded-lg overflow-x-auto">
       <table className="w-full table-auto text-xs">
@@ -160,7 +176,17 @@ export default function InvoiceFollowUpTable({
               }`}
             >
               <Cell val={r.orderDate} />
-              <Cell val={r.jobSheetNumber} />
+              <button
+                className="border-b text-blue-500 hover:text-blue-700"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleOpenModal(r.jobSheetNumber);
+                }}
+              >
+                <Cell val= 
+                {(r.jobSheetNumber) || "No Number" }
+                />
+              </button>
               <Cell val={r.clientCompanyName} />
               <Cell val={r.clientName} />
               <Cell val={r.eventName} />
@@ -193,6 +219,12 @@ export default function InvoiceFollowUpTable({
           )}
         </tbody>
       </table>
+
+         <JobSheetGlobal
+            jobSheetNumber={selectedJobSheetNumber} 
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+          />
     </div>
   );
 }

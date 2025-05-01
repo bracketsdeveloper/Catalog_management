@@ -27,6 +27,8 @@ export default function ManageInvoiceFollowUp() {
     invoiceGenerated: "",
   });
 
+  
+
   /* Fetch + enrich */
   useEffect(() => {
     fetchRows();

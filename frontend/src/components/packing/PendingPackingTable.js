@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   EllipsisVerticalIcon,
   ArrowUpIcon,
   ArrowDownIcon,
 } from "@heroicons/react/24/outline";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 /* --------------------------------------------------------------- */
 function Header({ label, field, sortField, sortOrder, toggleSort }) {
@@ -37,6 +38,21 @@ export default function PendingPackingTable({
   onShowFollowUps,
   showEdit = true, // new prop
 }) {
+
+ const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+        const [isModalOpen, setIsModalOpen] = useState(false);
+        
+        
+        const handleOpenModal = (jobSheetNumber) => {
+          setSelectedJobSheetNumber(jobSheetNumber);
+          setIsModalOpen(true);
+        };
+        
+        const handleCloseModal = () => {
+          setIsModalOpen(false);
+          setSelectedJobSheetNumber(null);
+        };
+
   return (
     <div className="border border-gray-300 rounded-lg">
       <table className="w-full table-auto text-xs">
@@ -66,7 +82,18 @@ export default function PendingPackingTable({
             return (
               <tr key={key} className="hover:bg-gray-50">
                 <Cell val={row.jobSheetCreatedDate} />
-                <Cell val={row.jobSheetNumber} />
+                <button
+                    className="flex justify-center items-center text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(row.jobSheetNumber);
+                    }}
+                  >
+                  <Cell val=
+                      {(row.jobSheetNumber) || "(No Number)"}
+                      />
+                    </button>
+                
                 <Cell val={row.expectedDeliveryDate} />
                 <Cell val={row.clientCompanyName} />
                 <Cell val={row.eventName} />
@@ -104,6 +131,12 @@ export default function PendingPackingTable({
           )}
         </tbody>
       </table>
+
+       <JobSheetGlobal
+            jobSheetNumber={selectedJobSheetNumber} 
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+          />
     </div>
   );
 }

@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 /* ────────────────────────── constants ────────────────────────── */
 const INVOICE_RECEIVED_OPTIONS = ["Yes", "No"];
@@ -144,6 +145,20 @@ export default function ManagePurchaseInvoice() {
 
   const [canEdit, setCanEdit]         = useState(false);
   const [modal, setModal]             = useState(null);
+
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    
+    const handleOpenModal = (jobSheetNumber) => {
+      setSelectedJobSheetNumber(jobSheetNumber);
+      setIsModalOpen(true);
+    };
+    
+    const handleCloseModal = () => {
+      setIsModalOpen(false);
+      setSelectedJobSheetNumber(null);
+    };
 
   /* permissions */
   useEffect(() => {
@@ -398,7 +413,17 @@ export default function ManagePurchaseInvoice() {
             <tr key={inv._id || inv.jobSheetNumber+inv.product} className={inv.vendorInvoiceReceived==="Yes"?"bg-green-100":""}>
               <td className="p-2 border">{inv.orderConfirmedDate?new Date(inv.orderConfirmedDate).toLocaleDateString():""}</td>
               <td className="p-2 border">{inv.deliveryDateTime?new Date(inv.deliveryDateTime).toLocaleDateString():""}</td>
-              <td className="p-2 border">{inv.jobSheetNumber}</td>
+              <td className="p-2 border">
+                 <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(inv.jobSheetNumber);
+                    }}
+                  >
+                    {inv.jobSheetNumber || "(No Number)"}
+                  </button>
+                </td>
               <td className="p-2 border">{inv.clientCompanyName}</td>
               <td className="p-2 border">{inv.eventName}</td>
               <td className="p-2 border">{inv.product}</td>
@@ -423,6 +448,13 @@ export default function ManagePurchaseInvoice() {
         </tbody>
       </table>
 
+ 
+                 <JobSheetGlobal
+                   jobSheetNumber={selectedJobSheetNumber} 
+                   isOpen={isModalOpen}
+                   onClose={handleCloseModal}
+                 />
+               
       {modal && (
         <EditInvoiceModal
           invoice={modal}

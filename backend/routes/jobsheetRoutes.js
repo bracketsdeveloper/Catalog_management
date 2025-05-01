@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
-
+const mongoose = require("mongoose")
 // Create a new job sheet (POST)
 router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -121,24 +121,30 @@ router.get("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
 // GET /jobsheets/:id
 // - If the job sheet is a draft, only the creator can view it
 // - Otherwise, it's visible to any authorized admin
-router.get("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
+router.get('/jobsheets/:id', authenticate, async (req, res) => {
   try {
-    const jobSheet = await JobSheet.findById(req.params.id);
+    const { id } = req.params;
+    const isObjectId = mongoose.Types.ObjectId.isValid(id) && id.length === 24;
+
+    const filter = isObjectId
+      ? { $or: [{ _id: id }, { jobSheetNumber: id }] }
+      : { jobSheetNumber: id };
+
+      const jobSheet = await JobSheet.findOne(filter);
     if (!jobSheet) {
-      return res.status(404).json({ message: "Job sheet not found" });
+      return res.status(404).json({ message: 'Job sheet not found' });
     }
 
-    // If this is a draft, only the creator can see it
-    if (jobSheet.isDraft === true && jobSheet.createdBy !== req.user.email) {
+    if (jobSheet.isDraft && jobSheet.createdBy !== req.user.email) {
       return res
         .status(403)
-        .json({ message: "Forbidden: you are not the owner of this draft." });
+        .json({ message: 'Forbidden: you are not the owner of this draft.' });
     }
 
     res.json(jobSheet);
   } catch (error) {
-    console.error("Error fetching job sheet:", error);
-    res.status(500).json({ message: "Server error fetching job sheet" });
+    console.error('Error fetching job sheet:', error);
+    res.status(500).json({ message: 'Server error fetching job sheet' });
   }
 });
 
