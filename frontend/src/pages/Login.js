@@ -142,7 +142,7 @@ export default function SignIn() {
               Don't have an account yet?{" "}
               <Link
                 to="/signup"
-                className="font-medium text-pink-400 hover:underline"
+                className="font-medium text-[#ff8045] hover:underline"
               >
                 Sign up
               </Link>

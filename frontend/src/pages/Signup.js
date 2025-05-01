@@ -58,22 +58,23 @@ export default function CreateAccount() {
   };
 
   return (
-    <section
-      className="bg-gradient-to-tr from-[#ff80b5] to-[#9089fc] m-4 rounded-md"
-    >
+     <section
+    className="h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center bg-white"
+    style={{ backgroundImage: "url('/Login_page.png')" }} // Replace with your actual image path
+  >
       <div className="flex flex-col items-center justify-center px-6 py-8 mx-auto min-h-screen">
         {/* Increase the width by using max-w-xl (adjust as you prefer) */}
-        <div className="w-full max-w-xl bg-white rounded-lg shadow dark:border dark:bg-gray-800 dark:border-gray-700">
+        <div className="w-full max-w-xl bg-white rounded-lg shadow dark:border dark:bg-white">
           {/* Remove overflow and max-h to prevent vertical scrolling */}
-          <div className="p-6 space-y-4 md:space-y-6 sm:p-8">
-            <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
+          <div className="p-2 space-y-4 md:space-y-6 sm:p-8">
+            <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-black">
               Create an account
             </h1>
             <form className="space-y-4 md:space-y-6" onSubmit={handleSubmit}>
               <div>
                 <label
                   htmlFor="name"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
                 >
                   Your Name
                 </label>
@@ -83,11 +84,11 @@ export default function CreateAccount() {
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 
+                  className="bg-gray-50 border border-gray-300 text-black
                              rounded-lg focus:ring-primary-600 
                              focus:border-primary-600 block w-full p-2.5 
-                             dark:bg-gray-700 dark:border-gray-600 
-                             dark:placeholder-gray-400 dark:text-white"
+                             dark:bg-gray-200 dark:border-gray-600 
+                             dark:placeholder-gray-400 dark:text-black"
                   placeholder="John Doe"
                   required
                 />
@@ -96,7 +97,7 @@ export default function CreateAccount() {
               <div>
                 <label
                   htmlFor="email"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
                 >
                   Your Email
                 </label>
@@ -106,11 +107,11 @@ export default function CreateAccount() {
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 
+                  className="bg-gray-50 border border-gray-300 text-black
                              rounded-lg focus:ring-primary-600 
                              focus:border-primary-600 block w-full p-2.5 
-                             dark:bg-gray-700 dark:border-gray-600 
-                             dark:placeholder-gray-400 dark:text-white"
+                             dark:bg-gray-200 dark:border-gray-600 
+                             dark:placeholder-gray-400 dark:text-black"
                   placeholder="name@company.com"
                   required
                 />
@@ -119,7 +120,7 @@ export default function CreateAccount() {
               <div>
                 <label
                   htmlFor="phone"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
                 >
                   Phone Number
                 </label>
@@ -129,11 +130,11 @@ export default function CreateAccount() {
                   id="phone"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 
+                  className="bg-gray-50 border border-gray-300 text-black
                              rounded-lg focus:ring-primary-600 
                              focus:border-primary-600 block w-full p-2.5 
-                             dark:bg-gray-700 dark:border-gray-600 
-                             dark:placeholder-gray-400 dark:text-white"
+                             dark:bg-gray-200 dark:border-gray-600 
+                             dark:placeholder-gray-400 dark:text-black"
                   placeholder="9876543210"
                   required
                 />
@@ -142,7 +143,7 @@ export default function CreateAccount() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
                 >
                   Password
                 </label>
@@ -153,11 +154,11 @@ export default function CreateAccount() {
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 
+                    className="bg-gray-50 border border-gray-300 text-black
                                rounded-lg focus:ring-primary-600 
                                focus:border-primary-600 block w-full p-2.5 
-                               dark:bg-gray-700 dark:border-gray-600 
-                               dark:placeholder-gray-400 dark:text-white"
+                               dark:bg-gray-200 dark:border-gray-600 
+                               dark:placeholder-gray-400 dark:text-black"
                     placeholder="••••••••"
                     required
                   />
@@ -176,7 +177,7 @@ export default function CreateAccount() {
               <div>
                 <label
                   htmlFor="confirm-password"
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-black"
                 >
                   Confirm password
                 </label>
@@ -186,11 +187,11 @@ export default function CreateAccount() {
                   id="confirm-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 
+                  className="bg-gray-50 border border-gray-300 text-black 
                              rounded-lg focus:ring-primary-600 
                              focus:border-primary-600 block w-full p-2.5 
-                             dark:bg-gray-700 dark:border-gray-600 
-                             dark:placeholder-gray-400 dark:text-white"
+                             dark:bg-gray-200 dark:border-gray-600 
+                             dark:placeholder-gray-400 dark:text-black"
                   placeholder="••••••••"
                   required
                 />
@@ -200,8 +201,7 @@ export default function CreateAccount() {
               <button
                 type="submit"
                 className="w-full 
-                           bg-gradient-to-r from-purple-600 to-pink-500 
-                           hover:from-purple-700 hover:to-pink-600 
+                           bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded
                            focus:ring-4 focus:outline-none 
                            focus:ring-purple-300 font-medium 
                            rounded-lg text-sm px-5 py-2.5 text-center 
@@ -214,7 +214,7 @@ export default function CreateAccount() {
                 Already have an account?{" "}
                 <Link
                   to={"/login"}
-                  className="font-medium text-primary-600 hover:underline dark:text-primary-500"
+                  className="font-medium text-[#ff8045] hover:underline dark:text-[#ff8045]"
                 >
                   Login here
                 </Link>
