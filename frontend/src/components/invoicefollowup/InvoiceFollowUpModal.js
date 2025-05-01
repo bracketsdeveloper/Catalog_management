@@ -75,16 +75,12 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
           <Field label="Delivered Through" value={form.deliveredThrough} />
           <Field label="PO Status" value={form.poStatus} />
           <Field label="Pending From (days)" value={form.pendingFromDays} />
+          <Field label="Partial Qty" value={form.partialQty || ""} />
+
         </div>
 
         {/* Editable */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <Input
-            label="Partial Qty"
-            type="number"
-            value={form.partialQty || ""}
-            onChange={(v) => set("partialQty", v)}
-          />
           <Select
             label="Invoice Generated"
             value={form.invoiceGenerated}

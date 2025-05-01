@@ -56,8 +56,15 @@ export default function InvoiceFollowUpTable({
               toggle={toggleSort}
             />
             <HeadCell
-              label="Client"
+              label="Client (Co.)"
               field="clientCompanyName"
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
+            />
+            <HeadCell
+              label="Client Name"
+              field="clientName"
               sortField={sortField}
               sortOrder={sortOrder}
               toggle={toggleSort}
@@ -146,10 +153,16 @@ export default function InvoiceFollowUpTable({
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.dispatchId || r._id} className="hover:bg-gray-100">
+            <tr
+              key={r.dispatchId || r._id}
+              className={`hover:bg-gray-100 ${
+                r.invoiceGenerated === "Yes" ? "bg-green-100" : ""
+              }`}
+            >
               <Cell val={r.orderDate} />
               <Cell val={r.jobSheetNumber} />
               <Cell val={r.clientCompanyName} />
+              <Cell val={r.clientName} />
               <Cell val={r.eventName} />
               <Cell val={r.quotationNumber} />
               <Cell val={r.crmName} />
@@ -171,7 +184,7 @@ export default function InvoiceFollowUpTable({
           {rows.length === 0 && (
             <tr>
               <td
-                colSpan={15}
+                colSpan={16}
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records
@@ -187,7 +200,9 @@ export default function InvoiceFollowUpTable({
 function Cell({ val }) {
   return (
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
-      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val) ? fmt(val) : val ?? "-"}
+      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
+        ? fmt(val)
+        : val ?? "-"}
     </td>
   );
 }
