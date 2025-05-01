@@ -29,8 +29,8 @@ export default function OpportunityTabs({ activeTab, setActiveTab, isSuperAdmin 
             onClick={() => setActiveTab("all-opportunities")}
             className={`px-4 py-2 text-sm font-semibold rounded-t-md ${
               activeTab === "all-opportunities"
-                ? "bg-purple-600 text-white"
-                : "bg-[#Ff8045] text-white"
+                ? "bg-[#b3b3b3] text-white"
+                : "bg-[#44b977] text-white"
             }`}
           >
             All Opportunities

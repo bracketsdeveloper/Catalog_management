@@ -27,7 +27,7 @@ export default function ManageInvoiceFollowUp() {
     invoiceGenerated: "",
   });
 
-  
+
 
   /* Fetch + enrich */
   useEffect(() => {
@@ -164,7 +164,7 @@ export default function ManageInvoiceFollowUp() {
 
   return (
     <div className="p-6">
-      <h1 className="text-xl md:text-2xl font-bold mb-4 text-purple-700">
+      <h1 className="text-xl md:text-2xl font-bold mb-4 text-[#Ff8045]">
         Invoices Follow-Up
       </h1>
 
@@ -178,7 +178,7 @@ export default function ManageInvoiceFollowUp() {
         />
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-4 py-2 rounded"
+          className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white text-xs px-4 py-2 rounded"
         >
           Filters
         </button>

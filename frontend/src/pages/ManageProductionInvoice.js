@@ -172,7 +172,7 @@ export default function ManageProductionInvoice() {
   /* --------------- UI --------------- */
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold text-purple-700 mb-4">
+      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
         Production Job Sheet Invoice
       </h1>
 
@@ -188,7 +188,7 @@ export default function ManageProductionInvoice() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded ${tab === t ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+            className={`px-4 py-2 rounded ${tab === t ? "bg-[#Ff8045] text-white" : "bg-gray-200"}`}
           >
             {t === "open" ? "Open Invoices" : "Closed Invoices"}
           </button>
@@ -205,7 +205,7 @@ export default function ManageProductionInvoice() {
         />
         <button
           onClick={() => setShow((p) => !p)}
-          className="bg-purple-600 text-white text-xs px-4 py-2 rounded"
+          className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white text-xs px-4 py-2 rounded"
         >
           Filters
         </button>

@@ -91,7 +91,7 @@ export default function ManageDeliveryReports() {
   /* ---------------------------------------------------------------- */
   return (
     <div>
-      <h1 className="text-xl md:text-2xl font-bold mb-4 text-purple-700">
+      <h1 className="text-xl md:text-2xl font-bold mb-4 text-[#Ff8045]">
         Delivery Reports
       </h1>
 

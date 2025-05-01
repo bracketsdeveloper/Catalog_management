@@ -67,7 +67,7 @@ export default function ManagePendingPackingClosed() {
 
   return (
     <div>
-      <h1 className="text-xl md:text-2xl font-bold mb-4 text-purple-700">
+      <h1 className="text-xl md:text-2xl font-bold mb-4 text-[#Ff8045]">
         Closed Pending Packing
       </h1>
 
@@ -80,7 +80,7 @@ export default function ManagePendingPackingClosed() {
         />
         <Link
           to="/admin-dashboard/pending-packing"
-          className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-xs"
+          className="px-3 py-1 bg-[#Ff8045] hover:bg-[#Ff8045]/90 rounded text-xs"
         >
           ← Open Pending Packing
         </Link>

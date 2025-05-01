@@ -215,7 +215,7 @@ export default function ManageProductionJobsheet() {
   /* --------------- UI --------------- */
   return (
     <div className="p-4">
-      <h1 className="text-2xl text-purple-700 font-bold mb-4">
+      <h1 className="text-2xl text-[#Ff8045] font-bold mb-4">
         Manage Production Job Sheet
       </h1>
 
@@ -235,7 +235,7 @@ export default function ManageProductionJobsheet() {
         />
         <button
           onClick={() => setShowFilters((p) => !p)}
-          className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-4 py-2 rounded"
+          className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white text-xs px-4 py-2 rounded"
         >
           Filters
         </button>
