@@ -201,6 +201,7 @@ export default function EditQuotation() {
         ProductBrand: item.ProductBrand || "",
       }));
       setSelectedProducts(mappedItems);
+      console.log(mappedItems);
     } catch (error) {
       console.error("Error fetching quotation for edit:", error);
       alert("Failed to load quotation. Check console.");
@@ -296,15 +297,16 @@ export default function EditQuotation() {
   const handleAddSingle = (item) => {
     const color = item.color && item.color !== "N/A" ? item.color : "";
     const size = item.size && item.size !== "N/A" ? item.size : "";
-    if (isDuplicate(item.productId, color, size)) {
+    if (isDuplicate(item.productId || item._id, color, size)) {
       alert("This item with the same color & size is already added!");
       return;
     }
+   
     const productName = `${
       item.productName || item.name || "Unknown Product"
     }${color ? `(${color})` : ""}${size ? `[${size}]` : ""}`;
-    const newItem = {
-      productId: item._id,
+      const newItem = {
+      productId: item.productId || item._id,
       productName,
       productCost: item.productCost || 0,
       productprice: item.productCost || 0,
@@ -318,6 +320,7 @@ export default function EditQuotation() {
       ProductBrand: item.brandName || "",
     };
     setSelectedProducts((prev) => [...prev, newItem]);
+    console.log(newItem);
   };
 
   const handleAddVariations = (variations) => {

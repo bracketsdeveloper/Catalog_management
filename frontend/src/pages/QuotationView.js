@@ -20,6 +20,28 @@ export default function QuotationView() {
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [editingTermIdx, setEditingTermIdx] = useState(null);
 
+   const [products, setProducts] = useState([]);
+    
+   const token = localStorage.getItem("token");
+   useEffect(() => {
+ 
+    const fetchProducts = async () => {
+      try {
+        const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        setProducts(res.data.products || []);
+      } catch (error) {
+        console.error("Error fetching products:", error.response?.data || error.message);
+      }
+    };
+
+    fetchProducts();
+  }, [BACKEND_URL, token]);
+
   const defaultTerms = [
     {
       heading: "Delivery",
@@ -413,29 +435,37 @@ export default function QuotationView() {
               (amount * (parseFloat(item.productGST) / 100)).toFixed(2)
             );
             const total = parseFloat((amount + gstVal).toFixed(2));
-            const imageUrl =
-              item.image ||
-              (item.productId &&
-                item.productId.images &&
-                item.productId.images.length > 0
-                ? item.productId.images[0]
-                : "https://via.placeholder.com/150");
+            // const imageUrl =
+            //   item.image ||
+            //   (item.productId &&
+            //     item.productId.images &&
+            //     item.productId.images.length > 0
+                // item.productId.images[0]
+            //     : "https://via.placeholder.com/150");
 
+            const imageUrl = 
+                 item.image ||
+                item.productId?.images?.[0] ||
+                item.productId?.name ||
+                "https://via.placeholder.com/150";
+
+                
+             
             const hsnCode = item.hsnCode || (item.productId && item.productId.hsnCode) || "N/A";
 
             return (
               <tr key={index} className="border-b">
-                <td className="p-2">{item.slNo}</td>
+                <td className="p-2">{item.productId?.name}</td>
                 <td className="p-2">
-                  {imageUrl !== "https://via.placeholder.com/150" ? (
-                    <img
-                      src={imageUrl}
-                      alt={item.product}
-                      className="w-16 h-16 object-cover"
-                    />
-                  ) : (
-                    "No Image"
-                  )}
+                {imageUrl !== "https://via.placeholder.com/150" ? (
+                      <img
+                        src={imageUrl}
+                        alt={item.name || "Product Image"}
+                        className="w-16 h-16 object-cover"
+                      />
+                    ) : (
+                      "No Image"
+                    )}
                 </td>
                 <td className="p-2">
                   <EditableField

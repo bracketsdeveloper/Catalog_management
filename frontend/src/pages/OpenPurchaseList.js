@@ -34,13 +34,27 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     <tr className="bg-gray-100">
       {columns.map((c) => (
         <th key={c} className="p-1 border border-gray-300">
-          <input
-            type="text"
-            className="w-full p-1 text-xs border rounded"
-            placeholder={`Filter ${c}`}
-            value={headerFilters[c] || ""}
-            onChange={(e) => onFilterChange(c, e.target.value)}
-          />
+           {c !== "status" ? (
+              <input
+                  type="text"
+                  className="w-full p-1 text-xs border rounded"
+                  placeholder={`Filter ${c}`}
+                  value={headerFilters[c] || ""}
+                  onChange={(e) => onFilterChange(c, e.target.value)}
+                />
+         ) : (
+             <select
+                className="w-full p-1 text-xs border rounded"
+                value={headerFilters[c] || ""}
+                onChange={(e) => onFilterChange(c, e.target.value)}
+              >
+                <option value="">All</option>
+                <option value="received">Received</option>
+                <option value="pending">Pending</option>
+                <option value="alert">Alert</option>
+              </select>
+             
+              )}
         </th>
       ))}
       <th className="p-1 border border-gray-300" colSpan={2}></th>
@@ -280,6 +294,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                     </option>
                   ))}
                 </select>
+                
               </div>
             </div>
 
@@ -707,9 +722,9 @@ const handleSourcedByDelete = async (id) => {
               Remarks {sort.key === "remarks" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
             </th>
             <th onClick={() => sortBy("status")} className="p-2 border cursor-pointer">
-              Status {sort.key === "status" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
-            </th>
-            <th className="p-2 border">Actions</th>
+                Status {sort.key === "status" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
+              </th>
+              <th className="p-2 border">Actions</th>
           </tr>
           <HeaderFilters headerFilters={headerFilters} onFilterChange={changeHeaderFilter} />
         </thead>
