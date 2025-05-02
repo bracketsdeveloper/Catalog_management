@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { format } from "date-fns";
 
@@ -8,6 +8,24 @@ export default function JobSheetGlobal({ jobSheetNumber, isOpen, onClose }) {
   const [jobSheet, setJobSheet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+    const modalRef = useRef(null);
+
+ useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (modalRef.current && !modalRef.current.contains(event.target)) {
+      onClose();
+    }
+  };
+
+  if (isOpen) {
+    document.addEventListener("mousedown", handleClickOutside);
+  }
+
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, [isOpen, onClose]);
+
 
   useEffect(() => {
   if (!jobSheetNumber || !isOpen) return;
@@ -44,17 +62,20 @@ export default function JobSheetGlobal({ jobSheetNumber, isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white max-h-[90vh] overflow-y-auto p-4 border rounded-lg w-full max-w-[1200px] relative">
-        <button onClick={onClose} className="absolute top-2 right-2 text-3xl font-bold">×</button>
+          <div
+      ref={modalRef}
+      className="bg-white max-h-[90vh] overflow-y-auto p-4 border rounded-lg w-full max-w-[1200px] relative"
+    >
+      <button onClick={onClose} className="absolute top-2 right-2 text-3xl font-bold">×</button>
+      {loading ? (
+        <div>Loading...</div>
+      ) : error ? (
+        <div className="text-red-500">{error}</div>
+      ) : (
+        <JobSheetContent jobSheet={jobSheet} formatDate={formatDate} />
+      )}
+    </div>
 
-        {loading ? (
-          <div>Loading...</div>
-        ) : error ? (
-          <div className="text-red-500">{error}</div>
-        ) : (
-          <JobSheetContent jobSheet={jobSheet} formatDate={formatDate} />
-        )}
-      </div>
     </div>
   );
 }
