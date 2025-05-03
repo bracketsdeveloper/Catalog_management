@@ -252,6 +252,7 @@ const adminPages = [
         permission: "sample-status",
       },
       
+      
     ],
   },
 
@@ -289,7 +290,12 @@ const adminPages = [
         name:"Potential Clients",
         path: "/admin-dashboard/filter-potential-clients",
         permission: "filter-potential-clients"
-      }
+      },
+      {
+        name: "Events Calender",
+        path: "/admin-dashboard/events-calender",
+        permission: "events-calender",
+      },
     ],
   },
 

@@ -56,6 +56,7 @@ import ManageExpenses from "../pages/ManageExpenses";
 import ManagePotentialClients from "../pages/ManagePotentialClients";
 import EventManager from "../pages/EventManager";
 import PotentialClientsList from "../pages/PotentialClientsList";
+import CalendarPage from "../pages/CalendarPage";
 
 const router = createBrowserRouter([
     {
@@ -309,6 +310,10 @@ const router = createBrowserRouter([
                     {
                         path:"filter-potential-clients",
                         element:<PotentialClientsList/>
+                    },
+                    {
+                        path:"events-calender",
+                        element: <CalendarPage/>
                     }
 
                 ]
