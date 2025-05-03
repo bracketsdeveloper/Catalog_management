@@ -9,7 +9,7 @@ import { format, parse, isValid, isWithinInterval } from "date-fns";
 import "react-datepicker/dist/react-datepicker.css";
 import { Dropdown } from "react-bootstrap";
 import { FaEllipsisV } from "react-icons/fa";
-import JobSheetModal from "../components/jobsheet/JobNumberView";
+import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 export default function ManageJobSheets() {
   const navigate = useNavigate();
@@ -44,38 +44,20 @@ export default function ManageJobSheets() {
   const [draftError, setDraftError] = useState(null);
 
   //writing sort
-   const [isSorted, setIsSorted] = useState(false);
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      
+      
+      const handleOpenModal = (jobSheetNumber) => {
+        setSelectedJobSheetNumber(jobSheetNumber);
+        setIsModalOpen(true);
+      };
+      
+      const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedJobSheetNumber(null);
+      };
 
-   const [showModal, setShowModal] = useState(false);
-  const [jobSheet, setSelectedJobSheet] = useState(null);
-
- const handleOpenModal = (js) => {
-  setSelectedJobSheet(js);
-  setShowModal(true);
-};
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setSelectedJobSheet(null);
-  };
-
-
-
-
-   // const displayJobSheet = useMemo(() => {
-  //     if(isSorted){
-  //       return [...filteredJobSheets].sort((a, b) => {
-  //           const aVal = a.jobSheetNumber || "";
-  //           const bVal = b.jobSheetNumber || "";
-  //           return bVal.localeCompare(aVal);
-  //       })
-  //     }
-  //     return filteredJobSheets;
-  // }, [filteredJobSheets, isSorted])
-
-  // const handleSortClick = () => {
-  //     setIsSorted()
-  // }
 
   const dateFilterRef = useRef(null);
 
@@ -461,6 +443,7 @@ export default function ManageJobSheets() {
                 JobSheet No.
               {/*   {isSorted && <span> 🔽 </span>} */}
                 </th>
+                <th className="p-2 text-left">Event Name</th>
               <th className="p-2 text-left">Client Name</th>
               <th className="p-2 text-left">Company</th>
               <th className="p-2 text-left">Order Date</th>
@@ -471,17 +454,18 @@ export default function ManageJobSheets() {
           <tbody>
             {filteredJobSheets.map((js) => (
               <tr key={js._id} className="border-b">
-                <td className="p-2">
+                <td className="p-2 border">
                  <button
-                  className="border-b text-blue-500 hover:text-blue-700"
-                  onClick={(e) => { 
-                    e.preventDefault(); // Prevent default behavior of anchor
-                    handleOpenModal(js); 
-                  }}
-                  >{js.jobSheetNumber || "(No Number)"}
-               </button>
-                  </td>
-              
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(js.jobSheetNumber);
+                    }}
+                  >
+                    {js.jobSheetNumber || "(No Number)"}
+                  </button>
+                </td>
+                <td className="p-2">{js.eventName}</td>
                 <td className="p-2">{js.clientName}</td>
                 <td className="p-2">{js.clientCompanyName}</td>
                 <td className="p-2">
@@ -531,11 +515,17 @@ export default function ManageJobSheets() {
         </table>
       )}
 
-            {showModal && (
+                  {/* {showModal && (
                      <div className="p-10">
                       <JobSheetModal jobSheet={jobSheet} onClose={handleCloseModal} />
                     </div>
-                  )}
+                  )} */}
+
+                      <JobSheetGlobal
+                        jobSheetNumber={selectedJobSheetNumber} 
+                        isOpen={isModalOpen}
+                        onClose={handleCloseModal}
+                      />
                   
       {/* The Modal for "Create Jobsheet" */}
       {modalOpen && (

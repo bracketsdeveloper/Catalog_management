@@ -5,7 +5,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { TrashIcon } from '@heroicons/react/24/solid'; // or `/outline` for outlined style
 import * as XLSX from "xlsx";
-import JobSheetModal from "../components/jobsheet/JobNumberView";
 import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 
