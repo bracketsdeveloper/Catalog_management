@@ -53,6 +53,9 @@ import Samples from "../pages/Samples";
 import SamplesOut from "../pages/SamplesOut";
 import SampleStatus from "../pages/SampleStatus";
 import ManageExpenses from "../pages/ManageExpenses";
+import ManagePotentialClients from "../pages/ManagePotentialClients";
+import EventManager from "../pages/EventManager";
+import PotentialClientsList from "../pages/PotentialClientsList";
 
 const router = createBrowserRouter([
     {
@@ -294,6 +297,18 @@ const router = createBrowserRouter([
                     {
                         path:"manage-expenses",
                         element:<ManageExpenses/>
+                    },
+                    {
+                        path:"manage-potential-clients",
+                        element:<ManagePotentialClients/>
+                    },
+                    {
+                        path:"manage-events",
+                        element:<EventManager/>
+                    },
+                    {
+                        path:"filter-potential-clients",
+                        element:<PotentialClientsList/>
                     }
 
                 ]

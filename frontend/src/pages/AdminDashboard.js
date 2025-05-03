@@ -270,6 +270,29 @@ const adminPages = [
     ],
   },
 
+  {
+    name: "FollowUp Tracker",
+    defaultPath: "/admin-dashboard/manage-potential-clients",
+    icon: <BriefcaseIcon className="w-8 h-8 flex justify-center items-center" />,
+    subItems: [
+      {
+        name: "Manage Potential Clients",
+        path: "/admin-dashboard/manage-potential-clients",
+        permission: "manage-potential-clients",
+      },
+      {
+        name: "Manage Events",
+        path: "/admin-dashboard/manage-events",
+        permission: "manage-events",
+      },
+      {
+        name:"Potential Clients",
+        path: "/admin-dashboard/filter-potential-clients",
+        permission: "filter-potential-clients"
+      }
+    ],
+  },
+
 ];
 
 /* ================================================================== */
@@ -289,6 +312,7 @@ export default function AdminDashboard() {
   const [invoicesHovered, setInvoicesHovered] = useState(false);
   const [samplesHovered, setSamplesHovered] = useState(false);
   const [expenseHovered, setExpenseHovered] = useState(false);
+  const [followUpTrackerHovered, setFollowUpTrackerHovered] = useState(false);
 
   //user management
   const [userManagementHovered, setUserManagementHovered] = useState(false);
@@ -321,6 +345,11 @@ export default function AdminDashboard() {
       setPermissions(perms);
       setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     }
+
+    // Cleanup function (if needed)
+    return () => {
+      // Any cleanup logic here
+    };
   }, []);
 
   /* ---------------------- SIGN‑OUT ------------------------------- */
@@ -343,7 +372,7 @@ export default function AdminDashboard() {
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 100;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered;
+    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered || followUpTrackerHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
@@ -495,6 +524,20 @@ export default function AdminDashboard() {
                     page={page}
                     hovered={expenseHovered}
                     setHovered={setExpenseHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ===== FOLLOW UP TRACKER (two‑tier menu) ==== */
+              if (page.name === "FollowUp Tracker") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={followUpTrackerHovered}
+                    setHovered={setFollowUpTrackerHovered}
                     sidebarOpen={sidebarOpen}
                     sidebarHover={sidebarHover}
                   />
