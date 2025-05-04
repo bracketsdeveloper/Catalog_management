@@ -38,6 +38,14 @@ export const VendorAdd = (
     const removeClient = (idx) =>
     setForm((p) => ({ ...p, clients: p.clients.filter((_, i) => i !== idx) }));
 
+    
+  const updateClientField = (idx, field, value) =>
+    setForm((p) => {
+      const list = [...p.clients];
+      list[idx] = { ...list[idx], [field]: value };
+      return { ...p, clients: list };
+    });
+
      const sanitiseContacts = (clients) =>
     clients
       .filter((c) => c && c.name && c.contactNumber)
@@ -206,7 +214,8 @@ export const VendorAdd = (
                           )
                         )}
                         <td className="border p-1 text-center">
-                          <button                    
+                          <button           
+                           onClick={() => removeClient(idx)}
                             className="text-red-600"
                           >
                             ×
