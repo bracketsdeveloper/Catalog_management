@@ -60,7 +60,15 @@ const groupedPermissions = {
   ],
   "Expenses Records" :[
     "manage-expenses"
-  ]
+  ],
+  
+    "FollowUp Tracker" :[
+      "manage-potential-clients",
+      "manage-events",
+      "filter-potential-clients",
+      "events-calender"
+    ]
+  
 };
 
 /* flat list (if needed elsewhere) */
