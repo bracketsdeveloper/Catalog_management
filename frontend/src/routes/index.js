@@ -314,6 +314,10 @@ const router = createBrowserRouter([
                     {
                         path:"events-calender",
                         element: <CalendarPage/>
+                    },
+                    {
+                        path:"home",
+                        element:<Home/>
                     }
 
                 ]

@@ -64,7 +64,9 @@ const groupedPermissions = {
   
     "FollowUp Tracker" :[
       "manage-potential-clients",
-      "manage-events"
+      "manage-events",
+      "filter-potential-clients",
+      "events-calender"
     ]
   
 };

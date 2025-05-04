@@ -291,7 +291,7 @@ const adminPages = [
         path: "/admin-dashboard/filter-potential-clients",
         permission: "filter-potential-clients"
       },
-      {
+      { 
         name: "Events Calender",
         path: "/admin-dashboard/events-calender",
         permission: "events-calender",
