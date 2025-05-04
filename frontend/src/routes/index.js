@@ -53,14 +53,12 @@ import Samples from "../pages/Samples";
 import SamplesOut from "../pages/SamplesOut";
 import SampleStatus from "../pages/SampleStatus";
 import ManageExpenses from "../pages/ManageExpenses";
-<<<<<<< HEAD
-import { ManageVendors } from "../components/manageVendors/manageVendors";
-=======
+
 import ManagePotentialClients from "../pages/ManagePotentialClients";
 import EventManager from "../pages/EventManager";
 import PotentialClientsList from "../pages/PotentialClientsList";
 import CalendarPage from "../pages/CalendarPage";
->>>>>>> be4c6e2a0d58c7c341a799f3997efcc173f9f352
+
 
 const router = createBrowserRouter([
     {
