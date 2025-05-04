@@ -85,6 +85,10 @@ app.use("/api/admin",require("./routes/companyRoutes.js"))
 
 app.use("/api", require("./routes/erpRoutes.js"));
 
+//manage vendor
+const vendorRoutes = require("./routes/vendorRoutes");
+app.use("/api/admin", vendorRoutes);
+
 // after other routes...
 const opportunityRoutes = require("./routes/opportunityRoutes");
 app.use("/api/admin", opportunityRoutes);
