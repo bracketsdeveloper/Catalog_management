@@ -53,10 +53,13 @@ import Samples from "../pages/Samples";
 import SamplesOut from "../pages/SamplesOut";
 import SampleStatus from "../pages/SampleStatus";
 import ManageExpenses from "../pages/ManageExpenses";
+
+import { ManageVendors } from "../components/manageVendors/manageVendors";
 import ManagePotentialClients from "../pages/ManagePotentialClients";
 import EventManager from "../pages/EventManager";
 import PotentialClientsList from "../pages/PotentialClientsList";
 import CalendarPage from "../pages/CalendarPage";
+
 
 const router = createBrowserRouter([
     {
@@ -194,6 +197,10 @@ const router = createBrowserRouter([
                     {
                         path:'create-opportunity/:id',
                         element:<CreateOpportunity/>
+                    },
+                    {
+                        path:'manage-vendors',
+                        element:<ManageVendors/>
                     },
                     {
                         path:'manage-openpurchase',

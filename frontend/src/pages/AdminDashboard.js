@@ -110,6 +110,11 @@ const adminPages = [
       <img src='/Purchase.png' alt="Purchase Icon" className="h-12 w-12" />
     ),
     subItems: [
+        {
+        name: "Add / Manage Vendor",
+        path: "/admin-dashboard/manage-vendors",
+        permission: "manage-vendors",
+      },
       {
         name: "Manage Purchase",
         path: "/admin-dashboard/manage-openpurchase",

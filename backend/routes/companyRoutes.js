@@ -68,7 +68,11 @@ router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
     const {
       companyName,
       brandName,
+      segment,
       GSTIN,
+      vendorCode,
+      portalUpload,
+      paymentTerms,
       companyAddress,
       clients: rawClients = [],
     } = req.body;
@@ -86,7 +90,11 @@ router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
     const doc = await Company.create({
       companyName,
       brandName,
+      segment,
       GSTIN,
+      vendorCode,
+      portalUpload,
+      paymentTerms,
       companyAddress,
       clients: sanitiseClients(rawClients),
       createdBy: req.user.id,
@@ -141,7 +149,11 @@ router.put("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
     const {
       companyName,
       brandName,
+      segment,
       GSTIN,
+      vendorCode,
+      portalUpload,
+      paymentTerms,
       companyAddress,
       clients: rawClients,
     } = req.body;
@@ -172,6 +184,10 @@ router.put("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     check("companyName", companyName);
     check("brandName", brandName);
+    check("segment", segment);
+    check("vendorCode", vendorCode);
+    check("portalUpload", portalUpload);
+    check("paymentTerms", paymentTerms);
     check("GSTIN", GSTIN);
     check("companyAddress", companyAddress);
 
