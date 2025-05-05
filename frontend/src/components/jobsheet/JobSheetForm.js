@@ -63,12 +63,18 @@ const JobSheetForm = ({
   setClientDropdownOpen,
   handleClientSelect,
   brandingTypeOptions = [
-    "Screen Printing",
-    "Embroidery",
-    "Heat Transfer",
-    "Patch",
+  " Screen Printing",
+   "Sublimation Printing",
+    "HT Printing",
+    "Engraving",
+    "Embriodery",
+    "UV Printing",
+    "DTF Stickering",
+    "Embossing",
+    "Debossing",
     "Digital Printing",
-    "Other",
+    "Offset Printing",
+    "Others",
   ],
 }) => {
   const [addresses, setAddresses] = useState(
@@ -99,6 +105,9 @@ const JobSheetForm = ({
     const filtered = newArray.filter((addr) => addr.trim() !== "");
     setDeliveryAddress(filtered);
   };
+
+  const [isManual, setIsManual] = useState(false);
+   const [manualBrandingIdx, setManualBrandingIdx] = useState(null);
 
   const handleOrderDateChange = (date) => {
     const formattedDate = date ? format(date, "yyyy-MM-dd") : "";
@@ -403,22 +412,40 @@ const JobSheetForm = ({
                         placeholder="Enter sourcing"
                       />
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      <select
-                        className="border rounded p-1 w-full"
-                        value={item.brandingType || ""}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "brandingType", e.target.value)
-                        }
+                   <td className="flex px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {manualBrandingIdx === idx ? (
+                        <input
+                          type="text"
+                          className="border rounded p-1 w-full"
+                          value={item.brandingType || ""}
+                          onChange={(e) =>
+                            handleInlineUpdate(idx, "brandingType", e.target.value)
+                          }
+                        />
+                      ) : (
+                        <select
+                          className="border rounded p-1 w-full"
+                          value={item.brandingType || ""}
+                          onChange={(e) =>
+                            handleInlineUpdate(idx, "brandingType", e.target.value)
+                          }
+                        >
+                          <option value="">Select Branding Type</option>
+                          {brandingTypeOptions.map((option, optionIdx) => (
+                            <option key={optionIdx} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        onClick={() => setManualBrandingIdx(idx)}
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded ml-2"
                       >
-                        <option value="">Select Branding Type</option>
-                        {brandingTypeOptions.map((option, optionIdx) => (
-                          <option key={optionIdx} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                        +
+                      </button>
                     </td>
+
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                       <input
                         type="text"
