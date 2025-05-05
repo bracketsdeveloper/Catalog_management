@@ -33,7 +33,19 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
 
   return (
     <tr className="bg-gray-100">
-      {columns.map((c) => (
+      
+  {columns.map((c) => (
+        <th key={c} className="p-1 border">
+          <input
+            type="text"
+            className="w-full p-1 text-xs border rounded"
+            placeholder={`Filter ${c}`}
+            value={headerFilters[c] || ""}
+            onChange={(e) => onFilterChange(c, e.target.value)}
+          />
+        </th>
+      ))}
+      {/* {columns.map((c) => (
         <th key={c} className="p-1 border border-gray-300">
           {c === "status" ? (
             <select
@@ -56,7 +68,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
             />
           )}
         </th>
-      ))}
+      ))} */}
       <th className="p-1 border border-gray-300" colSpan={2}></th>
     </tr>
   );

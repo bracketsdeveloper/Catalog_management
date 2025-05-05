@@ -62,6 +62,10 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       } else {
         aggregated.push({ ...updated.toObject(), isTemporary: false });
       }
+     
+    
+    ///aggregated.push({ ...updated.toObject(), isTemporary: false });
+
     });
 
     // Remove duplicates based on jobSheetNumber, product, and size
