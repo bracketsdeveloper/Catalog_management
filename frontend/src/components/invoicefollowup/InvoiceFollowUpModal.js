@@ -62,8 +62,11 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
           {isSaved ? "Edit Invoice Follow-Up" : "Add Invoice Follow-Up"}
         </h2>
 
+        <div>
+          add invoice
+        </div>
         {/* Summary (non-editable) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <Field label="Order Date" value={fmt(form.orderDate)} />
           <Field label="Job Sheet #" value={form.jobSheetNumber} />
           <Field label="Client" value={form.clientCompanyName} />
@@ -77,22 +80,91 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
           <Field label="Pending From (days)" value={form.pendingFromDays} />
           <Field label="Partial Qty" value={form.partialQty || ""} />
 
-        </div>
+        </div> */}
 
         {/* Editable */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <Select
-            label="Invoice Generated"
-            value={form.invoiceGenerated}
-            onChange={(v) => set("invoiceGenerated", v)}
-            options={["No", "Yes"]}
-          />
-          <Input
-            label="Invoice #"
-            value={form.invoiceNumber || ""}
-            onChange={(v) => set("invoiceNumber", v)}
-          />
-        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+  <Input
+    label="Order Date"
+    type="date"
+    value={form.orderDate?.slice(0, 10) || ""}
+    onChange={(v) => set("orderDate", v)}
+  />
+  <Input
+    label="Job Sheet #"
+    value={form.jobSheetNumber || ""}
+    onChange={(v) => set("jobSheetNumber", v)}
+  />
+  <Input
+    label="Client"
+    value={form.clientCompanyName || ""}
+    onChange={(v) => set("clientCompanyName", v)}
+  />
+  <Input
+    label="Event"
+    value={form.eventName || ""}
+    onChange={(v) => set("eventName", v)}
+  />
+  <Input
+    label="Quotation #"
+    value={form.quotationNumber || ""}
+    onChange={(v) => set("quotationNumber", v)}
+  />
+  <Input
+    label="CRM Name"
+    value={form.crmName || ""}
+    onChange={(v) => set("crmName", v)}
+  />
+  <Input
+    label="Product"
+    value={form.product || ""}
+    onChange={(v) => set("product", v)}
+  />
+  <Input
+    label="Dispatched On"
+    type="date"
+    value={form.dispatchedOn?.slice(0, 10) || ""}
+    onChange={(v) => set("dispatchedOn", v)}
+  />
+  <Input
+    label="Delivered Through"
+    value={form.deliveredThrough || ""}
+    onChange={(v) => set("deliveredThrough", v)}
+  />
+  <Input
+    label="PO Status"
+    value={form.poStatus || ""}
+    onChange={(v) => set("poStatus", v)}
+  />
+  <Input
+    label="Pending From (days)"
+    type="number"
+    value={form.pendingFromDays || ""}
+    onChange={(v) => set("pendingFromDays", v)}
+  />
+  <Input
+    label="Partial Qty"
+    type="number"
+    value={form.partialQty || ""}
+    onChange={(v) => set("partialQty", v)}
+  />
+</div>
+
+{/* Already Editable Fields */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+  <Select
+    label="Invoice Generated"
+    value={form.invoiceGenerated}
+    onChange={(v) => set("invoiceGenerated", v)}
+    options={["No", "Yes"]}
+  />
+  <Input
+    label="Invoice #"
+    value={form.invoiceNumber || ""}
+    onChange={(v) => set("invoiceNumber", v)}
+  />
+</div>
+
 
         {/* Buttons */}
         <div className="flex justify-end gap-2">

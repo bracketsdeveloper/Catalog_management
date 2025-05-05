@@ -6,6 +6,7 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import InvoiceFollowUpTable from "../components/invoicefollowup/InvoiceFollowUpTable.js";
 import InvoiceFollowUpModal from "../components/invoicefollowup/InvoiceFollowUpModal.js";
+import InvoiceFollowUpManual from "../components/invoicefollowup/invoiceFollowupManual.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -27,7 +28,11 @@ export default function ManageInvoiceFollowUp() {
     invoiceGenerated: "",
   });
 
+  const [showPopup, setShowPopup] = useState(false);
 
+const handleSubmitInvoice = () => {
+        
+};  
 
   /* Fetch + enrich */
   useEffect(() => {
@@ -164,9 +169,19 @@ export default function ManageInvoiceFollowUp() {
 
   return (
     <div className="p-6">
+      <div className="flex justify-between items-center">
       <h1 className="text-xl md:text-2xl font-bold mb-4 text-[#Ff8045]">
         Invoices Follow-Up
       </h1>
+      <h1>
+        <button
+          onClick={() => setShowPopup(true)}
+          className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
+        >
+          Add Invoice
+        </button>
+      </h1>
+      </div>
 
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -189,6 +204,8 @@ export default function ManageInvoiceFollowUp() {
           Export to Excel
         </button>
       </div>
+
+     
 
       {/* Filters Panel */}
       {showFilters && (
@@ -285,6 +302,11 @@ export default function ManageInvoiceFollowUp() {
           </div>
         </div>
       )}
+      
+       {showPopup &&
+       <InvoiceFollowUpManual 
+       onClose={() => setShowPopup(false)} 
+       />}
 
       {/* Table */}
       <InvoiceFollowUpTable

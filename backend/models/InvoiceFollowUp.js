@@ -6,9 +6,10 @@ const invoiceFollowUpSchema = new mongoose.Schema(
     dispatchId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "DispatchSchedule",
-      required: true,
-      unique: true, // 1-to-1 with DispatchSchedule
+      unique: true,
+      sparse: true, // Required to allow multiple manual entries without dispatchId
     },
+
 
     /* Reference data copied from DispatchSchedule and related JobSheet */
     orderDate: Date, // From JobSheet

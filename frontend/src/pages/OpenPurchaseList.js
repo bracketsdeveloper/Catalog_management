@@ -19,12 +19,14 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     "size",
     "qtyRequired",
     "qtyOrdered",
+    "sourcedBy",
     "sourcingFrom",
     "deliveryDateTime",
     "vendorContactNumber",
     "orderConfirmedDate",
     "expectedReceiveDate",
     "schedulePickUp",
+    "followUp",
     "remarks",
     "status",
   ];
@@ -33,27 +35,26 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     <tr className="bg-gray-100">
       {columns.map((c) => (
         <th key={c} className="p-1 border border-gray-300">
-           {c !== "status" ? (
-              <input
-                  type="text"
-                  className="w-full p-1 text-xs border rounded"
-                  placeholder={`Filter ${c}`}
-                  value={headerFilters[c] || ""}
-                  onChange={(e) => onFilterChange(c, e.target.value)}
-                />
-         ) : (
-             <select
-                className="w-full p-1 text-xs border rounded"
-                value={headerFilters[c] || ""}
-                onChange={(e) => onFilterChange(c, e.target.value)}
-              >
-                <option value="">All</option>
-                <option value="received">Received</option>
-                <option value="pending">Pending</option>
-                <option value="alert">Alert</option>
-              </select>
-             
-              )}
+          {c === "status" ? (
+            <select
+              className="w-full p-1 text-xs border rounded"
+              value={headerFilters[c] || ""}
+              onChange={(e) => onFilterChange(c, e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="received">Received</option>
+              <option value="pending">Pending</option>
+              <option value="alert">Alert</option>
+            </select>
+          ) : (
+            <input
+              type="text"
+              className="w-full p-1 text-xs border rounded"
+              placeholder={`Filter ${c}`}
+              value={headerFilters[c] || ""}
+              onChange={(e) => onFilterChange(c, e.target.value)}
+            />
+          )}
         </th>
       ))}
       <th className="p-1 border border-gray-300" colSpan={2}></th>
@@ -478,12 +479,14 @@ const handleSourcedByDelete = async (id) => {
       "size",
       "qtyRequired",
       "qtyOrdered",
+      "sourcedBy",
       "sourcingFrom",
       "deliveryDateTime",
       "vendorContactNumber",
       "orderConfirmedDate",
       "expectedReceiveDate",
       "schedulePickUp",
+      "followUp",
       "remarks",
       "status",
     ];
@@ -736,18 +739,19 @@ const handleSourcedByDelete = async (id) => {
                     new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
                   )
                 : null;
-
+              console.log("Status:", p.status);
             return (
+              
               <tr
                 key={p._id || `${p.jobSheetNumber}_${p.product}_${p.size || ""}`}
                 className={
-                  p.status === "alert"
-                    ? "bg-red-300"
-                    : p.status === "pending"
-                    ? "bg-orange-300"
-                    : p.status === "received"
-                    ? "bg-green-300"
-                    : ""
+                   p.status?.trim().toLowerCase() === "alert"
+                      ? "bg-red-300"
+                      : p.status?.trim().toLowerCase() === "pending"
+                      ? "bg-orange-300"
+                      : p.status?.trim().toLowerCase() === "received"
+                      ? "bg-green-300"
+                      : ""
                 }
               >
             <td className="p-2 border">
@@ -834,6 +838,7 @@ const handleSourcedByDelete = async (id) => {
                   )}
                 </td>
                 <td className="p-2 border">{p.remarks}</td>
+                
                 <td className="p-2 border">{p.status}</td>
                 <td className="p-2 border space-y-1">
                   <button
