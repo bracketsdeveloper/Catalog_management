@@ -8,18 +8,102 @@ const InvoicesSummary = require("../models/InvoiceSummary");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 /* GET /api/admin/payment-followup */
+// router.get("/", authenticate, authorizeAdmin, async (req, res) => {
+//   try {
+//     // Step 1: Fetch all InvoiceFollowUp entries
+//     const invoiceFollowUps = await InvoiceFollowUp.find({}).lean();
+//     if (!invoiceFollowUps.length) {
+//       return res.json([]);
+//     }
+
+//     // Step 2: Get dispatchIds from InvoiceFollowUp
+//     const dispatchIds = invoiceFollowUps.map((f) => f.dispatchId);
+
+//     // Step 3: Fetch DispatchSchedule rows with status "sent" and matching dispatchIds
+//     const dispatchRows = await DispatchSchedule.find({
+//       status: "sent",
+//       _id: { $in: dispatchIds },
+//     }).lean();
+
+//     // Step 4: Fetch InvoicesSummary and PaymentFollowUp entries
+//     const invoiceSummaries = await InvoicesSummary.find({}).lean();
+//     const savedFollowUps = await PaymentFollowUp.find({}).lean();
+
+//     // Create maps for quick lookup
+//     const followUpMap = {};
+//     invoiceFollowUps.forEach((f) => (followUpMap[f.dispatchId.toString()] = f));
+
+//     const summaryMap = {};
+//     invoiceSummaries.forEach((s) => (summaryMap[s.dispatchId.toString()] = s));
+
+//     const paymentMap = {};
+//     savedFollowUps.forEach((p) => (paymentMap[p.dispatchId.toString()] = p));
+
+//     // Step 5: Group by invoiceNumber and pick the latest dispatchId
+//     const dispatchMap = {};
+//     dispatchRows.forEach((d) => {
+//       const followUp = followUpMap[d._id.toString()];
+//       if (!followUp) return;
+
+//       const invoiceNumber = followUp.invoiceNumber || "";
+//       if (!invoiceNumber) return;
+
+//       if (
+//         !dispatchMap[invoiceNumber] ||
+//         new Date(d.sentOn) > new Date(dispatchMap[invoiceNumber].sentOn)
+//       ) {
+//         dispatchMap[invoiceNumber] = d;
+//       }
+//     });
+
+//     const uniqueDispatchRows = Object.values(dispatchMap);
+
+//     // Step 6: Merge data
+//     const merged = uniqueDispatchRows.map((d) => {
+//       const followUp = followUpMap[d._id.toString()];
+//       const summary = summaryMap[d._id.toString()] || {};
+//       const existing = paymentMap[d._id.toString()] || {};
+
+//       const today = new Date();
+//       const dueDate = existing.dueDate ? new Date(existing.dueDate) : null;
+//       const overDueSince = dueDate
+//         ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
+//         : null;
+
+//       return {
+//         _id: existing?._id || undefined,
+//         dispatchId: d._id,
+//         invoiceNumber: followUp.invoiceNumber || "",
+//         invoiceDate: existing.invoiceDate || null,
+//         invoiceAmount: existing.invoiceAmount || 0,
+//         invoiceMailed: summary.invoiceMailed || "No",
+//         dueDate: existing.dueDate || null,
+//         overDueSince,
+//         followUps: existing.followUps || [],
+//         paymentReceived: existing.paymentReceived || 0,
+//       };
+//     });
+
+//     res.json(merged);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error fetching Payment Follow-Up" });
+//   }
+// });
+
+
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     // Step 1: Fetch all InvoiceFollowUp entries
     const invoiceFollowUps = await InvoiceFollowUp.find({}).lean();
-    if (!invoiceFollowUps.length) {
-      return res.json([]);
-    }
+    if (!invoiceFollowUps.length) return res.json([]);
 
-    // Step 2: Get dispatchIds from InvoiceFollowUp
-    const dispatchIds = invoiceFollowUps.map((f) => f.dispatchId);
+    // Step 2: Get valid dispatchIds from InvoiceFollowUp
+    const dispatchIds = invoiceFollowUps
+      .map((f) => f.dispatchId)
+      .filter((id) => id); // filter null/undefined
 
-    // Step 3: Fetch DispatchSchedule rows with status "sent" and matching dispatchIds
+    // Step 3: Fetch DispatchSchedule with status "sent" and matching dispatchIds
     const dispatchRows = await DispatchSchedule.find({
       status: "sent",
       _id: { $in: dispatchIds },
@@ -29,24 +113,30 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     const invoiceSummaries = await InvoicesSummary.find({}).lean();
     const savedFollowUps = await PaymentFollowUp.find({}).lean();
 
-    // Create maps for quick lookup
+    // Step 5: Create lookup maps
     const followUpMap = {};
-    invoiceFollowUps.forEach((f) => (followUpMap[f.dispatchId.toString()] = f));
+    for (const f of invoiceFollowUps) {
+      if (f.dispatchId) followUpMap[f.dispatchId.toString()] = f;
+    }
 
     const summaryMap = {};
-    invoiceSummaries.forEach((s) => (summaryMap[s.dispatchId.toString()] = s));
+    for (const s of invoiceSummaries) {
+      if (s.dispatchId) summaryMap[s.dispatchId.toString()] = s;
+    }
 
     const paymentMap = {};
-    savedFollowUps.forEach((p) => (paymentMap[p.dispatchId.toString()] = p));
+    for (const p of savedFollowUps) {
+      if (p.dispatchId) paymentMap[p.dispatchId.toString()] = p;
+    }
 
-    // Step 5: Group by invoiceNumber and pick the latest dispatchId
+    // Step 6: Group dispatchRows by latest invoiceNumber
     const dispatchMap = {};
-    dispatchRows.forEach((d) => {
+    for (const d of dispatchRows) {
       const followUp = followUpMap[d._id.toString()];
-      if (!followUp) return;
+      if (!followUp) continue;
 
       const invoiceNumber = followUp.invoiceNumber || "";
-      if (!invoiceNumber) return;
+      if (!invoiceNumber) continue;
 
       if (
         !dispatchMap[invoiceNumber] ||
@@ -54,24 +144,25 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       ) {
         dispatchMap[invoiceNumber] = d;
       }
-    });
+    }
 
     const uniqueDispatchRows = Object.values(dispatchMap);
 
-    // Step 6: Merge data
+    // Step 7: Merge all data
     const merged = uniqueDispatchRows.map((d) => {
-      const followUp = followUpMap[d._id.toString()];
+      const followUp = followUpMap[d._id.toString()] || {};
       const summary = summaryMap[d._id.toString()] || {};
       const existing = paymentMap[d._id.toString()] || {};
 
       const today = new Date();
       const dueDate = existing.dueDate ? new Date(existing.dueDate) : null;
-      const overDueSince = dueDate
-        ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
-        : null;
+      const overDueSince =
+        dueDate != null
+          ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
+          : null;
 
       return {
-        _id: existing?._id || undefined,
+        _id: existing._id || undefined,
         dispatchId: d._id,
         invoiceNumber: followUp.invoiceNumber || "",
         invoiceDate: existing.invoiceDate || null,
@@ -86,10 +177,11 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
     res.json(merged);
   } catch (err) {
-    console.error(err);
+    console.error("Payment Follow-Up Error:", err);
     res.status(500).json({ message: "Server error fetching Payment Follow-Up" });
   }
 });
+
 
 /* CREATE */
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
