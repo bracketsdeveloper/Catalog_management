@@ -186,15 +186,19 @@ export default function InvoiceFollowUpManual({onClose}) {
               />
             </div> 
             <div>
-              <label className="block mb-1 font-semibold">Invoice Generated</label>
-              <input
-                type="text"
-                className="border w-full p-1 rounded"
-                onChange={handleChange}
-                name="invoiceGenerated"
-                value={form.invoiceGenerated}
-              />
-            </div>
+                <label className="block mb-1 font-semibold">Invoice Generated</label>
+                <select
+                    className="border w-full p-1 rounded"
+                    onChange={handleChange}
+                    name="invoiceGenerated"
+                    value={form.invoiceGenerated}
+                >
+                    <option value="">Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                </select>
+                </div>
+
             <div>
               <label className="block mb-1 font-semibold">Invoice #</label>
               <input
