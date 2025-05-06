@@ -120,7 +120,7 @@ export default function ProductionJobSheetInvoiceTable({
             ))}
             <th className="p-2 border">Qty Req</th>
             <th className="p-2 border">Qty Ord</th>
-            <th className="p-2 border">Source From</th>
+            <th className="p-2 border">Branding Vendor</th>
             {[
               ["cost", "Cost"],
               ["negotiatedCost", "Negotiated Cost"],
@@ -169,7 +169,7 @@ export default function ProductionJobSheetInvoiceTable({
               <td className="p-2 border">{t(i.product)}</td>
               <td className="p-2 border">{i.qtyRequired}</td>
               <td className="p-2 border">{i.qtyOrdered}</td>
-              <td className="p-2 border">{t(i.sourceFrom)}</td>
+              <td className="p-2 border">{t(i.brandingVendor)}</td>
               <td className="p-2 border">{i.cost}</td>
               <td className="p-2 border">{i.negotiatedCost}</td>
               <td className="p-2 border">
