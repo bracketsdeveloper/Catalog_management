@@ -96,6 +96,23 @@ router.get("/users", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+router.get("/products/filter-options", async (req, res) => {
+  try {
+    const products = await Product.find({});
+    const categories = [...new Set(products.map((p) => p.category).filter(Boolean))].sort();
+    const subCategories = [...new Set(products.map((p) => p.subCategory).filter(Boolean))].sort();
+    const brands = [...new Set(products.map((p) => p.brandName).filter(Boolean))].sort();
+    const priceRanges = [...new Set(products.map((p) => p.priceRange).filter(Boolean))].sort(
+      (a, b) => a - b
+    );
+    const variationHinges = [...new Set(products.map((p) => p.variationHinge).filter(Boolean))].sort();
+
+    res.status(200).json({ categories, subCategories, brands, priceRanges, variationHinges });
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching filter options" });
+  }
+});
+
 router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
@@ -137,6 +154,7 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
       priceRanges,
       variationHinges,
     } = req.query;
+
     const query = {};
 
     if (search) {
@@ -165,21 +183,25 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
         { images: { $elemMatch: { $regex: term, $options: "i" } } },
       ]);
     }
-    if (categories) query.category = { $in: categories.split(",") };
-    if (subCategories) query.subCategory = { $in: subCategories.split(",") };
-    if (brands) query.brandName = { $in: brands.split(",") };
-    if (priceRanges) query.priceRange = { $in: priceRanges.split(",") };
-    if (variationHinges) query.variationHinge = { $in: variationHinges.split(",") };
+
+    if (categories)
+      query.category = { $in: categories.split(",").map((v) => new RegExp(`^${v}$`, "i")) };
+    if (subCategories)
+      query.subCategory = { $in: subCategories.split(",").map((v) => new RegExp(`^${v}$`, "i")) };
+    if (brands)
+      query.brandName = { $in: brands.split(",").map((v) => new RegExp(`^${v}$`, "i")) };
+    if (priceRanges)
+      query.priceRange = { $in: priceRanges.split(",").map((v) => new RegExp(`^${v}$`, "i")) };
+    if (variationHinges)
+      query.variationHinge = {
+        $in: variationHinges.split(",").map((v) => new RegExp(`^${v}$`, "i")),
+      };
 
     const pageNum = Number(page);
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const products = await Product.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
+    const products = await Product.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean();
     const totalProducts = await Product.countDocuments(query);
 
     res.status(200).json({
@@ -193,7 +215,10 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+
 // GET /api/admin/products/filters - Returns distinct filter values with counts
+// routes/admin.js  (only the /products/filters endpoint shown)
+
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const [
@@ -203,45 +228,99 @@ router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) =
       priceRanges,
       variationHinges,
     ] = await Promise.all([
+      /* -------- categories -------- */
       Product.aggregate([
-        { $match: { category: { $ne: null } } },
-        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $match: { category: { $nin: [null, ""] } } },
+        {
+          $project: {
+            name: { $toLower: { $trim: { input: "$category" } } }
+          }
+        },
+        { $group: { _id: "$name", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $sort: { name: 1 } }
       ]),
+
+      /* -------- sub‑categories -------- */
       Product.aggregate([
-        { $match: { subCategory: { $ne: null } } },
-        { $group: { _id: "$subCategory", count: { $sum: 1 } } },
+        { $match: { subCategory: { $nin: [null, ""] } } },
+        {
+          $project: {
+            name: { $toLower: { $trim: { input: "$subCategory" } } }
+          }
+        },
+        { $group: { _id: "$name", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $sort: { name: 1 } }
       ]),
+
+      /* -------- brands -------- */
       Product.aggregate([
-        { $match: { brandName: { $ne: null } } },
-        { $group: { _id: "$brandName", count: { $sum: 1 } } },
+        { $match: { brandName: { $nin: [null, ""] } } },
+        {
+          $project: {
+            name: { $toLower: { $trim: { input: "$brandName" } } }
+          }
+        },
+        { $group: { _id: "$name", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $sort: { name: 1 } }
       ]),
+
+      /* -------- price ranges -------- */
       Product.aggregate([
-        { $match: { priceRange: { $ne: null } } },
-        { $group: { _id: "$priceRange", count: { $sum: 1 } } },
-        { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $match: { priceRange: { $nin: [null, ""] } } },
+        {
+          $project: {
+            name: { $trim: { input: "$priceRange" } },
+            start: {
+              $convert: {
+                input: {
+                  $arrayElemAt: [
+                    { $split: [{ $trim: { input: "$priceRange" } }, "-"] },
+                    0
+                  ]
+                },
+                to: "int",
+                onError: -1,
+                onNull: -1
+              }
+            }
+          }
+        },
+        { $group: { _id: "$name", count: { $sum: 1 }, start: { $first: "$start" } } },
+        { $project: { name: "$_id", count: 1, start: 1, _id: 0 } },
+        { $sort: { start: 1 } }
       ]),
+
+      /* -------- variation hinges -------- */
       Product.aggregate([
-        { $match: { variationHinge: { $ne: null } } },
-        { $group: { _id: "$variationHinge", count: { $sum: 1 } } },
+        { $match: { variationHinge: { $nin: [null, ""] } } },
+        {
+          $project: {
+            name: { $toLower: { $trim: { input: "$variationHinge" } } }
+          }
+        },
+        { $group: { _id: "$name", count: { $sum: 1 } } },
         { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $sort: { name: 1 } }
       ]),
     ]);
 
     res.status(200).json({
-      categories: categories.filter((c) => c.name && c.count > 0),
-      subCategories: subCategories.filter((c) => c.name && c.count > 0),
-      brands: brands.filter((c) => c.name && c.count > 0),
-      priceRanges: priceRanges.filter((c) => c.name && c.count > 0),
-      variationHinges: variationHinges.filter((c) => c.name && c.count > 0),
+      categories,
+      subCategories,
+      brands,
+      priceRanges: priceRanges.map(({ name, count }) => ({ name, count })),
+      variationHinges,
     });
-  } catch (error) {
-    console.error("Error fetching filter options:", error);
+  } catch (err) {
+    console.error("Error fetching filter options:", err);
     res.status(500).json({ message: "Error fetching filter options" });
   }
 });
+
+
 
 // POST /api/admin/products - Create a single product (with hash computation)
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
