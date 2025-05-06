@@ -41,23 +41,33 @@ const adminPages = [
       },
     ],
   },
-  {
-    name: "Calculations",
-    defaultPath: "/admin-dashboard/segment-manager",
-    icon: <CubeIcon className="w-8 h-8 flex justify-center items-center" />,
-    subItems: [
-      {
-        name: "Segment Manager",
-        path: "/admin-dashboard/manage-segments",
-        permission: "segment-manager",
-      },
-      {
-        name: "Calculation Manager",
-        path: "/admin-dashboard/calculation-manager",
-        permission: "calculation-manager",
-      },
-    ],
-  },
+  // {
+  //   name: "Calculations",
+  //   defaultPath: "/admin-dashboard/segment-manager",
+  //   icon: <CubeIcon className="w-8 h-8 flex justify-center items-center" />,
+  //   subItems: [
+  //     {
+  //       name: "Segment Manager",
+  //       path: "/admin-dashboard/manage-segments",
+  //       permission: "segment-manager",
+  //     },
+  //     {
+  //       name: "Calculation Manager",
+  //       path: "/admin-dashboard/calculation-manager",
+  //       permission: "calculation-manager",
+  //     },
+  //   ],
+  // },
+
+
+
+
+
+
+
+
+
+  
   // {
   //   name: "Review Catalog",
   //   path: "/admin-dashboard/review-catalog",
