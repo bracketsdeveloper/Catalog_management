@@ -21,7 +21,7 @@ const HEADER_COLS = [
   { key: "sourcingFrom",       label: "Source From" },
   { key: "cost",               label: "Cost",              type: "number" },
   { key: "negotiatedCost",     label: "Negotiated Cost",   type: "number" },
-  { key: "paymentMade",        label: "Payment Made",      type: "number" },
+  { key: "paymentMade",        label: "Amount Transfer",      type: "number" },
   { key: "vendorInvoiceNumber",    label: "Vendor Invoice Number" },
   { key: "vendorInvoiceReceived",  label: "Vendor Invoice Received" },
 ];
@@ -77,7 +77,7 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
           {[
             ["cost", "Cost"],
             ["negotiatedCost", "Negotiated Cost"],
-            ["paymentMade", "Payment Made"],
+            ["paymentMade", "Amount Transfer"],
             ["qtyRequired", "Qty Required"],
             ["qtyOrdered", "Qty Ordered"],
           ].map(([k, l]) => (
@@ -147,7 +147,7 @@ export default function ManagePurchaseInvoice() {
   const [modal, setModal]             = useState(null);
 
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
     
     
     const handleOpenModal = (jobSheetNumber) => {

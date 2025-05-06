@@ -114,7 +114,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             <input type="text" value={invoice.product} disabled className="w-full border p-1 rounded bg-gray-50" />
           </div>
           <div className="col-span-1">
-            <label className="font-semibold text-purple-600">Source From</label>
+            <label className="font-semibold text-purple-600">Branding Vendor</label>
             <input type="text" value={invoice.sourceFrom} disabled className="w-full border p-1 rounded bg-gray-50" />
           </div>
 
@@ -162,7 +162,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             />
           </div>
           <div className="col-span-1 md:col-span-2">
-            <label className="font-semibold text-purple-600">Payment Made</label>
+            <label className="font-semibold text-purple-600">Amount Transfer</label>
             <div className="flex space-x-2">
               <input
                 type="text"
