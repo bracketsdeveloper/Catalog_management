@@ -1,65 +1,86 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
-import CompanyModal from "../components/CompanyModal";
 import debounce from "lodash.debounce";
+import CompanyModal from "../components/CompanyModal";
 
-// Optional bag icon
-const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
-
-const limit = 100;
+/* ────────────────────────────────────────────────────────────
+ *  Helpers & constants
+ * ────────────────────────────────────────────────────────────*/
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const limit = 100;
+const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
+const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
+const obj = (arr) => Object.fromEntries(arr.map(({ name, count }) => [norm(name), count]));
 
+/* ────────────────────────────────────────────────────────────
+ *  Page component
+ * ────────────────────────────────────────────────────────────*/
 export default function EditQuotation() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // -- General states
+  /* ------------ product / filter state ------------ */
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
   const [fullCategories, setFullCategories] = useState([]);
   const [fullSubCategories, setFullSubCategories] = useState([]);
   const [fullBrands, setFullBrands] = useState([]);
   const [fullPriceRanges, setFullPriceRanges] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubCategories, setSelectedSubCategories] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
+
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
   const [priceRangeOpen, setPriceRangeOpen] = useState(false);
-  const [variationModalOpen, setVariationModalOpen] = useState(false);
-  const [variationModalProduct, setVariationModalProduct] = useState(null);
+
+  const [filterCounts, setFilterCounts] = useState({
+    categories: {},
+    subCategories: {},
+    brands: {},
+    priceRanges: {},
+  });
+
+  /* ------------ search, image search ------------ */
+  const [searchTerm, setSearchTerm] = useState("");
   const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
   const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const imageInputRef = useRef(null);
+
+  /* ------------ quotation, cart, misc ------------ */
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [catalogName, setCatalogName] = useState("");
+
   const [salutation, setSalutation] = useState("Mr.");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerCompany, setCustomerCompany] = useState("");
+
   const presetMarginOptions = [0, 5, 10, 15, 20];
   const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
   const [marginOption, setMarginOption] = useState("preset");
   const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
   const [customMargin, setCustomMargin] = useState("");
+
   const presetGstOptions = [18];
   const [gstOption, setGstOption] = useState("preset");
   const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
   const [customGst, setCustomGst] = useState("");
   const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
+
   const [cartOpen, setCartOpen] = useState(false);
-  const [displayTotals, setDisplayTotals] = useState(true);
   const [terms, setTerms] = useState([
     {
       heading: "Delivery",
@@ -67,87 +88,117 @@ export default function EditQuotation() {
         "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
     },
     { heading: "Branding", content: "As mentioned above" },
-    { heading: "Payment Terms", content: "Within 30 days upon delivery" },
+    { heading: "Payment Terms", content: "Within 30 days upon interchange" },
     {
       heading: "Quote Validity",
       content: "The quote is valid only for 6 days from the date of quotation",
     },
   ]);
+  const [displayTotals, setDisplayTotals] = useState(true);
 
-  // -- Company suggestions
+  /* ------------ company ------------ */
   const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
-  const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
 
-  // Fetch product filter options
-  useEffect(() => {
-    fetchFilterOptions();
-  }, []);
+  const [variationModalOpen, setVariationModalOpen] = useState(false);
+  const [variationModalProduct, setVariationModalProduct] = useState(null);
 
-  const fetchFilterOptions = async () => {
+  /* ─────────────────────────────────────────
+   *  Network helpers
+   * ─────────────────────────────────────────*/
+  const buildParams = () => {
+    const p = new URLSearchParams();
+    if (searchTerm) {
+      const terms = searchTerm.toLowerCase().split(" ").filter(Boolean);
+      p.append("search", terms.join(","));
+    }
+    if (selectedCategories.length) p.append("categories", selectedCategories.join(","));
+    if (selectedSubCategories.length) p.append("subCategories", selectedSubCategories.join(","));
+    if (selectedBrands.length) p.append("brands", selectedBrands.join(","));
+    if (selectedPriceRanges.length) p.append("priceRanges", selectedPriceRanges.join(","));
+    return p;
+  };
+
+  const fetchFilterOptions = async (extraQS = "") => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const { data } = await axios.get(
+        `${BACKEND_URL}/api/admin/products/filters${extraQS}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setFullCategories(data.categories.map((x) => x.name));
+      setFullSubCategories(data.subCategories.map((x) => x.name));
+      setFullBrands(data.brands.map((x) => x.name));
+      setFullPriceRanges(data.priceRanges.map((x) => x.name));
+      setFilterCounts({
+        categories: obj(data.categories),
+        subCategories: obj(data.subCategories),
+        brands: obj(data.brands),
+        priceRanges: obj(data.priceRanges),
       });
-      setFullCategories(res.data.categories?.map((item) => item.name) || []);
-      setFullSubCategories(res.data.subCategories?.map((item) => item.name) || []);
-      setFullBrands(res.data.brands?.map((item) => item.name) || []);
-      setFullPriceRanges(res.data.priceRanges?.map((item) => item.name) || []);
-    } catch (error) {
-      console.error("Error fetching filter options:", error);
+    } catch (err) {
+      console.error("Error fetching filter options:", err);
     }
   };
 
-  // Fetch product list
-  const fetchProducts = async (page = 1, search = searchTerm) => {
+  const fetchProducts = async (page = 1) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const params = new URLSearchParams();
+
+      /* 1 — paginated products */
+      const params = buildParams();
       params.append("page", page);
       params.append("limit", limit);
-      if (search) params.append("search", search);
-      if (selectedCategories.length > 0) {
-        params.append("categories", selectedCategories.join(","));
-      }
-      if (selectedSubCategories.length > 0) {
-        params.append("subCategories", selectedSubCategories.join(","));
-      }
-      if (selectedBrands.length > 0) {
-        params.append("brands", selectedBrands.join(","));
-      }
-      if (selectedPriceRanges.length > 0) {
-        params.append("priceRanges", selectedPriceRanges.join(","));
-      }
-
-      const url = `${BACKEND_URL}/api/admin/products?${params.toString()}`;
-      const res = await axios.get(url, {
+      const { data } = await axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setProducts(res.data.products || []);
-      setCurrentPage(res.data.currentPage || 1);
-      setTotalPages(res.data.totalPages || 1);
-    } catch (error) {
-      console.error("Error fetching products:", error);
+      setProducts(Array.isArray(data.products) ? data.products : []);
+      setCurrentPage(data.currentPage || 1);
+      setTotalPages(data.totalPages || 1);
+
+      /* 2 — counts */
+      await fetchFilterOptions(`?${buildParams().toString()}`);
+    } catch (err) {
+      console.error("Error fetching products:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Debounced search handler
-  const debouncedFetchProducts = useCallback(
-    debounce((search, page) => {
-      fetchProducts(page, search);
+  /* ─────────────────────────────────────────
+   *  Initial data loads
+   * ─────────────────────────────────────────*/
+  useEffect(() => {
+    fetchFilterOptions();
+  }, []);
+
+  useEffect(() => {
+    fetchProducts(1);
+  }, [selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges]);
+
+  /* --- debounced text search --- */
+  const debouncedSearch = useCallback(
+    debounce((text) => {
+      setSearchTerm(text);
+      fetchProducts(1);
     }, 300),
     [selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges]
   );
 
-  useEffect(() => {
-    debouncedFetchProducts(searchTerm, 1);
-  }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges]);
+  /* ─────────────────────────────────────────
+   *  UI helpers
+   * ─────────────────────────────────────────*/
+  const toggleFilter = (val, list, setter) =>
+    list.includes(val) ? setter(list.filter((v) => v !== val)) : setter([...list, val]);
+
+  const clearSearch = () => {
+    debouncedSearch("");
+  };
+
+  const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
   // Fetch existing quotation if in edit mode
   useEffect(() => {
@@ -171,7 +222,7 @@ export default function EditQuotation() {
       setCustomerEmail(data.customerEmail || "");
       setCustomerAddress(data.customerAddress || "");
       setCustomerCompany(data.customerCompany || "");
-      setSelectedCompany(data.customerCompany || "");
+      setSelectedCompanyData(data.customerCompany || "");
       setDisplayTotals(data.displayTotals !== undefined ? data.displayTotals : true);
       setTerms(data.terms && data.terms.length > 0 ? data.terms : terms);
 
@@ -261,20 +312,7 @@ export default function EditQuotation() {
     setAdvancedSearchResults([]);
   };
 
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    fetchProducts(1, "");
-  };
-
   // Handlers for product selection + variations
-  const toggleFilter = (value, list, setList) => {
-    if (list.includes(value)) {
-      setList(list.filter((x) => x !== value));
-    } else {
-      setList([...list, value]);
-    }
-  };
-
   const openVariationSelector = (product) => {
     setVariationModalProduct(product);
     setVariationModalOpen(true);
@@ -301,11 +339,11 @@ export default function EditQuotation() {
       alert("This item with the same color & size is already added!");
       return;
     }
-   
+
     const productName = `${
       item.productName || item.name || "Unknown Product"
     }${color ? `(${color})` : ""}${size ? `[${size}]` : ""}`;
-      const newItem = {
+    const newItem = {
       productId: item.productId || item._id,
       productName,
       productCost: item.productCost || 0,
@@ -490,17 +528,15 @@ export default function EditQuotation() {
   // Pagination
   const handlePrevPage = () => {
     if (currentPage > 1) {
-      fetchProducts(currentPage - 1, searchTerm);
+      fetchProducts(currentPage - 1);
     }
   };
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
-      fetchProducts(currentPage + 1, searchTerm);
+      fetchProducts(currentPage + 1);
     }
   };
-
-  const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
   // Company selection
   const handleCompanySelect = (company) => {
@@ -521,7 +557,9 @@ export default function EditQuotation() {
     fetchCompanies();
   };
 
-  // Render
+  /* ─────────────────────────────────────────
+   *  JSX
+   * ─────────────────────────────────────────*/
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
       {/* Header */}
@@ -529,23 +567,19 @@ export default function EditQuotation() {
         <h1 className="text-2xl font-bold text-purple-700">
           {isEditMode ? "Edit Quotation" : "Create Quotation"}
         </h1>
-        <div className="flex flex-wrap items-center gap-4">
-          <button
-            onClick={handleSaveQuotation}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-          >
-            {isEditMode ? "Update Quotation" : "Create Quotation"}
-          </button>
-        </div>
+        <button
+          onClick={handleSaveQuotation}
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+        >
+          {isEditMode ? "Update Quotation" : "Create Quotation"}
+        </button>
       </div>
 
       {/* Form Fields */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {/* Catalog Name */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Quotation Name *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Quotation Name *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -557,9 +591,7 @@ export default function EditQuotation() {
 
         {/* Customer Company */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Company *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Company *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -573,9 +605,7 @@ export default function EditQuotation() {
             <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
               {companies
                 .filter((company) =>
-                  company.companyName
-                    .toLowerCase()
-                    .includes(customerCompany.toLowerCase())
+                  company.companyName.toLowerCase().includes(customerCompany.toLowerCase())
                 )
                 .map((company) => (
                   <div
@@ -598,9 +628,7 @@ export default function EditQuotation() {
 
         {/* Customer Name + Salutation */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Name *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Name *</label>
           <div className="flex items-center">
             <select
               className="border border-purple-300 rounded p-2 mr-2"
@@ -623,9 +651,7 @@ export default function EditQuotation() {
 
         {/* Customer Email */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Email
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Email</label>
           <input
             type="email"
             className="border border-purple-300 rounded w-full p-2"
@@ -637,9 +663,7 @@ export default function EditQuotation() {
 
         {/* Customer Address */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Address
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Address</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -649,177 +673,83 @@ export default function EditQuotation() {
         </div>
       </div>
 
-      {/* Search & Image Search */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div className="flex items-center space-x-2 w-full md:w-1/2 relative">
-          <input
-            type="text"
-            placeholder="Search products by name..."
-            className="flex-grow px-4 py-2 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button
-              onClick={handleClearSearch}
-              className="absolute right-12 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-            >
-              <span className="text-lg">×</span>
-            </button>
-          )}
-          <button
-            onClick={handleImageSearchClick}
-            className="px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded-lg hover:opacity-90 flex items-center"
-          >
-            {advancedSearchLoading && (
-              <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin mr-2"></div>
-            )}
-            <span>Search by Image</span>
+      {/* Search bar */}
+      <div className="flex items-center space-x-2 mb-6">
+        <input
+          className="flex-grow px-4 py-2 border border-purple-300 rounded-lg"
+          value={searchTerm}
+          onChange={(e) => debouncedSearch(e.target.value)}
+          placeholder="Search products..."
+        />
+        {searchTerm && (
+          <button onClick={clearSearch} className="text-xl text-gray-500">
+            ×
           </button>
-          <input
-            type="file"
-            ref={imageInputRef}
-            style={{ display: "none" }}
-            accept="image/*"
-            onChange={handleImageSearch}
-          />
-          {advancedSearchActive && (
-            <button
-              onClick={handleClearAdvancedSearch}
-              className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
-            >
-              Clear Image
-            </button>
+        )}
+        <button
+          onClick={handleImageSearchClick}
+          className="px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded-lg hover:opacity-90 flex items-center"
+        >
+          {advancedSearchLoading && (
+            <div className="w-5 h-5 border-4 border-white border-t-transparent border-solid rounded-full animate-spin mr-2"></div>
           )}
-        </div>
+          <span>Search by Image</span>
+        </button>
+        <input
+          type="file"
+          ref={imageInputRef}
+          style={{ display: "none" }}
+          accept="image/*"
+          onChange={handleImageSearch}
+        />
+        {advancedSearchActive && (
+          <button
+            onClick={handleClearAdvancedSearch}
+            className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
+          >
+            Clear Image
+          </button>
+        )}
       </div>
 
-      {/* Filter Buttons */}
+      {/* Filter dropdowns */}
       <div className="flex flex-wrap gap-2 mb-6">
-        <div className="relative">
-          <button
-            onClick={() => setCategoryOpen(!categoryOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Categories ({selectedCategories.length})
-          </button>
-          {categoryOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullCategories.map((cat) => (
-                <label
-                  key={cat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedCategories.includes(cat)}
-                    onChange={() =>
-                      toggleFilter(cat, selectedCategories, setSelectedCategories)
-                    }
-                  />
-                  <span className="truncate">{cat}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setSubCategoryOpen(!subCategoryOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            SubCats ({selectedSubCategories.length})
-          </button>
-          {subCategoryOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullSubCategories.map((subCat) => (
-                <label
-                  key={subCat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedSubCategories.includes(subCat)}
-                    onChange={() =>
-                      toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
-                    }
-                  />
-                  <span className="truncate">{subCat}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setBrandOpen(!brandOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Brands ({selectedBrands.length})
-          </button>
-          {brandOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullBrands.map((brand) => (
-                <label
-                  key={brand}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedBrands.includes(brand)}
-                    onChange={() =>
-                      toggleFilter(brand, selectedBrands, setSelectedBrands)
-                    }
-                  />
-                  <span className="truncate">{brand}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setPriceRangeOpen(!priceRangeOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Price Range ({selectedPriceRanges.length})
-          </button>
-          {priceRangeOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullPriceRanges.map((range) => (
-                <label
-                  key={range}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedPriceRanges.includes(range)}
-                    onChange={() =>
-                      toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
-                    }
-                  />
-                  <span className="truncate">{range}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+        <FilterDropdown
+          label="Categories"
+          open={categoryOpen}
+          setOpen={setCategoryOpen}
+          options={fullCategories}
+          selected={selectedCategories}
+          toggle={(v) => toggleFilter(v, selectedCategories, setSelectedCategories)}
+          counts={filterCounts.categories}
+        />
+        <FilterDropdown
+          label="SubCats"
+          open={subCategoryOpen}
+          setOpen={setSubCategoryOpen}
+          options={fullSubCategories}
+          selected={selectedSubCategories}
+          toggle={(v) => toggleFilter(v, selectedSubCategories, setSelectedSubCategories)}
+          counts={filterCounts.subCategories}
+        />
+        <FilterDropdown
+          label="Brands"
+          open={brandOpen}
+          setOpen={setBrandOpen}
+          options={fullBrands}
+          selected={selectedBrands}
+          toggle={(v) => toggleFilter(v, selectedBrands, setSelectedBrands)}
+          counts={filterCounts.brands}
+        />
+        <FilterDropdown
+          label="Price Range"
+          open={priceRangeOpen}
+          setOpen={setPriceRangeOpen}
+          options={fullPriceRanges}
+          selected={selectedPriceRanges}
+          toggle={(v) => toggleFilter(v, selectedPriceRanges, setSelectedPriceRanges)}
+          counts={filterCounts.priceRanges}
+        />
       </div>
 
       {/* Product Grid */}
@@ -956,6 +886,44 @@ export default function EditQuotation() {
 
       {/* Company Creation Modal */}
       {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+ *  FilterDropdown (re‑usable)
+ * ─────────────────────────────────────────*/
+function FilterDropdown({ label, open, setOpen, options, selected, toggle, counts }) {
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+      >
+        {label} ({selected.length})
+      </button>
+      {open && (
+        <div
+          className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-40 overflow-y-auto"
+        >
+          {options.map((opt) => (
+            <label
+              key={opt}
+              className="flex items-center space-x-2 text-sm hover:bg-gray-100 p-1 rounded cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="form-checkbox h-4 w-4 text-purple-500"
+                checked={selected.includes(opt)}
+                onChange={() => toggle(opt)}
+              />
+              <span className="truncate">
+                {opt} ({counts[norm(opt)] || 0})
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1107,9 +1075,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
           </h2>
           <div className="grid grid-cols-3 gap-2 mb-4">
             <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Color
-              </label>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
               {colorOptions.length ? (
                 <select
                   className="border border-purple-300 rounded p-1 w-full"
@@ -1134,9 +1100,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Size
-              </label>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
               {sizeOptions.length ? (
                 <select
                   className="border border-purple-300 rounded p-1 w-full"
@@ -1161,9 +1125,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Qty
-              </label>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Qty</label>
               <input
                 type="number"
                 min="1"

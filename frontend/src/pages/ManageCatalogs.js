@@ -5,70 +5,53 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import CompanyModal from "../components/CompanyModal";
 
-// Optional bag icon
-const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
-
-const limit = 100;
+/* ────────────────────────────────────────────────────────────
+ *  Helpers & constants
+ * ────────────────────────────────────────────────────────────*/
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const limit = 100; // products per page
+const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
+const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
+const obj = (arr) => Object.fromEntries(arr.map(({ name, count }) => [norm(name), count]));
 
+/* ────────────────────────────────────────────────────────────
+ *  Main Page Component
+ * ────────────────────────────────────────────────────────────*/
 export default function CreateManualCatalog() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  // -- Opportunity Number states + dropdown
+  /* ------------ Opportunity -------------- */
   const [opportunityNumber, setOpportunityNumber] = useState("");
   const [opportunityCodes, setOpportunityCodes] = useState([]);
   const [opportunityDropdownOpen, setOpportunityDropdownOpen] = useState(false);
 
-  // -- General states
+  /* ------------ Product & Filters -------- */
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
   const [fullCategories, setFullCategories] = useState([]);
   const [fullSubCategories, setFullSubCategories] = useState([]);
   const [fullBrands, setFullBrands] = useState([]);
   const [fullPriceRanges, setFullPriceRanges] = useState([]);
   const [fullVariationHinges, setFullVariationHinges] = useState([]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubCategories, setSelectedSubCategories] = useState([]);
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
   const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
   const [priceRangeOpen, setPriceRangeOpen] = useState(false);
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
-  const [variationModalOpen, setVariationModalOpen] = useState(false);
-  const [variationModalProduct, setVariationModalProduct] = useState(null);
-  const [editIndex, setEditIndex] = useState(null);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
-  const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
-  const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
-  const imageInputRef = useRef(null);
-  const [selectedProducts, setSelectedProducts] = useState([]);
-  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
-  const [catalogName, setCatalogName] = useState("");
-  const [salutation, setSalutation] = useState("Mr.");
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [customerAddress, setCustomerAddress] = useState("");
-  const [customerCompany, setCustomerCompany] = useState("");
-  const presetMarginOptions = [0, 5, 10, 15, 20];
-  const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
-  const [marginOption, setMarginOption] = useState("preset");
-  const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
-  const [customMargin, setCustomMargin] = useState("");
-  const presetGstOptions = [18];
-  const [gstOption, setGstOption] = useState("preset");
-  const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
-  const [customGst, setCustomGst] = useState("");
-  const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
-  const [cartOpen, setCartOpen] = useState(false);
+
   const [filterCounts, setFilterCounts] = useState({
     categories: {},
     subCategories: {},
@@ -77,82 +60,93 @@ export default function CreateManualCatalog() {
     variationHinges: {},
   });
 
-  // -- Company suggestions
+  /* ------------ Cart / modal / misc state ------- */
+  const [variationModalOpen, setVariationModalOpen] = useState(false);
+  const [variationModalProduct, setVariationModalProduct] = useState(null);
+  const [editIndex, setEditIndex] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
+  const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
+  const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
+  const imageInputRef = useRef(null);
+
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [fieldsToDisplay, setFieldsToDisplay] = useState(["name", "productCost"]);
+  const [catalogName, setCatalogName] = useState("");
+  const [salutation, setSalutation] = useState("Mr.");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [customerCompany, setCustomerCompany] = useState("");
+
+  const presetMarginOptions = [0, 5, 10, 15, 20];
+  const [selectedMargin, setSelectedMargin] = useState(presetMarginOptions[0]);
+  const [marginOption, setMarginOption] = useState("preset");
+  const [selectedPresetMargin, setSelectedPresetMargin] = useState(presetMarginOptions[0]);
+  const [customMargin, setCustomMargin] = useState("");
+
+  const presetGstOptions = [18];
+  const [gstOption, setGstOption] = useState("preset");
+  const [selectedPresetGst, setSelectedPresetGst] = useState(presetGstOptions[0]);
+  const [customGst, setCustomGst] = useState("");
+  const [selectedGst, setSelectedGst] = useState(presetGstOptions[0]);
+
+  const [cartOpen, setCartOpen] = useState(false);
+
+  /* ------------ Company / client ---------- */
   const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [clients, setClients] = useState([]);
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
-  // Fetch full list of Opportunity codes for suggestion
-  useEffect(() => {
-    fetchOpportunityCodes();
-  }, []);
-
-  const fetchOpportunityCodes = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setOpportunityCodes(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error("Error fetching opportunities for suggestion:", error);
-      setOpportunityCodes([]);
+  /* ─────────────────────────────────────────
+   *  Network helpers
+   * ─────────────────────────────────────────*/
+  const buildParams = () => {
+    const p = new URLSearchParams();
+    if (searchTerm) {
+      const terms = searchTerm.toLowerCase().split(" ").filter(Boolean);
+      p.append("search", terms.join(","));
     }
+    if (selectedCategories.length) p.append("categories", selectedCategories.join(","));
+    if (selectedSubCategories.length) p.append("subCategories", selectedSubCategories.join(","));
+    if (selectedBrands.length) p.append("brands", selectedBrands.join(","));
+    if (selectedPriceRanges.length) p.append("priceRanges", selectedPriceRanges.join(","));
+    if (selectedVariationHinges.length) p.append("variationHinges", selectedVariationHinges.join(","));
+    return p;
   };
 
-  // Filter list for typed text
-  const filteredOppCodes = opportunityCodes.filter((opp) =>
-    opp.opportunityCode?.toLowerCase().includes(opportunityNumber.toLowerCase())
-  );
-
-  // Fetch product filter options
-  useEffect(() => {
-    fetchFilterOptions();
-  }, []);
-
-  const fetchFilterOptions = async () => {
+  const fetchFilterOptions = async (extraQS = "") => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const { data } = await axios.get(
+        `${BACKEND_URL}/api/admin/products/filters${extraQS}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setFullCategories(data.categories.map((x) => x.name));
+      setFullSubCategories(data.subCategories.map((x) => x.name));
+      setFullBrands(data.brands.map((x) => x.name));
+      setFullPriceRanges(data.priceRanges.map((x) => x.name));
+      setFullVariationHinges(data.variationHinges.map((x) => x.name));
+
+      setFilterCounts({
+        categories: obj(data.categories),
+        subCategories: obj(data.subCategories),
+        brands: obj(data.brands),
+        priceRanges: obj(data.priceRanges),
+        variationHinges: obj(data.variationHinges),
       });
-      setFullCategories(
-        Array.isArray(res.data.categories)
-          ? res.data.categories.map((cat) => (cat.name ? cat.name : cat)).sort()
-          : []
-      );
-      setFullSubCategories(
-        Array.isArray(res.data.subCategories)
-          ? res.data.subCategories
-              .map((subCat) => (subCat.name ? subCat.name : subCat))
-              .sort()
-          : []
-      );
-      setFullBrands(
-        Array.isArray(res.data.brands)
-          ? res.data.brands.map((brand) => (brand.name ? brand.name : brand)).sort()
-          : []
-      );
-      setFullPriceRanges(
-        Array.isArray(res.data.priceRanges)
-          ? res.data.priceRanges
-              .map((range) => (range.name ? range.name : range))
-              .sort((a, b) => a - b)
-          : []
-      );
-      setFullVariationHinges(
-        Array.isArray(res.data.variationHinges)
-          ? res.data.variationHinges
-              .map((hinge) => (hinge.name ? hinge.name : hinge))
-              .sort()
-          : []
-      );
-    } catch (error) {
-      console.error("Error fetching filter options:", error);
+    } catch (err) {
+      console.error("Error fetching filter options:", err);
+      setFilterCounts({
+        categories: {},
+        subCategories: {},
+        brands: {},
+        priceRanges: {},
+        variationHinges: {},
+      });
       setFullCategories([]);
       setFullSubCategories([]);
       setFullBrands([]);
@@ -161,7 +155,55 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // Fetch product list
+  const fetchProducts = async (page = 1) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+
+      /* 1 — page of products */
+      const prodParams = buildParams();
+      prodParams.append("page", page);
+      prodParams.append("limit", limit);
+      const { data } = await axios.get(
+        `${BACKEND_URL}/api/admin/products?${prodParams.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setProducts(Array.isArray(data.products) ? data.products : []);
+      setCurrentPage(data.currentPage || 1);
+      setTotalPages(data.totalPages || 1);
+
+      /* 2 — counts (same filters, no page/limit) */
+      const countQS = `?${buildParams().toString()}`;
+      await fetchFilterOptions(countQS);
+    } catch (err) {
+      console.error("Error fetching products:", err);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ─────────────────────────────────────────
+   *  Initial data loads
+   * ─────────────────────────────────────────*/
+  useEffect(() => {
+    // opportunity list
+    (async () => {
+      try {
+        const { data } = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        setOpportunityCodes(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error opp codes:", err);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, []); // static full list
   useEffect(() => {
     fetchProducts(1);
   }, [
@@ -173,89 +215,12 @@ export default function CreateManualCatalog() {
     selectedVariationHinges,
   ]);
 
-  const fetchProducts = async (page = 1) => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const params = new URLSearchParams();
-      params.append("page", page);
-      params.append("limit", limit);
-      if (searchTerm) {
-        const searchTerms = searchTerm.toLowerCase().split(" ").filter((term) => term);
-        params.append("search", searchTerms.join(","));
-      }
-      if (selectedCategories.length > 0) {
-        params.append("categories", selectedCategories.join(","));
-      }
-      if (selectedSubCategories.length > 0) {
-        params.append("subCategories", selectedSubCategories.join(","));
-      }
-      if (selectedBrands.length > 0) {
-        params.append("brands", selectedBrands.join(","));
-      }
-      if (selectedPriceRanges.length > 0) {
-        params.append("priceRanges", selectedPriceRanges.join(","));
-      }
-      if (selectedVariationHinges.length > 0) {
-        params.append("variationHinges", selectedVariationHinges.join(","));
-      }
+  /* ─────────────────────────────────────────
+   *  Simple local helpers
+   * ─────────────────────────────────────────*/
+  const toggleFilter = (val, list, setter) =>
+    list.includes(val) ? setter(list.filter((v) => v !== val)) : setter([...list, val]);
 
-      const url = `${BACKEND_URL}/api/admin/products?${params.toString()}`;
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setProducts(Array.isArray(res.data.products) ? res.data.products : []);
-      setCurrentPage(res.data.currentPage || 1);
-      setTotalPages(res.data.totalPages || 1);
-      updateFilterCounts(res.data.products);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Update filter counts
-  const updateFilterCounts = (products) => {
-    const counts = {
-      categories: {},
-      subCategories: {},
-      brands: {},
-      priceRanges: {},
-      variationHinges: {},
-    };
-
-    products.forEach((product) => {
-      if (product.category)
-        counts.categories[product.category] =
-          (counts.categories[product.category] || 0) + 1;
-      if (product.subCategory)
-        counts.subCategories[product.subCategory] =
-          (counts.subCategories[product.subCategory] || 0) + 1;
-      if (product.brandName)
-        counts.brands[product.brandName] = (counts.brands[product.brandName] || 0) + 1;
-      if (product.priceRange)
-        counts.priceRanges[product.priceRange] =
-          (counts.priceRanges[product.priceRange] || 0) + 1;
-      if (product.variationHinge)
-        counts.variationHinges[product.variationHinge] =
-          (counts.variationHinges[product.variationHinge] || 0) + 1;
-    });
-
-    setFilterCounts(counts);
-  };
-
-  // Toggle filter helper
-  const toggleFilter = (value, list, setList) => {
-    if (list.includes(value)) {
-      setList(list.filter((x) => x !== value));
-    } else {
-      setList([...list, value]);
-    }
-  };
-
-  // Clear filters
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategories([]);
@@ -265,6 +230,15 @@ export default function CreateManualCatalog() {
     setSelectedVariationHinges([]);
   };
 
+  const filteredOppCodes = opportunityCodes.filter((o) =>
+    o.opportunityCode?.toLowerCase().includes(opportunityNumber.toLowerCase())
+  );
+
+  const finalProducts = advancedSearchActive ? advancedSearchResults : products;
+
+  /* ─────────────────────────────────────────
+   *  Business Logic (unchanged from original)
+   * ─────────────────────────────────────────*/
   // If editing an existing catalog, load it
   useEffect(() => {
     if (isEditMode) {
@@ -287,7 +261,7 @@ export default function CreateManualCatalog() {
       setCustomerEmail(data.customerEmail || "");
       setCustomerAddress(data.customerAddress || "");
       setCustomerCompany(data.customerCompany || "");
-      setSelectedCompany(data.customerCompany || "");
+      setSelectedCompanyData(data.customerCompany || "");
       setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
       setSalutation(data.salutation || "Mr.");
 
@@ -708,10 +682,8 @@ export default function CreateManualCatalog() {
   const handleNextPage = () => {
     if (currentPage < totalPages) {
       fetchProducts(currentPage + 1);
-    }
+      }
   };
-
-  const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
   // Company selection
   const handleCompanySelect = (company) => {
@@ -721,7 +693,7 @@ export default function CreateManualCatalog() {
     setClients(company.clients || []);
     setCustomerName("");
     setCustomerEmail(company.companyEmail || "");
-    setDropdownOpen(false);
+    setClientDropdownOpen(false);
   };
 
   const handleOpenCompanyModal = () => {
@@ -744,7 +716,9 @@ export default function CreateManualCatalog() {
     setVariationModalProduct(null);
   };
 
-  // RENDER
+  /* ─────────────────────────────────────────
+   *  JSX
+   * ─────────────────────────────────────────*/
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
       {/* Header */}
@@ -1003,169 +977,56 @@ export default function CreateManualCatalog() {
 
       {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
-        <div className="relative">
-          <button
-            onClick={() => setCategoryOpen(!categoryOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Categories ({selectedCategories.length})
-          </button>
-          {categoryOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullCategories.map((cat) => (
-                <label
-                  key={cat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedCategories.includes(cat)}
-                    onChange={() =>
-                      toggleFilter(cat, selectedCategories, setSelectedCategories)
-                    }
-                  />
-                  <span className="truncate">
-                    {cat} ({filterCounts.categories[cat] || 0})
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setSubCategoryOpen(!subCategoryOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            SubCats ({selectedSubCategories.length})
-          </button>
-          {subCategoryOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullSubCategories.map((subCat) => (
-                <label
-                  key={subCat}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedSubCategories.includes(subCat)}
-                    onChange={() =>
-                      toggleFilter(subCat, selectedSubCategories, setSelectedSubCategories)
-                    }
-                  />
-                  <span className="truncate">
-                    {subCat} ({filterCounts.subCategories[subCat] || 0})
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setBrandOpen(!brandOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Brands ({selectedBrands.length})
-          </button>
-          {brandOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullBrands.map((brand) => (
-                <label
-                  key={brand}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedBrands.includes(brand)}
-                    onChange={() => toggleFilter(brand, selectedBrands, setSelectedBrands)}
-                  />
-                  <span className="truncate">
-                    {brand} ({filterCounts.brands[brand] || 0})
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setPriceRangeOpen(!priceRangeOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Price Range ({selectedPriceRanges.length})
-          </button>
-          {priceRangeOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullPriceRanges.map((range) => (
-                <label
-                  key={range}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedPriceRanges.includes(range)}
-                    onChange={() =>
-                      toggleFilter(range, selectedPriceRanges, setSelectedPriceRanges)
-                    }
-                  />
-                  <span className="truncate">
-                    {range} ({filterCounts.priceRanges[range] || 0})
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setVariationHingeOpen(!variationHingeOpen)}
-            className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
-          >
-            Variation Hinge ({selectedVariationHinges.length})
-          </button>
-          {variationHingeOpen && (
-            <div
-              className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20"
-              style={{ maxHeight: "150px", overflowY: "auto" }}
-            >
-              {fullVariationHinges.map((hinge) => (
-                <label
-                  key={hinge}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={selectedVariationHinges.includes(hinge)}
-                    onChange={() =>
-                      toggleFilter(hinge, selectedVariationHinges, setSelectedVariationHinges)
-                    }
-                  />
-                  <span className="truncate">
-                    {hinge} ({filterCounts.variationHinges[hinge] || 0})
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Category */}
+        <FilterDropdown
+          label="Categories"
+          open={categoryOpen}
+          setOpen={setCategoryOpen}
+          options={fullCategories}
+          selected={selectedCategories}
+          toggle={(v) => toggleFilter(v, selectedCategories, setSelectedCategories)}
+          counts={filterCounts.categories}
+        />
+        {/* Sub-category */}
+        <FilterDropdown
+          label="SubCats"
+          open={subCategoryOpen}
+          setOpen={setSubCategoryOpen}
+          options={fullSubCategories}
+          selected={selectedSubCategories}
+          toggle={(v) => toggleFilter(v, selectedSubCategories, setSelectedSubCategories)}
+          counts={filterCounts.subCategories}
+        />
+        {/* Brands */}
+        <FilterDropdown
+          label="Brands"
+          open={brandOpen}
+          setOpen={setBrandOpen}
+          options={fullBrands}
+          selected={selectedBrands}
+          toggle={(v) => toggleFilter(v, selectedBrands, setSelectedBrands)}
+          counts={filterCounts.brands}
+        />
+        {/* Price Range */}
+        <FilterDropdown
+          label="Price Range"
+          open={priceRangeOpen}
+          setOpen={setPriceRangeOpen}
+          options={fullPriceRanges}
+          selected={selectedPriceRanges}
+          toggle={(v) => toggleFilter(v, selectedPriceRanges, setSelectedPriceRanges)}
+          counts={filterCounts.priceRanges}
+        />
+        {/* Variation Hinge */}
+        <FilterDropdown
+          label="Variation Hinge"
+          open={variationHingeOpen}
+          setOpen={setVariationHingeOpen}
+          options={fullVariationHinges}
+          selected={selectedVariationHinges}
+          toggle={(v) => toggleFilter(v, selectedVariationHinges, setSelectedVariationHinges)}
+          counts={filterCounts.variationHinges}
+        />
       </div>
 
       {/* Product Grid */}
@@ -1306,7 +1167,6 @@ export default function CreateManualCatalog() {
           product={variationModalProduct}
           onClose={closeVariationModal}
           onSave={handleAddVariations}
-          selectedMargin={selectedMargin}
         />
       )}
 
@@ -1332,9 +1192,45 @@ export default function CreateManualCatalog() {
   );
 }
 
-/**
- * ProductCard Component
- */
+/* ─────────────────────────────────────────
+ *  FilterDropdown – small reusable dropdown
+ * ─────────────────────────────────────────*/
+function FilterDropdown({ label, open, setOpen, options, selected, toggle, counts }) {
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="px-3 py-2 bg-white border border-purple-300 rounded hover:bg-gray-100"
+      >
+        {label} ({selected.length})
+      </button>
+      {open && (
+        <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-40 overflow-y-auto">
+          {options.map((opt) => (
+            <label
+              key={opt}
+              className="flex items-center space-x-2 text-sm hover:bg-gray-100 p-1 rounded cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="form-checkbox h-4 w-4 text-purple-500"
+                checked={selected.includes(opt)}
+                onChange={() => toggle(opt)}
+              />
+              <span className="truncate">
+                {opt} ({counts[norm(opt)] || 0})
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+ *  ProductCard Component
+ * ─────────────────────────────────────────*/
 function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
   const colorOptions = Array.isArray(product.color)
     ? product.color
@@ -1357,14 +1253,8 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
       productCost: cost,
       productprice: cost,
       productGST: product.productGST || 0,
-      color:
-        colorOptions.length > 0 && colorOptions[0].trim() !== ""
-          ? colorOptions[0]
-          : "N/A",
-      size:
-        sizeOptions.length > 0 && sizeOptions[0].trim() !== ""
-          ? sizeOptions[0]
-          : "N/A",
+      color: colorOptions.length > 0 && colorOptions[0].trim() !== "" ? colorOptions[0] : "N/A",
+      size: sizeOptions.length > 0 && sizeOptions[0].trim() !== "" ? sizeOptions[0] : "N/A",
       quantity: 1,
       material: product.material || "",
       weight: product.weight || "",
@@ -1425,10 +1315,10 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
   );
 }
 
-/**
- * VariationModal Component
- */
-function VariationModal({ product, onClose, onSave, selectedMargin }) {
+/* ─────────────────────────────────────────
+ *  VariationModal Component
+ * ─────────────────────────────────────────*/
+function VariationModal({ product, onClose, onSave }) {
   const [variations, setVariations] = useState([]);
   const colorOptions = Array.isArray(product.color)
     ? product.color
@@ -1445,24 +1335,24 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
   const [pickedQuantity, setPickedQuantity] = useState(1);
 
   const handleAddLine = () => {
-    const line = {
-      color: pickedColor || "",
-      size: pickedSize || "",
-      quantity: parseInt(pickedQuantity) || 1,
-    };
-    setVariations((prev) => [...prev, line]);
+    setVariations((prev) => [
+      ...prev,
+      {
+        color: pickedColor || "",
+        size: pickedSize || "",
+        quantity: parseInt(pickedQuantity) || 1,
+      },
+    ]);
   };
 
-  const handleRemoveLine = (index) => {
-    setVariations((prev) => prev.filter((_, i) => i !== index));
-  };
+  const handleRemoveLine = (idx) => setVariations((prev) => prev.filter((_, i) => i !== idx));
 
-  const handleSaveAndClose = () => {
+  const handleSave = () => {
     if (variations.length === 0) {
       alert("Add product to save");
       return;
     }
-    const itemsWithProductData = variations.map((variation) => {
+    const out = variations.map((v) => {
       const cost = product.productCost || 0;
       return {
         productId: product._id,
@@ -1470,16 +1360,16 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
         productCost: cost,
         productprice: cost,
         productGST: product.productGST || 0,
-        color: variation.color && variation.color.trim() !== "" ? variation.color : "N/A",
-        size: variation.size && variation.size.trim() !== "" ? variation.size : "N/A",
-        quantity: variation.quantity || 1,
+        color: v.color && v.color.trim() !== "" ? v.color : "N/A",
+        size: v.size && v.size.trim() !== "" ? v.size : "N/A",
+        quantity: v.quantity || 1,
         material: product.material || "",
         weight: product.weight || "",
         ProductDescription: product.productDetails || "",
         ProductBrand: product.brandName || "",
       };
     });
-    onSave(itemsWithProductData);
+    onSave(out);
   };
 
   return (
@@ -1496,10 +1386,9 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
             Choose Variations for {product.productName || product.name || "Unknown Product"}
           </h2>
           <div className="grid grid-cols-3 gap-2 mb-4">
+            {/* color */}
             <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Color
-              </label>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
               {colorOptions.length ? (
                 <select
                   className="border border-purple-300 rounded p-1 w-full"
@@ -1507,9 +1396,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
                   onChange={(e) => setPickedColor(e.target.value)}
                 >
                   {colorOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c}>{c}</option>
                   ))}
                 </select>
               ) : (
@@ -1518,14 +1405,13 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
                   className="border border-purple-300 rounded p-1 w-full"
                   value={pickedColor}
                   onChange={(e) => setPickedColor(e.target.value)}
-                  placeholder="No colors? Type custom"
+                  placeholder="Type color"
                 />
               )}
             </div>
+            {/* size */}
             <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Size
-              </label>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
               {sizeOptions.length ? (
                 <select
                   className="border border-purple-300 rounded p-1 w-full"
@@ -1533,9 +1419,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
                   onChange={(e) => setPickedSize(e.target.value)}
                 >
                   {sizeOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
+                    <option key={s}>{s}</option>
                   ))}
                 </select>
               ) : (
@@ -1544,17 +1428,16 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
                   className="border border-purple-300 rounded p-1 w-full"
                   value={pickedSize}
                   onChange={(e) => setPickedSize(e.target.value)}
-                  placeholder="No sizes? Type custom"
+                  placeholder="Type size"
                 />
               )}
             </div>
+            {/* qty */}
             <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Qty
-              </label>
+              <label className="block text-sm font-medium text-purple-700 mb-1">Qty</label>
               <input
                 type="number"
-                min="1"
+                min={1}
                 className="border border-purple-300 rounded p-1 w-full"
                 value={pickedQuantity}
                 onChange={(e) => setPickedQuantity(e.target.value)}
@@ -1567,20 +1450,19 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
           >
             + Add
           </button>
+
           <div className="mt-4 space-y-2">
             {variations.length === 0 && (
               <p className="text-red-500 text-sm font-semibold">Add product to save</p>
             )}
-            {variations.map((line, idx) => (
+            {variations.map((v, idx) => (
               <div
                 key={idx}
                 className="flex items-center justify-between border p-2 rounded"
               >
-                <div>
-                  <span className="mr-2 font-semibold">{line.color || "N/A"}</span>
-                  <span className="mr-2 font-semibold">{line.size || "N/A"}</span>
-                  <span>Qty: {line.quantity}</span>
-                </div>
+                <span>
+                  {v.color || "N/A"} / {v.size || "N/A"}  Qty:{v.quantity}
+                </span>
                 <button
                   onClick={() => handleRemoveLine(idx)}
                   className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
@@ -1598,11 +1480,9 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
               Cancel
             </button>
             <button
-              onClick={handleSaveAndClose}
+              onClick={handleSave}
               className={`px-4 py-2 rounded text-white ${
-                variations.length > 0
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-gray-300 cursor-not-allowed"
+                variations.length ? "bg-green-600 hover:bg-green-700" : "bg-gray-300 cursor-not-allowed"
               }`}
               disabled={variations.length === 0}
             >
@@ -1615,9 +1495,9 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
   );
 }
 
-/**
- * VariationEditModal Component
- */
+/* ─────────────────────────────────────────
+ *  VariationEditModal Component
+ * ─────────────────────────────────────────*/
 function VariationEditModal({ item, onClose, onUpdate }) {
   const [name, setName] = useState(item.productName || item.name || "");
   const [productCost, setProductCost] = useState(item.productCost || 0);
@@ -1627,54 +1507,39 @@ function VariationEditModal({ item, onClose, onUpdate }) {
   const [quantity, setQuantity] = useState(item.quantity || 1);
   const [material, setMaterial] = useState(item.material || "");
   const [weight, setWeight] = useState(item.weight || "");
-  const [productDescription, setProductDescription] = useState(
-    item.ProductDescription || ""
-  );
+  const [productDescription, setProductDescription] = useState(item.ProductDescription || "");
   const [productBrand, setProductBrand] = useState(item.ProductBrand || "");
 
+  /* (fetch product details only if missing) */
   useEffect(() => {
-    if (!productDescription || !productBrand || item.productId) {
+    if ((!productDescription || !productBrand) && item.productId) {
       axios
         .get(`${BACKEND_URL}/api/admin/products/${item.productId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         })
-        .then((res) => {
-          const prod = res.data;
-          if (!productDescription) {
-            setProductDescription(prod.productDetails || "");
-          }
-          if (!productBrand) {
-            setProductBrand(prod.brandName || "");
-          }
+        .then(({ data }) => {
+          if (!productDescription) setProductDescription(data.productDetails || "");
+          if (!productBrand) setProductBrand(data.brandName || "");
         })
-        .catch((err) => console.error("Error fetching product details:", err));
+        .catch((err) => console.error("Error fetching prod details:", err));
     }
-  }, [item.productId, productDescription, productBrand]);
+  }, [item.productId]);
 
   const handleSave = () => {
-    const parsedCost = parseFloat(productCost);
-    const finalCost = isNaN(parsedCost) ? item.productCost || 0 : parsedCost;
-
-    const parsedGST = parseFloat(productGST);
-    const finalGST = isNaN(parsedGST) ? item.productGST || 0 : parsedGST;
-
-    const parsedQuantity = parseInt(quantity);
-    const finalQuantity = isNaN(parsedQuantity) ? item.quantity || 1 : parsedQuantity;
-
-    const updatedItem = {
-      productName: name || item.productName || item.name || "Unknown Product",
-      productCost: finalCost,
-      productprice: finalCost,
-      productGST: finalGST,
+    const upd = {
+      productName: name || "Unknown Product",
+      productCost: parseFloat(productCost) || 0,
+      productprice: parseFloat(productCost) || 0,
+      productGST: parseFloat(productGST) || 0,
       color: color || "N/A",
       size: size || "N/A",
-      quantity: finalQuantity,
+      quantity: parseInt(quantity) || 1,
       material: material || "",
       weight: weight || "",
       ProductDescription: productDescription || "",
       ProductBrand: productBrand || "",
-    };
-    onUpdate(updatedItem);
+    }
+      onUpdate(upd);
   };
 
   return (
@@ -1689,120 +1554,27 @@ function VariationEditModal({ item, onClose, onUpdate }) {
           </button>
           <h2 className="text-xl font-bold mb-4 text-purple-700">Edit Cart Item</h2>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Product Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Cost
-              </label>
-              <input
-                type="number"
-                value={productCost}
-                onChange={(e) => setProductCost(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                GST (%)
-              </label>
-              <input
-                type="number"
-                value={productGST}
-                onChange={(e) => setProductGST(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Color
-              </label>
-              <input
-                type="text"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Size
-              </label>
-              <input
-                type="text"
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Quantity
-              </label>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-                min="1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Material
-              </label>
-              <input
-                type="text"
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Weight
-              </label>
-              <input
-                type="text"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Product Description
-              </label>
-              <textarea
-                value={productDescription}
-                onChange={(e) => setProductDescription(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full h-40"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">
-                Product Brand
-              </label>
-              <input
-                type="text"
-                value={productBrand}
-                onChange={(e) => setProductBrand(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
+            {/* Name */}
+            <Field label="Product Name" value={name} setValue={setName} />
+            {/* Cost */}
+            <Field label="Cost" type="number" value={productCost} setValue={setProductCost} />
+            {/* GST */}
+            <Field label="GST (%)" type="number" value={productGST} setValue={setProductGST} />
+            {/* Color / Size / Qty */}
+            <Field label="Color" value={color} setValue={setColor} />
+            <Field label="Size" value={size} setValue={setSize} />
+            <Field label="Quantity" type="number" value={quantity} setValue={setQuantity} />
+            {/* Material / Weight */}
+            <Field label="Material" value={material} setValue={setMaterial} />
+            <Field label="Weight" value={weight} setValue={setWeight} />
+            {/* Description / Brand */}
+            <Field
+              label="Product Description"
+              textarea
+              value={productDescription}
+              setValue={setProductDescription}
+            />
+            <Field label="Product Brand" value={productBrand} setValue={setProductBrand} />
           </div>
           <div className="mt-6 flex justify-end space-x-2">
             <button
@@ -1820,6 +1592,31 @@ function VariationEditModal({ item, onClose, onUpdate }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+ *  Field Component for VariationEditModal
+ * ─────────────────────────────────────────*/
+function Field({ label, value, setValue, type = "text", textarea = false }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-purple-700 mb-1">{label}</label>
+      {textarea ? (
+        <textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="border border-purple-300 rounded p-2 w-full h-24"
+        />
+      ) : (
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="border border-purple-300 rounded p-2 w-full"
+        />
+      )}
     </div>
   );
 }
