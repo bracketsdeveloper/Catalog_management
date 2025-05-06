@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { VendorAdd } from "./VendorAdd";
 import axios from "axios";
+import VendorUploader from "../invoicefollowup/invoiceBulkUpload";
 
 export const ManageVendors = () => {
      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -12,6 +13,12 @@ export const ManageVendors = () => {
      const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState("add"); // 'add' | 'edit'
     const [selectedVendor, setSelectedVendor] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+
+    const bulkUploadOpen = () => {
+      setShowModal(true);
+    };
+
 
     const openModal = () => {
         setModalMode("add");
@@ -62,6 +69,7 @@ export const ManageVendors = () => {
     //         </>
     //     )
     // });
+    
     return (
        <div className="p-6">
       {/* header */}
@@ -70,6 +78,9 @@ export const ManageVendors = () => {
            <div className="flex gap-2">
                 <button onClick={openModal}  className="bg-orange-500 text-white px-4 py-2 rounded">
                 Add Vendor
+                </button>
+                <button onClick={bulkUploadOpen}  className="bg-green-500 text-white px-4 py-2 rounded">
+                  Bulk Upload
                 </button>
            </div>
          </div>
@@ -174,6 +185,17 @@ export const ManageVendors = () => {
             </tbody> */}
           </table>
         </div>
+
+        {showModal && (
+        <VendorUploader
+          mode="create"
+          vendor={null}
+          onClose={() => setShowModal(false)}
+          onSuccess={() => setShowModal(false)}
+          BACKEND_URL={BACKEND_URL}
+        />
+       )}
+
 
             {modalOpen && (
                 <VendorAdd

@@ -63,12 +63,18 @@ const JobSheetForm = ({
   setClientDropdownOpen,
   handleClientSelect,
   brandingTypeOptions = [
-    "Screen Printing",
-    "Embroidery",
-    "Heat Transfer",
-    "Patch",
+  " Screen Printing",
+    "Sublimation Printing",
+    "HT Printing",
+    "Engraving",
+    "Embriodery",
+    "UV Printing",
+    "DTF Stickering",
+    "Embossing",
+    "Debossing",
     "Digital Printing",
-    "Other",
+    "Offset Printing",
+    "Others",
   ],
 }) => {
   const [addresses, setAddresses] = useState(
