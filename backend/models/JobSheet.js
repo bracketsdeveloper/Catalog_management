@@ -9,10 +9,11 @@ const jobSheetItemSchema = new mongoose.Schema({
   size: { type: String },
   quantity: { type: Number, required: true },
   sourcingFrom: { type: String },
-  brandingType: { type: String },
+  brandingType: [{ type: String }], // <-- CHANGED HERE
   brandingVendor: { type: String },
   remarks: { type: String },
 });
+
 
 const jobSheetSchema = new mongoose.Schema({
   eventName: { type: String },

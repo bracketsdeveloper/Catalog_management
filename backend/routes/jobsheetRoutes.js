@@ -151,34 +151,79 @@ router.get('/jobsheets/:id', authenticate, async (req, res) => {
 // PUT /jobsheets/:id
 // - If isDraft is provided, store it
 // - If job sheet is a draft, only the creator can update it
+// router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
+//   try {
+//     // Filter out empty addresses
+//     if (Array.isArray(req.body.deliveryAddress)) {
+//       req.body.deliveryAddress = req.body.deliveryAddress.filter(
+//         (addr) => addr.trim() !== ""
+//       );
+//     }
+
+//     // Check if isDraft is explicitly provided
+//     if (typeof req.body.isDraft !== "undefined") {
+//       req.body.isDraft = !!req.body.isDraft;
+//     }
+
+//     // First find the doc
+//     const jobSheet = await JobSheet.findById(req.params.id);
+//     if (!jobSheet) {
+//       return res.status(404).json({ message: "Job sheet not found" });
+//     }
+
+//     // If it's a draft, ensure only the creator can update
+//     if (jobSheet.isDraft === true && jobSheet.createdBy !== req.user.email) {
+//       return res
+//         .status(403)
+//         .json({ message: "Forbidden: you are not the owner of this draft." });
+//     }
+
+//     // Now update the doc with the new data
+//     const updatedJobSheet = await JobSheet.findByIdAndUpdate(
+//       req.params.id,
+//       req.body,
+//       { new: true }
+//     );
+
+//     res.json({ message: "Job sheet updated", jobSheet: updatedJobSheet });
+//   } catch (error) {
+//     console.error("Error updating job sheet:", error);
+//     res.status(500).json({ message: "Server error updating job sheet" });
+//   }
+// });
+
 router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Filter out empty addresses
     if (Array.isArray(req.body.deliveryAddress)) {
       req.body.deliveryAddress = req.body.deliveryAddress.filter(
         (addr) => addr.trim() !== ""
       );
     }
 
-    // Check if isDraft is explicitly provided
     if (typeof req.body.isDraft !== "undefined") {
       req.body.isDraft = !!req.body.isDraft;
     }
 
-    // First find the doc
+    // Normalize brandingType if it exists
+    if ("brandingType" in req.body) {
+      req.body.brandingType = Array.isArray(req.body.brandingType)
+        ? req.body.brandingType
+        : typeof req.body.brandingType === "string" && req.body.brandingType.trim() !== ""
+          ? [req.body.brandingType]
+          : [];
+    }
+
     const jobSheet = await JobSheet.findById(req.params.id);
     if (!jobSheet) {
       return res.status(404).json({ message: "Job sheet not found" });
     }
 
-    // If it's a draft, ensure only the creator can update
     if (jobSheet.isDraft === true && jobSheet.createdBy !== req.user.email) {
       return res
         .status(403)
         .json({ message: "Forbidden: you are not the owner of this draft." });
     }
 
-    // Now update the doc with the new data
     const updatedJobSheet = await JobSheet.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -191,6 +236,7 @@ router.put("/jobsheets/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error updating job sheet" });
   }
 });
+
 
 // DELETE /jobsheets/:id
 // - If job sheet is a draft, only the creator can delete it
