@@ -365,7 +365,12 @@ export default function OpenPurchases() {
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
-  const [sort, setSort] = useState({ key: "deliveryDateTime", direction: "asc" });
+//  const [sort, setSort] = useState({
+//   key: "jobSheetCreatedDate", // Default column to sort by
+//   direction: "asc", // Default direction (ascending)
+// });
+
+const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [perms, setPerms] = useState([]);
   const canEdit = perms.includes("write-purchase");
 
@@ -527,6 +532,7 @@ const handleSourcedByDelete = async (id) => {
       if (to && dt > new Date(to)) return false;
       return true;
     };
+
     return headerFiltered.filter((r) => {
       const numOK =
         (!advFilters.jobSheetNumber.from || r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
@@ -561,12 +567,15 @@ const handleSourcedByDelete = async (id) => {
       return hasReal ? arr.filter((a) => a.size && a.size.toLowerCase() !== "n/a") : arr;
     });
   };
+
   const rows = filterNA(groupFilter(advFiltered));
 
   const changeHeaderFilter = (k, v) => setHeaderFilters((p) => ({ ...p, [k]: v }));
   const changeAdv = (f, k, v) => setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
+
   const sortBy = (k) =>
     setSort((p) => ({ key: k, direction: p.key === k && p.direction === "asc" ? "desc" : "asc" }));
+
 
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -727,7 +736,12 @@ const handleSourcedByDelete = async (id) => {
               { k: "expectedReceiveDate", l: "Expected Receive Date" },
               { k: "schedulePickUp", l: "Schedule Pick Up" }
             ].map(({ k, l }) => (
-              <th key={k} onClick={() => sortBy(k)} className="p-2 border cursor-pointer">
+          
+             <th
+                key={k}
+                onClick={() => sortBy(k)}
+                className="p-2 border cursor-pointer"
+              >
                 {l} {sort.key === k ? (sort.direction === "asc" ? "↑" : "↓") : ""}
               </th>
             ))}
@@ -766,6 +780,7 @@ const handleSourcedByDelete = async (id) => {
                       : ""
                 }
               >
+
             <td className="p-2 border">
                 {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
                 </td>
@@ -816,7 +831,6 @@ const handleSourcedByDelete = async (id) => {
                         <option value="Vijaylakshmi">Vijaylakshmi</option>
                       </select>
                     )}
-
                   </td>
 
                 <td className="p-2 border">{p.sourcingFrom}</td>
@@ -853,7 +867,7 @@ const handleSourcedByDelete = async (id) => {
                 
                 <td className="p-2 border">{p.status}</td>
                 <td className="p-2 border space-y-1">
-                  <button
+                  <button 
                     className="bg-blue-700 text-white w-full rounded py-0.5 text-[10px]"
                     disabled={!canEdit || p.status === "received"}
                     onClick={() => {

@@ -113,6 +113,7 @@ export default function PaymentFollowUpTable({
                 >
                   {latestFollowUp ? fmt(latestFollowUp.date) : "-"}
                 </td>
+            
                 <Cell val={r.paymentReceived} />
                 <td className="px-2 py-1 border border-gray-300">
                   <button onClick={() => onEdit(r)}>
