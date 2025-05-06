@@ -59,6 +59,7 @@ import ManagePotentialClients from "../pages/ManagePotentialClients";
 import EventManager from "../pages/EventManager";
 import PotentialClientsList from "../pages/PotentialClientsList";
 import CalendarPage from "../pages/CalendarPage";
+import ManageSegments from "../pages/ManageSegments";
 
 
 const router = createBrowserRouter([
@@ -325,6 +326,10 @@ const router = createBrowserRouter([
                     {
                         path:"home",
                         element:<Home/>
+                    },
+                    {
+                        path: "manage-segments",
+                        element : <ManageSegments/>
                     }
 
                 ]

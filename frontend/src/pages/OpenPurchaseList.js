@@ -1,16 +1,15 @@
-// pages/OpenPurchases.js
+// src/pages/OpenPurchaseList.js
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { TrashIcon } from '@heroicons/react/24/solid'; // or `/outline` for outlined style
+import { TrashIcon } from "@heroicons/react/24/solid";
 import * as XLSX from "xlsx";
 import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
-
 /* ───────────────── Header Filters ───────────────── */
 function HeaderFilters({ headerFilters, onFilterChange }) {
-  const columns = [
+  const cols = [
     "jobSheetCreatedDate",
     "jobSheetNumber",
     "clientCompanyName",
@@ -28,13 +27,11 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     "schedulePickUp",
     "followUp",
     "remarks",
-    "status",
   ];
 
   return (
     <tr className="bg-gray-100">
-      
-  {columns.map((c) => (
+      {cols.map((c) => (
         <th key={c} className="p-1 border">
           <input
             type="text"
@@ -45,31 +42,24 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           />
         </th>
       ))}
-      {/* {columns.map((c) => (
-        <th key={c} className="p-1 border border-gray-300">
-          {c === "status" ? (
-            <select
-              className="w-full p-1 text-xs border rounded"
-              value={headerFilters[c] || ""}
-              onChange={(e) => onFilterChange(c, e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="received">Received</option>
-              <option value="pending">Pending</option>
-              <option value="alert">Alert</option>
-            </select>
-          ) : (
-            <input
-              type="text"
-              className="w-full p-1 text-xs border rounded"
-              placeholder={`Filter ${c}`}
-              value={headerFilters[c] || ""}
-              onChange={(e) => onFilterChange(c, e.target.value)}
-            />
-          )}
-        </th>
-      ))} */}
-      <th className="p-1 border border-gray-300" colSpan={2}></th>
+
+      {/* Status filter: All / pending / received / alert / No Status */}
+      <th className="p-1 border">
+        <select
+          className="w-full p-1 text-xs border rounded"
+          value={headerFilters.status || ""}
+          onChange={(e) => onFilterChange("status", e.target.value)}
+        >
+          <option value="">All</option>
+          <option value="pending">pending</option>
+          <option value="received">received</option>
+          <option value="alert">alert</option>
+          <option value="__empty__">No Status</option>
+        </select>
+      </th>
+
+      {/* Align with Actions */}
+      <th className="p-1 border"></th>
     </tr>
   );
 }
@@ -90,7 +80,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
     setDate("");
     setNote("");
   };
-
   const remove = (i) => setLocal((p) => p.filter((_, idx) => idx !== i));
   const markDone = (i) =>
     setLocal((p) => p.map((fu, idx) => (idx === i ? { ...fu, done: true } : fu)));
@@ -104,9 +93,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
       <div className="bg-white p-6 rounded w-full max-w-lg text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
-          <button onClick={close} className="text-2xl">
-            &times;
-          </button>
+          <button onClick={close} className="text-2xl">&times;</button>
         </div>
 
         <div className="mb-4 space-y-2">
@@ -145,10 +132,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
               </span>
               <div className="flex gap-2">
                 {!fu.done && (
-                  <button
-                    onClick={() => markDone(i)}
-                    className="bg-green-600 text-white px-2 rounded"
-                  >
+                  <button onClick={() => markDone(i)} className="bg-green-600 text-white px-2 rounded">
                     Done
                   </button>
                 )}
@@ -172,13 +156,13 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 
 /* ───────────────── Edit Modal ───────────────── */
 const statusOptions = ["", "pending", "received", "alert"];
-
 function EditPurchaseModal({ purchase, onClose, onSave }) {
   const [data, setData] = useState({ ...purchase });
   const [fuModal, setFuModal] = useState(false);
   const change = (f, v) => setData((p) => ({ ...p, [f]: v }));
   const save = () => {
-    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?")) return;
+    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
+      return;
     onSave(data);
   };
 
@@ -188,48 +172,34 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-2xl">
-              &times;
-            </button>
+            <button onClick={onClose} className="text-2xl">&times;</button>
           </div>
 
           <form className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Job Sheet Number:</label> {data.jobSheetNumber}
-              </div>
+              <div><label className="font-bold">Job Sheet #:</label> {data.jobSheetNumber}</div>
               <div>
                 <label className="font-bold">Job Sheet Date:</label>{" "}
                 {new Date(data.jobSheetCreatedDate).toLocaleDateString()}
               </div>
-              <div>
-                <label className="font-bold">Client Company Name:</label> {data.clientCompanyName}
-              </div>
+              <div><label className="font-bold">Client:</label> {data.clientCompanyName}</div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Event Name:</label> {data.eventName}
-              </div>
-              <div>
-                <label className="font-bold">Product:</label> {data.product}
-              </div>
-              <div>
-                <label className="font-bold">Size:</label> {data.size || "N/A"}
-              </div>
+              <div><label className="font-bold">Event:</label> {data.eventName}</div>
+              <div><label className="font-bold">Product:</label> {data.product}</div>
+              <div><label className="font-bold">Size:</label> {data.size || "N/A"}</div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Sourced From:</label> {data.sourcingFrom}
-              </div>
+              <div><label className="font-bold">Sourced From:</label> {data.sourcingFrom}</div>
               <div>
                 <label className="font-bold">Delivery Date:</label>{" "}
-                {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : "N/A"}
+                {data.deliveryDateTime
+                  ? new Date(data.deliveryDateTime).toLocaleDateString()
+                  : "N/A"}
               </div>
-              <div>
-                <label className="font-bold">Qty Required:</label> {data.qtyRequired}
-              </div>
+              <div><label className="font-bold">Qty Req’d:</label> {data.qtyRequired}</div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -239,11 +209,13 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   type="number"
                   className="w-full border p-1"
                   value={data.qtyOrdered || ""}
-                  onChange={(e) => change("qtyOrdered", parseInt(e.target.value) || 0)}
+                  onChange={(e) =>
+                    change("qtyOrdered", parseInt(e.target.value) || 0)
+                  }
                 />
               </div>
               <div>
-                <label className="font-bold">Vendor Contact Number:</label>
+                <label className="font-bold">Vendor #:</label>
                 <input
                   type="text"
                   className="w-full border p-1"
@@ -264,28 +236,32 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
               <div>
-                <label className="font-bold">Order Confirmed Date:</label>
+                <label className="font-bold">Order Confirmed:</label>
                 <input
                   type="date"
                   className="w-full border p-1"
                   value={data.orderConfirmedDate?.substring(0, 10) || ""}
-                  onChange={(e) => change("orderConfirmedDate", e.target.value)}
+                  onChange={(e) =>
+                    change("orderConfirmedDate", e.target.value)
+                  }
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="font-bold">Expected Receive Date:</label>
+                <label className="font-bold">Expected Recv’:</label>
                 <input
                   type="date"
                   className="w-full border p-1"
                   value={data.expectedReceiveDate?.substring(0, 10) || ""}
-                  onChange={(e) => change("expectedReceiveDate", e.target.value)}
+                  onChange={(e) =>
+                    change("expectedReceiveDate", e.target.value)
+                  }
                 />
               </div>
               <div>
-                <label className="font-bold">Schedule Pick Up:</label>
+                <label className="font-bold">Pick-Up Dt/Tm:</label>
                 <input
                   type="datetime-local"
                   className="w-full border p-1"
@@ -297,7 +273,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 <label className="font-bold">Status:</label>
                 <select
                   className="w-full border p-1"
-                  value={data.status}
+                  value={data.status || ""}
                   onChange={(e) => change("status", e.target.value)}
                 >
                   {statusOptions.map((s) => (
@@ -306,7 +282,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                     </option>
                   ))}
                 </select>
-                
               </div>
             </div>
 
@@ -354,7 +329,7 @@ const initAdv = {
   schedulePickUp: { ...initDateRange },
 };
 
-export default function OpenPurchases() {
+export default function OpenPurchaseList() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editModal, setEditModal] = useState(false);
@@ -365,107 +340,70 @@ export default function OpenPurchases() {
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
-//  const [sort, setSort] = useState({
-//   key: "jobSheetCreatedDate", // Default column to sort by
-//   direction: "asc", // Default direction (ascending)
-// });
-
-const [sort, setSort] = useState({ key: "", direction: "asc" });
+  const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [perms, setPerms] = useState([]);
   const canEdit = perms.includes("write-purchase");
 
-const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
+  /* ─────────── Handlers for "Sourced By" ─────────── */
+  const handleSourcedByChange = async (e, id) => {
+    const selected = e.target.value;
+    const token = localStorage.getItem("token");
+    try {
+      await axios.put(
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${id}`,
+        { sourcedBy: selected },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPurchases((prev) =>
+        prev.map((p) => (p._id === id ? { ...p, sourcedBy: selected } : p))
+      );
+      alert("Successfully updated sourcedBy!");
+    } catch {
+      alert("Failed to update sourcedBy!");
+    }
+  };
 
-const handleOpenModal = (jobSheetNumber) => {
-  setSelectedJobSheetNumber(jobSheetNumber);
-  setIsModalOpen(true);
-};
-
-const handleCloseModal = () => {
-  setIsModalOpen(false);
-  setSelectedJobSheetNumber(null);
-};
-
-  
+  const handleSourcedByDelete = async (id) => {
+    const token = localStorage.getItem("token");
+    try {
+      await axios.put(
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${id}`,
+        { sourcedBy: "" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPurchases((prev) =>
+        prev.map((p) => (p._id === id ? { ...p, sourcedBy: "" } : p))
+      );
+      alert("Successfully deleted sourcedBy!");
+    } catch {
+      alert("Failed to delete sourcedBy");
+    }
+  };
 
   useEffect(() => {
     const str = localStorage.getItem("permissions");
-    if (str)
+    if (str) {
       try {
         setPerms(JSON.parse(str));
       } catch {}
+    }
   }, []);
 
-
-  //sorceby logic
-const handleSourcedByChange = async (e, id) => {
-  const selectedSourcedBy = e.target.value;
-  
-  const token = localStorage.getItem('token'); // Or sessionStorage, wherever you saved after login
-
-  try {
-    await axios.put(
-      `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${id}`,
-      { sourcedBy: selectedSourcedBy },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    setPurchases((prevPurchases) =>
-      prevPurchases.map((purchase) =>
-        purchase._id === id
-          ? { ...purchase, sourcedBy: selectedSourcedBy }
-          : purchase
-      )
-    );
-
-    alert("Successfully updated sourcedBy!");
-  } catch (error) {
-    console.error("Error updating sourcedBy:", error);
-    alert("Failed to update sourcedBy!");
-  }
-};
-
-const handleSourcedByDelete = async (id) => {
-  const token = localStorage.getItem("token");
-
-  try {
-    await axios.put(
-           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${id}`,
-      { sourcedBy: "" }, // Clear the sourcedBy field
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    setPurchases((prevPurchases) =>
-      prevPurchases.map((purchase) =>
-        purchase._id === id ? { ...purchase, sourcedBy: "" } : purchase
-      )
-    );
-
-    alert("Successfully deleted sourcedBy!");
-  } catch (error) {
-    console.error("Error deleting sourcedBy:", error);
-    alert("Failed to delete sourcedBy");
-  }
-};
-
-
+  useEffect(() => {
+    fetchPurchases();
+  }, [sort]);
 
   const fetchPurchases = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const token = localStorage.getItem("token");
       const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases?sortKey=${sort.key}&sortDirection=${sort.direction}`;
-      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setPurchases(res.data);
     } catch (err) {
       console.error(err);
@@ -473,52 +411,31 @@ const handleSourcedByDelete = async (id) => {
       setLoading(false);
     }
   };
-  useEffect(() => {
-    fetchPurchases();
-  }, [sort]);
 
+  /* ─────────── Filtering Pipeline ─────────── */
   const globalFiltered = useMemo(() => {
     const s = search.toLowerCase();
     return purchases.filter((p) =>
-      ["jobSheetNumber", "clientCompanyName", "eventName", "product", "size", "sourcingFrom", "vendorContactNumber"].some(
-        (f) => (p[f] || "").toLowerCase().includes(s)
-      )
+      ["jobSheetNumber","clientCompanyName","eventName","product","size","sourcingFrom","vendorContactNumber"]
+        .some((f) => (p[f] || "").toLowerCase().includes(s))
     );
   }, [purchases, search]);
 
   const headerFiltered = useMemo(() => {
-    const keys = [
-      "jobSheetCreatedDate",
-      "jobSheetNumber",
-      "clientCompanyName",
-      "eventName",
-      "product",
-      "size",
-      "qtyRequired",
-      "qtyOrdered",
-      "sourcedBy",
-      "sourcingFrom",
-      "deliveryDateTime",
-      "vendorContactNumber",
-      "orderConfirmedDate",
-      "expectedReceiveDate",
-      "schedulePickUp",
-      "followUp",
-      "remarks",
-      "status",
-    ];
-    
     return globalFiltered.filter((r) =>
-      keys.every((k) => {
-        if (!headerFilters[k]) return true;
-        let v = "";
-        if (r[k]) {
-          v =
-            k.includes("Date") || k === "schedulePickUp" || k === "deliveryDateTime"
-              ? new Date(r[k]).toLocaleDateString()
-              : String(r[k]);
+      Object.entries(headerFilters).every(([k, v]) => {
+        if (!v) return true;
+        if (k === "status") {
+          if (v === "__empty__") return !r.status;
+          return (r.status || "").toLowerCase() === v.toLowerCase();
         }
-        return v.toLowerCase().includes(headerFilters[k].toLowerCase());
+        let cell = "";
+        if (r[k]) {
+          cell = k.includes("Date")
+            ? new Date(r[k]).toLocaleDateString()
+            : String(r[k]);
+        }
+        return cell.toLowerCase().includes(v.toLowerCase());
       })
     );
   }, [globalFiltered, headerFilters]);
@@ -532,11 +449,12 @@ const handleSourcedByDelete = async (id) => {
       if (to && dt > new Date(to)) return false;
       return true;
     };
-
     return headerFiltered.filter((r) => {
       const numOK =
-        (!advFilters.jobSheetNumber.from || r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
-        (!advFilters.jobSheetNumber.to || r.jobSheetNumber <= advFilters.jobSheetNumber.to);
+        (!advFilters.jobSheetNumber.from ||
+          r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
+        (!advFilters.jobSheetNumber.to ||
+          r.jobSheetNumber <= advFilters.jobSheetNumber.to);
       return (
         numOK &&
         inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
@@ -548,34 +466,45 @@ const handleSourcedByDelete = async (id) => {
     });
   }, [headerFiltered, advFilters]);
 
-  const groupFilter = (recs) => {
-    const g = {};
-    recs.forEach((r) => (g[r.jobSheetNumber] = g[r.jobSheetNumber] || []).push(r));
-    return Object.values(g).flatMap((arr) =>
-      arr.every((a) => a.status === "received") ? [] : arr
-    );
-  };
+  // skip groupFilter when explicitly looking at "received"
+  const afterGroup = headerFilters.status === "received"
+    ? advFiltered
+    : (() => {
+        const g = {};
+        advFiltered.forEach((r) => {
+          g[r.jobSheetNumber] = g[r.jobSheetNumber] || [];
+          g[r.jobSheetNumber].push(r);
+        });
+        return Object.values(g).flatMap((arr) =>
+          arr.every((a) => a.status === "received") ? [] : arr
+        );
+      })();
 
-  const filterNA = (recs) => {
+  const rows = (() => {
     const g = {};
-    recs.forEach(
-      (r) =>
-        (g[`${r.jobSheetNumber}_${r.product}`] = g[`${r.jobSheetNumber}_${r.product}`] || []).push(r)
-    );
+    afterGroup.forEach((r) => {
+      const key = `${r.jobSheetNumber}_${r.product}`;
+      g[key] = g[key] || [];
+      g[key].push(r);
+    });
     return Object.values(g).flatMap((arr) => {
       const hasReal = arr.some((a) => a.size && a.size.toLowerCase() !== "n/a");
-      return hasReal ? arr.filter((a) => a.size && a.size.toLowerCase() !== "n/a") : arr;
+      return hasReal
+        ? arr.filter((a) => a.size && a.size.toLowerCase() !== "n/a")
+        : arr;
     });
-  };
+  })();
 
-  const rows = filterNA(groupFilter(advFiltered));
-
-  const changeHeaderFilter = (k, v) => setHeaderFilters((p) => ({ ...p, [k]: v }));
-  const changeAdv = (f, k, v) => setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
+  const changeHeaderFilter = (k, v) =>
+    setHeaderFilters((p) => ({ ...p, [k]: v }));
+  const changeAdv = (f, k, v) =>
+    setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
 
   const sortBy = (k) =>
-    setSort((p) => ({ key: k, direction: p.key === k && p.direction === "asc" ? "desc" : "asc" }));
-
+    setSort((p) => ({
+      key: k,
+      direction: p.key === k && p.direction === "asc" ? "desc" : "asc",
+    }));
 
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -591,11 +520,19 @@ const handleSourcedByDelete = async (id) => {
         "Qty Ordered": r.qtyOrdered,
         "Sourced By": r.sourcedBy || "N/A",
         "Sourced From": r.sourcingFrom,
-        "Delivery Date": r.deliveryDateTime ? new Date(r.deliveryDateTime).toLocaleDateString() : "",
+        "Delivery Date": r.deliveryDateTime
+          ? new Date(r.deliveryDateTime).toLocaleDateString()
+          : "",
         "Vendor Contact": r.vendorContactNumber,
-        "Order Confirmed": r.orderConfirmedDate ? new Date(r.orderConfirmedDate).toLocaleDateString() : "",
-        "Expected Receive": r.expectedReceiveDate ? new Date(r.expectedReceiveDate).toLocaleDateString() : "",
-        "Schedule PickUp": r.schedulePickUp ? new Date(r.schedulePickUp).toLocaleString() : "",
+        "Order Confirmed": r.orderConfirmedDate
+          ? new Date(r.orderConfirmedDate).toLocaleDateString()
+          : "",
+        "Expected Receive": r.expectedReceiveDate
+          ? new Date(r.expectedReceiveDate).toLocaleDateString()
+          : "",
+        "Schedule PickUp": r.schedulePickUp
+          ? new Date(r.schedulePickUp).toLocaleString()
+          : "",
         Status: r.status,
         Remarks: r.remarks,
       }))
@@ -607,7 +544,9 @@ const handleSourcedByDelete = async (id) => {
   if (loading)
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">
+          Open Purchases
+        </h1>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-300 rounded"></div>
           <div className="h-64 bg-gray-300 rounded"></div>
@@ -618,17 +557,19 @@ const handleSourcedByDelete = async (id) => {
   return (
     <div className="p-6">
       {!canEdit && (
-        <div className="mb-4 p-2 bg-red-200 text-red-800 border border-red-400 rounded">
+        <div className="mb-4 p-2 bg-red-200 text-red-800 border rounded">
           You don't have permission to edit purchase records.
         </div>
       )}
 
-      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Open Purchases</h1>
+      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
+        Open Purchases
+      </h1>
 
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           type="text"
-          className="border p-2 rounded flex-grow md:flex-none md:w-1/3"
+          className="border p-2 rounded flex-grow md:w-1/3"
           placeholder="Global search…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -651,21 +592,29 @@ const handleSourcedByDelete = async (id) => {
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block mb-1 font-semibold">Job Sheet # From</label>
+              <label className="block mb-1 font-semibold">
+                Job Sheet # From
+              </label>
               <input
                 type="text"
                 className="w-full border p-1 rounded"
                 value={advFilters.jobSheetNumber.from}
-                onChange={(e) => changeAdv("jobSheetNumber", "from", e.target.value.trim())}
+                onChange={(e) =>
+                  changeAdv("jobSheetNumber", "from", e.target.value.trim())
+                }
               />
             </div>
             <div>
-              <label className="block mb-1 font-semibold">Job Sheet # To</label>
+              <label className="block mb-1 font-semibold">
+                Job Sheet # To
+              </label>
               <input
                 type="text"
                 className="w-full border p-1 rounded"
                 value={advFilters.jobSheetNumber.to}
-                onChange={(e) => changeAdv("jobSheetNumber", "to", e.target.value.trim())}
+                onChange={(e) =>
+                  changeAdv("jobSheetNumber", "to", e.target.value.trim())
+                }
               />
             </div>
 
@@ -678,7 +627,9 @@ const handleSourcedByDelete = async (id) => {
             ].map(([k, label]) => (
               <React.Fragment key={k}>
                 <div>
-                  <label className="block mb-1 font-semibold">{label} From</label>
+                  <label className="block mb-1 font-semibold">
+                    {label} From
+                  </label>
                   <input
                     type={k === "schedulePickUp" ? "datetime-local" : "date"}
                     className="w-full border p-1 rounded"
@@ -687,7 +638,9 @@ const handleSourcedByDelete = async (id) => {
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 font-semibold">{label} To</label>
+                  <label className="block mb-1 font-semibold">
+                    {label} To
+                  </label>
                   <input
                     type={k === "schedulePickUp" ? "datetime-local" : "date"}
                     className="w-full border p-1 rounded"
@@ -734,10 +687,9 @@ const handleSourcedByDelete = async (id) => {
               { k: "vendorContactNumber", l: "Vendor Contact Number" },
               { k: "orderConfirmedDate", l: "Order Confirmed Date" },
               { k: "expectedReceiveDate", l: "Expected Receive Date" },
-              { k: "schedulePickUp", l: "Schedule Pick Up" }
+              { k: "schedulePickUp", l: "Schedule Pick Up" },
             ].map(({ k, l }) => (
-          
-             <th
+              <th
                 key={k}
                 onClick={() => sortBy(k)}
                 className="p-2 border cursor-pointer"
@@ -746,55 +698,61 @@ const handleSourcedByDelete = async (id) => {
               </th>
             ))}
             <th className="p-2 border">Follow Up</th>
-            <th onClick={() => sortBy("remarks")} className="p-2 border cursor-pointer">
-              Remarks {sort.key === "remarks" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
+            <th
+              onClick={() => sortBy("remarks")}
+              className="p-2 border cursor-pointer"
+            >
+              Remarks{" "}
+              {sort.key === "remarks" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
             </th>
-            <th onClick={() => sortBy("status")} className="p-2 border cursor-pointer">
-                Status {sort.key === "status" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
-              </th>
-              <th className="p-2 border">Actions</th>
+            <th
+              onClick={() => sortBy("status")}
+              className="p-2 border cursor-pointer"
+            >
+              Status{" "}
+              {sort.key === "status" ? (sort.direction === "asc" ? "↑" : "↓") : ""}
+            </th>
+            <th className="p-2 border">Actions</th>
           </tr>
-          <HeaderFilters headerFilters={headerFilters} onFilterChange={changeHeaderFilter} />
+          <HeaderFilters
+            headerFilters={headerFilters}
+            onFilterChange={changeHeaderFilter}
+          />
         </thead>
         <tbody>
-
           {rows.map((p) => {
-            const latest =
-              p.followUp?.length
-                ? p.followUp.reduce((l, fu) =>
-                    new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
-                  )
-                : null;
-              console.log("Status:", p.status);
+            const latest = p.followUp?.length
+              ? p.followUp.reduce((l, fu) =>
+                  new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
+                )
+              : null;
             return (
-              
               <tr
                 key={p._id || `${p.jobSheetNumber}_${p.product}_${p.size || ""}`}
                 className={
-                   p.status?.trim().toLowerCase() === "alert"
-                      ? "bg-red-300"
-                      : p.status?.trim().toLowerCase() === "pending"
-                      ? "bg-orange-300"
-                      : p.status?.trim().toLowerCase() === "received"
-                      ? "bg-green-300"
-                      : ""
+                  p.status?.trim().toLowerCase() === "alert"
+                    ? "bg-red-300"
+                    : p.status?.trim().toLowerCase() === "pending"
+                    ? "bg-orange-300"
+                    : p.status?.trim().toLowerCase() === "received"
+                    ? "bg-green-300"
+                    : ""
                 }
               >
-
-            <td className="p-2 border">
-                {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
+                <td className="p-2 border">
+                  {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
                 </td>
-                <td  className="p-2 border">
-                 <button
+                <td className="p-2 border">
+                  <button
                     className="border-b text-blue-500 hover:text-blue-700"
                     onClick={(e) => {
                       e.preventDefault();
-                      handleOpenModal(p.jobSheetNumber);
+                      setSelectedJobSheetNumber(p.jobSheetNumber);
+                      setIsModalOpen(true);
                     }}
                   >
                     {p.jobSheetNumber || "(No Number)"}
                   </button>
-
                 </td>
                 <td className="p-2 border">{p.clientCompanyName}</td>
                 <td className="p-2 border">{p.eventName}</td>
@@ -802,50 +760,55 @@ const handleSourcedByDelete = async (id) => {
                 <td className="p-2 border">{p.size || "N/A"}</td>
                 <td className="p-2 border">{p.qtyRequired}</td>
                 <td className="p-2 border">{p.qtyOrdered}</td>
-                 <td className="p-2 border">
-                    {p.sourcedBy ? (
-                      <div className="flex justify-between">
-                       <div>
-                      <span className="text-sm font-medium text-gray-700">{p.sourcedBy}</span>
-                        </div>
-                        <div>
-                       <button
+                <td className="p-2 border">
+                  {p.sourcedBy ? (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">
+                        {p.sourcedBy}
+                      </span>
+                      <button
                         onClick={() => handleSourcedByDelete(p._id)}
                         className="text-red-600 text-sm underline"
                       >
                         <TrashIcon className="h-4 w-4" />
-                        </button>
-                        </div>
+                      </button>
                     </div>
-                    ) : (
-                      <select
-                        name="sourcedBy"
-                        value={p.sourcedBy}
-                        onChange={(e) => handleSourcedByChange(e, p._id)}
-                        className="border rounded px-2 py-1 text-sm"
-                      >
-                        <option value="">Select</option>
-                        <option value="Mohan">Mohan</option>
-                        <option value="Neeraj">Neeraj</option>
-                        <option value="Sathya">Sathya</option>
-                        <option value="Vijaylakshmi">Vijaylakshmi</option>
-                      </select>
-                    )}
-                  </td>
-
+                  ) : (
+                    <select
+                      name="sourcedBy"
+                      value={p.sourcedBy || ""}
+                      onChange={(e) => handleSourcedByChange(e, p._id)}
+                      className="border rounded px-2 py-1 text-sm"
+                    >
+                      <option value="">Select</option>
+                      <option value="Mohan">Mohan</option>
+                      <option value="Neeraj">Neeraj</option>
+                      <option value="Sathya">Sathya</option>
+                      <option value="Vijaylakshmi">Vijaylakshmi</option>
+                    </select>
+                  )}
+                </td>
                 <td className="p-2 border">{p.sourcingFrom}</td>
                 <td className="p-2 border">
-                  {p.deliveryDateTime ? new Date(p.deliveryDateTime).toLocaleDateString() : ""}
+                  {p.deliveryDateTime
+                    ? new Date(p.deliveryDateTime).toLocaleDateString()
+                    : ""}
                 </td>
                 <td className="p-2 border">{p.vendorContactNumber}</td>
                 <td className="p-2 border">
-                  {p.orderConfirmedDate ? new Date(p.orderConfirmedDate).toLocaleDateString() : ""}
+                  {p.orderConfirmedDate
+                    ? new Date(p.orderConfirmedDate).toLocaleDateString()
+                    : ""}
                 </td>
                 <td className="p-2 border">
-                  {p.expectedReceiveDate ? new Date(p.expectedReceiveDate).toLocaleDateString() : ""}
+                  {p.expectedReceiveDate
+                    ? new Date(p.expectedReceiveDate).toLocaleDateString()
+                    : ""}
                 </td>
                 <td className="p-2 border">
-                  {p.schedulePickUp ? new Date(p.schedulePickUp).toLocaleString() : ""}
+                  {p.schedulePickUp
+                    ? new Date(p.schedulePickUp).toLocaleString()
+                    : ""}
                 </td>
                 <td className="p-2 border">
                   {latest ? (
@@ -864,10 +827,9 @@ const handleSourcedByDelete = async (id) => {
                   )}
                 </td>
                 <td className="p-2 border">{p.remarks}</td>
-                
                 <td className="p-2 border">{p.status}</td>
                 <td className="p-2 border space-y-1">
-                  <button 
+                  <button
                     className="bg-blue-700 text-white w-full rounded py-0.5 text-[10px]"
                     disabled={!canEdit || p.status === "received"}
                     onClick={() => {
@@ -878,22 +840,26 @@ const handleSourcedByDelete = async (id) => {
                   >
                     Edit
                   </button>
-                  {!p.isTemporary && !(p._id || "").startsWith("temp_") && (
+                  {!p.isTemporary && !p._id?.startsWith("temp_") && (
                     <button
                       className="bg-red-700 text-white w-full rounded py-0.5 text-[10px]"
                       disabled={!canEdit}
                       onClick={async () => {
-                        if (!canEdit || !window.confirm("Delete this purchase?")) return;
+                        if (!canEdit || !window.confirm("Delete this purchase?"))
+                          return;
                         try {
                           const token = localStorage.getItem("token");
                           await axios.delete(
                             `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
-                            { headers: { Authorization: `Bearer ${token}` } }
+                            {
+                              headers: { Authorization: `Bearer ${token}` },
+                            }
                           );
-                          setPurchases((prev) => prev.filter((x) => x._id !== p._id));
+                          setPurchases((prev) =>
+                            prev.filter((x) => x._id !== p._id)
+                          );
                           alert("Deleted.");
-                        } catch (err) {
-                          console.error(err);
+                        } catch {
                           alert("Error deleting.");
                         }
                       }}
@@ -908,15 +874,11 @@ const handleSourcedByDelete = async (id) => {
         </tbody>
       </table>
 
-      
-        
-          <JobSheetGlobal
-            jobSheetNumber={selectedJobSheetNumber} 
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-          />
-        
-
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
 
       {editModal && currentEdit && (
         <EditPurchaseModal
@@ -938,10 +900,9 @@ const handleSourcedByDelete = async (id) => {
                   { headers: { Authorization: `Bearer ${token}` } }
                 );
               }
-              await fetchPurchases();
+              fetchPurchases();
               setEditModal(false);
-            } catch (err) {
-              console.error(err);
+            } catch {
               alert("Error saving.");
             }
           }}
@@ -956,10 +917,7 @@ const handleSourcedByDelete = async (id) => {
               prev.map((x) => (x._id === viewFuId ? { ...x, followUp: f } : x))
             )
           }
-          onClose={() => {
-            setViewFuModal(false);
-            setViewFuId(null);
-          }}
+          onClose={() => setViewFuModal(false)}
         />
       )}
     </div>

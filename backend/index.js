@@ -150,6 +150,9 @@ app.use("/api/admin", potentialClientRoutes);
 const eventRoutes = require("./routes/eventRoutes");
 app.use("/api/admin", eventRoutes);
 
+const segmentRoutes = require("./routes/segmentRoutes.js");
+app.use("/api/admin", segmentRoutes)
+
 
 // Start server (original)
 const PORT = process.env.PORT || 5000;

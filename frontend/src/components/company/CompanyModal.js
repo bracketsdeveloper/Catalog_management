@@ -1,5 +1,4 @@
-// client/src/components/CompanyModal.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 export default function CompanyModal({
@@ -11,37 +10,42 @@ export default function CompanyModal({
 }) {
   const isEdit = mode === "edit";
 
-  /* ---------- form state ---------- */
-  const [form, setForm] = useState(
-    isEdit
-      ? {
-          companyName: company.companyName,
-          brandName: company.brandName || "",
-          GSTIN: company.GSTIN || "",
-          companyAddress: company.companyAddress || "",
-          clients: company.clients || [],
-        }
-      : {
-          companyName: "",
-          brandName: "",
-          GSTIN: "",
-          companyAddress: "",
-          clients: [],
-        }
-  );
-
-  /* ---------- temp client buffer ---------- */
+  const [segmentsList, setSegmentsList] = useState([]);
+  const [form, setForm] = useState({
+    companyName: company?.companyName || "",
+    brandName: company?.brandName || "",
+    GSTIN: company?.GSTIN || "",
+    companyAddress: company?.companyAddress || "",
+    clients: company?.clients || [],
+    segment: company?.segment || "",
+    vendorCode: company?.vendorCode || "",
+    paymentTerms: company?.paymentTerms || "",
+    portalUpload: company?.portalUpload || "",
+  });
   const [clientTmp, setClientTmp] = useState({
     name: "",
     department: "",
     email: "",
     contactNumber: "",
   });
-
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  /* ---------- helpers ---------- */
+  useEffect(() => {
+    async function fetchSegments() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${BACKEND_URL}/api/admin/segments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSegmentsList(res.data);
+      } catch (e) {
+        console.error("Failed to fetch segments", e);
+      }
+    }
+    fetchSegments();
+  }, [BACKEND_URL]);
+
   const sanitiseContacts = (clients) =>
     clients
       .filter((c) => c && c.name && c.contactNumber)
@@ -50,16 +54,16 @@ export default function CompanyModal({
         contactNumber: c.contactNumber.toString().trim(),
       }));
 
-  /* ---------- client handlers ---------- */
   const addClient = () => {
     if (!clientTmp.name || !clientTmp.contactNumber) return;
     setForm((p) => ({ ...p, clients: [...p.clients, clientTmp] }));
     setClientTmp({ name: "", department: "", email: "", contactNumber: "" });
   };
-
   const removeClient = (idx) =>
-    setForm((p) => ({ ...p, clients: p.clients.filter((_, i) => i !== idx) }));
-
+    setForm((p) => ({
+      ...p,
+      clients: p.clients.filter((_, i) => i !== idx),
+    }));
   const updateClientField = (idx, field, value) =>
     setForm((p) => {
       const list = [...p.clients];
@@ -67,10 +71,12 @@ export default function CompanyModal({
       return { ...p, clients: list };
     });
 
-  /* ---------- submit ---------- */
   const submit = async () => {
     setErr("");
-
+    if (!form.companyName.trim()) {
+      setErr("Company name required");
+      return;
+    }
     const payload = {
       ...form,
       companyName: form.companyName.trim(),
@@ -79,13 +85,10 @@ export default function CompanyModal({
       companyAddress: form.companyAddress.trim(),
       clients: sanitiseContacts(form.clients),
     };
-
-    if (!payload.companyName) return setErr("Company name required");
     try {
       setSaving(true);
       const token = localStorage.getItem("token");
       const config = { headers: { Authorization: `Bearer ${token}` } };
-
       if (isEdit) {
         await axios.put(
           `${BACKEND_URL}/api/admin/companies/${company._id}`,
@@ -110,18 +113,16 @@ export default function CompanyModal({
     }
   };
 
-  /* ---------- UI ---------- */
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
         <h2 className="text-2xl font-bold mb-4">
           {isEdit ? "Edit Company" : "Add Company"}
         </h2>
-
         {err && <div className="bg-red-100 text-red-700 p-2 mb-3">{err}</div>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* --- company basics --- */}
+          {/* Company Basics */}
           <div className="col-span-2">
             <label className="block text-sm font-medium mb-1">
               Company Name *
@@ -162,11 +163,62 @@ export default function CompanyModal({
             />
           </div>
 
-          {/* --- clients --- */}
+          {/* New Fields */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Segment</label>
+            <select
+              className="w-full p-2 border rounded"
+              value={form.segment}
+              onChange={(e) => setForm({ ...form, segment: e.target.value })}
+            >
+              <option value="">Select segment</option>
+              {segmentsList.map((seg) => (
+                <option key={seg._id} value={seg.segmentName}>
+                  {seg.segmentName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Vendor Code
+            </label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.vendorCode}
+              onChange={(e) =>
+                setForm({ ...form, vendorCode: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Payment Terms
+            </label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.paymentTerms}
+              onChange={(e) =>
+                setForm({ ...form, paymentTerms: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Portal Upload
+            </label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.portalUpload}
+              onChange={(e) =>
+                setForm({ ...form, portalUpload: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Clients Section */}
           <div className="col-span-2 border-t pt-4">
             <label className="block text-sm font-medium mb-2">Clients</label>
-
-            {/* add client */}
             <div className="flex flex-wrap gap-2 mb-3">
               {["name", "department", "email", "contactNumber"].map((f) => (
                 <input
@@ -190,8 +242,6 @@ export default function CompanyModal({
                 Add
               </button>
             </div>
-
-            {/* list clients */}
             {form.clients.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs border">
@@ -237,7 +287,7 @@ export default function CompanyModal({
           </div>
         </div>
 
-        {/* --- actions --- */}
+        {/* Actions */}
         <div className="mt-6 flex justify-end gap-2">
           <button onClick={onClose} className="border px-4 py-2 rounded">
             Cancel

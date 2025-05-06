@@ -42,21 +42,38 @@ const adminPages = [
     ],
   },
   {
-    name: "Review Catalog",
-    path: "/admin-dashboard/review-catalog",
-    permission: "review-catalog",
-    icon: (
-      <img src="/Review_catalog.png" className="h-12 w-12" alt="Review Catalog" />
-    ),
+    name: "Calculations",
+    defaultPath: "/admin-dashboard/segment-manager",
+    icon: <CubeIcon className="w-8 h-8 flex justify-center items-center" />,
+    subItems: [
+      {
+        name: "Segment Manager",
+        path: "/admin-dashboard/manage-segments",
+        permission: "segment-manager",
+      },
+      {
+        name: "Calculation Manager",
+        path: "/admin-dashboard/calculation-manager",
+        permission: "calculation-manager",
+      },
+    ],
   },
-  {
-    name: "Add Viewers",
-    path: "/admin-dashboard/viewer-manager",
-    permission: "viewers-manager",
-    icon: (
-      <img src="/Add_Viewers.png" className="h-12 w-12" alt="Viewers" />
-    ),
-  },
+  // {
+  //   name: "Review Catalog",
+  //   path: "/admin-dashboard/review-catalog",
+  //   permission: "review-catalog",
+  //   icon: (
+  //     <img src="/Review_catalog.png" className="h-12 w-12" alt="Review Catalog" />
+  //   ),
+  // },
+  // {
+  //   name: "Add Viewers",
+  //   path: "/admin-dashboard/viewer-manager",
+  //   permission: "viewers-manager",
+  //   icon: (
+  //     <img src="/Add_Viewers.png" className="h-12 w-12" alt="Viewers" />
+  //   ),
+  // },
 
   /* ----------------------- CRM ----------------------------------- */
 
@@ -304,6 +321,8 @@ const adminPages = [
     ],
   },
 
+  
+
 ];
 
 /* ================================================================== */
@@ -324,6 +343,7 @@ export default function AdminDashboard() {
   const [samplesHovered, setSamplesHovered] = useState(false);
   const [expenseHovered, setExpenseHovered] = useState(false);
   const [followUpTrackerHovered, setFollowUpTrackerHovered] = useState(false);
+  const [calculationsHovered, setCalculationsHovered] = useState(false);
 
   //user management
   const [userManagementHovered, setUserManagementHovered] = useState(false);
@@ -383,7 +403,7 @@ export default function AdminDashboard() {
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 100;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered || followUpTrackerHovered;
+    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered || followUpTrackerHovered || calculationsHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
@@ -425,6 +445,7 @@ export default function AdminDashboard() {
             setProductionHovered(false);
             setPackDelHovered(false);
             setExpenseHovered(false);
+            setCalculationsHovered(false);
           }
         }}
       >
@@ -549,6 +570,20 @@ export default function AdminDashboard() {
                     page={page}
                     hovered={followUpTrackerHovered}
                     setHovered={setFollowUpTrackerHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ===== CALCULATIONS (mega‑menu) ==== */
+              if (page.name === "Calculations") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={calculationsHovered}
+                    setHovered={setCalculationsHovered}
                     sidebarOpen={sidebarOpen}
                     sidebarHover={sidebarHover}
                   />
