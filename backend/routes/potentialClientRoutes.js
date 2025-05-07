@@ -1,9 +1,26 @@
 const express = require("express");
 const PotentialClient = require("../models/PotentialClient");
 const User            = require("../models/User");
+const multer = require("multer");
+const xlsx = require("xlsx")
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 const router = express.Router();
+
+    const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5MB max, 1 file
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      file.mimetype === "application/vnd.ms-excel"
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only Excel files allowed."), false);
+    }
+  },
+});
 
 function makeLog(req, action, field = null, oldValue = null, newValue = null) {
   return {
@@ -35,6 +52,72 @@ router.post(
       res.status(201).json({ message: "Created", potentialClient: pc });
     } catch (e) {
       res.status(400).json({ message: e.message });
+    }
+  }
+);
+
+
+router.post(
+  "/upload-potential-clients",
+  authenticate,
+  authorizeAdmin,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Please upload a file" });
+      }
+
+      // Read and parse Excel
+      const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = xlsx.utils.sheet_to_json(sheet);
+
+      if (!data.length) {
+        return res.status(400).json({ message: "No data found in the file" });
+      }
+
+      // Group contacts by companyName
+      const grouped = {};
+      for (const row of data) {
+        const companyName = row.companyName?.trim();
+        if (!companyName) continue;
+
+        if (!grouped[companyName]) {
+          grouped[companyName] = [];
+        }
+
+        grouped[companyName].push({
+          clientName: row.clientName?.trim(),
+          designation: row.designation?.trim(),
+          source: row.source?.trim(),
+          mobile: row.mobile?.toString().trim(),
+          email: row.email?.trim(),
+          location: row.location?.trim(),
+          assignedTo: req.user._id,
+        });
+      }
+
+      // Create potential clients with contacts
+      const potentialClients = await Promise.all(
+        Object.entries(grouped).map(async ([companyName, contacts]) => {
+          const pc = new PotentialClient({
+            companyName,
+            contacts,
+            createdBy: req.user._id,
+            logs: [makeLog(req, "bulk-create")],
+          });
+          return pc.save();
+        })
+      );
+
+      res.status(201).json({
+        message: "Potential clients uploaded successfully",
+        potentialClients,
+      });
+    } catch (error) {
+      console.error("Bulk upload error:", error);
+      res.status(500).json({ message: "Bulk upload failed" });
     }
   }
 );

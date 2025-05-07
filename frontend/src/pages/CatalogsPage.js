@@ -972,6 +972,9 @@ export default function CatalogManagementPage() {
                         Quotation No.
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Event Name
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         Company Name
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
@@ -989,6 +992,7 @@ export default function CatalogManagementPage() {
                     {items.map((quotation) => (
                       <tr key={quotation._id}>
                         <td className="px-4 py-2">{quotation.quotationNumber}</td>
+                        <td className="px-4 py-2">{quotation.eventName || "N/A"}</td>
                         <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
                         <td className="px-4 py-2">{quotation.customerName}</td>
                         <td className="px-4 py-2">{quotation.items?.length || 0}</td>
