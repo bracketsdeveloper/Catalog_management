@@ -14,7 +14,7 @@ export const ManageVendors = () => {
     const [modalMode, setModalMode] = useState("add"); // 'add' | 'edit'
     const [selectedVendor, setSelectedVendor] = useState(null);
     const [showModal, setShowModal] = useState(false);
-
+    
     const bulkUploadOpen = () => {
       setShowModal(true);
     };
@@ -26,7 +26,14 @@ export const ManageVendors = () => {
         setModalOpen(true);
     };  
 
+      const openEditModal = (vendor) => {
+        setModalMode("edit");
+        setSelectedVendor(vendor); // ✔ Pass only the vendor ID
+        setModalOpen(true);
+      };
 
+
+ 
      useEffect(() => {
         fetchVendors(); 
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,7 +136,7 @@ export const ManageVendors = () => {
                       <td className="p-3">{c.ifscCode}</td>
                       <td className="p-3 space-x-1">
                         <button
-                        //   onClick={() => openEditModal(c)}
+                          onClick={() => openEditModal(c)}
                           className="bg-yellow-500 text-white px-2 py-1 rounded text-sm"
                         >
                           Edit

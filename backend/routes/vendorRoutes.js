@@ -155,7 +155,54 @@ router.post(
     }
   });
 
+//write put endpoint
+router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
+ try {
+    const vendorId = req.params.id;
 
+    const {
+      vendorName,
+      vendorCompanyName,
+      brandDealing,
+      location,
+      clients,
+      gst,
+      bankName,
+      accountNumber,
+      ifscCode,
+    } = req.body;
+
+    // Basic validation
+    if (!vendorName || typeof vendorName !== "string") {
+      return res.status(400).json({ message: "Vendor name is required" });
+    }
+
+    const updatedVendor = await Vendor.findByIdAndUpdate(
+      vendorId,
+      {
+        vendorName,
+        vendorCompanyName,
+        brandDealing,
+        location,
+        clients,
+        gst,
+        bankName,
+        accountNumber,
+        ifscCode,
+      },
+      { new: true }
+    );
+
+    if (!updatedVendor) {
+      return res.status(404).json({ message: "Vendor not found" });
+    }
+
+    res.json({ message: "Vendor updated", vendor: updatedVendor });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  } 
+});
 
 
 router.delete(

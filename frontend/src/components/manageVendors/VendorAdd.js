@@ -1,44 +1,52 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-export const VendorAdd = (
-    {
-        
-    mode,
-  vendor,
-  onClose,
-  onSuccess,
-  BACKEND_URL,
+
+export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => {
+  const isEdit = mode === "edit";
+  const [error, setError] = useState("");
+  const [vendorList, setVendorList] = useState([]);
+  const [form, setForm] = useState({
+    vendorName: "",
+    vendorCompany: "",
+    brandDealing: "",
+    location: "",
+    clients: [],
+    gst: "",
+    bankName: "",
+    accountNumber: "",
+    ifscCode: "",
+  });
+
+  const [clientTmp, setClientTmp] = useState({
+    name: "",
+    contactNumber: "",
+  });
+
+  useEffect(() => {
+    if (isEdit && vendor) {
+      setForm({
+        vendorName: vendor.vendorName || "",
+        vendorCompany: vendor.vendorCompany || "",
+        brandDealing: vendor.brandDealing || "",
+        location: vendor.location || "",
+        clients: vendor.clients || [],
+        gst: vendor.gst || "",
+        bankName: vendor.bankName || "",
+        accountNumber: vendor.accountNumber || "",
+        ifscCode: vendor.ifscCode || "",
+      });
     }
-) => {
-   const isEdit = mode === "edit";
+  }, [isEdit, vendor]);
 
-    const [form, setForm] = useState({
-        vendorName: "",
-        vendorCompany: "",
-        brandDealing: "",
-        location: "",
-        clients: [],
-        gst: "",
-        bankName: "",
-        accountNumber: "",
-        ifscCode: "",
-    });
-
-    const [clientTmp, setClientTmp] = useState({
-        name: "",
-        contactNumber: "",
-    });
-
-    const addClient = () => {
+  const addClient = () => {
     if (!clientTmp.name || !clientTmp.contactNumber) return;
     setForm((p) => ({ ...p, clients: [...p.clients, clientTmp] }));
-    setClientTmp({ name: "",  contactNumber: "" });
+    setClientTmp({ name: "", contactNumber: "" });
   };
 
-    const removeClient = (idx) =>
+  const removeClient = (idx) =>
     setForm((p) => ({ ...p, clients: p.clients.filter((_, i) => i !== idx) }));
 
-    
   const updateClientField = (idx, field, value) =>
     setForm((p) => {
       const list = [...p.clients];
@@ -46,7 +54,7 @@ export const VendorAdd = (
       return { ...p, clients: list };
     });
 
-     const sanitiseContacts = (clients) =>
+  const sanitiseContacts = (clients) =>
     clients
       .filter((c) => c && c.name && c.contactNumber)
       .map((c) => ({
@@ -54,60 +62,77 @@ export const VendorAdd = (
         contactNumber: c.contactNumber.toString().trim(),
       }));
 
+  const fetchVendors = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/vendors`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVendorList(res.data);
+    } catch (err) {
+      console.error("Error fetching vendors:", err);
+    }
+  };
 
-    const [saving, setSaving] = useState(false);
-    const [err, setErr] = useState("");
+  useEffect(() => {
+    fetchVendors();
+  }, []);
 
-    const submit = async () => {
-        setErr("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
 
-        const payload = {
-            ...form,
-            vendorName: form.vendorName.trim(),
-            vendorCompanyName: form.vendorCompany.trim(),
-            brandDealing: form.brandDealing.trim(),
-            location: form.location.trim(),
-            clients: sanitiseContacts(form.clients),
-            gst: form.gst.trim(),
-            bankName: form.bankName.trim(),
-            accountNumber: form.accountNumber.trim(),
-            ifscCode: form.ifscCode.trim(),
-        };
+  const submit = async () => {
+    setErr("");
 
-        if (!payload.vendorName) return setErr("Vendor name required");
-        try {
-            setSaving(true);
-            const token = localStorage.getItem("token");
-            const config = { headers: { Authorization: `Bearer ${token}` } };
-
-            if (isEdit) {
-                await axios.put(
-                    `${BACKEND_URL}/api/admin/vendors/${vendor._id}`,
-                    payload,
-                    config
-                );
-            } else {
-                await axios.post(
-                    `${BACKEND_URL}/api/admin/vendors`,
-                    payload,
-                    config
-                );
-               console.log(payload);
-
-            }
-            onSuccess();
-        } catch (e) {
-            const msg =
-                e?.response?.data?.message ||
-                (e?.response?.status === 400 ? "Validation error" : "Save failed");
-            setErr(msg);
-        } finally {
-            setSaving(false);
-        }
+    const payload = {
+      ...form,
+      vendorName: form.vendorName.trim(),
+      vendorCompanyName: form.vendorCompany.trim(),
+      brandDealing: form.brandDealing.trim(),
+      location: form.location.trim(),
+      clients: sanitiseContacts(form.clients),
+      gst: form.gst.trim(),
+      bankName: form.bankName.trim(),
+      accountNumber: form.accountNumber.trim(),
+      ifscCode: form.ifscCode.trim(),
     };
 
-    return (
-         <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
+    if (!payload.vendorName) return setErr("Vendor name required");
+    try {
+      setSaving(true);
+      const token = localStorage.getItem("token");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
+      if (isEdit) {
+        await axios.put(
+          `${BACKEND_URL}/api/admin/vendors/${vendor._id}`,
+          payload,
+          config
+        );
+        alert("Vendor updated successfully!");
+        setError("");
+      } else {
+        await axios.post(
+          `${BACKEND_URL}/api/admin/vendors`,
+          payload,
+          config
+        );
+        console.log(payload);
+        alert("Vendor created successfully!");
+      }
+      onSuccess();
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message ||
+        (e?.response?.status === 400 ? "Validation error" : "Save failed");
+      setErr(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
         <h2 className="text-2xl font-bold mb-4">
           {isEdit ? "Edit Vendor" : "Add Vendor"}
@@ -118,9 +143,7 @@ export const VendorAdd = (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* --- company basics --- */}
           <div className="col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Vendor Name
-            </label>
+            <label className="block text-sm font-medium mb-1">Vendor Name</label>
             <input
               className="w-full p-2 border rounded"
               value={form.vendorName}
@@ -200,22 +223,20 @@ export const VendorAdd = (
                   <tbody>
                     {form.clients.map((cl, idx) => (
                       <tr key={idx}>
-                        {["name", "contactNumber"].map(
-                          (f) => (
-                            <td key={f} className="border p-1">
-                              <input
-                                className="w-full p-1 border rounded"
-                                value={cl[f] || ""}
-                                onChange={(e) =>
-                                  updateClientField(idx, f, e.target.value)
-                                }
-                              />
-                            </td>
-                          )
-                        )}
+                        {["name", "contactNumber"].map((f) => (
+                          <td key={f} className="border p-1">
+                            <input
+                              className="w-full p-1 border rounded"
+                              value={cl[f] || ""}
+                              onChange={(e) =>
+                                updateClientField(idx, f, e.target.value)
+                              }
+                            />
+                          </td>
+                        ))}
                         <td className="border p-1 text-center">
-                          <button           
-                           onClick={() => removeClient(idx)}
+                          <button
+                            onClick={() => removeClient(idx)}
                             className="text-red-600"
                           >
                             ×
@@ -231,38 +252,37 @@ export const VendorAdd = (
         </div>
 
         <div>
-            <label className="block text-sm font-medium mb-1">GST Number</label>
-            <input
-              className="w-full p-2 border rounded"
-              value={form.gst}
-              onChange={(e) => setForm({ ...form, gst: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Bank Name</label>
-            <input
-              className="w-full p-2 border rounded"
-              value={form.bankName}
-              onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Account Number</label>
-            <input
-              className="w-full p-2 border rounded"
-              value={form.accountNumber}
-              onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">IFSC Code</label>
-            <input
-              className="w-full p-2 border rounded"
-              value={form.ifscCode}
-              onChange={(e) => setForm({ ...form, ifscCode: e.target.value })}
-            />
-          </div>
-      
+          <label className="block text-sm font-medium mb-1">GST Number</label>
+          <input
+            className="w-full p-2 border rounded"
+            value={form.gst}
+            onChange={(e) => setForm({ ...form, gst: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Bank Name</label>
+          <input
+            className="w-full p-2 border rounded"
+            value={form.bankName}
+            onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Account Number</label>
+          <input
+            className="w-full p-2 border rounded"
+            value={form.accountNumber}
+            onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">IFSC Code</label>
+          <input
+            className="w-full p-2 border rounded"
+            value={form.ifscCode}
+            onChange={(e) => setForm({ ...form, ifscCode: e.target.value })}
+          />
+        </div>
 
         {/* --- actions --- */}
         <div className="mt-6 flex justify-end gap-2">
@@ -278,8 +298,9 @@ export const VendorAdd = (
           >
             {saving ? "Saving…" : isEdit ? "Update" : "Create"}
           </button>
+          {error && <div className="bg-red-100 text-red-700 p-2 mb-3">{error}</div>}
         </div>
-      </div>    
+      </div>
     </div>
-    )
-}
+  );
+};
