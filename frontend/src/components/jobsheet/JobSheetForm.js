@@ -1,10 +1,11 @@
-import React, { useState, forwardRef } from "react";
+import React, { useState, forwardRef, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import { format, parse } from "date-fns";
 import UserSuggestionInput from "./UserSuggestionInput";
 import PurchaseOrderSuggestionInput from "./PurchaseOrderSuggestionInput";
 import QuotationSuggestionInput from "./QuotationSuggestionInput";
 import "react-datepicker/dist/react-datepicker.css";
+import axios from "axios";
 
 const JobSheetForm = ({
   orderDate,
@@ -142,6 +143,29 @@ const JobSheetForm = ({
       placeholder="DD/MM/YYYY"
     />
   ));
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  const fetchVendors = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/vendors`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVendorSuggestions(res.data || []);
+    } catch (err) {
+      console.error("Error fetching vendors:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchVendors();
+  },   []);
+
+ //const [isVendorOther, setIsVendorOther] = useState(false);
+
+
+  const [vendorOtherMap, setVendorOtherMap] = useState({});
+
 
   return (
     <div className="space-y-4 mb-6">
@@ -421,20 +445,67 @@ const JobSheetForm = ({
                         {brandingTypeOptions.map((option, optionIdx) => (
                           <option key={optionIdx} value={option}>
                             {option}
+                            
                           </option>
                         ))}
                       </select>
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      <input
-                        type="text"
-                        className="border rounded p-1 w-full"
-                        value={item.brandingVendor || ""}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "brandingVendor", e.target.value)
-                        }
-                        placeholder="Enter Vendor"
-                      />
+                     <div>
+                      
+                           {vendorOtherMap[idx] ? (
+                                <div className="relative">
+                                  <div>
+                                  <input  
+                                    type="text"
+                                    className="border rounded p-1 w-full"
+                                    value={item.brandingVendor || ""}
+                                    onChange={(e) =>
+                                      handleInlineUpdate(idx, "brandingVendor", e.target.value)
+                                    }
+                                    placeholder="Enter Vendor"
+                                  />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVendorOtherMap(prev => ({ ...prev, [idx]: false }))
+                                    }
+                                    className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                                  >
+                                    Go to option
+                                  </button>
+                                </div>
+                              ) : (
+                                <div>
+                                  {vendorSuggestions.length > 0 && (
+                                    <select
+                                      name="vendorName"
+                                      className="border w-full p-2 rounded text-sm"
+                                      value={item.brandingVendor || ""}
+                                      onChange={(e) => {
+                                        const selected = e.target.value;
+                                        if (selected === "Other") {
+                                          setVendorOtherMap(prev => ({ ...prev, [idx]: true }));
+                                          handleInlineUpdate(idx, "brandingVendor", "");
+                                        } else {
+                                          handleInlineUpdate(idx, "brandingVendor", selected);
+                                        }
+                                      }}
+                                    >
+                                      <option value="">Select Vendor</option>
+                                      {vendorSuggestions.map((vendor, i) => (
+                                        <option key={i} value={vendor.vendorName}>
+                                          {vendor.vendorName}
+                                        </option>
+                                      ))}
+                                      <option value="Other">Other</option>
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+
+                      </div>
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                       <button
