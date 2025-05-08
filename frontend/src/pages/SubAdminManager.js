@@ -14,6 +14,11 @@ const groupedPermissions = {
     "review-catalog",
     "viewers-manager",
   ],
+  "Calculations" : [
+    "segment-manager",
+    "calculation-manager"
+  ]
+  ,
 
   /* ↓ CRM & sales pipeline */
   CRM: [

@@ -74,11 +74,12 @@ router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
       portalUpload,
       paymentTerms,
       companyAddress,
+      pincode,
       clients: rawClients = [],
     } = req.body;
 
-    if (!companyName)
-      return res.status(400).json({ message: "Company name is required" });
+    if (!companyName || !pincode)
+      return res.status(400).json({ message: "Company name and pincode are required" });
 
     if (
       await Company.findOne({
@@ -96,6 +97,7 @@ router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
       portalUpload,
       paymentTerms,
       companyAddress,
+      pincode,
       clients: sanitiseClients(rawClients),
       createdBy: req.user.id,
       logs: [createLogEntry(req, "create")],
@@ -155,13 +157,13 @@ router.put("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
       portalUpload,
       paymentTerms,
       companyAddress,
+      pincode,
       clients: rawClients,
     } = req.body;
 
     const doc = await Company.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: "Not found" });
 
-    /* -- Unique name check -- */
     if (
       companyName &&
       !isEqual(companyName, doc.companyName) &&
@@ -190,6 +192,7 @@ router.put("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
     check("paymentTerms", paymentTerms);
     check("GSTIN", GSTIN);
     check("companyAddress", companyAddress);
+    check("pincode", pincode);
 
     if (rawClients !== undefined) check("clients", sanitiseClients(rawClients));
 
@@ -258,6 +261,7 @@ router.get(
           companyName: c.companyName,
           brandName: c.brandName,
           GSTIN: c.GSTIN,
+          pincode: c.pincode,
           createdAt: c.createdAt,
           createdBy: c.createdBy,
           updatedAt: c.updatedAt,
@@ -303,6 +307,7 @@ router.get(
           "Brand Name": "Example Brand",
           GSTIN: "22AAAAA0000A1Z5",
           "Company Address": "123 Main St",
+          "Pincode*": "560001",
           "Client 1 Name": "Alice",
           "Client 1 Department": "Procurement",
           "Client 1 Email": "alice@example.com",
@@ -345,8 +350,8 @@ router.post(
       const errors = [];
 
       rows.forEach((r, i) => {
-        if (!r["Company Name*"]) {
-          errors.push(`Row ${i + 2}: Company Name required`);
+        if (!r["Company Name*"] || !r["Pincode*"]) {
+          errors.push(`Row ${i + 2}: Company Name and Pincode required`);
           return;
         }
 
@@ -371,6 +376,7 @@ router.post(
           brandName: r["Brand Name"] || "",
           GSTIN: r["GSTIN"] || "",
           companyAddress: r["Company Address"] || "",
+          pincode: r["Pincode*"].toString(),
           clients,
           createdBy: req.user.id,
           logs: [createLogEntry(req, "create")],

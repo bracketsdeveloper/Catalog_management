@@ -24,6 +24,7 @@ const companySchema = new mongoose.Schema({
   segment: { type: String },
   clients: { type: [clientSchema], default: [] },
   companyAddress: { type: String },
+  pincode: { type: String, required: true },
   GSTIN: { type: String },
   vendorCode: { type: String },
   paymentTerms: { type: String },

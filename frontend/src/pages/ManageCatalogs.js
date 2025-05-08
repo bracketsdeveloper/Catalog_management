@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import CompanyModal from "../components/CompanyModal";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 /* ────────────────────────────────────────────────────────────
  *  Helpers & constants
@@ -716,6 +717,17 @@ export default function CreateManualCatalog() {
     setVariationModalProduct(null);
   };
 
+  // Add the handleDragEnd function to update the order of items
+  const handleDragEnd = (result) => {
+    if (!result.destination) return;
+
+    const items = Array.from(selectedProducts);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    setSelectedProducts(items);
+  };
+
   /* ─────────────────────────────────────────
    *  JSX
    * ─────────────────────────────────────────*/
@@ -1109,48 +1121,65 @@ export default function CreateManualCatalog() {
             >
               <span className="text-xl font-bold">×</span>
             </button>
-            <div className="flex-grow overflow-auto">
-              {selectedProducts.length === 0 && (
-                <p className="text-gray-600">No products selected.</p>
-              )}
-              {selectedProducts.map((row, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col border border-purple-200 rounded p-2 mb-2"
-                >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-sm text-purple-800">
-                        {row.productName || row.name || "Unknown Product"}
-                      </div>
-                      {row.color && row.color !== "N/A" && (
-                        <div className="text-xs">Color: {row.color}</div>
-                      )}
-                      {row.size && row.size !== "N/A" && (
-                        <div className="text-xs">Size: {row.size}</div>
-                      )}
-                      <div className="text-xs">
-                        Cost: ₹{Number(row.productCost || 0).toFixed(2)}
-                      </div>
-                      <div className="text-xs">GST: {row.productGST || 0}%</div>
-                      <div className="text-xs">Qty: {row.quantity || 1}</div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveSelectedRow(idx)}
-                      className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => handleEditItem(idx)}
-                    className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="cartItems">
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className="flex-grow overflow-auto"
                   >
-                    Edit
-                  </button>
-                </div>
-              ))}
-            </div>
+                    {selectedProducts.length === 0 && (
+                      <p className="text-gray-600">No products selected.</p>
+                    )}
+                    {selectedProducts.map((row, idx) => (
+                      <Draggable key={row._id} draggableId={row._id} index={idx}>
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="flex flex-col border border-purple-200 rounded p-2 mb-2"
+                          >
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="font-bold text-sm text-purple-800">
+                                  {row.productName || row.name || "Unknown Product"}
+                                </div>
+                                {row.color && row.color !== "N/A" && (
+                                  <div className="text-xs">Color: {row.color}</div>
+                                )}
+                                {row.size && row.size !== "N/A" && (
+                                  <div className="text-xs">Size: {row.size}</div>
+                                )}
+                                <div className="text-xs">
+                                  Cost: ₹{Number(row.productCost || 0).toFixed(2)}
+                                </div>
+                                <div className="text-xs">GST: {row.productGST || 0}%</div>
+                                <div className="text-xs">Qty: {row.quantity || 1}</div>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveSelectedRow(idx)}
+                                className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => handleEditItem(idx)}
+                              className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs self-start"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
             <button
               onClick={() => setCartOpen(false)}
               className="bg-green-500 hover:bg-green-700 text-white px-4 py-2 rounded self-end mt-2"
@@ -1461,7 +1490,7 @@ function VariationModal({ product, onClose, onSave }) {
                 className="flex items-center justify-between border p-2 rounded"
               >
                 <span>
-                  {v.color || "N/A"} / {v.size || "N/A"}  Qty:{v.quantity}
+                  {v.color || "N/A"} / {v.size || "N/A"}  Qty:{v.quantity}
                 </span>
                 <button
                   onClick={() => handleRemoveLine(idx)}

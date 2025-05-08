@@ -992,6 +992,7 @@ export default function CatalogManagementPage() {
                     {items.map((quotation) => (
                       <tr key={quotation._id}>
                         <td className="px-4 py-2">{quotation.quotationNumber}</td>
+                        
                         <td className="px-4 py-2">{quotation.eventName || "N/A"}</td>
                         <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
                         <td className="px-4 py-2">{quotation.customerName}</td>

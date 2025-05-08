@@ -41,23 +41,23 @@ const adminPages = [
       },
     ],
   },
-  // {
-  //   name: "Calculations",
-  //   defaultPath: "/admin-dashboard/segment-manager",
-  //   icon: <CubeIcon className="w-8 h-8 flex justify-center items-center" />,
-  //   subItems: [
-  //     {
-  //       name: "Segment Manager",
-  //       path: "/admin-dashboard/manage-segments",
-  //       permission: "segment-manager",
-  //     },
-  //     {
-  //       name: "Calculation Manager",
-  //       path: "/admin-dashboard/calculation-manager",
-  //       permission: "calculation-manager",
-  //     },
-  //   ],
-  // },
+   {
+     name: "Calculations",
+     defaultPath: "/admin-dashboard/segment-manager",
+     icon: <CubeIcon className="w-8 h-8 flex justify-center items-center" />,
+     subItems: [
+       {
+         name: "Segment Manager",
+         path: "/admin-dashboard/manage-segments",
+         permission: "segment-manager",
+       },
+       {
+         name: "Calculation Manager",
+         path: "/admin-dashboard/calculation-manager",
+         permission: "calculation-manager",
+       },
+     ],
+   },
 
 
 
@@ -401,6 +401,15 @@ export default function AdminDashboard() {
 
   /* ------------------- ACCESSIBLE PAGES FILTER ------------------- */
   const accessiblePages = adminPages.filter((page) => {
+    if (page.name === "Calculations") {
+      // For "Calculations", check if the user has the required permission
+      const hasPermission = page.subItems.some(
+        (sub) => permissions.includes(sub.permission)
+      );
+      return hasPermission;
+    }
+
+    // For other pages, use the existing logic
     if (page.subItems) {
       const accessibleSub = page.subItems.filter(
         (s) => isSuperAdmin || permissions.includes(s.permission)

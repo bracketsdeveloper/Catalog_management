@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 // Mapping for field names to display labels
 const fieldMapping = {
@@ -57,7 +58,7 @@ export default function EditCatalogPage() {
       setCustomerEmail(catalog.customerEmail || "");
       setFieldsToDisplay(catalog.fieldsToDisplay || []);
       setSelectedMargin(catalog.margin || 0);
-      setSelectedProducts(catalog.products.map((item) => item.productId));
+      setSelectedProducts(catalog.products.map((item) => ({ ...item, index: 0 })));
       // Determine margin option based on preset options
       if (presetMarginOptions.includes(catalog.margin)) {
         setMarginOption("preset");
@@ -86,14 +87,25 @@ export default function EditCatalogPage() {
     }
   };
 
-  // Toggle product selection
-  const handleSelectProduct = (product) => {
+  // Update the handleSelectProduct function to include an index
+  const handleSelectProduct = (product, index) => {
     const isSelected = selectedProducts.some((p) => p._id === product._id);
     if (isSelected) {
       setSelectedProducts(selectedProducts.filter((p) => p._id !== product._id));
     } else {
-      setSelectedProducts([...selectedProducts, product]);
+      setSelectedProducts([...selectedProducts, { ...product, index }]);
     }
+  };
+
+  // Add a function to handle drag-and-drop reordering
+  const handleDragEnd = (result) => {
+    if (!result.destination) return;
+
+    const items = Array.from(selectedProducts);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    setSelectedProducts(items);
   };
 
   // Toggle a field in "fieldsToDisplay"
@@ -251,29 +263,46 @@ export default function EditCatalogPage() {
       {/* Product Selection */}
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-2">Select Products</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {products.map((p) => {
-            const isSelected = selectedProducts.some((prod) => prod._id === p._id);
-            return (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="products">
+            {(provided) => (
               <div
-                key={p._id}
-                className={`border p-2 rounded cursor-pointer ${
-                  isSelected ? "bg-blue-100" : "bg-white"
-                }`}
-                onClick={() => handleSelectProduct(p)}
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                className="grid grid-cols-2 md:grid-cols-4 gap-4"
               >
-                {p.images && p.images.length > 0 ? (
-                  <img src={p.images[0]} alt={p.name} className="w-full h-20 object-cover mb-2" />
-                ) : (
-                  <div className="w-full h-20 bg-gray-200 flex items-center justify-center mb-2">
-                    No Image
-                  </div>
-                )}
-                <p className="text-sm font-medium">{p.name}</p>
+                {selectedProducts.map((p, index) => {
+                  const isSelected = selectedProducts.some((prod) => prod._id === p._id);
+                  return (
+                    <Draggable key={p._id} draggableId={p._id} index={index}>
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className={`border p-2 rounded cursor-pointer ${
+                            isSelected ? "bg-blue-100" : "bg-white"
+                          }`}
+                          onClick={() => handleSelectProduct(p, index)}
+                        >
+                          {p.images && p.images.length > 0 ? (
+                            <img src={p.images[0]} alt={p.name} className="w-full h-20 object-cover mb-2" />
+                          ) : (
+                            <div className="w-full h-20 bg-gray-200 flex items-center justify-center mb-2">
+                              No Image
+                            </div>
+                          )}
+                          <p className="text-sm font-medium">{p.name}</p>
+                        </div>
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {provided.placeholder}
               </div>
-            );
-          })}
-        </div>
+            )}
+          </Droppable>
+        </DragDropContext>
       </div>
 
       {/* Update Button */}
