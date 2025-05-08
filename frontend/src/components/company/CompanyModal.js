@@ -1,3 +1,4 @@
+// frontend/components/CompanyModal.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -16,6 +17,7 @@ export default function CompanyModal({
     brandName: company?.brandName || "",
     GSTIN: company?.GSTIN || "",
     companyAddress: company?.companyAddress || "",
+    pincode: company?.pincode || "",
     clients: company?.clients || [],
     segment: company?.segment || "",
     vendorCode: company?.vendorCode || "",
@@ -73,13 +75,14 @@ export default function CompanyModal({
 
   const submit = async () => {
     setErr("");
-    if (!form.companyName.trim()) {
-      setErr("Company name required");
+    if (!form.companyName.trim() || !form.pincode.trim()) {
+      setErr("Company name and pincode are required");
       return;
     }
     const payload = {
       ...form,
       companyName: form.companyName.trim(),
+      pincode: form.pincode.trim(),
       GSTIN: form.GSTIN.trim(),
       brandName: form.brandName.trim(),
       companyAddress: form.companyAddress.trim(),
@@ -160,6 +163,16 @@ export default function CompanyModal({
               onChange={(e) =>
                 setForm({ ...form, companyAddress: e.target.value })
               }
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Pincode *
+            </label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.pincode}
+              onChange={(e) => setForm({ ...form, pincode: e.target.value })}
             />
           </div>
 

@@ -5,6 +5,7 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import debounce from "lodash.debounce";
 import CompanyModal from "../components/CompanyModal";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 /* ────────────────────────────────────────────────────────────
  *  Helpers & constants
@@ -58,7 +59,7 @@ export default function EditQuotation() {
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
   const imageInputRef = useRef(null);
 
-  /* ------------ quotation, cart, misc ------------ */
+  /* ------------ quotation Europej, cart, misc ------------ */
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [catalogName, setCatalogName] = useState("");
 
@@ -148,7 +149,6 @@ export default function EditQuotation() {
     try {
       const token = localStorage.getItem("token");
 
-      /* 1 — paginated products */
       const params = buildParams();
       params.append("page", page);
       params.append("limit", limit);
@@ -159,7 +159,6 @@ export default function EditQuotation() {
       setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
 
-      /* 2 — counts */
       await fetchFilterOptions(`?${buildParams().toString()}`);
     } catch (err) {
       console.error("Error fetching products:", err);
@@ -239,7 +238,7 @@ export default function EditQuotation() {
 
       const mappedItems = data.items.map((item) => ({
         productId: item.productId,
-        productName: item.product, // Use the product field as productName
+        productName: item.product,
         productCost: item.productprice || item.rate,
         productprice: item.productprice || item.rate,
         productGST: item.productGST || 0,
@@ -380,7 +379,7 @@ export default function EditQuotation() {
         size: size || "N/A",
         quantity: v.quantity || 1,
         material: variationModalProduct.material || "",
-        weight: variationModalProduct.weight || "",
+        weight: variationModalProduct.material || "",
         ProductDescription: variationModalProduct.productDetails || "",
         ProductBrand: variationModalProduct.brandName || "",
       };
@@ -401,6 +400,15 @@ export default function EditQuotation() {
 
   const handleRemoveSelectedRow = (index) => {
     setSelectedProducts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Drag and Drop
+  const handleDragEnd = ({ source, destination }) => {
+    if (!destination) return;
+    const items = Array.from(selectedProducts);
+    const [moved] = items.splice(source.index, 1);
+    items.splice(destination.index, 0, moved);
+    setSelectedProducts(items);
   };
 
   // Handlers for terms
@@ -819,7 +827,7 @@ export default function EditQuotation() {
         )}
       </div>
 
-      {/* Cart Drawer */}
+      {/* Cart Drawer with Drag and Drop */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black bg-opacity-30">
           <div className="bg-white w-full sm:w-96 h-full shadow-md p-4 flex flex-col relative">
@@ -832,38 +840,63 @@ export default function EditQuotation() {
             >
               <span className="text-xl font-bold">×</span>
             </button>
-            <div className="flex-grow overflow-auto">
-              {selectedProducts.length === 0 && (
-                <p className="text-gray-600">No products selected.</p>
-              )}
-              {selectedProducts.map((row, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col border border-purple-200 rounded p-2 mb-2"
-                >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-sm text-purple-800">
-                        {row.productName}
-                      </div>
-                      <div className="text-xs">Color: {row.color}</div>
-                      <div className="text-xs">Size: {row.size}</div>
-                      <div className="text-xs">
-                        Cost: ₹{Number(row.productCost).toFixed(2)}
-                      </div>
-                      <div className="text-xs">GST: {row.productGST}%</div>
-                      <div className="text-xs">Qty: {row.quantity}</div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveSelectedRow(idx)}
-                      className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
-                    >
-                      Remove
-                    </button>
+
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="selectedProducts">
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="flex-grow overflow-auto"
+                  >
+                    {selectedProducts.length === 0 && (
+                      <p className="text-gray-600">No products selected.</p>
+                    )}
+                    {selectedProducts.map((row, idx) => (
+                      <Draggable
+                        key={`${row.productId}-${row.color}-${row.size}-${idx}`}
+                        draggableId={`item-${idx}`}
+                        index={idx}
+                      >
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`flex flex-col border border-purple-200 rounded p-2 mb-2 bg-white ${
+                              snapshot.isDragging ? "bg-gray-100" : ""
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="font-bold text-sm text-purple-800">
+                                  {row.productName}
+                                </div>
+                                <div className="text-xs">Color: {row.color}</div>
+                                <div className="text-xs">Size: {row.size}</div>
+                                <div className="text-xs">
+                                  Cost: ₹{Number(row.productCost).toFixed(2)}
+                                </div>
+                                <div className="text-xs">GST: {row.productGST}%</div>
+                                <div className="text-xs">Qty: {row.quantity}</div>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveSelectedRow(idx)}
+                                className="bg-pink-600 hover:bg-pink-700 text-white px-2 py-1 rounded text-sm"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+
             <button
               onClick={() => setCartOpen(false)}
               className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded self-end mt-2"
@@ -891,7 +924,7 @@ export default function EditQuotation() {
 }
 
 /* ─────────────────────────────────────────
- *  FilterDropdown (re‑usable)
+ *  FilterDropdown (re-usable)
  * ─────────────────────────────────────────*/
 function FilterDropdown({ label, open, setOpen, options, selected, toggle, counts }) {
   return (
@@ -903,9 +936,7 @@ function FilterDropdown({ label, open, setOpen, options, selected, toggle, count
         {label} ({selected.length})
       </button>
       {open && (
-        <div
-          className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-40 overflow-y-auto"
-        >
+        <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-40 overflow-y-auto">
           {options.map((opt) => (
             <label
               key={opt}
@@ -928,9 +959,9 @@ function FilterDropdown({ label, open, setOpen, options, selected, toggle, count
   );
 }
 
-/**
- * ProductCard Component
- */
+/* ─────────────────────────────────────────
+ *  ProductCard Component
+ * ─────────────────────────────────────────*/
 function ProductCard({ product, selectedMargin, onAddSelected, openVariationSelector }) {
   const colorOptions = Array.isArray(product.color)
     ? product.color
@@ -1020,9 +1051,9 @@ function ProductCard({ product, selectedMargin, onAddSelected, openVariationSele
   );
 }
 
-/**
- * VariationModal Component
- */
+/* ─────────────────────────────────────────
+ *  VariationModal Component
+ * ─────────────────────────────────────────*/
 function VariationModal({ product, onClose, onSave, selectedMargin }) {
   const [variations, setVariations] = useState([]);
   const colorOptions = Array.isArray(product.color)
@@ -1078,7 +1109,7 @@ function VariationModal({ product, onClose, onSave, selectedMargin }) {
               <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
               {colorOptions.length ? (
                 <select
-                  className="border border-purple-300 rounded p-1 w-full"
+                  className="border border-purple-300 rounded睁 p-1 w-full"
                   value={pickedColor}
                   onChange={(e) => setPickedColor(e.target.value)}
                 >

@@ -154,6 +154,16 @@ const segmentRoutes = require("./routes/segmentRoutes.js");
 app.use("/api/admin", segmentRoutes)
 
 
+const brandingChargeRoutes = require("./routes/brandingChargeRoutes");
+app.use("/api/admin/branding-charges", brandingChargeRoutes);
+
+const logisticsRoutes = require("./routes/logisticsRoutes");
+app.use("/api/logistics", logisticsRoutes);
+
+app.get("/health", (req, res) => res.send("OK"));
+
+
+
 // Start server (original)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
