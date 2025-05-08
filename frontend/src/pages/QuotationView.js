@@ -455,7 +455,7 @@ export default function QuotationView() {
 
             return (
               <tr key={index} className="border-b">
-                <td className="p-2">{item.productId?.name}</td>
+                <td className="p-2">{item.slNo}</td>
                 <td className="p-2">
                 {imageUrl !== "https://via.placeholder.com/150" ? (
                       <img
