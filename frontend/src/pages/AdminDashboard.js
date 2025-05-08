@@ -52,9 +52,9 @@ const adminPages = [
          permission: "segment-manager",
        },
        {
-         name: "Calculation Manager",
-         path: "/admin-dashboard/calculation-manager",
-         permission: "calculation-manager",
+         name: "Manage Brandings",
+         path: "/admin-dashboard/manage-branding-charges",
+         permission: "manage-branding-charges",
        },
      ],
    },

@@ -16,9 +16,10 @@ const groupedPermissions = {
   ],
   // "Calculations" : [
   //   "segment-manager",
-  //   "calculation-manager"
+  //   "calculation-manager",
+  //   "manage-branding-charges"
   // ]
-  // ,
+  
 
   /* ↓ CRM & sales pipeline */
   CRM: [
