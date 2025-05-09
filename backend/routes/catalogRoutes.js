@@ -26,7 +26,6 @@ async function createLog(action, oldValue, newValue, user, ip) {
   }
 }
 
-<<<<<<< HEAD
 /**
  * GET branding types (full documents)
  */
@@ -46,27 +45,28 @@ router.get(
 );
 
 /**
- * 1) Get all catalogs
+ * Helper: Builds the product sub-document
  */
-=======
-// helper: builds the sub‑doc exactly once ------------------------
 function buildSubDoc(p, docFromDB = {}) {
   return {
-    productId        : p.productId,
-    productName      : p.productName      ?? docFromDB.productName ?? docFromDB.name,
+    productId: p.productId,
+    productName: p.productName ?? docFromDB.productName ?? docFromDB.name ?? "",
     ProductDescription: p.ProductDescription ?? docFromDB.productDetails ?? "",
-    ProductBrand     : p.ProductBrand     ?? docFromDB.brandName  ?? "",
-    color            : p.color      ?? "",
-    size             : p.size       ?? "",
-    quantity         : p.quantity   ?? 1,
-    productCost      : p.productCost ?? docFromDB.productCost ?? 0,
-    productGST       : p.productGST ?? docFromDB.productGST  ?? 0,
+    ProductBrand: p.ProductBrand ?? docFromDB.brandName ?? "",
+    color: p.color ?? "",
+    size: p.size ?? "",
+    quantity: p.quantity ?? 1,
+    productCost: p.productCost ?? docFromDB.productCost ?? 0,
+    productGST: p.productGST ?? docFromDB.productGST ?? 0,
+    material: p.material ?? docFromDB.material ?? "",
+    weight: p.weight ?? docFromDB.weight ?? "",
+    brandingTypes: Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
   };
 }
 
-
-// 1) Get all catalogs
->>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
+/**
+ * 1) Get all catalogs
+ */
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const catalogs = await Catalog.find()
@@ -86,7 +86,6 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-<<<<<<< HEAD
       opportunityNumber,
       catalogName,
       salutation,
@@ -94,54 +93,30 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       customerEmail,
       customerCompany,
       customerAddress,
-      products,
-      fieldsToDisplay,
+      products = [],
+      fieldsToDisplay = [],
       priceRange,
       margin,
       gst,
     } = req.body;
 
     // Validate opportunityNumber
-=======
-      opportunityNumber, catalogName, salutation, customerName,
-      customerEmail, customerCompany, customerAddress,
-      products = [], fieldsToDisplay = [], margin, gst = 18, priceRange,
-    } = req.body;
-
-    // validate opportunity once
->>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
     if (opportunityNumber) {
       const oppOk = await Opportunity.exists({ opportunityCode: opportunityNumber });
       if (!oppOk) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
-<<<<<<< HEAD
-    // Build product sub-docs
-    const newProducts = [];
-    for (const p of products || []) {
-      const productDoc = await Product.findById(p.productId).lean();
-      if (!productDoc) {
-        console.warn(`Product not found: ${p.productId}`);
-        continue;
-      }
-      newProducts.push({
-        productId: p.productId,
-        productName: p.productName ?? productDoc.productName ?? productDoc.name,
-        ProductDescription:
-          p.ProductDescription ?? productDoc.productDetails ?? "",
-        ProductBrand: p.ProductBrand ?? productDoc.brandName ?? "",
-        color: p.color ?? "",
-        size: p.size ?? "",
-        quantity: p.quantity ?? 1,
-        productCost: p.productCost ?? productDoc.productCost ?? 0,
-        productGST: p.productGST ?? productDoc.productGST ?? 0,
-        material: p.material ?? productDoc.material ?? "",
-        weight: p.weight ?? productDoc.weight ?? "",
-        brandingTypes: Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
-      });
-    }
+    // Bulk-fetch all products
+    const ids = products.map((p) => p.productId);
+    const prodDocs = await Product.find({ _id: { $in: ids } }).lean();
+    const prodMap = Object.fromEntries(prodDocs.map((d) => [d._id.toString(), d]));
 
-    const newCatalog = new Catalog({
+    // Build sub-documents
+    const subDocs = products
+      .filter((p) => prodMap[p.productId])
+      .map((p) => buildSubDoc(p, prodMap[p.productId]));
+
+    const catalog = await Catalog.create({
       opportunityNumber: opportunityNumber ?? "",
       catalogName,
       salutation: salutation ?? "Mr.",
@@ -149,30 +124,12 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       customerEmail,
       customerCompany,
       customerAddress,
-      products: newProducts,
-      fieldsToDisplay: fieldsToDisplay || [],
+      products: subDocs,
+      fieldsToDisplay,
       priceRange,
       margin: margin ?? 0,
       gst: gst ?? 18,
-      createdBy: req.user ? req.user.email : "",
-=======
-    // -------- bulk‑fetch all products in a single query -------------
-    const ids = products.map(p => p.productId);
-    const prodDocs = await Product.find({ _id: { $in: ids } }).lean();
-    const prodMap = Object.fromEntries(prodDocs.map(d => [d._id.toString(), d]));
-
-    const subDocs = products
-      .filter(p => prodMap[p.productId])          // skip orphans
-      .map(p => buildSubDoc(p, prodMap[p.productId]));
-
-    const catalog = await Catalog.create({
-      opportunityNumber, catalogName, salutation, customerName,
-      customerEmail, customerCompany, customerAddress,
-      margin, gst, priceRange,
-      products      : subDocs,
-      fieldsToDisplay,
-      createdBy     : req.user?.email || "",
->>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
+      createdBy: req.user?.email || "",
     });
 
     await createLog("create", null, catalog, req.user, req.ip);
@@ -183,14 +140,9 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 /**
- * 3) AI Generate (unchanged)
+ * 3) AI Generate
  */
-=======
-
-// 3) Example AI Generate route (unchanged)
->>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { fromPrice, toPrice, filters } = req.body;
@@ -201,7 +153,8 @@ router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, r
     if (filters?.stockLocations?.length) query.stockCurrentlyWith = { $in: filters.stockLocations };
 
     const allFiltered = await Product.find(query).lean();
-    let bestSubset = [], bestSum = 0;
+    let bestSubset = [],
+      bestSum = 0;
 
     function backtrack(i, subset, sum) {
       if (sum > toPrice) return;
@@ -265,7 +218,6 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-<<<<<<< HEAD
       opportunityNumber,
       catalogName,
       salutation,
@@ -273,16 +225,11 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       customerEmail,
       customerCompany,
       customerAddress,
-      products,
-      fieldsToDisplay,
+      products = [],
+      fieldsToDisplay = [],
       margin,
       gst,
       priceRange,
-=======
-      opportunityNumber, catalogName, salutation, customerName,
-      customerEmail, customerCompany, customerAddress,
-      products = [], fieldsToDisplay = [], margin, gst = 18, priceRange,
->>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
     } = req.body;
 
     if (opportunityNumber) {
@@ -293,68 +240,31 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     const catalog = await Catalog.findById(req.params.id);
     if (!catalog) return res.status(404).json({ message: "Catalog not found" });
 
-<<<<<<< HEAD
-    const oldCatalog = catalog.toObject();
+    const oldCopy = catalog.toObject();
 
-    // update basics
-    catalog.opportunityNumber = opportunityNumber ?? "";
-    catalog.catalogName = catalogName;
-    catalog.salutation = salutation ?? catalog.salutation;
-    catalog.customerName = customerName;
-    catalog.customerEmail = customerEmail;
-    catalog.customerCompany = customerCompany;
-    catalog.customerAddress = customerAddress;
-    catalog.fieldsToDisplay = fieldsToDisplay || catalog.fieldsToDisplay;
-    catalog.margin = margin ?? catalog.margin;
-    catalog.gst = gst ?? catalog.gst;
-    catalog.priceRange = priceRange || catalog.priceRange;
-
-    // merge products
-    const merged = [];
-    for (const p of products || []) {
-      if (p._id) {
-        const ex = catalog.products.id(p._id);
-        if (ex) {
-          ex.color = p.color ?? ex.color;
-          ex.size = p.size ?? ex.size;
-          ex.quantity = p.quantity ?? ex.quantity;
-          ex.productCost = p.productCost ?? ex.productCost;
-          ex.productGST = p.productGST ?? ex.productGST;
-          ex.ProductDescription = p.ProductDescription ?? ex.ProductDescription;
-          ex.ProductBrand = p.ProductBrand ?? ex.ProductBrand;
-          ex.material = p.material ?? ex.material;
-          ex.weight = p.weight ?? ex.weight;
-          ex.brandingTypes = Array.isArray(p.brandingTypes) ? p.brandingTypes : ex.brandingTypes;
-          merged.push(ex);
-        } else {
-          merged.push(p);
-        }
-      } else {
-        merged.push(p);
-      }
-    }
-    catalog.products = merged;
-
-    const updated = await catalog.save();
-    await createLog("update", oldCatalog, updated, req.user, req.ip);
-
-    res.json({ message: "Catalog updated", catalog: updated });
-  } catch (error) {
-    console.error("Error updating catalog:", error);
-=======
-    const oldCopy = catalog.toObject();               // for the audit log
-
-    // bulk‑fetch
-    const ids = products.map(p => p.productId);
+    // Bulk-fetch products
+    const ids = products.map((p) => p.productId);
     const prodDocs = await Product.find({ _id: { $in: ids } }).lean();
-    const prodMap = Object.fromEntries(prodDocs.map(d => [d._id.toString(), d]));
+    const prodMap = Object.fromEntries(prodDocs.map((d) => [d._id.toString(), d]));
 
-    // merge / replace list
-    catalog.products = products.map(p => buildSubDoc(p, prodMap[p.productId]));
+    // Build sub-documents
+    catalog.products = products
+      .filter((p) => prodMap[p.productId])
+      .map((p) => buildSubDoc(p, prodMap[p.productId]));
+
+    // Update other fields
     catalog.set({
-      opportunityNumber, catalogName, salutation, customerName,
-      customerEmail, customerCompany, customerAddress,
-      margin, gst, priceRange, fieldsToDisplay,
+      opportunityNumber: opportunityNumber ?? "",
+      catalogName,
+      salutation: salutation ?? catalog.salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      margin: margin ?? catalog.margin,
+      gst: gst ?? catalog.gst,
+      priceRange,
+      fieldsToDisplay,
     });
 
     const updated = await catalog.save();
@@ -362,7 +272,6 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.json({ message: "Catalog updated", catalog: updated });
   } catch (err) {
     console.error("update catalog:", err);
->>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });
