@@ -8,19 +8,10 @@ import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import SuggestedPriceCalculator from "../components/SuggestedPriceCalculator";
 
 /* ────────────────────────────────────────────────────────────
- *  Axios Instance
+ *  Helpers & constants
  * ────────────────────────────────────────────────────────────*/
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const limit = 100;
-const axiosInstance = axios.create({
-  baseURL: `${BACKEND_URL}/api`,
-  timeout: 120000, // 2 min
-});
-
-/* ────────────────────────────────────────────────────────────
- *  Helpers & constants
- * ────────────────────────────────────────────────────────────*/
-const limit = 100; // products per page
 const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
 const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
 const obj = (arr) => Object.fromEntries(arr.map(({ name, count }) => [norm(name), count]));
@@ -133,8 +124,8 @@ export default function CreateManualCatalog() {
   const fetchFilterOptions = async (extraQS = "") => {
     try {
       const token = localStorage.getItem("token");
-      const { data } = await axiosInstance.get(
-        `/admin/products/filters${extraQS}`,
+      const { data } = await axios.get(
+        `${BACKEND_URL}/api/admin/products/filters${extraQS}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setFullCategories(data.categories.map((x) => x.name));
@@ -174,13 +165,6 @@ export default function CreateManualCatalog() {
       params.append("limit", limit);
       const { data } = await axios.get(
         `${BACKEND_URL}/api/admin/products?${params.toString()}`,
-
-      /* 1 — page of products */
-      const prodParams = buildParams();
-      prodParams.append("page", page);
-      prodParams.append("limit", limit);
-      const { data } = await axiosInstance.get(
-        `/admin/products?${prodParams.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setProducts(data.products || []);
@@ -230,17 +214,6 @@ export default function CreateManualCatalog() {
       .catch(console.error);
 
     fetchFilterOptions();
-    // opportunity list
-    (async () => {
-      try {
-        const { data } = await axiosInstance.get(`/admin/opportunities`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        setOpportunityCodes(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Error opp codes:", err);
-      }
-    })();
   }, []);
 
   // Fetch company details when opportunityNumber changes
@@ -295,25 +268,6 @@ export default function CreateManualCatalog() {
         setSelectedCompanyData(data.customerCompany ? { companyName: data.customerCompany } : null);
         setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
         setSalutation(data.salutation || "Mr.");
-    }
-  }, [id]);
-
-  const fetchExistingCatalog = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const { data } = await axiosInstance.get(`/admin/catalogs/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      setOpportunityNumber(data.opportunityNumber || "");
-      setCatalogName(data.catalogName || "");
-      setCustomerName(data.customerName || "");
-      setCustomerEmail(data.customerEmail || "");
-      setCustomerAddress(data.customerAddress || "");
-      setCustomerCompany(data.customerCompany || "");
-      setSelectedCompanyData(data.customerCompany || "");
-      setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
-      setSalutation(data.salutation || "Mr.");
 
         const existingMargin = data.margin ?? presetMarginOptions[0];
         if (presetMarginOptions.includes(existingMargin)) {
@@ -467,7 +421,7 @@ export default function CreateManualCatalog() {
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axiosInstance.get(`/admin/companies?all=true`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(Array.isArray(res.data) ? res.data : []);
@@ -479,7 +433,7 @@ export default function CreateManualCatalog() {
   const fetchCompanyDetails = async (companyName) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axiosInstance.get(`/admin/companies`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { companyName },
       });
@@ -525,8 +479,8 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axiosInstance.post(
-        `/products/advanced-search`,
+      const res = await axios.post(
+        `${BACKEND_URL}/api/products/advanced-search`,
         formData,
         {
           headers: {
@@ -567,8 +521,8 @@ export default function CreateManualCatalog() {
               ]
             : [{ name: customerName, contactNumber: "", email: customerEmail }],
       };
-      await axiosInstance.put(
-        `/admin/companies/${selectedCompanyData._id}`,
+      await axios.put(
+        `${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`,
         updatedData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -625,31 +579,6 @@ export default function CreateManualCatalog() {
       navigate("/admin-dashboard/manage-catalogs");
     } catch (e) {
       alert(e.response?.data?.message || "Error saving catalog");
-      let response;
-      if (isEditMode) {
-        response = await axiosInstance.put(
-          `/admin/catalogs/${id}`,
-          catalogData,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        alert("Catalog updated successfully!");
-        navigate(`/admin-dashboard/manage-catalogs`);
-      } else {
-        response = await axiosInstance.post(`/admin/catalogs`, catalogData, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        alert("Catalog created successfully!");
-        navigate(`/admin-dashboard/manage-catalogs`);
-      }
-    } catch (error) {
-      console.error("Error saving catalog:", error);
-      if (error.response && error.response.status === 400) {
-        alert(error.response.data.message || "Invalid opportunity number");
-      } else {
-        alert("Failed to save catalog. Check console.");
-      }
     }
   };
 
@@ -697,7 +626,7 @@ export default function CreateManualCatalog() {
         gst: selectedGst,
         items,
       };
-      await axiosInstance.post(`/admin/quotations`, body, {
+      await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert("Quotation created successfully!");
@@ -1420,24 +1349,6 @@ function VariationModal({ product, onClose, onSave }) {
       return;
     }
     onSave(variations);
-    const out = variations.map((v) => {
-      const cost = product.productCost || 0;
-      return {
-        productId: product._id,
-        productName: product.productName || product.name || "Unknown Product",
-        productCost: cost,
-        productprice: cost,
-        productGST: product.productGST || 0,
-        color: v.color && v.color.trim() !== "" ? v.color : "N/A",
-        size: v.size && v.size.trim() !== "" ? v.size : "N/A",
-        quantity: v.quantity || 1,
-        material: product.material || "",
-        weight: product.material || "",
-        ProductDescription: product.productDetails || "",
-        ProductBrand: product.brandName || "",
-      };
-    });
-    onSave(out);
   };
 
   return (
@@ -1619,18 +1530,6 @@ function VariationEditModal({
     setBrandingTypes((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-    if ((!productDescription || !productBrand) && item.productId) {
-      axiosInstance
-        .get(`/admin/products/${item.productId}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        })
-        .then(({ data }) => {
-          if (!productDescription) setProductDescription(data.productDetails || "");
-          if (!productBrand) setProductBrand(data.brandName || "");
-        })
-        .catch((err) => console.error("Error fetching prod details:", err));
-    }
-  }, [item.productId]);
 
   const handleSave = () =>
     onUpdate({
@@ -1649,14 +1548,6 @@ function VariationEditModal({
     });
 
   /* ── JSX ───────────────────────── */
-      material: material || "",
-      weight: weight || "",
-      ProductDescription: productDescription || "",
-      ProductBrand: productBrand || "",
-    };
-    onUpdate(upd);
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
       <div className="flex items-center justify-center min-h-full py-8 px-4">
@@ -1783,6 +1674,11 @@ function Field({ label, value, setValue, type = "text", textarea = false, classN
   );
 }
 
+/* ─────────────────────────────────────────
+ *  SuggestedPriceCalculator Component
+ * ─────────────────────────────────────────*/
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 
 /**
  * SuggestedPriceCalculator
@@ -1807,3 +1703,131 @@ function Field({ label, value, setValue, type = "text", textarea = false, classN
  *
  *  onPrice?: (number) => void  // optional callback – emits finalPrice whenever it changes
  */
+export default function SuggestedPriceCalculator({
+  product,
+  companySegment,
+  companyPincode,
+  brandingTypesList,
+  segmentsList,
+  onPrice,
+}) {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  const ORIGIN_PIN = "560019"; // ship‑from pincode
+
+  const [result, setResult] = useState(null); // full breakdown
+  const [error, setError] = useState("");
+
+  /* ────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    setError("");
+    setResult(null);
+
+    const run = async () => {
+      /* basic validation  ----------------------------------- */
+      const baseCost = parseFloat(product.productCost) || 0;
+      const qty = parseInt(product.quantity) || 1;
+      const wgt = parseFloat(product.weight) || 0;
+      const destPin = (companyPincode || "").trim();
+
+      if (baseCost <= 0) return setError("Valid product cost is required");
+      if (qty < 1) return setError("Quantity must be at least 1");
+      if (wgt < 0) return setError("Valid weight is required");
+      if (!/^\d{6}$/.test(destPin))
+        return setError("Valid 6‑digit destination pincode is required");
+      if (!companySegment) return setError("Segment is required");
+      if (!/^\d{6}$/.test(ORIGIN_PIN))
+        return setError("Origin pincode mis‑configured");
+
+      try {
+        /* segment look‑up ----------------------------------- */
+        const seg = segmentsList.find((s) => s.segmentName === companySegment);
+        if (!seg) return setError("Selected segment not found");
+
+        /* branding cost (per‑unit) --------------------------- */
+        const brandingCost =
+          Array.isArray(product.brandingTypes) && product.brandingTypes.length
+            ? product.brandingTypes.reduce((sum, id) => {
+                const bt = brandingTypesList.find((b) => b._id === id);
+                return sum + (bt ? parseFloat(bt.cost) || 0 : 0);
+              }, 0)
+            : 0;
+
+        /* logistic cost (per‑unit) --------------------------- */
+        const totalWeight = wgt * qty;
+        const { data } = await axios.get(`${BACKEND_URL}/api/logistics/calculate`, {
+          params: {
+            originPincode: ORIGIN_PIN,
+            destPincode: destPin,
+            weight: totalWeight,
+          },
+        });
+        const perUnitLogistics = (parseFloat(data.cost) || 0) / qty;
+
+        /* margin % ------------------------------------------- */
+        const priceIdx = seg.priceQueries.findIndex(
+          (q) => baseCost >= q.from && baseCost <= q.to
+        );
+        let marginPct = 0;
+        if (priceIdx !== -1) {
+          const qtySlab = seg.quantityQueries.find(
+            (q) => qty >= q.fromQty && qty <= q.toQty
+          );
+          const adjIdx = priceIdx + (qtySlab ? parseInt(qtySlab.operation || 0, 10) : 0);
+
+          const finalIdx = Math.min(seg.priceQueries.length - 1, Math.max(0, adjIdx));
+          marginPct = seg.priceQueries[finalIdx]?.margin || 0;
+        }
+
+        const marginAmt = baseCost * (marginPct / 100);
+        const finalPrice = parseFloat(
+          (baseCost + marginAmt + brandingCost + perUnitLogistics).toFixed(2)
+        );
+
+        /* callback for parent ------------------------------- */
+        if (typeof onPrice === "function") onPrice(finalPrice);
+
+        /* save breakdown ------------------------------------ */
+        setResult({
+          baseCost: baseCost,
+          marginPct: marginPct,
+          marginAmount: parseFloat(marginAmt.toFixed(2)),
+          logisticsCost: parseFloat(perUnitLogistics.toFixed(2)),
+          brandingCost: parseFloat(brandingCost.toFixed(2)),
+          finalPrice: finalPrice,
+        });
+      } catch (err) {
+        console.error("SuggestedPriceCalculator:", err);
+        setError(err.response?.data?.message || "Calculation failed. Check logistics API.");
+      }
+    };
+
+    run();
+  }, [product, companySegment, companyPincode, brandingTypesList, segmentsList, onPrice]);
+
+  /* ────────────────────────────────────────────────────────── */
+  if (error) return <span className="text-red-600 text-xs">{error}</span>;
+  if (!result) return <span className="text-gray-600 text-xs">Calculating…</span>;
+
+  return (
+    <div className="flex items-center space-x-2">
+      <span className="text-green-600 text-xs">₹{result.finalPrice}</span>
+
+      {/* info tooltip */}
+      <span className="relative group">
+        <button className="w-4 h-4 text-xs text-white bg-purple-600 rounded-full flex items-center justify-center">
+          i
+        </button>
+
+        <div className="absolute left-5 top-0 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 shadow-lg z-10 w-56">
+          <ul>
+            <li>Base Cost: ₹{result.baseCost.toFixed(2)}</li>
+            <li>Logistics: ₹{result.logisticsCost.toFixed(2)}</li>
+            <li>Branding: ₹{result.brandingCost.toFixed(2)}</li>
+            <li className="font-semibold mt-1">Total: ₹{result.finalPrice.toFixed(2)}</li>
+            <li>Profit: ₹{result.marginAmount.toFixed(2)}</li>
+          </ul>
+        </div>
+      </span>
+    </div>
+  );
+}

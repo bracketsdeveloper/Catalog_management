@@ -17,8 +17,11 @@ const productSubSchema = new mongoose.Schema({
   brandingTypes: [{ type: mongoose.Schema.Types.ObjectId, ref: "BrandingCharge" }],
 });
 
+<<<<<<< HEAD
+=======
 
 // A remark schema for chatting
+>>>>>>> a806e421cdbb6fb43dbbaca0959981a2345e5c72
 const remarkSchema = new mongoose.Schema({
   sender: { type: String },
   message: { type: String },
