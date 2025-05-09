@@ -11,6 +11,11 @@ const purchaseInvoiceSchema = new mongoose.Schema(
     cost: { type: Number, required: true },
     negotiatedCost: { type: Number, default: 0 },
     paymentMade: { type: Number, default: 0 },
+    paymentStatus: {
+      type: String,
+      enum: ["Not Paid", "Partially Paid", "Fully Paid"],
+      default: "Not Paid",
+    },
     vendorInvoiceNumber: {
       type: String,
       required: true,

@@ -20,7 +20,7 @@ const HEADER_COLS = [
   { key: "sourcingFrom", label: "Source From" },
   { key: "cost", label: "Cost", type: "number" },
   { key: "negotiatedCost", label: "Negotiated Cost", type: "number" },
-  { key: "paymentMade", label: "Amount Transfer", type: "number" },
+ { key: "paymentMade", label: "Amount Transfer", type: "number" },
   { key: "vendorInvoiceNumber", label: "Vendor Invoice Number" },
   { key: "vendorInvoiceReceived", label: "Vendor Invoice Received" },
   { key: "paymentStatus", label: "Payment Status" },
@@ -67,12 +67,12 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
         sourcingFrom: data.sourcingFrom,
         cost: data.cost || 0,
         negotiatedCost: data.negotiatedCost || 0,
-        paymentMade: data.paymentMade || 0,
+       paymentMade: data.paymentMade || 0,
         vendorInvoiceNumber: data.vendorInvoiceNumber || "",
         vendorInvoiceReceived: data.vendorInvoiceReceived || "No",
         qtyRequired: data.qtyRequired || 0,
         qtyOrdered: data.qtyOrdered || 0,
-        paymentStatus: data.paymentStatus || "No",
+        paymentStatus: data.paymentStatus || "Not Paid",
       };
 
       // Check if this is an existing PurchaseInvoice by querying
@@ -143,23 +143,23 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-          {[
-            ["cost", "Cost"],
-            ["negotiatedCost", "Negotiated Cost"],
-            ["paymentMade", "Amount Transfer"],
-            ["qtyRequired", "Qty Required"],
-            ["qtyOrdered", "Qty Ordered"],
-          ].map(([k, l]) => (
-            <div key={k}>
-              <label className="font-bold">{l}:</label>
-              <input
-                type="number"
-                value={data[k] ?? ""}
-                onChange={(e) => ch(k, parseFloat(e.target.value) || 0)}
-                className="w-full border p-1"
-              />
-            </div>
-          ))}
+         {[
+          ["cost", "Cost"],
+          ["negotiatedCost", "Negotiated Cost"],
+          ["qtyRequired", "Qty Required"],
+          ["qtyOrdered", "Qty Ordered"],
+        ].map(([k, l]) => (
+          <div key={k}>
+            <label className="font-bold">{l}:</label>
+            <input
+              type="number"
+              value={data[k] ?? ""}
+              onChange={(e) => ch(k, parseFloat(e.target.value) || 0)}
+              className="w-full border p-1"
+            />
+          </div>
+        ))}
+
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
@@ -183,18 +183,19 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               ))}
             </select>
           </div>
-          <div>
-            <label className="font-bold">Payment Status:</label>
-            <select
-              value={data.paymentStatus ?? "No"}
-              onChange={(e) => ch("paymentStatus", e.target.value)}
-              className="w-full border p-1"
-            >
-              {["Yes", "No"].map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          </div>
+          {/* Payment Status Dropdown */}
+        <div>
+          <label className="font-bold">Payment Status:</label>
+          <select
+            value={data.paymentStatus ?? "Not Paid"}
+            onChange={(e) => ch("paymentStatus", e.target.value)}
+            className="w-full border p-1 rounded"
+          >
+            <option value="Not Paid">Not Paid</option>
+            <option value="Partially Paid">Partially Paid</option>
+            <option value="Fully Paid">Fully Paid</option>
+          </select>
+        </div>
         </div>
 
         <div className="flex justify-end gap-4">
