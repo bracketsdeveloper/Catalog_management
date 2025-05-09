@@ -1,4 +1,3 @@
-// client/src/pages/ManageSegments.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -11,6 +10,7 @@ export default function ManageSegments() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editSegment, setEditSegment] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchSegments();
@@ -18,15 +18,26 @@ export default function ManageSegments() {
 
   async function fetchSegments() {
     setLoading(true);
+    setError(null);
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/segments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setSegments(res.data);
+      // Ensure response is an array and normalize data
+      const data = Array.isArray(res.data)
+        ? res.data.map((seg) => ({
+            ...seg,
+            priceQueries: Array.isArray(seg.priceQueries) ? seg.priceQueries : [],
+            quantityQueries: Array.isArray(seg.quantityQueries)
+              ? seg.quantityQueries
+              : [],
+          }))
+        : [];
+      setSegments(data);
     } catch (e) {
-      console.error(e);
-      alert("Failed to fetch segments");
+      console.error("Error fetching segments:", e);
+      setError("Failed to fetch segments. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -36,6 +47,7 @@ export default function ManageSegments() {
     setEditSegment(null);
     setModalOpen(true);
   };
+
   const openEdit = (seg) => {
     setEditSegment(seg);
     setModalOpen(true);
@@ -50,7 +62,7 @@ export default function ManageSegments() {
       });
       fetchSegments();
     } catch (e) {
-      console.error(e);
+      console.error("Error deleting segment:", e);
       alert("Delete failed");
     }
   };
@@ -67,8 +79,14 @@ export default function ManageSegments() {
         </button>
       </div>
 
+      {error && (
+        <div className="bg-red-100 text-red-700 p-2 mb-4">{error}</div>
+      )}
+
       {loading ? (
         <div>Loading…</div>
+      ) : segments.length === 0 ? (
+        <div>No segments found.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-left">
@@ -76,6 +94,7 @@ export default function ManageSegments() {
               <tr>
                 <th className="p-2 border">Name</th>
                 <th className="p-2 border">Price Ranges</th>
+                <th className="p-2 border">Quantity Ranges</th>
                 <th className="p-2 border">Actions</th>
               </tr>
             </thead>
@@ -84,11 +103,27 @@ export default function ManageSegments() {
                 <tr key={s._id} className="hover:bg-gray-50">
                   <td className="p-2 border">{s.segmentName}</td>
                   <td className="p-2 border">
-                    {s.priceQueries.map((q, i) => (
-                      <div key={i} className="text-sm">
-                        ₹{q.from}–₹{q.to} @ {q.margin}%  
-                      </div>
-                    ))}
+                    {s.priceQueries.length > 0 ? (
+                      s.priceQueries.map((q, i) => (
+                        <div key={i} className="text-sm">
+                          ₹{q.from}–₹{q.to} @ {q.margin}%
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500">None</div>
+                    )}
+                  </td>
+                  <td className="p-2 border">
+                    {s.quantityQueries.length > 0 ? (
+                      s.quantityQueries.map((q, i) => (
+                        <div key={i} className="text-sm">
+                          {q.fromQty}–{q.toQty} units = n{q.operation > 0 ? "+" : ""}
+                          {q.operation} 
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500">None</div>
+                    )}
                   </td>
                   <td className="p-2 border space-x-2">
                     <button
