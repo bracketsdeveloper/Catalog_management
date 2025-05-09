@@ -23,30 +23,11 @@ async function createLog(action, oldValue, newValue, user, ip) {
     });
   } catch (error) {
     console.error("Error creating catalog log:", error);
+    // Not throwing so it doesn't block main flow
   }
 }
 
-/**
- * GET branding types (full documents)
- */
-router.get(
-  "/catalogs/branding-types",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const list = await BrandingCharge.find().lean();
-      res.json(list);
-    } catch (err) {
-      console.error("Error fetching branding types:", err);
-      res.status(500).json({ message: "Server error fetching branding types" });
-    }
-  }
-);
-
-/**
- * 1) Get all catalogs
- */
+// 1) Get all catalogs
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const catalogs = await Catalog.find()
@@ -66,9 +47,9 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      opportunityNumber,
+      opportunityNumber, // <-- NEW
       catalogName,
-      salutation,
+      salutation, // <-- NEW FIELD
       customerName,
       customerEmail,
       customerCompany,
@@ -80,15 +61,13 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       gst,
     } = req.body;
 
-    // Validate opportunityNumber
+    // 1) Validate the opportunityNumber (if provided)
     if (opportunityNumber) {
-      const validOpp = await Opportunity.findOne({ opportunityCode: opportunityNumber }).lean();
-      if (!validOpp) {
-        return res.status(400).json({ message: "Invalid opportunity number" });
-      }
+      const oppOk = await Opportunity.exists({ opportunityCode: opportunityNumber });
+      if (!oppOk) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
-    // Build product sub-docs
+    // 2) Build the products sub-doc array
     const newProducts = [];
     for (const p of products || []) {
       const productDoc = await Product.findById(p.productId).lean();
@@ -98,46 +77,51 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       }
       newProducts.push({
         productId: p.productId,
-        productName: p.productName ?? productDoc.productName ?? productDoc.name,
+        productName: p.productName || productDoc.productName || productDoc.name,
         ProductDescription:
-          p.ProductDescription ?? productDoc.productDetails ?? "",
-        ProductBrand: p.ProductBrand ?? productDoc.brandName ?? "",
-        color: p.color ?? "",
-        size: p.size ?? "",
-        quantity: p.quantity ?? 1,
-        productCost: p.productCost ?? productDoc.productCost ?? 0,
-        productGST: p.productGST ?? productDoc.productGST ?? 0,
-        material: p.material ?? productDoc.material ?? "",
-        weight: p.weight ?? productDoc.weight ?? "",
-        brandingTypes: Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
+          p.ProductDescription !== undefined
+            ? p.ProductDescription
+            : productDoc.productDetails || "",
+        ProductBrand:
+          p.ProductBrand !== undefined
+            ? p.ProductBrand
+            : productDoc.brandName || "",
+        color: p.color || "",
+        size: p.size || "",
+        quantity: p.quantity !== undefined ? p.quantity : 1,
+        productCost:
+          p.productCost !== undefined ? p.productCost : productDoc.productCost || 0,
+        productGST:
+          p.productGST !== undefined ? p.productGST : productDoc.productGST || 0,
+        // hsnCode: 
+        //  p.hsnCode !== undefined ? p.hsnCode : productDoc.hsnCode || 0,
       });
     }
 
     const newCatalog = new Catalog({
-      opportunityNumber: opportunityNumber ?? "",
+      opportunityNumber, // store the new opportunityNumber
       catalogName,
-      salutation: salutation ?? "Mr.",
+      salutation, // store salutation
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
       products: newProducts,
       fieldsToDisplay: fieldsToDisplay || [],
+      margin,
+      gst: gst || 18,
       priceRange,
-      margin: margin ?? 0,
-      gst: gst ?? 18,
       createdBy: req.user ? req.user.email : "",
     });
 
-    await newCatalog.save();
-    await createLog("create", null, newCatalog, req.user, req.ip);
-
-    res.status(201).json({ message: "Catalog created", catalog: newCatalog });
-  } catch (error) {
-    console.error("Error creating catalog:", error);
+    await createLog("create", null, catalog, req.user, req.ip);
+    res.status(201).json({ message: "Catalog created", catalog });
+  } catch (err) {
+    console.error("create catalog:", err);
     res.status(500).json({ message: "Server error creating catalog" });
   }
 });
+
 
 /**
  * 3) AI Generate (unchanged)
@@ -216,9 +200,9 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      opportunityNumber,
+      opportunityNumber, // <-- NEW
       catalogName,
-      salutation,
+      salutation, // <-- NEW FIELD
       customerName,
       customerEmail,
       customerCompany,
@@ -231,60 +215,69 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     } = req.body;
 
     if (opportunityNumber) {
-      const validOpp = await Opportunity.findOne({ opportunityCode: opportunityNumber }).lean();
-      if (!validOpp) {
-        return res.status(400).json({ message: "Invalid opportunity number" });
-      }
+      const oppOk = await Opportunity.exists({ opportunityCode: opportunityNumber });
+      if (!oppOk) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
     const catalog = await Catalog.findById(req.params.id);
-    if (!catalog) return res.status(404).json({ message: "Catalog not found" });
+    if (!catalog) {
+      return res.status(404).json({ message: "Catalog not found" });
+    }
 
+    // Before updating, store old state for logging
     const oldCatalog = catalog.toObject();
 
-    // update basics
-    catalog.opportunityNumber = opportunityNumber ?? "";
+    // Update basic fields
+    catalog.opportunityNumber = opportunityNumber || "";
     catalog.catalogName = catalogName;
-    catalog.salutation = salutation ?? catalog.salutation;
+    catalog.salutation = salutation;
     catalog.customerName = customerName;
     catalog.customerEmail = customerEmail;
     catalog.customerCompany = customerCompany;
     catalog.customerAddress = customerAddress;
-    catalog.fieldsToDisplay = fieldsToDisplay || catalog.fieldsToDisplay;
-    catalog.margin = margin ?? catalog.margin;
-    catalog.gst = gst ?? catalog.gst;
-    catalog.priceRange = priceRange || catalog.priceRange;
+    catalog.fieldsToDisplay = fieldsToDisplay || [];
+    catalog.margin = margin;
+    catalog.gst = gst || 18;
+    catalog.priceRange = priceRange;
 
-    // merge products
-    const merged = [];
-    for (const p of products || []) {
-      if (p._id) {
-        const ex = catalog.products.id(p._id);
-        if (ex) {
-          ex.color = p.color ?? ex.color;
-          ex.size = p.size ?? ex.size;
-          ex.quantity = p.quantity ?? ex.quantity;
-          ex.productCost = p.productCost ?? ex.productCost;
-          ex.productGST = p.productGST ?? ex.productGST;
-          ex.ProductDescription = p.ProductDescription ?? ex.ProductDescription;
-          ex.ProductBrand = p.ProductBrand ?? ex.ProductBrand;
-          ex.material = p.material ?? ex.material;
-          ex.weight = p.weight ?? ex.weight;
-          ex.brandingTypes = Array.isArray(p.brandingTypes) ? p.brandingTypes : ex.brandingTypes;
-          merged.push(ex);
+    // Merge product updates
+    const updatedProducts = [];
+    for (let p of products || []) {
+      if (p._id && p._id !== "undefined") {
+        const existingProduct = catalog.products.id(p._id);
+        if (existingProduct) {
+          existingProduct.color = p.color || existingProduct.color;
+          existingProduct.size = p.size || existingProduct.size;
+          existingProduct.quantity = p.quantity || existingProduct.quantity;
+          //existingProduct.hsnCode = p.hsnCode || existingProduct.hsnCode;   // added hsncode
+          existingProduct.productCost =
+            p.productCost !== undefined ? p.productCost : existingProduct.productCost;
+          existingProduct.productGST =
+            p.productGST !== undefined ? p.productGST : existingProduct.productGST;
+          existingProduct.ProductDescription =
+            p.ProductDescription !== undefined
+              ? p.ProductDescription
+              : existingProduct.ProductDescription;
+          existingProduct.ProductBrand =
+            p.ProductBrand !== undefined
+              ? p.ProductBrand
+              : existingProduct.ProductBrand;
+          updatedProducts.push(existingProduct);
         } else {
-          merged.push(p);
+          // No matching subdoc found; add as new
+          updatedProducts.push(p);
         }
       } else {
-        merged.push(p);
+        // Treat as new
+        updatedProducts.push(p);
       }
     }
-    catalog.products = merged;
+    catalog.products = updatedProducts;
 
-    const updated = await catalog.save();
-    await createLog("update", oldCatalog, updated, req.user, req.ip);
+    const updatedCatalog = await catalog.save();
+    await createLog("update", oldCatalog, updatedCatalog, req.user, req.ip);
 
-    res.json({ message: "Catalog updated", catalog: updated });
+    res.json({ message: "Catalog updated", catalog: updatedCatalog });
   } catch (error) {
     console.error("Error updating catalog:", error);
     res.status(500).json({ message: "Server error updating catalog" });

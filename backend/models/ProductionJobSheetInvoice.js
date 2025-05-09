@@ -28,6 +28,11 @@ const productionJobSheetInvoiceSchema = new mongoose.Schema({
     enum: ["Yes", "No"],
     default: "No",
   },
+  paymentStatus: {
+    type: String,
+    enum: ["Not Paid", "Partially Paid", "Fully Paid"],
+    default: "Not Paid",
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

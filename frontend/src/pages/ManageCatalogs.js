@@ -8,10 +8,19 @@ import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import SuggestedPriceCalculator from "../components/SuggestedPriceCalculator";
 
 /* ────────────────────────────────────────────────────────────
- *  Helpers & constants
+ *  Axios Instance
  * ────────────────────────────────────────────────────────────*/
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const limit = 100;
+const axiosInstance = axios.create({
+  baseURL: `${BACKEND_URL}/api`,
+  timeout: 120000, // 2 min
+});
+
+/* ────────────────────────────────────────────────────────────
+ *  Helpers & constants
+ * ────────────────────────────────────────────────────────────*/
+const limit = 100; // products per page
 const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
 const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
 const obj = (arr) => Object.fromEntries(arr.map(({ name, count }) => [norm(name), count]));
@@ -124,8 +133,8 @@ export default function CreateManualCatalog() {
   const fetchFilterOptions = async (extraQS = "") => {
     try {
       const token = localStorage.getItem("token");
-      const { data } = await axios.get(
-        `${BACKEND_URL}/api/admin/products/filters${extraQS}`,
+      const { data } = await axiosInstance.get(
+        `/admin/products/filters${extraQS}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setFullCategories(data.categories.map((x) => x.name));
@@ -165,6 +174,13 @@ export default function CreateManualCatalog() {
       params.append("limit", limit);
       const { data } = await axios.get(
         `${BACKEND_URL}/api/admin/products?${params.toString()}`,
+
+      /* 1 — page of products */
+      const prodParams = buildParams();
+      prodParams.append("page", page);
+      prodParams.append("limit", limit);
+      const { data } = await axiosInstance.get(
+        `/admin/products?${prodParams.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setProducts(data.products || []);
@@ -214,6 +230,17 @@ export default function CreateManualCatalog() {
       .catch(console.error);
 
     fetchFilterOptions();
+    // opportunity list
+    (async () => {
+      try {
+        const { data } = await axiosInstance.get(`/admin/opportunities`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        setOpportunityCodes(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error opp codes:", err);
+      }
+    })();
   }, []);
 
   // Fetch company details when opportunityNumber changes
@@ -268,6 +295,25 @@ export default function CreateManualCatalog() {
         setSelectedCompanyData(data.customerCompany ? { companyName: data.customerCompany } : null);
         setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
         setSalutation(data.salutation || "Mr.");
+    }
+  }, [id]);
+
+  const fetchExistingCatalog = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axiosInstance.get(`/admin/catalogs/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setOpportunityNumber(data.opportunityNumber || "");
+      setCatalogName(data.catalogName || "");
+      setCustomerName(data.customerName || "");
+      setCustomerEmail(data.customerEmail || "");
+      setCustomerAddress(data.customerAddress || "");
+      setCustomerCompany(data.customerCompany || "");
+      setSelectedCompanyData(data.customerCompany || "");
+      setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
+      setSalutation(data.salutation || "Mr.");
 
         const existingMargin = data.margin ?? presetMarginOptions[0];
         if (presetMarginOptions.includes(existingMargin)) {
@@ -421,7 +467,7 @@ export default function CreateManualCatalog() {
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
+      const res = await axiosInstance.get(`/admin/companies?all=true`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(Array.isArray(res.data) ? res.data : []);
@@ -433,7 +479,7 @@ export default function CreateManualCatalog() {
   const fetchCompanyDetails = async (companyName) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+      const res = await axiosInstance.get(`/admin/companies`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { companyName },
       });
@@ -479,8 +525,8 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axios.post(
-        `${BACKEND_URL}/api/products/advanced-search`,
+      const res = await axiosInstance.post(
+        `/products/advanced-search`,
         formData,
         {
           headers: {
@@ -521,8 +567,8 @@ export default function CreateManualCatalog() {
               ]
             : [{ name: customerName, contactNumber: "", email: customerEmail }],
       };
-      await axios.put(
-        `${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`,
+      await axiosInstance.put(
+        `/admin/companies/${selectedCompanyData._id}`,
         updatedData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -579,6 +625,31 @@ export default function CreateManualCatalog() {
       navigate("/admin-dashboard/manage-catalogs");
     } catch (e) {
       alert(e.response?.data?.message || "Error saving catalog");
+      let response;
+      if (isEditMode) {
+        response = await axiosInstance.put(
+          `/admin/catalogs/${id}`,
+          catalogData,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        alert("Catalog updated successfully!");
+        navigate(`/admin-dashboard/manage-catalogs`);
+      } else {
+        response = await axiosInstance.post(`/admin/catalogs`, catalogData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        alert("Catalog created successfully!");
+        navigate(`/admin-dashboard/manage-catalogs`);
+      }
+    } catch (error) {
+      console.error("Error saving catalog:", error);
+      if (error.response && error.response.status === 400) {
+        alert(error.response.data.message || "Invalid opportunity number");
+      } else {
+        alert("Failed to save catalog. Check console.");
+      }
     }
   };
 
@@ -626,7 +697,7 @@ export default function CreateManualCatalog() {
         gst: selectedGst,
         items,
       };
-      await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
+      await axiosInstance.post(`/admin/quotations`, body, {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert("Quotation created successfully!");
@@ -1349,6 +1420,24 @@ function VariationModal({ product, onClose, onSave }) {
       return;
     }
     onSave(variations);
+    const out = variations.map((v) => {
+      const cost = product.productCost || 0;
+      return {
+        productId: product._id,
+        productName: product.productName || product.name || "Unknown Product",
+        productCost: cost,
+        productprice: cost,
+        productGST: product.productGST || 0,
+        color: v.color && v.color.trim() !== "" ? v.color : "N/A",
+        size: v.size && v.size.trim() !== "" ? v.size : "N/A",
+        quantity: v.quantity || 1,
+        material: product.material || "",
+        weight: product.material || "",
+        ProductDescription: product.productDetails || "",
+        ProductBrand: product.brandName || "",
+      };
+    });
+    onSave(out);
   };
 
   return (
@@ -1530,6 +1619,18 @@ function VariationEditModal({
     setBrandingTypes((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+    if ((!productDescription || !productBrand) && item.productId) {
+      axiosInstance
+        .get(`/admin/products/${item.productId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        })
+        .then(({ data }) => {
+          if (!productDescription) setProductDescription(data.productDetails || "");
+          if (!productBrand) setProductBrand(data.brandName || "");
+        })
+        .catch((err) => console.error("Error fetching prod details:", err));
+    }
+  }, [item.productId]);
 
   const handleSave = () =>
     onUpdate({
@@ -1548,6 +1649,14 @@ function VariationEditModal({
     });
 
   /* ── JSX ───────────────────────── */
+      material: material || "",
+      weight: weight || "",
+      ProductDescription: productDescription || "",
+      ProductBrand: productBrand || "",
+    };
+    onUpdate(upd);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
       <div className="flex items-center justify-center min-h-full py-8 px-4">

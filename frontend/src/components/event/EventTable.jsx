@@ -10,7 +10,7 @@ export default function EventTable({ data, onEdit, onDelete }) {
       scheduledOn:         new Date(s.scheduledOn).toLocaleDateString(),
       action:              s.action,
       assignedTo:          s.assignedTo?.name || "—",
-      discussion:          new Date(s.discussion).toLocaleString(),
+      discussion:          s.discussion || "",
       status:              s.status,
       reschedule:          s.reschedule ? new Date(s.reschedule).toLocaleString() : "",
       remarks:             s.remarks,

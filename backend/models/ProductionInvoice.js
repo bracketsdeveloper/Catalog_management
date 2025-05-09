@@ -10,6 +10,7 @@ const productionInvoiceItemSchema = new mongoose.Schema({
   paymentRef: { type: String },
   vendorInvoiceNumber: { type: String, required: true, uppercase: true, trim: true },
   vendorInvoiceReceived: { type: Boolean, default: false },
+  paymentStatus: { type: String, enum: ["Not Paid", "Partially Paid", "Fully Paid"] },
 });
 
 const productionInvoiceSchema = new mongoose.Schema({

@@ -162,6 +162,7 @@ export default function ManageProductionInvoice() {
           "Payment Modes": i.paymentModes?.map((p) => p.mode).join(", "),
           "Vendor Inv #": i.vendorInvoiceNumber,
           "Inv Received": i.vendorInvoiceReceived,
+          "Payment Status": i.paymentStatus,
         }))
       ),
       "Invoices"
