@@ -21,9 +21,13 @@ const purchaseInvoiceSchema = new mongoose.Schema(
       enum: ["Yes", "No"],
       default: "No",
     },
-    // NEW fields (optional)
     qtyRequired: { type: Number },
     qtyOrdered: { type: Number },
+    paymentStatus: {
+      type: String,
+      enum: ["Yes", "No"],
+      default: "No",
+    },
   },
   { timestamps: true }
 );

@@ -52,7 +52,6 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       sourcingFrom,
       cost,
       vendorInvoiceNumber,
-      // New fields (optional)
       qtyRequired,
       qtyOrdered,
     } = req.body;
@@ -64,7 +63,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       !clientName ||
       !eventName ||
       !sourcingFrom ||
-      cost === undefined // cost is required
+      cost === undefined
     ) {
       return res.status(400).json({
         message: "Required fields are missing",
@@ -77,7 +76,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
         ? vendorInvoiceNumber.toUpperCase()
         : "",
       vendorInvoiceReceived: req.body.vendorInvoiceReceived || "No",
-      // New fields are directly passed. They are optional so may be undefined.
+      paymentStatus: req.body.paymentStatus || "No",
       qtyRequired,
       qtyOrdered,
     };
@@ -102,9 +101,9 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       vendorInvoiceNumber: req.body.vendorInvoiceNumber
         ? req.body.vendorInvoiceNumber.toUpperCase()
         : "",
-      // Include new quantity fields
       qtyRequired: req.body.qtyRequired,
       qtyOrdered: req.body.qtyOrdered,
+      paymentStatus: req.body.paymentStatus || "No",
     };
 
     const invoice = await PurchaseInvoice.findByIdAndUpdate(
