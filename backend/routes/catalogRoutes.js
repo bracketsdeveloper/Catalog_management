@@ -28,6 +28,22 @@ async function createLog(action, oldValue, newValue, user, ip) {
   }
 }
 
+// helper: builds the sub‑doc exactly once ------------------------
+function buildSubDoc(p, docFromDB = {}) {
+  return {
+    productId        : p.productId,
+    productName      : p.productName      ?? docFromDB.productName ?? docFromDB.name,
+    ProductDescription: p.ProductDescription ?? docFromDB.productDetails ?? "",
+    ProductBrand     : p.ProductBrand     ?? docFromDB.brandName  ?? "",
+    color            : p.color      ?? "",
+    size             : p.size       ?? "",
+    quantity         : p.quantity   ?? 1,
+    productCost      : p.productCost ?? docFromDB.productCost ?? 0,
+    productGST       : p.productGST ?? docFromDB.productGST  ?? 0,
+  };
+}
+
+
 // 1) Get all catalogs
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -43,84 +59,43 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      opportunityNumber, // <-- NEW
-      catalogName,
-      salutation, // <-- NEW FIELD
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      products,
-      fieldsToDisplay,
-      priceRange,
-      margin,
-      gst,
+      opportunityNumber, catalogName, salutation, customerName,
+      customerEmail, customerCompany, customerAddress,
+      products = [], fieldsToDisplay = [], margin, gst = 18, priceRange,
     } = req.body;
 
-    // 1) Validate the opportunityNumber (if provided)
+    // validate opportunity once
     if (opportunityNumber) {
-      const validOpp = await Opportunity.findOne({ opportunityCode: opportunityNumber }).lean();
-      if (!validOpp) {
-        return res.status(400).json({ message: "Invalid opportunity number" });
-      }
+      const oppOk = await Opportunity.exists({ opportunityCode: opportunityNumber });
+      if (!oppOk) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
-    // 2) Build the products sub-doc array
-    const newProducts = [];
-    for (const p of products || []) {
-      const productDoc = await Product.findById(p.productId).lean();
-      if (!productDoc) {
-        console.warn(`Product not found: ${p.productId}`);
-        continue;
-      }
-      newProducts.push({
-        productId: p.productId,
-        productName: p.productName || productDoc.productName || productDoc.name,
-        ProductDescription:
-          p.ProductDescription !== undefined
-            ? p.ProductDescription
-            : productDoc.productDetails || "",
-        ProductBrand:
-          p.ProductBrand !== undefined
-            ? p.ProductBrand
-            : productDoc.brandName || "",
-        color: p.color || "",
-        size: p.size || "",
-        quantity: p.quantity !== undefined ? p.quantity : 1,
-        productCost:
-          p.productCost !== undefined ? p.productCost : productDoc.productCost || 0,
-        productGST:
-          p.productGST !== undefined ? p.productGST : productDoc.productGST || 0,
-        // hsnCode: 
-        //  p.hsnCode !== undefined ? p.hsnCode : productDoc.hsnCode || 0,
-      });
-    }
+    // -------- bulk‑fetch all products in a single query -------------
+    const ids = products.map(p => p.productId);
+    const prodDocs = await Product.find({ _id: { $in: ids } }).lean();
+    const prodMap = Object.fromEntries(prodDocs.map(d => [d._id.toString(), d]));
 
-    const newCatalog = new Catalog({
-      opportunityNumber, // store the new opportunityNumber
-      catalogName,
-      salutation, // store salutation
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      products: newProducts,
-      fieldsToDisplay: fieldsToDisplay || [],
-      margin,
-      gst: gst || 18,
-      priceRange,
-      createdBy: req.user ? req.user.email : "",
+    const subDocs = products
+      .filter(p => prodMap[p.productId])          // skip orphans
+      .map(p => buildSubDoc(p, prodMap[p.productId]));
+
+    const catalog = await Catalog.create({
+      opportunityNumber, catalogName, salutation, customerName,
+      customerEmail, customerCompany, customerAddress,
+      margin, gst, priceRange,
+      products      : subDocs,
+      fieldsToDisplay,
+      createdBy     : req.user?.email || "",
     });
 
-    await newCatalog.save();
-    await createLog("create", null, newCatalog, req.user, req.ip);
-
-    res.status(201).json({ message: "Catalog created", catalog: newCatalog });
-  } catch (error) {
-    console.error("Error creating catalog:", error);
+    await createLog("create", null, catalog, req.user, req.ip);
+    res.status(201).json({ message: "Catalog created", catalog });
+  } catch (err) {
+    console.error("create catalog:", err);
     res.status(500).json({ message: "Server error creating catalog" });
   }
 });
+
 
 // 3) Example AI Generate route (unchanged)
 router.post("/catalogs/ai-generate", authenticate, authorizeAdmin, async (req, res) => {
@@ -206,89 +181,39 @@ router.delete("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) =>
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      opportunityNumber, // <-- NEW
-      catalogName,
-      salutation, // <-- NEW FIELD
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      products,
-      fieldsToDisplay,
-      margin,
-      gst,
-      priceRange,
+      opportunityNumber, catalogName, salutation, customerName,
+      customerEmail, customerCompany, customerAddress,
+      products = [], fieldsToDisplay = [], margin, gst = 18, priceRange,
     } = req.body;
 
-    // Validate the opportunityNumber (if provided)
     if (opportunityNumber) {
-      const validOpp = await Opportunity.findOne({ opportunityCode: opportunityNumber }).lean();
-      if (!validOpp) {
-        return res.status(400).json({ message: "Invalid opportunity number" });
-      }
+      const oppOk = await Opportunity.exists({ opportunityCode: opportunityNumber });
+      if (!oppOk) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
     const catalog = await Catalog.findById(req.params.id);
-    if (!catalog) {
-      return res.status(404).json({ message: "Catalog not found" });
-    }
+    if (!catalog) return res.status(404).json({ message: "Catalog not found" });
 
-    // Before updating, store old state for logging
-    const oldCatalog = catalog.toObject();
+    const oldCopy = catalog.toObject();               // for the audit log
 
-    // Update basic fields
-    catalog.opportunityNumber = opportunityNumber || "";
-    catalog.catalogName = catalogName;
-    catalog.salutation = salutation;
-    catalog.customerName = customerName;
-    catalog.customerEmail = customerEmail;
-    catalog.customerCompany = customerCompany;
-    catalog.customerAddress = customerAddress;
-    catalog.fieldsToDisplay = fieldsToDisplay || [];
-    catalog.margin = margin;
-    catalog.gst = gst || 18;
-    catalog.priceRange = priceRange;
+    // bulk‑fetch
+    const ids = products.map(p => p.productId);
+    const prodDocs = await Product.find({ _id: { $in: ids } }).lean();
+    const prodMap = Object.fromEntries(prodDocs.map(d => [d._id.toString(), d]));
 
-    // Merge product updates
-    const updatedProducts = [];
-    for (let p of products || []) {
-      if (p._id && p._id !== "undefined") {
-        const existingProduct = catalog.products.id(p._id);
-        if (existingProduct) {
-          existingProduct.color = p.color || existingProduct.color;
-          existingProduct.size = p.size || existingProduct.size;
-          existingProduct.quantity = p.quantity || existingProduct.quantity;
-          //existingProduct.hsnCode = p.hsnCode || existingProduct.hsnCode;   // added hsncode
-          existingProduct.productCost =
-            p.productCost !== undefined ? p.productCost : existingProduct.productCost;
-          existingProduct.productGST =
-            p.productGST !== undefined ? p.productGST : existingProduct.productGST;
-          existingProduct.ProductDescription =
-            p.ProductDescription !== undefined
-              ? p.ProductDescription
-              : existingProduct.ProductDescription;
-          existingProduct.ProductBrand =
-            p.ProductBrand !== undefined
-              ? p.ProductBrand
-              : existingProduct.ProductBrand;
-          updatedProducts.push(existingProduct);
-        } else {
-          // No matching subdoc found; add as new
-          updatedProducts.push(p);
-        }
-      } else {
-        // Treat as new
-        updatedProducts.push(p);
-      }
-    }
-    catalog.products = updatedProducts;
+    // merge / replace list
+    catalog.products = products.map(p => buildSubDoc(p, prodMap[p.productId]));
+    catalog.set({
+      opportunityNumber, catalogName, salutation, customerName,
+      customerEmail, customerCompany, customerAddress,
+      margin, gst, priceRange, fieldsToDisplay,
+    });
 
-    const updatedCatalog = await catalog.save();
-    await createLog("update", oldCatalog, updatedCatalog, req.user, req.ip);
-
-    res.json({ message: "Catalog updated", catalog: updatedCatalog });
-  } catch (error) {
-    console.error("Error updating catalog:", error);
+    const updated = await catalog.save();
+    await createLog("update", oldCopy, updated, req.user, req.ip);
+    res.json({ message: "Catalog updated", catalog: updated });
+  } catch (err) {
+    console.error("update catalog:", err);
     res.status(500).json({ message: "Server error updating catalog" });
   }
 });

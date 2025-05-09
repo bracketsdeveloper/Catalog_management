@@ -7,9 +7,17 @@ import CompanyModal from "../components/CompanyModal";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 /* ────────────────────────────────────────────────────────────
- *  Helpers & constants
+ *  Axios Instance
  * ────────────────────────────────────────────────────────────*/
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const axiosInstance = axios.create({
+  baseURL: `${BACKEND_URL}/api`,
+  timeout: 120000, // 2 min
+});
+
+/* ────────────────────────────────────────────────────────────
+ *  Helpers & constants
+ * ────────────────────────────────────────────────────────────*/
 const limit = 100; // products per page
 const BagIcon = () => <span style={{ fontSize: "1.2rem" }}>🛍️</span>;
 const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
@@ -121,8 +129,8 @@ export default function CreateManualCatalog() {
   const fetchFilterOptions = async (extraQS = "") => {
     try {
       const token = localStorage.getItem("token");
-      const { data } = await axios.get(
-        `${BACKEND_URL}/api/admin/products/filters${extraQS}`,
+      const { data } = await axiosInstance.get(
+        `/admin/products/filters${extraQS}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -165,8 +173,8 @@ export default function CreateManualCatalog() {
       const prodParams = buildParams();
       prodParams.append("page", page);
       prodParams.append("limit", limit);
-      const { data } = await axios.get(
-        `${BACKEND_URL}/api/admin/products?${prodParams.toString()}`,
+      const { data } = await axiosInstance.get(
+        `/admin/products?${prodParams.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -192,7 +200,7 @@ export default function CreateManualCatalog() {
     // opportunity list
     (async () => {
       try {
-        const { data } = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+        const { data } = await axiosInstance.get(`/admin/opportunities`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
         setOpportunityCodes(Array.isArray(data) ? data : []);
@@ -252,7 +260,7 @@ export default function CreateManualCatalog() {
   const fetchExistingCatalog = async () => {
     try {
       const token = localStorage.getItem("token");
-      const { data } = await axios.get(`${BACKEND_URL}/api/admin/catalogs/${id}`, {
+      const { data } = await axiosInstance.get(`/admin/catalogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -320,7 +328,7 @@ export default function CreateManualCatalog() {
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
+      const res = await axiosInstance.get(`/admin/companies?all=true`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(Array.isArray(res.data) ? res.data : []);
@@ -346,7 +354,7 @@ export default function CreateManualCatalog() {
   const fetchCompanyDetails = async (companyName) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
+      const res = await axiosInstance.get(`/admin/companies`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { companyName },
       });
@@ -394,8 +402,8 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
-      const res = await axios.post(
-        `${BACKEND_URL}/api/products/advanced-search`,
+      const res = await axiosInstance.post(
+        `/products/advanced-search`,
         formData,
         {
           headers: {
@@ -532,8 +540,8 @@ export default function CreateManualCatalog() {
               ]
             : [{ name: customerName, contactNumber: "", email: customerEmail }],
       };
-      await axios.put(
-        `${BACKEND_URL}/api/admin/companies/${selectedCompanyData._id}`,
+      await axiosInstance.put(
+        `/admin/companies/${selectedCompanyData._id}`,
         updatedData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -588,8 +596,8 @@ export default function CreateManualCatalog() {
       const token = localStorage.getItem("token");
       let response;
       if (isEditMode) {
-        response = await axios.put(
-          `${BACKEND_URL}/api/admin/catalogs/${id}`,
+        response = await axiosInstance.put(
+          `/admin/catalogs/${id}`,
           catalogData,
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -598,7 +606,7 @@ export default function CreateManualCatalog() {
         alert("Catalog updated successfully!");
         navigate(`/admin-dashboard/manage-catalogs`);
       } else {
-        response = await axios.post(`${BACKEND_URL}/api/admin/catalogs`, catalogData, {
+        response = await axiosInstance.post(`/admin/catalogs`, catalogData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         alert("Catalog created successfully!");
@@ -663,7 +671,7 @@ export default function CreateManualCatalog() {
         gst: selectedGst,
         items,
       };
-      await axios.post(`${BACKEND_URL}/api/admin/quotations`, body, {
+      await axiosInstance.post(`/admin/quotations`, body, {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert("Quotation created successfully!");
@@ -683,7 +691,7 @@ export default function CreateManualCatalog() {
   const handleNextPage = () => {
     if (currentPage < totalPages) {
       fetchProducts(currentPage + 1);
-      }
+    }
   };
 
   // Company selection
@@ -1393,7 +1401,7 @@ function VariationModal({ product, onClose, onSave }) {
         size: v.size && v.size.trim() !== "" ? v.size : "N/A",
         quantity: v.quantity || 1,
         material: product.material || "",
-        weight: product.weight || "",
+        weight: product.material || "",
         ProductDescription: product.productDetails || "",
         ProductBrand: product.brandName || "",
       };
@@ -1542,8 +1550,8 @@ function VariationEditModal({ item, onClose, onUpdate }) {
   /* (fetch product details only if missing) */
   useEffect(() => {
     if ((!productDescription || !productBrand) && item.productId) {
-      axios
-        .get(`${BACKEND_URL}/api/admin/products/${item.productId}`, {
+      axiosInstance
+        .get(`/admin/products/${item.productId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         })
         .then(({ data }) => {
@@ -1567,8 +1575,8 @@ function VariationEditModal({ item, onClose, onUpdate }) {
       weight: weight || "",
       ProductDescription: productDescription || "",
       ProductBrand: productBrand || "",
-    }
-      onUpdate(upd);
+    };
+    onUpdate(upd);
   };
 
   return (
