@@ -141,6 +141,7 @@ router.get("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.json(c);
   } catch (e) {
     console.error(e);
+    
     res.status(500).json({ message: "Fetch failed" });
   }
 });

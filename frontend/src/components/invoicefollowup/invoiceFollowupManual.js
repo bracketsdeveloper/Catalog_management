@@ -62,7 +62,7 @@ export default function InvoiceFollowUpManual({onClose}) {
         async function fetchJobSheetSuggestions() {
             try {
                 const token = localStorage.getItem("token");
-                const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+                const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 setJobSheetSuggestion(res.data || []);
@@ -118,7 +118,7 @@ export default function InvoiceFollowUpManual({onClose}) {
           onChange={handleChange}
         >
           <option value="">Select...</option>
-          {getUniqueOptions("clientCompanyName").map((name, idx) => (
+          {getUniqueOptions("companyName").map((name, idx) => (
             <option key={idx} value={name}>
               {name.length > 20 ? name.slice(0, 60) + "..." : name}
             </option>
@@ -137,7 +137,7 @@ export default function InvoiceFollowUpManual({onClose}) {
           onChange={handleChange}
         >
           <option value="">Select...</option>
-          {getUniqueOptions("clientName").map((name, idx) => (
+          {getUniqueOptions("name").map((name, idx) => (
             <option key={idx} value={name}>{name}</option>
           ))}
         </select>
