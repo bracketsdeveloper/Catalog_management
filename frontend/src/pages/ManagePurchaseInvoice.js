@@ -277,7 +277,7 @@ export default function ManagePurchaseInvoice() {
             paymentMade: m?.paymentMade ?? p.paymentMade ?? 0,
             vendorInvoiceNumber: m?.vendorInvoiceNumber ?? p.vendorInvoiceNumber ?? "",
             vendorInvoiceReceived: m?.vendorInvoiceReceived ?? p.vendorInvoiceReceived ?? "No",
-            paymentStatus: m?.paymentStatus ?? p.paymentStatus ?? "No",
+            paymentStatus: m?.paymentStatus ?? p.paymentStatus ?? "Not Paid",
             _id: m?._id, // Use PurchaseInvoice _id only
             clientCompanyName: m?.clientName ?? p.clientCompanyName,
             orderConfirmedDate: m?.orderConfirmationDate ?? p.orderConfirmedDate,
@@ -296,7 +296,7 @@ export default function ManagePurchaseInvoice() {
               orderConfirmedDate: i.orderConfirmationDate,
               qtyRequired: i.qtyRequired ?? 0,
               qtyOrdered: i.qtyOrdered ?? 0,
-              paymentStatus: i.paymentStatus ?? "No",
+              paymentStatus: i.paymentStatus ?? "Not Paid",
             });
           }
         });
