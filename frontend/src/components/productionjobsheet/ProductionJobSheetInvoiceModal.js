@@ -16,6 +16,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
     newPaymentMode: "",
     vendorInvoiceNumber: invoice.vendorInvoiceNumber || "",
     vendorInvoiceReceived: invoice.vendorInvoiceReceived || "No",
+    paymentStatus: invoice.paymentStatus || "Not Paid",
   });
 
   const handleInputChange = (e) => {
@@ -60,6 +61,7 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
       paymentModes: formData.paymentModes,
       vendorInvoiceNumber: formData.vendorInvoiceNumber.toUpperCase(),
       vendorInvoiceReceived: formData.vendorInvoiceReceived,
+      paymentStatus: formData.paymentStatus,
     };
 
     try {
@@ -208,6 +210,19 @@ const ProductionJobSheetInvoiceModal = ({ invoice, onClose }) => {
             >
               <option value="Yes">Yes</option>
               <option value="No">No</option>
+            </select>
+          </div>
+          <div className="col-span-1">
+            <label className="font-semibold text-purple-600">Payment Status</label>
+            <select
+              name="paymentStatus"
+              value={formData.paymentStatus}
+              onChange={handleInputChange}
+              className="w-full border p-1 rounded"
+            >
+              <option value="Not Paid">Not Paid</option>
+              <option value="Partially Paid">Partially Paid</option>
+              <option value="Fully Paid">Fully Paid</option>
             </select>
           </div>
           <div className="col-span-3 flex justify-end space-x-3 mt-4">

@@ -37,7 +37,7 @@ export default function AddEventModal({ ev, onClose }) {
         action:         s.action || "",
         assignedTo:     s.assignedTo?._id || s.assignedTo||"",
         assignedToName: s.assignedTo?.name || "",
-        discussion:     s.discussion ? new Date(s.discussion).toISOString().slice(0,16) : "",
+        discussion:     s.discussion || "",
         status:         s.status || "",
         reschedule:     s.reschedule ? new Date(s.reschedule).toISOString().slice(0,16) : "",
         remarks:        s.remarks || ""
@@ -237,7 +237,7 @@ export default function AddEventModal({ ev, onClose }) {
                 Discussion
               </label>
               <input
-                type="datetime-local"
+                type="text"
                 value={s.discussion}
                 onChange={e=>updateRow(i,"discussion",e.target.value)}
                 className="border rounded p-2 w-full"

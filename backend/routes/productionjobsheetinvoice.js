@@ -34,6 +34,7 @@ router.get("/aggregated", authenticate, authorizeAdmin, async (req, res) => {
           paymentModes: [],
           vendorInvoiceNumber: "",
           vendorInvoiceReceived: "No",
+          paymentStatus: "Not Paid",
           createdAt: pjs.createdAt,
           updatedAt: pjs.updatedAt,
           isVirtual: true,
@@ -81,6 +82,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       "negotiatedCost",
       "vendorInvoiceNumber",
       "vendorInvoiceReceived",
+      "paymentStatus",
     ];
     for (const f of required) {
       if (!data[f]) return res.status(400).json({ message: `${f} is missing` });

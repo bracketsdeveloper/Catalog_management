@@ -17,7 +17,7 @@ const scheduleSchema = new mongoose.Schema({
   scheduledOn: { type: Date },
   action:      { type: String, enum: ["Call","Msg","Mail","Meet","Assign to CRM"] },
   assignedTo:  { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  discussion:  { type: Date },
+  discussion:  { type: String },
   status:      { type: String, enum: ["","Done","Not done"], default: "" },
   reschedule:  { type: Date },
   remarks:     { type: String }

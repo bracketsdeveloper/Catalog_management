@@ -21,6 +21,7 @@ function FilterRow({ filters, onChange }) {
     "negotiatedCost",
     "vendorInvoiceNumber",
     "vendorInvoiceReceived",
+    "paymentStatus",
   ];
   return (
     <tr className="bg-gray-100">
@@ -89,6 +90,7 @@ export default function ProductionJobSheetInvoiceTable({
         "Payment Modes": i.paymentModes?.map((p) => p.mode).join(", "),
         "Vendor Inv #": i.vendorInvoiceNumber,
         "Inv Received": i.vendorInvoiceReceived,
+        "Payment Status": i.paymentStatus,
       }))
     );
     const wb = XLSX.utils.book_new();
@@ -133,11 +135,13 @@ export default function ProductionJobSheetInvoiceTable({
             {[
               ["vendorInvoiceNumber", "Vendor Invoice Number"],
               ["vendorInvoiceReceived", "Vendor Invoice Received"],
+              ["paymentStatus", "Payment Status"],
             ].map(([k, l]) => (
               <th key={k} className="p-2 border cursor-pointer" onClick={() => onSortChange(k)}>
                 {l} {icon(k)}
               </th>
             ))}
+            {/* <th className="p-2 border">Payment Status</th> */}
             <th className="p-2 border">Actions</th>
           </tr>
           <FilterRow filters={headerFilters} onChange={onHeaderFilterChange} />
@@ -177,6 +181,7 @@ export default function ProductionJobSheetInvoiceTable({
               </td>
               <td className="p-2 border">{t(i.vendorInvoiceNumber)}</td>
               <td className="p-2 border">{t(i.vendorInvoiceReceived)}</td>
+              <td className="p-2 border">{i.paymentStatus}</td>
               <td className="p-2 border text-center">
                 <button onClick={() => onActionClick(i)} className="focus:outline-none">
                   ⋮
