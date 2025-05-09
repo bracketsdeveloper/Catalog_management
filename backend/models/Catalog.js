@@ -17,6 +17,7 @@ const productSubSchema = new mongoose.Schema({
   productGST: { type: Number, default: 0 },
 });
 
+
 // A remark schema for chatting
 const remarkSchema = new mongoose.Schema({
   sender: { type: String },
