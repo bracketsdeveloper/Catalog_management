@@ -135,6 +135,10 @@ const router = createBrowserRouter([
                     },
                     {
                         path:'quotation/manual/:id',
+                        element:<ManageCatalogs/>
+                    },
+                    {
+                        path:'oldquotation/manual/:id',
                         element:<EditQuotation/>
                     },
                     {

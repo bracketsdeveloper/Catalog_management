@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import CompanyModal from "../components/CompanyModal";
 import FilterDropdown from "../components/manualcatalog/FilterDropdown.js";
 import ProductCard from "../components/manualcatalog/ProductCard.js";
@@ -21,7 +21,12 @@ const obj = (arr) => Object.fromEntries(arr.map(({ name, count }) => [norm(name)
 export default function CreateManualCatalog() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEditMode = Boolean(id);
+  const location = useLocation();
+
+  // Determine mode based on URL path
+  const isCatalogEditMode = location.pathname.includes("/catalogs/manual");
+  const isQuotationEditMode = location.pathname.includes("/quotation/manual");
+  const isCreateMode = !isCatalogEditMode && !isQuotationEditMode;
 
   // ─── State ────────────────────────────────────────────────────────────────
   const [opportunityNumber, setOpportunityNumber] = useState("");
@@ -79,6 +84,7 @@ export default function CreateManualCatalog() {
   const [customGst, setCustomGst] = useState("");
 
   const [cartOpen, setCartOpen] = useState(false);
+  const [quotationId, setQuotationId] = useState(null);
 
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
@@ -93,6 +99,13 @@ export default function CreateManualCatalog() {
   const [variationModalProduct, setVariationModalProduct] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
+
+  // ─── Dropdown‐open state for each filter ─────────────────────────────────
+  const [catsOpen, setCatsOpen] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
+  const [brandsOpen, setBrandsOpen] = useState(false);
+  const [prOpen, setPrOpen] = useState(false);
+  const [vhOpen, setVhOpen] = useState(false);
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
 
@@ -127,13 +140,7 @@ export default function CreateManualCatalog() {
         variationHinges: obj(data.variationHinges),
       });
     } catch {
-      setFilterCounts({
-        categories: {},
-        subCategories: {},
-        brands: {},
-        priceRanges: {},
-        variationHinges: {},
-      });
+      setFilterCounts({ categories: {}, subCategories: {}, brands: {}, priceRanges: {}, variationHinges: {} });
       setFullCategories([]);
       setFullSubCategories([]);
       setFullBrands([]);
@@ -170,10 +177,12 @@ export default function CreateManualCatalog() {
       .get(`${BACKEND_URL}/api/admin/opportunities`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => setOpportunityCodes(Array.isArray(r.data) ? r.data : []))
       .catch(console.error);
+
     axios
       .get(`${BACKEND_URL}/api/admin/catalogs/branding-types`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => setBrandingTypesList(Array.isArray(r.data) ? r.data : []))
       .catch(console.error);
+
     axios
       .get(`${BACKEND_URL}/api/admin/segments`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => setSegmentsList(Array.isArray(r.data) ? r.data : []))
@@ -183,62 +192,18 @@ export default function CreateManualCatalog() {
     fetchProducts(1);
   }, []);
 
-  // ─── Auto‐populate Company on Opportunity change ──────────────────────────
+  // ─── Fetch Catalog or Quotation for Editing ───────────────────────────────
   useEffect(() => {
-    if (!opportunityNumber) {
-      setCustomerCompany("");
-      setSelectedCompanyData(null);
-      setCustomerAddress("");
-      setClients([]);
-      setCustomerName("");
-      setCustomerEmail("");
-      return;
-    }
-    const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
-    if (opp && opp.account) {
-      setCustomerCompany(opp.account);
-      axios
-        .get(`${BACKEND_URL}/api/admin/companies`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-          params: { companyName: opp.account },
-        })
-        .then((res) => {
-          const comp = Array.isArray(res.data) ? res.data[0] : res.data;
-          if (comp) {
-            setSelectedCompanyData(comp);
-            setCustomerAddress(comp.companyAddress || "");
-            setClients(comp.clients || []);
-            setCustomerName("");
-            setCustomerEmail("");
-          }
-        })
-        .catch(() => {
-          setSelectedCompanyData(null);
-          setCustomerAddress("");
-          setClients([]);
-          setCustomerName("");
-          setCustomerEmail("");
-        });
-    } else {
-      setCustomerCompany("");
-      setSelectedCompanyData(null);
-      setCustomerAddress("");
-      setClients([]);
-      setCustomerName("");
-      setCustomerEmail("");
-    }
-  }, [opportunityNumber, opportunityCodes]);
+    if (!id || (!isCatalogEditMode && !isQuotationEditMode)) return;
 
-  // ─── Load existing Catalog (edit mode) ────────────────────────────────────
-  useEffect(() => {
-    if (!isEditMode) return;
     setLoading(true);
-    axios
-      .get(`${BACKEND_URL}/api/admin/catalogs/${id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      })
-      .then(({ data }) => {
-        console.log("Fetched Catalog Data:", data);
+    const token = localStorage.getItem("token");
+
+    const fetchCatalog = async () => {
+      try {
+        const { data } = await axios.get(`${BACKEND_URL}/api/admin/catalogs/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setOpportunityNumber(data.opportunityNumber || "");
         setCatalogName(data.catalogName || "");
         setCustomerName(data.customerName || "");
@@ -295,17 +260,162 @@ export default function CreateManualCatalog() {
                   brandingCost: 0,
                   finalPrice: 0,
                 },
+                imageIndex: item.imageIndex || 0,
               }))
             : []
         );
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [id, isEditMode]);
+
+        // Check for associated quotation
+        const { data: quotationData } = await axios.get(`${BACKEND_URL}/api/admin/quotations?catalog=${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (Array.isArray(quotationData) && quotationData.length > 0) {
+          setQuotationId(quotationData[0]._id);
+        }
+      } catch (err) {
+        console.error("Error fetching catalog:", err);
+      }
+    };
+
+    const fetchQuotation = async () => {
+      try {
+        const { data } = await axios.get(`${BACKEND_URL}/api/admin/quotations/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setQuotationId(data._id);
+        setOpportunityNumber(data.opportunityNumber || "");
+        setCatalogName(data.catalogName || "");
+        setCustomerName(data.customerName || "");
+        setCustomerEmail(data.customerEmail || "");
+        setCustomerAddress(data.customerAddress || "");
+        setCustomerCompany(data.customerCompany || "");
+        setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
+        setSalutation(data.salutation || "Mr.");
+
+        const m = data.margin ?? presetMarginOptions[0];
+        if (presetMarginOptions.includes(m)) {
+          setMarginOption("preset");
+          setSelectedMargin(m);
+        } else {
+          setMarginOption("custom");
+          setCustomMargin(String(m));
+          setSelectedMargin(m);
+        }
+
+        const g = data.gst ?? presetGstOptions[0];
+        if (presetGstOptions.includes(g)) {
+          setGstOption("preset");
+          setSelectedGst(g);
+        } else {
+          setGstOption("custom");
+          setCustomGst(String(g));
+          setSelectedGst(g);
+        }
+
+        setSelectedProducts(
+          Array.isArray(data.items)
+            ? data.items.map((item) => ({
+                productId: item.productId?._id || item.productId,
+                productName: item.product || "Unknown",
+                ProductDescription: "",
+                ProductBrand: "",
+                color: item.product.match(/\((\w+)\)/)?.[1] || "N/A",
+                size: item.product.match(/\[(\w+)\]/)?.[1] || "N/A",
+                quantity: item.quantity || 1,
+                productCost: item.productprice || 0,
+                productGST: item.productGST || 0,
+                material: item.material || "",
+                weight: item.weight || "",
+                brandingTypes: Array.isArray(item.brandingTypes)
+                  ? item.brandingTypes.map((bt) => bt._id || bt)
+                  : [],
+                baseCost: item.baseCost || 0,
+                suggestedBreakdown: item.suggestedBreakdown || {
+                  baseCost: 0,
+                  marginPct: 0,
+                  marginAmount: 0,
+                  logisticsCost: 0,
+                  brandingCost: 0,
+                  finalPrice: 0,
+                },
+                imageIndex: item.imageIndex || 0,
+              }))
+            : []
+        );
+      } catch (err) {
+        console.error("Error fetching quotation:", err);
+      }
+    };
+
+    if (isCatalogEditMode) {
+      fetchCatalog();
+    } else if (isQuotationEditMode) {
+      fetchQuotation();
+    }
+
+    setLoading(false);
+  }, [id, isCatalogEditMode, isQuotationEditMode]);
+
+  // ─── Auto‐populate Company on Opportunity change ──────────────────────────
+  useEffect(() => {
+    if (!opportunityNumber) {
+      setCustomerCompany("");
+      setSelectedCompanyData(null);
+      setCustomerAddress("");
+      setClients([]);
+      setCustomerName("");
+      setCustomerEmail("");
+      return;
+    }
+    const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
+    if (opp && opp.account) {
+      setCustomerCompany(opp.account);
+      axios
+        .get(`${BACKEND_URL}/api/admin/companies`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          params: { companyName: opp.account },
+        })
+        .then((res) => {
+          const comp = Array.isArray(res.data) ? res.data[0] : res.data;
+          if (comp) {
+            setSelectedCompanyData(comp);
+            setCustomerAddress(comp.companyAddress || "");
+            setClients(comp.clients || []);
+            setCustomerName("");
+            setCustomerEmail(comp.companyEmail || "");
+          }
+        })
+        .catch(() => {
+          setSelectedCompanyData(null);
+          setCustomerAddress("");
+          setClients([]);
+          setCustomerName("");
+          setCustomerEmail("");
+        });
+    } else {
+      setCustomerCompany("");
+      setSelectedCompanyData(null);
+      setCustomerAddress("");
+      setClients([]);
+      setCustomerName("");
+      setCustomerEmail("");
+    }
+  }, [opportunityNumber, opportunityCodes]);
+
+  // ─── Re‐fetch on searchTerm or filter change ──────────────────────────────
+  useEffect(() => {
+    fetchProducts(1);
+    setCatsOpen(false);
+    setSubOpen(false);
+    setBrandsOpen(false);
+    setPrOpen(false);
+    setVhOpen(false);
+  }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges, selectedVariationHinges]);
 
   // ─── Action Handlers ─────────────────────────────────────────────────────
   const toggleFilter = (val, arr, setArr) =>
     arr.includes(val) ? setArr(arr.filter((v) => v !== val)) : setArr([...arr, val]);
+
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategories([]);
@@ -336,6 +446,7 @@ export default function CreateManualCatalog() {
         brandingTypes: [],
         baseCost: cost,
         suggestedBreakdown: { baseCost: 0, marginPct: 0, marginAmount: 0, logisticsCost: 0, brandingCost: 0, finalPrice: 0 },
+        imageIndex: 0,
       },
     ]);
   };
@@ -358,6 +469,7 @@ export default function CreateManualCatalog() {
       brandingTypes: [],
       baseCost: cost,
       suggestedBreakdown: { baseCost: 0, marginPct: 0, marginAmount: 0, logisticsCost: 0, brandingCost: 0, finalPrice: 0 },
+      imageIndex: 0,
     }));
     const filtered = newItems.filter((i) => !isDuplicate(i.productId, i.color, i.size));
     if (filtered.length < newItems.length) alert("Some variations were duplicates and were not added.");
@@ -389,57 +501,134 @@ export default function CreateManualCatalog() {
     });
   };
 
-  const handleCreateQuotation = async () => {
+  // ─── Build Quotation Payload ──────────────────────────────────────────────
+  function buildQuotationPayload() {
+    return {
+      _id: quotationId,
+      opportunityNumber,
+      catalogId: isCatalogEditMode ? id : undefined,
+      catalogName,
+      salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      margin: selectedMargin,
+      gst: selectedGst,
+      fieldsToDisplay,
+      priceRange: { from: null, to: null },
+      items: selectedProducts.map((p, i) => {
+        const qty = p.quantity || 1;
+        const base = p.productCost || 0;
+        const rate = parseFloat(base.toFixed(2));
+        const amount = rate * qty;
+        const gst = p.productGST ?? selectedGst;
+        const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
+        const total = parseFloat((amount + gstVal).toFixed(2));
+        return {
+          slNo: i + 1,
+          productId: typeof p.productId === "object" ? p.productId._id : p.productId,
+          product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
+          hsnCode: p.hsnCode || "",
+          quantity: qty,
+          rate,
+          productprice: base,
+          amount,
+          productGST: gst,
+          total,
+          baseCost: p.baseCost || 0,
+          material: p.material || "",
+          weight: p.weight || "",
+          brandingTypes: p.brandingTypes || [],
+          suggestedBreakdown: p.suggestedBreakdown || {},
+          imageIndex: p.imageIndex || 0,
+        };
+      }),
+      terms: [],
+      displayTotals: true,
+      displayHSNCodes: true,
+    };
+  }
+
+  // ─── Save (Create or Update) Quotation ────────────────────────────────────
+  const handleSaveQuotation = async () => {
     if (!catalogName || !selectedProducts.length) {
-      alert("Enter Catalog Name & add at least one product");
-      return;
+      return alert("Enter Catalog Name & add ≥1 product");
     }
-    const items = selectedProducts.map((p, i) => {
-      const qty = p.quantity || 1;
-      const base = p.productCost || 0;
-      const rate = parseFloat(base.toFixed(2));
-      const amount = rate * qty;
-      const gst = p.productGST ?? selectedGst;
-      const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
-      const total = parseFloat((amount + gstVal).toFixed(2));
-      return {
-        slNo: i + 1,
-        productId: typeof p.productId === "object" ? p.productId._id : p.productId,
-        product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
-        quantity: qty,
-        rate,
-        productprice: base,
-        amount,
-        productGST: gst,
-        total,
-      };
-    });
+    const payload = buildQuotationPayload();
     try {
       const token = localStorage.getItem("token");
-      await axios.post(
-        `${BACKEND_URL}/api/admin/quotations`,
-        {
-          catalogName,
-          salutation,
-          customerName,
-          customerEmail,
-          customerAddress,
-          customerCompany,
-          margin: selectedMargin,
-          gst: selectedGst,
-          items,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert("Quotation created!");
+      const method = isQuotationEditMode && quotationId ? "put" : "post";
+      const url = isQuotationEditMode && quotationId
+        ? `${BACKEND_URL}/api/admin/quotations/${quotationId}`
+        : `${BACKEND_URL}/api/admin/quotations`;
+      const { data } = await axios[method](url, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setQuotationId(data.quotation._id);
+      alert(isQuotationEditMode && quotationId ? "Quotation updated!" : "Quotation created!");
     } catch {
-      alert("Error creating quotation");
+      alert("Error saving quotation");
+    }
+  };
+
+  // ─── Save (Create or Update) Catalog ──────────────────────────────────────
+  const handleSaveCatalog = async () => {
+    if (!opportunityNumber || !catalogName || !selectedProducts.length) {
+      alert("Please fill required fields and add at least one product");
+      return;
+    }
+    const payload = {
+      opportunityNumber,
+      catalogName,
+      salutation,
+      customerName,
+      customerEmail,
+      customerAddress,
+      customerCompany,
+      margin: selectedMargin,
+      gst: selectedGst,
+      products: selectedProducts.map((p) => ({
+        _id: p._id,
+        productId: p.productId,
+        productName: p.productName,
+        ProductDescription: p.ProductDescription,
+        ProductBrand: p.ProductBrand,
+        color: p.color,
+        size: p.size,
+        quantity: p.quantity,
+        productCost: p.productCost,
+        productGST: p.productGST,
+        material: p.material,
+        weight: p.weight,
+        brandingTypes: p.brandingTypes,
+        baseCost: p.baseCost,
+        suggestedBreakdown: p.suggestedBreakdown,
+        imageIndex: p.imageIndex,
+      })),
+      fieldsToDisplay,
+    };
+
+    try {
+      const token = localStorage.getItem("token");
+      const method = isCatalogEditMode ? "put" : "post";
+      const url = isCatalogEditMode
+        ? `${BACKEND_URL}/api/admin/catalogs/${id}`
+        : `${BACKEND_URL}/api/admin/catalogs`;
+      await axios[method](url, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      alert(isCatalogEditMode ? "Catalog updated!" : "Catalog created!");
+      navigate("/admin-dashboard/manage-catalogs");
+    } catch (e) {
+      alert(e.response?.data?.message || "Error saving catalog");
     }
   };
 
   const handlePrevPage = () => {
     if (currentPage > 1) fetchProducts(currentPage - 1);
   };
+
   const handleNextPage = () => {
     if (currentPage < totalPages) fetchProducts(currentPage + 1);
   };
@@ -465,6 +654,7 @@ export default function CreateManualCatalog() {
   const handleImageSearchClick = () => {
     imageInputRef.current?.click();
   };
+
   const handleImageSearch = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -487,6 +677,7 @@ export default function CreateManualCatalog() {
       setAdvancedSearchLoading(false);
     }
   };
+
   const handleClearAdvancedSearch = () => {
     setAdvancedSearchActive(false);
     setAdvancedSearchResults([]);
@@ -522,58 +713,8 @@ export default function CreateManualCatalog() {
     }
   };
 
-  const handleSaveCatalog = async () => {
-    if (!opportunityNumber || !catalogName || !selectedProducts.length) {
-      alert("Please fill required fields and add at least one product");
-      return;
-    }
-    const payload = {
-      opportunityNumber,
-      catalogName,
-      salutation,
-      customerName,
-      customerEmail,
-      customerAddress,
-      customerCompany,
-      margin: selectedMargin,
-      gst: selectedGst,
-      products: selectedProducts.map((p) => ({
-        _id: p._id,
-        productId: p.productId,
-        productName: p.productName,
-        ProductDescription: p.ProductDescription,
-        ProductBrand: p.ProductBrand,
-        color: p.color,
-        size: p.size,
-        quantity: p.quantity,
-        productCost: p.productCost,
-        productGST: p.productGST,
-        material: p.material,
-        weight: p.weight,
-        brandingTypes: p.brandingTypes,
-        baseCost: p.baseCost,
-        suggestedBreakdown: p.suggestedBreakdown,
-      })),
-      fieldsToDisplay,
-    };
-
-    try {
-      const token = localStorage.getItem("token");
-      const method = isEditMode ? "put" : "post";
-      const url = isEditMode
-        ? `${BACKEND_URL}/api/admin/catalogs/${id}`
-        : `${BACKEND_URL}/api/admin/catalogs`;
-      await axios[method](url, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      alert(isEditMode ? "Catalog updated!" : "Catalog created!");
-      navigate("/admin-dashboard/manage-catalogs");
-    } catch (e) {
-      alert(e.response?.data?.message || "Error saving catalog");
-    }
-  };
-
   const handleOpenCompanyModal = () => setShowCompanyModal(true);
+
   const handleCloseCompanyModal = () => {
     setShowCompanyModal(false);
     fetchCompanies();
@@ -583,6 +724,7 @@ export default function CreateManualCatalog() {
     setVariationModalProduct(product);
     setVariationModalOpen(true);
   };
+
   const closeVariationModal = () => {
     setVariationModalOpen(false);
     setVariationModalProduct(null);
@@ -594,20 +736,20 @@ export default function CreateManualCatalog() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
-          {isEditMode ? "Edit Catalog" : "Create Catalog (Manual)"}
+          {isCatalogEditMode ? "Edit Catalog" : isQuotationEditMode ? "Edit Quotation" : "Create Catalog (Manual)"}
         </h1>
         <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={handleSaveCatalog}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
-            {isEditMode ? "Update Catalog" : "Create Catalog"}
+            {isCatalogEditMode ? "Update Catalog" : "Create Catalog"}
           </button>
           <button
-            onClick={handleCreateQuotation}
+            onClick={handleSaveQuotation}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
-            Create Quotation
+            {isQuotationEditMode && quotationId ? "Update Quotation" : "Create Quotation"}
           </button>
         </div>
       </div>
@@ -632,7 +774,7 @@ export default function CreateManualCatalog() {
             required
           />
           {opportunityDropdownOpen && opportunityNumber && filteredOppCodes.length > 0 && (
-            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto min-h-10">
+            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto">
               {filteredOppCodes.map((opp) => (
                 <div
                   key={opp._id}
@@ -725,9 +867,7 @@ export default function CreateManualCatalog() {
 
         {/* Customer Email */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Email
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Email</label>
           <input
             type="email"
             className="border border-purple-300 rounded w-full p-2"
@@ -739,9 +879,7 @@ export default function CreateManualCatalog() {
 
         {/* Customer Address */}
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Customer Address
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Customer Address</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -753,9 +891,7 @@ export default function CreateManualCatalog() {
 
       {/* Fields to Display */}
       <div className="mb-6">
-        <label className="block mb-2 font-medium text-purple-700">
-          Fields to Display
-        </label>
+        <label className="block mb-2 font-medium text-purple-700">Fields to Display</label>
         <div className="flex flex-wrap gap-3">
           {[
             "images",
@@ -828,10 +964,7 @@ export default function CreateManualCatalog() {
         selectedPriceRanges.length > 0 ||
         selectedVariationHinges.length > 0) && (
         <div className="mb-4">
-          <button
-            onClick={clearFilters}
-            className="px-4 py-2 bg-red-500 text-white text-xs rounded"
-          >
+          <button onClick={clearFilters} className="px-4 py-2 bg-red-500 text-white text-xs rounded">
             Clear Filters
           </button>
         </div>
@@ -841,8 +974,8 @@ export default function CreateManualCatalog() {
       <div className="flex flex-wrap gap-2 mb-6">
         <FilterDropdown
           label="Categories"
-          open={false}
-          setOpen={() => {}}
+          open={catsOpen}
+          setOpen={setCatsOpen}
           options={fullCategories}
           selected={selectedCategories}
           toggle={(v) => toggleFilter(v, selectedCategories, setSelectedCategories)}
@@ -850,8 +983,8 @@ export default function CreateManualCatalog() {
         />
         <FilterDropdown
           label="SubCats"
-          open={false}
-          setOpen={() => {}}
+          open={subOpen}
+          setOpen={setSubOpen}
           options={fullSubCategories}
           selected={selectedSubCategories}
           toggle={(v) => toggleFilter(v, selectedSubCategories, setSelectedSubCategories)}
@@ -859,8 +992,8 @@ export default function CreateManualCatalog() {
         />
         <FilterDropdown
           label="Brands"
-          open={false}
-          setOpen={() => {}}
+          open={brandsOpen}
+          setOpen={setBrandsOpen}
           options={fullBrands}
           selected={selectedBrands}
           toggle={(v) => toggleFilter(v, selectedBrands, setSelectedBrands)}
@@ -868,8 +1001,8 @@ export default function CreateManualCatalog() {
         />
         <FilterDropdown
           label="Price Range"
-          open={false}
-          setOpen={() => {}}
+          open={prOpen}
+          setOpen={setPrOpen}
           options={fullPriceRanges}
           selected={selectedPriceRanges}
           toggle={(v) => toggleFilter(v, selectedPriceRanges, setSelectedPriceRanges)}
@@ -877,8 +1010,8 @@ export default function CreateManualCatalog() {
         />
         <FilterDropdown
           label="Variation Hinge"
-          open={false}
-          setOpen={() => {}}
+          open={vhOpen}
+          setOpen={setVhOpen}
           options={fullVariationHinges}
           selected={selectedVariationHinges}
           toggle={(v) => toggleFilter(v, selectedVariationHinges, setSelectedVariationHinges)}
@@ -886,7 +1019,7 @@ export default function CreateManualCatalog() {
         />
       </div>
 
-      {/* Product Grid */}
+      {/* Product Grid & Pagination */}
       {loading ? (
         <div>Loading products...</div>
       ) : (
@@ -901,8 +1034,6 @@ export default function CreateManualCatalog() {
               />
             ))}
           </div>
-
-          {/* Pagination */}
           {!advancedSearchActive && (
             <div className="flex justify-center items-center mt-6 space-x-4">
               <button
@@ -912,9 +1043,7 @@ export default function CreateManualCatalog() {
               >
                 Prev
               </button>
-              <span>
-                Page {currentPage} of {totalPages}
-              </span>
+              <span>Page {currentPage} of {totalPages}</span>
               <button
                 onClick={handleNextPage}
                 disabled={currentPage >= totalPages}
@@ -946,10 +1075,7 @@ export default function CreateManualCatalog() {
         <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-end z-50">
           <div className="bg-white w-full sm:w-96 p-4 overflow-auto relative">
             <h2 className="font-bold mb-4">Selected Items</h2>
-            <button
-              onClick={() => setCartOpen(false)}
-              className="absolute top-2 right-2 text-xl"
-            >
+            <button onClick={() => setCartOpen(false)} className="absolute top-2 right-2 text-xl">
               ×
             </button>
             <DragDropContext
@@ -965,11 +1091,7 @@ export default function CreateManualCatalog() {
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps}>
                     {selectedProducts.map((row, idx) => (
-                      <Draggable
-                        key={row._id || idx}
-                        draggableId={String(row._id || idx)}
-                        index={idx}
-                      >
+                      <Draggable key={row._id || idx} draggableId={String(row._id || idx)} index={idx}>
                         {(prov) => (
                           <div
                             ref={prov.innerRef}
@@ -982,39 +1104,32 @@ export default function CreateManualCatalog() {
                                 <div className="font-semibold">{row.productName}</div>
                                 {row.color && <div className="text-xs">Color: {row.color}</div>}
                                 {row.size && <div className="text-xs">Size: {row.size}</div>}
+                                <div className="text-xs">Base Cost: ₹{row.baseCost.toFixed(2)}</div>
                                 <div className="text-xs">
-                                  Base Cost: ₹{row.baseCost.toFixed(2)}
+                                  Product Cost: ₹{row.productCost.toFixed(2)}
+                                  <span className="relative inline-block ml-2 cursor-pointer group">
+                                    <span className="text-sm bg-gray-200 rounded-full px-2 py-1">i</span>
+                                    <div className="absolute z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible bg-white border border-gray-300 rounded shadow-lg p-2 w-48 text-sm mt-2 transition-all duration-200">
+                                      <ul>
+                                        <li>
+                                          Product Cost: ₹
+                                          {(row.baseCost * (1 + row.suggestedBreakdown.marginPct / 100)).toFixed(2)}
+                                        </li>
+                                        <li>Logistics: ₹{row.suggestedBreakdown.logisticsCost.toFixed(2)}</li>
+                                        <li>Branding: ₹{row.suggestedBreakdown.brandingCost.toFixed(2)}</li>
+                                        <li>Final Price: ₹{row.suggestedBreakdown.finalPrice.toFixed(2)}</li>
+                                        <li>
+                                          Profit: ₹
+                                          {(
+                                            row.baseCost * (1 + row.suggestedBreakdown.marginPct / 100) -
+                                            row.baseCost
+                                          ).toFixed(2)}
+                                        </li>
+                                      </ul>
+                                    </div>
+                                  </span>
                                 </div>
-                                <div className="text-xs">Cost : {row.productCost}</div>
                                 <div className="text-xs">Qty: {row.quantity}</div>
-
-                                {/* <SuggestedPriceCalculator
-                                  product={{
-                                    baseCost: row.baseCost,
-                                    productCost: row.productCost,
-                                    quantity: row.quantity,
-                                    weight: row.weight,
-                                    brandingTypes: row.brandingTypes,
-                                  }}
-                                  companySegment={selectedCompanyData?.segment}
-                                  companyPincode={
-                                    selectedCompanyData?.pincode ||
-                                    selectedCompanyData?.companyAddress?.pincode
-                                  }
-                                  brandingTypesList={brandingTypesList}
-                                  segmentsList={segmentsList}
-                                  onBreakdown={(bd) => {
-                                    setSelectedProducts((ps) => {
-                                      const a = [...ps];
-                                      // only update when finalPrice changes:
-                                      if (a[idx].suggestedBreakdown.finalPrice !== bd.finalPrice) {
-                                        a[idx].suggestedBreakdown = bd;
-                                      }
-                                      return a;
-                                    });
-                                  }}
-                                /> */}
-
                                 <div className="text-xs">GST: {row.productGST}%</div>
                                 {row.brandingTypes.length > 0 && (
                                   <div className="text-xs">
@@ -1029,9 +1144,7 @@ export default function CreateManualCatalog() {
                                 )}
                               </div>
                               <button
-                                onClick={() =>
-                                  setSelectedProducts((ps) => ps.filter((_, i) => i !== idx))
-                                }
+                                onClick={() => setSelectedProducts((ps) => ps.filter((_, i) => i !== idx))}
                                 className="text-red-600"
                               >
                                 Remove
@@ -1062,6 +1175,13 @@ export default function CreateManualCatalog() {
           product={variationModalProduct}
           onClose={closeVariationModal}
           onSave={handleAddVariations}
+          companySegment={selectedCompanyData?.segment}
+          companyPincode={
+            selectedCompanyData?.pincode ||
+            selectedCompanyData?.companyAddress?.pincode
+          }
+          brandingTypesList={brandingTypesList}
+          segmentsList={segmentsList}
         />
       )}
 
@@ -1085,7 +1205,9 @@ export default function CreateManualCatalog() {
       )}
 
       {/* Company Creation Modal */}
-      {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
+      {showCompanyModal && (
+        <CompanyModal onClose={handleCloseCompanyModal} />
+      )}
     </div>
   );
 }

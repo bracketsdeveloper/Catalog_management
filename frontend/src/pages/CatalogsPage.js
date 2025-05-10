@@ -1,3 +1,4 @@
+// src/pages/CatalogManagementPage.jsx
 "use client";
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
@@ -52,7 +53,7 @@ export default function CatalogManagementPage() {
   // For "create catalog" dropdown
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Track which catalog’s three-dots dropdown is open
+  // Track which catalog's three-dots dropdown is open
   const [openDropdownForCatalog, setOpenDropdownForCatalog] = useState(null);
   const [selectedCatalogForDropdown, setSelectedCatalogForDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -284,59 +285,66 @@ export default function CatalogManagementPage() {
     navigate(`/admin-dashboard/quotation/manual/${quotation._id}`);
   }
 
+  function handleEditQuotationold(quotation) {
+    navigate(`/admin-dashboard/oldquotation/manual/${quotation._id}`);
+  }
+
   // -------------- CREATE QUOTATION FROM CATALOG --------------
   async function handleCreateQuotationFromCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
       const newQuotationData = {
-        catalogNumber: catalog.catalogNumber,
-        catalogName: catalog.catalogName,
+        catalogId: catalog._id,
+        opportunityNumber: catalog.opportunityNumber || "",
+        catalogName: catalog.catalogName || "",
         salutation: catalog.salutation || "Mr.",
-        customerName: catalog.customerName,
-        customerEmail: catalog.customerEmail,
-        customerCompany: catalog.customerCompany,
-        customerAddress: catalog.customerAddress,
-        margin: catalog.margin,
-        terms: catalog.terms && catalog.terms.length > 0 ? catalog.terms : [],
-        items: []
+        customerName: catalog.customerName || "",
+        customerEmail: catalog.customerEmail || "",
+        customerCompany: catalog.customerCompany || "",
+        customerAddress: catalog.customerAddress || "",
+        margin: catalog.margin || 0,
+        gst: catalog.gst || 18,
+        fieldsToDisplay: catalog.fieldsToDisplay || [],
+        terms: catalog.terms && Array.isArray(catalog.terms) ? catalog.terms : [],
+        displayTotals: true,
+        displayHSNCodes: true,
+        items: catalog.products.map((prod, idx) => {
+          const baseCost = prod.productCost || 0;
+          const quantity = prod.quantity || 1;
+          const marginFactor = 1 + (catalog.margin || 0) / 100;
+          const rate = parseFloat((baseCost * marginFactor).toFixed(2));
+          const amount = parseFloat((rate * quantity).toFixed(2));
+          const gst = prod.productGST || catalog.gst || 18;
+          const gstAmount = parseFloat((amount * (gst / 100)).toFixed(2));
+          const total = parseFloat((amount + gstAmount).toFixed(2));
+          const productName = prod.productName || (prod.productId && typeof prod.productId === "object" ? prod.productId.name : "");
+          return {
+            slNo: idx + 1,
+            productId: prod.productId,
+            product: `${productName}${prod.color ? `(${prod.color})` : ""}${prod.size ? `[${prod.size}]` : ""}`,
+            hsnCode: prod.hsnCode || "",
+            quantity,
+            rate,
+            productprice: baseCost,
+            amount,
+            productGST: gst,
+            total,
+            material: prod.material || "",
+            weight: prod.weight || "",
+            brandingTypes: Array.isArray(prod.brandingTypes) ? prod.brandingTypes : [],
+            suggestedBreakdown: prod.suggestedBreakdown || {
+              baseCost: 0,
+              marginPct: 0,
+              marginAmount: 0,
+              logisticsCost: 0,
+              brandingCost: 0,
+              finalPrice: 0,
+            },
+            imageIndex: prod.imageIndex || 0,
+          };
+        }),
       };
 
-      for (let idx = 0; idx < catalog.products.length; idx++) {
-        const prod = catalog.products[idx];
-        let productDoc = {};
-
-        if (prod.productId && typeof prod.productId === "object" && prod.productId.name) {
-          productDoc = prod.productId;
-        } else {
-          const response = await axios.get(`${BACKEND_URL}/api/admin/products/${prod.productId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          productDoc = response.data;
-        }
-
-        const baseCost = prod.productCost || 0;
-        const marginFactor = 1 + ((catalog.margin || 0) / 100);
-        const rate = baseCost * marginFactor;
-        const quantity = prod.quantity || 1;
-        const amount = rate * quantity;
-        const gst = prod.productGST || 0;
-        const gstAmount = parseFloat((amount * (gst / 100)).toFixed(2));
-        const total = parseFloat((amount + gstAmount).toFixed(2));
-
-        newQuotationData.items.push({
-          slNo: idx + 1,
-          productId: prod.productId,
-          product: productDoc.name || "",
-          quantity,
-          rate,
-          amount,
-          productGST: gst,
-          total,
-          productprice: baseCost,
-        });
-      }
-
-      console.log("Quotation data being sent from catalog:", newQuotationData);
       const res = await axios.post(`${BACKEND_URL}/api/admin/quotations`, newQuotationData, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -894,7 +902,7 @@ export default function CatalogManagementPage() {
                       <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
                         Catalog Number
                       </th>
-                       <th className="px-4 py-2 text-left text-xs font-medium uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Company Name
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium uppercase">
@@ -991,10 +999,10 @@ export default function CatalogManagementPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {items.map((quotation) => (
                       <tr key={quotation._id}>
-                        <td className="px-4 py-2">{quotation.quotationNumber}</td>
                         
-                        <td className="px-4 py-2">{quotation.eventName || "N/A"}</td>
-                        <td className="px-4 py-2">{quotation.customerCompany || "N/A"}</td>
+                        <td className="px-4 py-2">{quotation.quotationNumber} </td>
+                        <td className="px-4 py-2">{quotation.catalogName || "N/A"}</td>
+                        <td className="px-4 py-2">{quotation.customerCompany || "N/A"}{quotation.quotationNumber < 10496 && (<>(old quotation)</>)}</td>
                         <td className="px-4 py-2">{quotation.customerName}</td>
                         <td className="px-4 py-2">{quotation.items?.length || 0}</td>
                         <td className="px-4 py-2 space-x-2">
@@ -1004,12 +1012,23 @@ export default function CatalogManagementPage() {
                           >
                             View
                           </button>
-                          <button
+                          
+                          {quotation.quotationNumber >= 10496 && (
+                            <button
                             onClick={() => handleEditQuotation(quotation)}
                             className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
                           >
                             Edit
                           </button>
+                          )}
+                          {quotation.quotationNumber < 10496 && (
+                            <button
+                              onClick={() => handleEditQuotationold(quotation)}
+                              className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                            >
+                              Edit
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDeleteQuotation(quotation)}
                             className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"

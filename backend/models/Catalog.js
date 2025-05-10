@@ -3,19 +3,21 @@ const mongoose = require("mongoose");
 const Counter = require("./Counter");
 
 const productSubSchema = new mongoose.Schema({
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
-  productName: { type: String },
-  ProductDescription: { type: String },
-  ProductBrand: { type: String },
-  color: { type: String },
-  size: { type: String },
-  productCost: { type: Number, default: 0 },
-  baseCost: { type: Number, default: 0 },
-  quantity: { type: Number, default: 1 },
-  productGST: { type: Number, default: 0 },
-  material: { type: String, default: "" },
-  weight: { type: String, default: "" },
-  brandingTypes: [{ type: mongoose.Schema.Types.ObjectId, ref: "BrandingCharge" }],
+  productId:        { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+  images:           [{ type: String }],             // ← all image URLs
+  imageIndex:       { type: Number, default: 0 },   // ← selected image index
+  productName:      { type: String },
+  ProductDescription:{ type: String },
+  ProductBrand:     { type: String },
+  color:            { type: String },
+  size:             { type: String },
+  productCost:      { type: Number, default: 0 },
+  baseCost:         { type: Number, default: 0 },
+  quantity:         { type: Number, default: 1 },
+  productGST:       { type: Number, default: 0 },
+  material:         { type: String, default: "" },
+  weight:           { type: String, default: "" },
+  brandingTypes:    [{ type: mongoose.Schema.Types.ObjectId, ref: "BrandingCharge" }],
   suggestedBreakdown: {
     baseCost:      { type: Number, default: 0 },
     marginPct:     { type: Number, default: 0 },
@@ -33,26 +35,26 @@ const remarkSchema = new mongoose.Schema({
 });
 
 const catalogSchema = new mongoose.Schema({
-  catalogNumber:    { type: Number, unique: true },
-  opportunityNumber:{ type: String, default: "" },
-  catalogName:      { type: String },
-  salutation:       { type: String, default: "Mr." },
-  customerName:     { type: String },
-  customerEmail:    { type: String },
-  customerCompany:  { type: String },
-  customerAddress:  { type: String },
-  approveStatus:    { type: Boolean, default: false },
-  remarks:          { type: [remarkSchema], default: [] },
-  margin:           { type: Number, default: 0 },
-  gst:              { type: Number, default: 18 },
-  products:         [productSubSchema],
-  fieldsToDisplay:  [String],
+  catalogNumber:     { type: Number, unique: true },
+  opportunityNumber: { type: String, default: "" },
+  catalogName:       { type: String },
+  salutation:        { type: String, default: "Mr." },
+  customerName:      { type: String },
+  customerEmail:     { type: String },
+  customerCompany:   { type: String },
+  customerAddress:   { type: String },
+  approveStatus:     { type: Boolean, default: false },
+  remarks:           { type: [remarkSchema], default: [] },
+  margin:            { type: Number, default: 0 },
+  gst:               { type: Number, default: 18 },
+  products:          [productSubSchema],
+  fieldsToDisplay:   [String],
   priceRange: {
     from: Number,
     to:   Number,
   },
-  createdBy:        { type: String },
-  createdAt:        { type: Date, default: Date.now },
+  createdBy:         { type: String },
+  createdAt:         { type: Date, default: Date.now },
 });
 
 catalogSchema.pre("save", async function (next) {

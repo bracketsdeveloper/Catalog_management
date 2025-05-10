@@ -4,92 +4,58 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function QuotationView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [jobSheet, setJobSheet] = useState(null);
+  const [quotation, setQuotation] = useState(null);
   const [editableQuotation, setEditableQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newTerm, setNewTerm] = useState({ heading: "", content: "" });
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [editingTermIdx, setEditingTermIdx] = useState(null);
-
-   const [products, setProducts] = useState([]);
-    
-   const token = localStorage.getItem("token");
-   useEffect(() => {
- 
-    const fetchProducts = async () => {
-      try {
-        const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        setProducts(res.data.products || []);
-      } catch (error) {
-        console.error("Error fetching products:", error.response?.data || error.message);
-      }
-    };
-
-    fetchProducts();
-  }, [BACKEND_URL, token]);
+  const token = localStorage.getItem("token");
 
   const defaultTerms = [
     {
       heading: "Delivery",
-      content:
-        "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
+      content: "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
     },
-    {
-      heading: "Branding",
-      content: "As mentioned above",
-    },
-    {
-      heading: "Payment Terms",
-      content: "Within 30 days upon delivery",
-    },
-    {
-      heading: "Quote Validity",
-      content: "The quote is valid only for 6 days from the date of quotation",
-    },
+    { heading: "Branding", content: "As mentioned above" },
+    { heading: "Payment Terms", content: "Within 30 days upon delivery" },
+    { heading: "Quote Validity", content: "The quote is valid only for 6 days from the date of quotation" },
   ];
 
   useEffect(() => {
     fetchQuotation();
-    // eslint-disable-next-line
   }, [id]);
 
   useEffect(() => {
     if (editableQuotation && (!editableQuotation.terms || editableQuotation.terms.length === 0)) {
-      setEditableQuotation((prev) => ({
-        ...prev,
-        terms: defaultTerms,
-      }));
+      setEditableQuotation((prev) => ({ ...prev, terms: defaultTerms }));
     }
-    // eslint-disable-next-line
-  }, [editableQuotation?.terms]);
+  }, [editableQuotation]);
 
   async function fetchQuotation() {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        throw new Error("Failed to fetch quotation");
-      }
-      const data = await res.json();
-      setJobSheet(data);
-      setEditableQuotation(data);
+      const data = res.data;
+      // Ensure items have valid quantity
+      const sanitizedItems = (data.items || []).map((item, idx) => ({
+        ...item,
+        quantity: parseFloat(item.quantity) || 1,
+        slNo: item.slNo || idx + 1,
+        productGST: parseFloat(item.productGST) || data.gst || 18,
+        rate: parseFloat(item.rate) || 0,
+      }));
+      setQuotation({ ...data, items: sanitizedItems });
+      setEditableQuotation({ ...data, items: sanitizedItems });
       setError(null);
     } catch (err) {
       console.error("Error fetching quotation:", err);
@@ -102,22 +68,47 @@ export default function QuotationView() {
   async function handleSaveQuotation() {
     if (!editableQuotation) return;
     try {
-      const token = localStorage.getItem("token");
       const updatedMargin = parseFloat(editableQuotation.margin) || 0;
       const {
+        catalogId,
+        opportunityNumber,
         catalogName,
         salutation,
         customerName,
         customerEmail,
         customerCompany,
         customerAddress,
+        gst,
         items,
         terms,
+        fieldsToDisplay,
         displayTotals,
-        displayHSNCodes, // New field
+        displayHSNCodes,
       } = editableQuotation;
 
+      const updatedItems = items.map((item) => {
+        const baseRate = parseFloat(item.rate) || 0;
+        const quantity = parseFloat(item.quantity) || 1;
+        const marginFactor = 1 + updatedMargin / 100;
+        const effRate = baseRate * marginFactor;
+        const amount = effRate * quantity;
+        const gstRate = parseFloat(item.productGST) || gst || 18;
+        const gstAmount = parseFloat((amount * (gstRate / 100)).toFixed(2));
+        const total = parseFloat((amount + gstAmount).toFixed(2));
+        return {
+          ...item,
+          rate: baseRate,
+          amount,
+          total,
+          productprice: baseRate,
+          productGST: gstRate,
+          quantity: quantity,
+        };
+      });
+
       const body = {
+        catalogId,
+        opportunityNumber,
         catalogName,
         salutation,
         customerName,
@@ -125,35 +116,21 @@ export default function QuotationView() {
         customerCompany,
         customerAddress,
         margin: updatedMargin,
-        items,
+        gst,
+        items: updatedItems,
         terms,
+        fieldsToDisplay,
         displayTotals,
-        displayHSNCodes, // New field
+        displayHSNCodes,
       };
 
-      console.log("Before saving, updated quotation data:", body);
-      body.items.forEach((it, idx) => {
-        const effRate = it.rate * (1 + updatedMargin / 100);
-        console.log(
-          `Item ${idx}: base rate = ${it.rate}, effective rate = ${effRate.toFixed(2)}`
-        );
+      const res = await axios.put(`${BACKEND_URL}/api/admin/quotations/${id}`, body, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      const res = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        throw new Error("Creation failed");
-      }
-      const data = await res.json();
-      console.log("Response from server:", data);
-      alert("New Quotation created!");
-      navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
+      alert("Quotation updated successfully!");
+      setQuotation(res.data);
+      setEditableQuotation(res.data);
     } catch (error) {
       console.error("Save error:", error);
       alert("Failed to save changes");
@@ -170,7 +147,12 @@ export default function QuotationView() {
   function updateItemField(index, field, newValue) {
     setEditableQuotation((prev) => {
       const newItems = [...prev.items];
-      newItems[index] = { ...newItems[index], [field]: newValue };
+      if (field === "quantity" || field === "productGST" || field === "rate") {
+        const parsedValue = parseFloat(newValue);
+        newItems[index] = { ...newItems[index], [field]: isNaN(parsedValue) ? newItems[index][field] : parsedValue };
+      } else {
+        newItems[index] = { ...newItems[index], [field]: newValue };
+      }
       return { ...prev, items: newItems };
     });
   }
@@ -178,18 +160,8 @@ export default function QuotationView() {
   function removeItem(index) {
     setEditableQuotation((prev) => ({
       ...prev,
-      items: prev.items.filter((_, i) => i !== index),
+      items: prev.items.filter((_, i) => i !== index).map((item, idx) => ({ ...item, slNo: idx + 1 })),
     }));
-  }
-
-  function handleAddEmail() {
-    const email = window.prompt("Enter customer email:");
-    if (email) {
-      setEditableQuotation((prev) => ({
-        ...prev,
-        customerEmail: email,
-      }));
-    }
   }
 
   function handleAddTerm() {
@@ -225,44 +197,11 @@ export default function QuotationView() {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
-  function computedAmount(quotation) {
-    let sum = 0;
-    quotation.items.forEach((item) => {
-      const quantity = parseFloat(item.quantity || item.qty) || 0;
-      const baseRate = parseFloat(item.rate) || 0;
-      const margin = parseFloat(quotation.margin) || 0;
-      const marginFactor = 1 + margin / 100;
-      sum += baseRate * marginFactor * quantity;
-    });
-    return sum;
-  }
+  if (loading) return <div className="p-6 text-gray-400">Loading quotation...</div>;
+  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (!editableQuotation || !editableQuotation.items) return <div className="p-6 text-gray-400">Quotation not found.</div>;
 
-  function computedTotal(quotation) {
-    let sum = 0;
-    quotation.items.forEach((item) => {
-      const quantity = parseFloat(item.quantity || item.qty) || 0;
-      const baseRate = parseFloat(item.rate) || 0;
-      const margin = parseFloat(quotation.margin) || 0;
-      const marginFactor = 1 + margin / 100;
-      const amount = baseRate * marginFactor * quantity;
-      const gst = parseFloat(item.productGST) || 0;
-      const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
-      sum += amount + gstVal;
-    });
-    return sum;
-  }
-
-  if (loading) {
-    return <div className="p-6 text-gray-400">Loading quotation...</div>;
-  }
-  if (error) {
-    return <div className="p-6 text-red-500">{error}</div>;
-  }
-  if (!editableQuotation) {
-    return <div className="p-6 text-gray-400">Quotation not found.</div>;
-  }
-
-  const marginFactor = 1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
+  const marginFactor = 1 + (parseFloat(editableQuotation.margin) || 0) / 100;
 
   return (
     <div className="p-6 bg-white text-black min-h-screen">
@@ -281,23 +220,13 @@ export default function QuotationView() {
             Save Changes
           </button>
           <button
-            onClick={() =>
-              setEditableQuotation((prev) => ({
-                ...prev,
-                displayTotals: !prev.displayTotals,
-              }))
-            }
+            onClick={() => setEditableQuotation((prev) => ({ ...prev, displayTotals: !prev.displayTotals }))}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-xs"
           >
             {editableQuotation.displayTotals ? "Hide Totals" : "Show Totals"}
           </button>
           <button
-            onClick={() =>
-              setEditableQuotation((prev) => ({
-                ...prev,
-                displayHSNCodes: !prev.displayHSNCodes,
-              }))
-            }
+            onClick={() => setEditableQuotation((prev) => ({ ...prev, displayHSNCodes: !prev.displayHSNCodes }))}
             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
           >
             {editableQuotation.displayHSNCodes ? "Hide HSN Codes" : "Show HSN Codes"}
@@ -331,10 +260,16 @@ export default function QuotationView() {
             {editableQuotation.customerCompany}
           </span>
         </div>
-        {editableQuotation.companyAddress && (
+        {editableQuotation.customerAddress && (
           <div>
-            <span className="font-bold uppercase">Company Address:</span>{" "}
-            <span>{editableQuotation.companyAddress}</span>
+            <span className="font-bold uppercase">Address:</span>{" "}
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(e) => handleHeaderBlur("customerAddress", e)}
+            >
+              {editableQuotation.customerAddress}
+            </span>
           </div>
         )}
       </div>
@@ -371,9 +306,7 @@ export default function QuotationView() {
                 type="text"
                 value={newTerm.heading}
                 placeholder="Term Heading"
-                onChange={(e) =>
-                  setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
-                }
+                onChange={(e) => setNewTerm((prev) => ({ ...prev, heading: e.target.value }))}
                 className="border p-2 w-full text-xs"
               />
             </div>
@@ -381,12 +314,10 @@ export default function QuotationView() {
               <textarea
                 value={newTerm.content}
                 placeholder="Term Content"
-                onChange={(e) =>
-                  setNewTerm((prev) => ({ ...prev, content: e.target.value }))
-                }
+                onChange={(e) => setNewTerm((prev) => ({ ...prev, content: e.target.value }))}
                 className="border p-2 w-full text-xs"
                 rows="4"
-              ></textarea>
+              />
             </div>
             <div className="flex justify-end space-x-4">
               <button
@@ -412,64 +343,49 @@ export default function QuotationView() {
             <th className="p-2 text-left">Sl. No.</th>
             <th className="p-2 text-left">Image</th>
             <th className="p-2 text-left">Product</th>
-            {editableQuotation.displayHSNCodes && (
-              <th className="p-2 text-left">HSN</th>
-            )}
+            {editableQuotation.displayHSNCodes && <th className="p-2 text-left">HSN</th>}
             <th className="p-2 text-left">Quantity</th>
-            <th className="p-2 text-left">Rate (with margin)</th>
+            <th className="p-2 text-left">Rate</th>
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (%)</th>
             <th className="p-2 text-left">Total</th>
+            <th className="p-2 text-left">Breakdown</th>
             <th className="p-2 text-left">Remove</th>
           </tr>
         </thead>
         <tbody>
           {editableQuotation.items.map((item, index) => {
             const baseRate = parseFloat(item.rate) || 0;
-            const quantity = parseFloat(item.quantity || item.qty) || 0;
-            const margin = parseFloat(editableQuotation.margin) || 0;
-            const marginFactor = 1 + margin / 100;
+            const quantity = parseFloat(item.quantity) || 1;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
-            const gstVal = parseFloat(
-              (amount * (parseFloat(item.productGST) / 100)).toFixed(2)
-            );
+            const gstRate = parseFloat(item.productGST) || editableQuotation.gst || 18;
+            const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
             const total = parseFloat((amount + gstVal).toFixed(2));
-            // const imageUrl =
-            //   item.image ||
-            //   (item.productId &&
-            //     item.productId.images &&
-            //     item.productId.images.length > 0
-                // item.productId.images[0]
-            //     : "https://via.placeholder.com/150");
-
-            const imageUrl = 
-                 item.image ||
-                item.productId?.images?.[0] ||
-                item.productId?.name ||
-                "https://via.placeholder.com/150";
-
-                
-             
-            const hsnCode = item.hsnCode || (item.productId && item.productId.hsnCode) || "N/A";
+            const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
+            const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
+            const breakdown = item.suggestedBreakdown || {
+              baseCost: 0,
+              marginPct: 0,
+              marginAmount: 0,
+              logisticsCost: 0,
+              brandingCost: 0,
+              finalPrice: 0,
+            };
 
             return (
               <tr key={index} className="border-b">
                 <td className="p-2">{item.slNo}</td>
                 <td className="p-2">
-                {imageUrl !== "https://via.placeholder.com/150" ? (
-                      <img
-                        src={imageUrl}
-                        alt={item.name || "Product Image"}
-                        className="w-16 h-16 object-cover"
-                      />
-                    ) : (
-                      "No Image"
-                    )}
+                  {imageUrl !== "https://via.placeholder.com/150" ? (
+                    <img src={imageUrl} alt={item.product} className="w-16 h-16 object-cover" />
+                  ) : (
+                    "No Image"
+                  )}
                 </td>
                 <td className="p-2">
                   <EditableField
-                    value={item.product}
+                    value={item.product || ""}
                     onSave={(newVal) => updateItemField(index, "product", newVal)}
                   />
                 </td>
@@ -483,13 +399,8 @@ export default function QuotationView() {
                 )}
                 <td className="p-2">
                   <EditableField
-                    value={item.quantity.toString()}
-                    onSave={(newVal) => {
-                      const newQuantity = parseFloat(newVal);
-                      if (!isNaN(newQuantity)) {
-                        updateItemField(index, "quantity", newQuantity);
-                      }
-                    }}
+                    value={(item.quantity || 1).toString()}
+                    onSave={(newVal) => updateItemField(index, "quantity", newVal)}
                   />
                 </td>
                 <td className="p-2">
@@ -508,17 +419,23 @@ export default function QuotationView() {
                 <td className="p-2">{amount.toFixed(2)}</td>
                 <td className="p-2">
                   <EditableField
-                    value={item.productGST.toString()}
-                    onSave={(newVal) => {
-                      const newGST = parseFloat(newVal);
-                      if (!isNaN(newGST)) {
-                        updateItemField(index, "productGST", newGST);
-                      }
-                    }}
+                    value={(item.productGST || editableQuotation.gst || 18).toString()}
+                    onSave={(newVal) => updateItemField(index, "productGST", newVal)}
                   />
                   %
                 </td>
                 <td className="p-2">{total.toFixed(2)}</td>
+                <td className="p-2 relative group">
+                  <span className="cursor-pointer text-blue-600">View</span>
+                  <div className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 z-10 w-64">
+                    SuggestedPrice:
+                    <p>Base Cost: ₹{(breakdown.baseCost+breakdown.marginAmount).toFixed(2)}</p>
+                    <p>Logistics Cost: ₹{breakdown.logisticsCost.toFixed(2)}</p>
+                    <p>Branding Cost: ₹{breakdown.brandingCost.toFixed(2)}</p>
+                    <p>Profit: ₹{breakdown.marginAmount}</p>
+                    <p>Final Price: ₹{breakdown.finalPrice.toFixed(2)}</p>
+                  </div>
+                </td>
                 <td className="p-2">
                   <button
                     onClick={() => removeItem(index)}
@@ -590,7 +507,7 @@ function EditableField({ value, onSave }) {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a join 2 2 0 002 2z"
+            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
           />
         </svg>
       </button>
@@ -600,8 +517,8 @@ function EditableField({ value, onSave }) {
 
 function computedAmount(quotation) {
   let sum = 0;
-  quotation.items.forEach((item) => {
-    const quantity = parseFloat(item.quantity || item.qty) || 0;
+  (quotation.items || []).forEach((item) => {
+    const quantity = parseFloat(item.quantity) || 1;
     const baseRate = parseFloat(item.rate) || 0;
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
@@ -612,13 +529,13 @@ function computedAmount(quotation) {
 
 function computedTotal(quotation) {
   let sum = 0;
-  quotation.items.forEach((item) => {
-    const quantity = parseFloat(item.quantity || item.qty) || 0;
+  (quotation.items || []).forEach((item) => {
+    const quantity = parseFloat(item.quantity) || 1;
     const baseRate = parseFloat(item.rate) || 0;
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gst = parseFloat(item.productGST) || 0;
+    const gst = parseFloat(item.productGST) || quotation.gst || 18;
     const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });

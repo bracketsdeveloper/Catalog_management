@@ -11,6 +11,7 @@ const Quotation = require("../models/Quotation");
 const Log = require("../models/Log");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
+// Helper to create audit logs
 async function createLog(action, oldValue, newValue, user, ip) {
   try {
     await Log.create({
@@ -18,36 +19,38 @@ async function createLog(action, oldValue, newValue, user, ip) {
       field: "quotation",
       oldValue,
       newValue,
-      performedBy: user ? user._id : null,
+      performedBy: user?._id || null,
       performedAt: new Date(),
       ipAddress: ip,
     });
-  } catch (error) {
-    console.error("Error creating quotation log:", error);
+  } catch (err) {
+    console.error("Error creating quotation log:", err);
   }
 }
 
+// ─── CREATE new quotation ─────────────────────────────────────────────────
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    console.log("Request body received for quotation creation:");
-    console.log(JSON.stringify(req.body, null, 2));
-
+    console.log("Creating quotation with payload:", req.body);
     const {
+      opportunityNumber,
       catalogName,
+      fieldsToDisplay,
+      priceRange,
       salutation,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
       margin,
+      gst,
       items,
       terms,
       displayTotals,
-      displayHSNCodes, // New field
+      displayHSNCodes,
     } = req.body;
 
     if (!items || items.length === 0) {
-      console.error("No items provided in the payload.");
       return res.status(400).json({ message: "No items provided" });
     }
 
@@ -61,258 +64,215 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       { heading: "Payment Terms", content: "Within 30 days upon delivery" },
       {
         heading: "Quote Validity",
-        content:
-          "The quote is valid only for 6 days from the date of quotation",
+        content: "The quote is valid only for 6 days from the date of quotation",
       },
     ];
+    const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
-    const quotationTerms = terms && terms.length > 0 ? terms : defaultTerms;
+    // Build items array
+    const builtItems = items.map((it, idx) => {
+      const qty = parseInt(it.quantity, 10) || 1;
+      const rate = parseFloat(it.rate) || 0;
+      const price = parseFloat(it.productprice) || rate;
+      const amount = parseFloat((price * qty).toFixed(2));
+      const gstVal = parseFloat((amount * (parseFloat(it.productGST) / 100)).toFixed(2));
+      const total = parseFloat((amount + gstVal).toFixed(2));
 
-    const newItems = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const productName = item.productName || item.product;
-      if (!productName) {
-        return res
-          .status(400)
-          .json({ message: `Product name is required for item #${i + 1}` });
-      }
-      const baseRate = parseFloat(item.productCost || item.productprice);
-      if (isNaN(baseRate)) {
-        return res
-          .status(400)
-          .json({ message: `Invalid product cost for item #${i + 1}` });
-      }
-      const updatedPrice = parseFloat(item.productprice);
-      if (isNaN(updatedPrice)) {
-        return res
-          .status(400)
-          .json({ message: `Invalid product price for item #${i + 1}` });
-      }
-      const productGST = parseFloat(item.productGST);
-      if (isNaN(productGST)) {
-        return res
-          .status(400)
-          .json({ message: `Invalid product GST for item #${i + 1}` });
-      }
-      let quantity = parseInt(item.quantity);
-      if (isNaN(quantity)) {
-        quantity = 1;
-      }
-      const amount = updatedPrice * quantity;
-      const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
-      const total = parseFloat((amount + gstValue).toFixed(2));
-
-      const productId =
-        typeof item.productId === "object" && item.productId._id
-          ? item.productId._id
-          : item.productId;
-
-      const newItem = {
-        slNo: i + 1,
-        productId,
-        product: productName,
-        hsnCode: item.hsnCode, // Store HSN code
-        quantity,
-        rate: baseRate,
-        productprice: updatedPrice,
+      return {
+        slNo: idx + 1,
+        productId: it.productId,
+        product: it.productName || it.product || "",
+        hsnCode: it.hsnCode || "",
+        quantity: qty,
+        rate,
+        productprice: price,
         amount,
-        productGST,
+        productGST: parseFloat(it.productGST) || 0,
         total,
+        baseCost: parseFloat(it.baseCost) || 0,
+        material: it.material || "",
+        weight: it.weight || "",
+        brandingTypes: Array.isArray(it.brandingTypes) ? it.brandingTypes : [],
+        suggestedBreakdown: it.suggestedBreakdown || {},
+        imageIndex: parseInt(it.imageIndex, 10) || 0,
       };
-      newItems.push(newItem);
-    }
+    });
 
-    const totalAmount = newItems.reduce((acc, curr) => acc + curr.amount, 0);
-    const grandTotal = newItems.reduce((acc, curr) => acc + curr.total, 0);
+    const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
+    const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
 
-    const newQuotation = new Quotation({
+    const quotation = new Quotation({
+      opportunityNumber,
       catalogName,
+      fieldsToDisplay,
+      priceRange,
       salutation,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
       margin,
-      items: newItems,
-      terms: quotationTerms,
+      gst,
+      items: builtItems,
       totalAmount,
       grandTotal,
       displayTotals: !!displayTotals,
-      displayHSNCodes: !!displayHSNCodes, // New field
+      displayHSNCodes: !!displayHSNCodes,
+      terms: quotationTerms,
       createdBy: req.user.email,
     });
 
-    await newQuotation.save();
-    await createLog("create", null, newQuotation, req.user, req.ip);
+    await quotation.save();
+    await createLog("create", null, quotation, req.user, req.ip);
 
-    res.status(201).json({ message: "Quotation created", quotation: newQuotation });
-  } catch (error) {
-    console.error("Error creating quotation:", error);
+    res.status(201).json({ message: "Quotation created", quotation });
+  } catch (err) {
+    console.error("Error creating quotation:", err);
     res.status(500).json({ message: "Server error creating quotation" });
   }
 });
 
+// ─── GET all quotations ───────────────────────────────────────────────────
 router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const quotations = await Quotation.find()
+    const list = await Quotation.find()
       .populate(
         "items.productId",
         "images name productCost category subCategory hsnCode"
       )
       .sort({ createdAt: -1 });
-    res.json(quotations);
-  } catch (error) {
-    console.error("Error fetching quotations:", error);
+    res.json(list);
+  } catch (err) {
+    console.error("Error fetching quotations:", err);
     res.status(500).json({ message: "Server error fetching quotations" });
   }
 });
 
+// ─── GET single quotation ─────────────────────────────────────────────────
 router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const quotation = await Quotation.findById(req.params.id)
+    const quote = await Quotation.findById(req.params.id)
       .populate(
         "items.productId",
         "images name productCost category subCategory hsnCode"
-      )
-      .exec();
-    if (!quotation) {
+      );
+    if (!quote) {
       return res.status(404).json({ message: "Quotation not found" });
     }
-    res.json(quotation);
-  } catch (error) {
-    console.error("Error fetching quotation:", error);
+    res.json(quote);
+  } catch (err) {
+    console.error("Error fetching quotation:", err);
     res.status(500).json({ message: "Server error fetching quotation" });
   }
 });
 
+// ─── UPDATE quotation ─────────────────────────────────────────────────────
 router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const {
-      catalogName,
-      salutation,
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      margin,
-      items,
-      terms,
-      displayTotals,
-      displayHSNCodes, // New field
-    } = req.body;
-
-    const existingQuotation = await Quotation.findById(req.params.id);
-    if (!existingQuotation) {
+    const existing = await Quotation.findById(req.params.id);
+    if (!existing) {
       return res.status(404).json({ message: "Quotation not found" });
     }
 
-    let newItems = [];
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const productName = item.productName || item.product;
-        if (!productName) {
-          return res
-            .status(400)
-            .json({ message: `Product name is required for item #${i + 1}` });
-        }
-        const baseRate = parseFloat(item.productCost || item.rate);
-        if (isNaN(baseRate)) {
-          return res
-            .status(400)
-            .json({ message: `Invalid product cost for item #${i + 1}` });
-        }
-        const updatedPrice = parseFloat(item.productprice);
-        if (isNaN(updatedPrice)) {
-          return res
-            .status(400)
-            .json({ message: `Invalid product price for item #${i + 1}` });
-        }
-        const productGST = parseFloat(item.productGST);
-        if (isNaN(productGST)) {
-          return res
-            .status(400)
-            .json({ message: `Invalid product GST for item #${i + 1}` });
-        }
-        let quantity = parseInt(item.quantity);
-        if (isNaN(quantity)) {
-          quantity = 1;
-        }
-        const amount = updatedPrice * quantity;
-        const gstValue = parseFloat((amount * (productGST / 100)).toFixed(2));
-        const total = parseFloat((amount + gstValue).toFixed(2));
-
-        newItems.push({
-          slNo: item.slNo || i + 1,
-          productId: item.productId,
-          product: productName,
-          hsnCode: item.hsnCode, // Store updated HSN code
-          quantity,
-          rate: baseRate,
-          productprice: updatedPrice,
-          amount,
-          productGST,
-          total,
-        });
-      }
-    }
-
-    const totalAmount = newItems.length
-      ? newItems.reduce((acc, curr) => acc + curr.amount, 0)
-      : existingQuotation.totalAmount;
-    const grandTotal = newItems.length
-      ? newItems.reduce((acc, curr) => acc + curr.total, 0)
-      : existingQuotation.grandTotal;
-
-    const updatedData = {
+    const {
+      opportunityNumber,
       catalogName,
+      fieldsToDisplay,
+      priceRange,
       salutation,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
       margin,
+      gst,
+      items,
       terms,
       displayTotals,
-      displayHSNCodes, // New field
-    };
+      displayHSNCodes,
+    } = req.body;
 
-    if (newItems.length) {
-      updatedData.items = newItems;
-      updatedData.totalAmount = totalAmount;
-      updatedData.grandTotal = grandTotal;
+    // Rebuild items if provided
+    let builtItems = existing.items;
+    if (Array.isArray(items)) {
+      builtItems = items.map((it, idx) => {
+        const qty = parseInt(it.quantity, 10) || 1;
+        const rate = parseFloat(it.rate) || 0;
+        const price = parseFloat(it.productprice) || rate;
+        const amount = parseFloat((price * qty).toFixed(2));
+        const gstVal = parseFloat((amount * (parseFloat(it.productGST) / 100)).toFixed(2));
+        const total = parseFloat((amount + gstVal).toFixed(2));
+
+        return {
+          slNo: it.slNo || idx + 1,
+          productId: it.productId,
+          product: it.productName || it.product || "",
+          hsnCode: it.hsnCode || "",
+          quantity: qty,
+          rate,
+          productprice: price,
+          amount,
+          productGST: parseFloat(it.productGST) || 0,
+          total,
+          baseCost: parseFloat(it.baseCost) || 0,
+          material: it.material || "",
+          weight: it.weight || "",
+          brandingTypes: Array.isArray(it.brandingTypes) ? it.brandingTypes : [],
+          suggestedBreakdown: it.suggestedBreakdown || {},
+          imageIndex: parseInt(it.imageIndex, 10) || 0,
+        };
+      });
     }
 
-    const updatedQuotation = await Quotation.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true }
-    );
+    const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
+    const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
 
-    await createLog("update", existingQuotation, updatedQuotation, req.user, req.ip);
-    res.json({ message: "Quotation updated", quotation: updatedQuotation });
-  } catch (error) {
-    console.error("Error updating quotation:", error);
+    existing.set({
+      opportunityNumber,
+      catalogName,
+      fieldsToDisplay,
+      priceRange,
+      salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      margin,
+      gst,
+      items: builtItems,
+      totalAmount,
+      grandTotal,
+      displayTotals: !!displayTotals,
+      displayHSNCodes: !!displayHSNCodes,
+      terms: Array.isArray(terms) && terms.length ? terms : existing.terms,
+    });
+
+    const updated = await existing.save();
+    await createLog("update", existing, updated, req.user, req.ip);
+    res.json({ message: "Quotation updated", quotation: updated });
+  } catch (err) {
+    console.error("Error updating quotation:", err);
     res.status(500).json({ message: "Server error updating quotation" });
   }
 });
 
+// ─── DELETE quotation ─────────────────────────────────────────────────────
 router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const quotationToDelete = await Quotation.findById(req.params.id);
-    if (!quotationToDelete) {
+    const toDelete = await Quotation.findById(req.params.id);
+    if (!toDelete) {
       return res.status(404).json({ message: "Quotation not found" });
     }
     await Quotation.findByIdAndDelete(req.params.id);
-    await createLog("delete", quotationToDelete, null, req.user, req.ip);
+    await createLog("delete", toDelete, null, req.user, req.ip);
     res.json({ message: "Quotation deleted" });
-  } catch (error) {
-    console.error("Error deleting quotation:", error);
+  } catch (err) {
+    console.error("Error deleting quotation:", err);
     res.status(500).json({ message: "Server error deleting quotation" });
   }
 });
 
+// ─── EXPORT quotation to Word ──────────────────────────────────────────────
 router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotation = await Quotation.findById(req.params.id)
@@ -360,7 +320,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       const rate = parseFloat(item.rate) || 0;
       const amount = rate * quantity;
       const total = amount + amount * (item.productGST / 100);
-      const image = item.productId?.images?.[0] || "https://via.placeholder.com/150";
+      const image = item.productId?.images?.[item.imageIndex || 0] || "https://via.placeholder.com/150";
 
       return {
         slNo: item.slNo?.toString() || (index + 1).toString(),
@@ -371,6 +331,9 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
         rate: rate.toFixed(2),
         amount: amount.toFixed(2),
         total: total.toFixed(2),
+        material: item.material || "",
+        weight: item.weight || "",
+        brandingTypes: item.brandingTypes || [],
       };
     });
 
@@ -385,6 +348,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
         day: "numeric",
       }),
       quotationNumber: quotation.quotationNumber || "NoNumber",
+      opportunityNumber: quotation.opportunityNumber || "",
       salutation: quotation.salutation || "",
       customerName: quotation.customerName || "",
       companyName: quotation.customerCompany || "",
@@ -394,7 +358,8 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       terms: quotation.terms || [],
       grandTotalAmount: totalAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2),
-      displayHSNCodes: quotation.displayHSNCodes, // New field
+      displayHSNCodes: quotation.displayHSNCodes,
+      fieldsToDisplay: quotation.fieldsToDisplay || [],
     };
 
     doc.render(docData);
@@ -403,17 +368,17 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     const filename = `Quotation-${quotation.quotationNumber || "NoNumber"}.docx`;
 
     res.set({
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "Content-Disposition": `attachment; filename=${filename}`,
     });
     res.send(buffer);
   } catch (err) {
     console.error("Export error:", err);
-    res=status(500).json({ message: "Error generating Word document" });
+    res.status(500).json({ message: "Error generating Word document" });
   }
 });
 
+// ─── APPROVE quotation ────────────────────────────────────────────────────
 router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const updatedQuotation = await Quotation.findByIdAndUpdate(
@@ -431,6 +396,7 @@ router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, 
   }
 });
 
+// ─── UPDATE remarks ───────────────────────────────────────────────────────
 router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { remarks } = req.body;

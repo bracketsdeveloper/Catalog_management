@@ -2,7 +2,7 @@
 "use strict";
 
 const express = require("express");
-const router = express.Router();
+const router  = express.Router();
 const Catalog = require("../models/Catalog");
 const Product = require("../models/Product");
 const Opportunity = require("../models/Opportunity");
@@ -27,29 +27,30 @@ async function createLog(action, oldValue, newValue, user, ip) {
   }
 }
 
-// Builds the product sub-document
+// Builds the product sub-document, now including images & imageIndex
 function buildSubDoc(p, doc = {}) {
   return {
-    productId: p.productId,
-    productName:        p.productName ?? doc.productName ?? doc.name ?? "",
+    productId:        p.productId,
+    images:           p.images ?? doc.images ?? [],
+    imageIndex:       p.imageIndex ?? doc.imageIndex ?? 0,
+    productName:      p.productName ?? doc.productName ?? doc.name ?? "",
     ProductDescription: p.ProductDescription ?? doc.productDetails ?? "",
-    ProductBrand:       p.ProductBrand ?? doc.brandName ?? "",
-    color:              p.color ?? "",
-    size:               p.size ?? "",
-    quantity:           p.quantity ?? 1,
-    productCost:        p.productCost ?? doc.productCost ?? 0,
-    baseCost:           p.baseCost ?? doc.baseCost ?? doc.productCost ?? 0,
-    productGST:         p.productGST ?? doc.productGST ?? 0,
-    material:           p.material ?? doc.material ?? "",
-    weight:             p.weight ?? doc.weight ?? "",
-    brandingTypes:      Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
+    ProductBrand:     p.ProductBrand ?? doc.brandName ?? "",
+    color:            p.color ?? "",
+    size:             p.size ?? "",
+    quantity:         p.quantity ?? 1,
+    productCost:      p.productCost ?? doc.productCost ?? 0,
+    baseCost:         p.baseCost ?? doc.baseCost ?? doc.productCost ?? 0,
+    productGST:       p.productGST ?? doc.productGST ?? 0,
+    material:         p.material ?? doc.material ?? "",
+    weight:           p.weight ?? doc.weight ?? "",
+    brandingTypes:    Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
     suggestedBreakdown: p.suggestedBreakdown ?? doc.suggestedBreakdown ?? {},
   };
 }
 
 /**
  * GET /api/admin/catalogs/branding-types
- * List all branding charges for catalog screens.
  */
 router.get(
   "/catalogs/branding-types",
@@ -86,31 +87,50 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      opportunityNumber, catalogName, salutation,
-      customerName, customerEmail, customerCompany, customerAddress,
-      products = [], fieldsToDisplay = [], priceRange, margin, gst,
+      opportunityNumber,
+      catalogName,
+      salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      products = [],
+      fieldsToDisplay = [],
+      priceRange,
+      margin,
+      gst,
     } = req.body;
 
+    // validate opportunity
     if (opportunityNumber) {
       const ok = await Opportunity.exists({ opportunityCode: opportunityNumber });
       if (!ok) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
+    // fetch master product docs
     const ids = products.map(p => p.productId);
     const docs = await Product.find({ _id: { $in: ids } }).lean();
     const map  = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
-    const subs = products.filter(p => map[p.productId])
-                         .map(p => buildSubDoc(p, map[p.productId]));
+
+    // build sub-docs
+    const subs = products
+      .filter(p => map[p.productId])
+      .map(p => buildSubDoc(p, map[p.productId]));
 
     const catalog = await Catalog.create({
       opportunityNumber: opportunityNumber ?? "",
       catalogName,
-      salutation: salutation ?? "Mr.",
-      customerName, customerEmail, customerCompany, customerAddress,
-      products: subs,
-      fieldsToDisplay, priceRange,
-      margin: margin ?? 0, gst: gst ?? 18,
-      createdBy: req.user?.email || "",
+      salutation:        salutation ?? "Mr.",
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      products:          subs,
+      fieldsToDisplay,
+      priceRange,
+      margin:            margin ?? 0,
+      gst:               gst ?? 18,
+      createdBy:         req.user?.email || "",
     });
 
     await createLog("create", null, catalog, req.user, req.ip);
@@ -140,11 +160,21 @@ router.get("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
 router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
-      opportunityNumber, catalogName, salutation,
-      customerName, customerEmail, customerCompany, customerAddress,
-      products = [], fieldsToDisplay = [], priceRange, margin, gst,
+      opportunityNumber,
+      catalogName,
+      salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      products = [],
+      fieldsToDisplay = [],
+      priceRange,
+      margin,
+      gst,
     } = req.body;
 
+    // validate opportunity
     if (opportunityNumber) {
       const ok = await Opportunity.exists({ opportunityCode: opportunityNumber });
       if (!ok) return res.status(400).json({ message: "Invalid opportunity number" });
@@ -154,19 +184,27 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     if (!catalog) return res.status(404).json({ message: "Catalog not found" });
     const old = catalog.toObject();
 
-    const ids = products.map(p => p.productId);
+    // rebuild products
+    const ids  = products.map(p => p.productId);
     const docs = await Product.find({ _id: { $in: ids } }).lean();
     const map  = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
-    catalog.products = products.filter(p => map[p.productId])
-                               .map(p => buildSubDoc(p, map[p.productId]));
+    catalog.products = products
+      .filter(p => map[p.productId])
+      .map(p => buildSubDoc(p, map[p.productId]));
 
+    // update other fields
     catalog.set({
       opportunityNumber: opportunityNumber ?? "",
-      catalogName, salutation: salutation ?? catalog.salutation,
-      customerName, customerEmail, customerCompany, customerAddress,
-      fieldsToDisplay, priceRange,
-      margin: margin ?? catalog.margin,
-      gst: gst ?? catalog.gst,
+      catalogName,
+      salutation:        salutation ?? catalog.salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      fieldsToDisplay,
+      priceRange,
+      margin:            margin ?? catalog.margin,
+      gst:               gst ?? catalog.gst,
     });
 
     const updated = await catalog.save();
