@@ -6,7 +6,9 @@ export default function InvoiceFollowUpManual({onClose}) {
     const [error  , setError] = useState("");
     const [jobSheetSuggestion , setJobSheetSuggestion] = useState([]);
     const [companySuggesion , setCompanySuggestion] = useState([]);
-    
+    const [clients, setClients] = useState([]);
+
+
     const [form, setForm] = useState({
         orderDate: "",
         jobSheetNumber: "",
@@ -54,11 +56,30 @@ export default function InvoiceFollowUpManual({onClose}) {
         });
     }
 
+    // const handleChange = (e) => {
+    //     setForm({
+    //         ...form,
+    //         [e.target.name]: e.target.value,
+    //     });
+    // };
+
     const handleChange = (e) => {
+      const { name, value } = e.target;
+  
+      if (name === "clientCompanyName") {
+        const company = companySuggesion.find(c => c.companyName === value);
+        setClients(company ? company.clients : []);
         setForm({
-            ...form,
-            [e.target.name]: e.target.value,
+          ...form,
+          [name]: value,
+          clientName: "", // reset client name on company change
         });
+      } else {
+        setForm({
+          ...form,
+          [name]: value,
+        });
+      }
     };
 
     useEffect(() => {
@@ -76,10 +97,11 @@ export default function InvoiceFollowUpManual({onClose}) {
         fetchJobSheetSuggestions();
     }, []);
 
-
-    const getUniqueOptions = (key) => {
-    return [...new Set(companySuggesion.map(item => item[key]).filter(Boolean))];
-  };
+  
+  
+        const getUniqueOptions = (key) => {
+        return [...new Set(companySuggesion.map(item => item[key]).filter(Boolean))];
+        };
 
 
   //getch the client and event name from the jobsheet
@@ -91,7 +113,7 @@ export default function InvoiceFollowUpManual({onClose}) {
                 const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                setJobSheetSuggestion(res.data || []);
+                setJobSheetSuggestion(res.data);
             } catch (err) {
                 console.error("Error fetching job sheet suggestions:", err);
             }
@@ -133,40 +155,38 @@ export default function InvoiceFollowUpManual({onClose}) {
         />
       </div>
 
-      {/* Client Company Name */}
-      <div>
-        <label className="block mb-1 font-semibold text-sm">Client Company Name</label>
-        <select
-          name="clientCompanyName"
-          className="border w-full p-2 rounded text-sm"
-          value={form.clientCompanyName}
-          onChange={handleChange}
-        >
-          <option value="">Select...</option>
-          {getUniqueOptions("companyName").map((name, idx) => (
-            <option key={idx} value={name}>
-              {name.length > 20 ? name.slice(0, 60) + "..." : name}
-            </option>
-          ))}
-        </select>
-      </div>
+         <div>
+            <label className="block mb-1 font-semibold text-sm">Client Company Name</label>
+            <select
+              name="clientCompanyName"
+              className="border w-full p-2 rounded text-sm"
+              value={form.clientCompanyName}
+              onChange={handleChange}
+            >
+              <option value="">Select...</option>
+              {getUniqueOptions("companyName").map((name, idx) => (
+                <option key={idx} value={name}>
+                  {name.length > 60 ? name.slice(0, 60) + "..." : name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-
-      {/* Client Name */}
-      <div>
-        <label className="block mb-1 font-semibold">Client Name</label>
-        <select
-          name="clientName"
-          className="border w-full p-2 rounded"
-          value={form.clientName}
-          onChange={handleChange}
-        >
-          <option value="">Select...</option>
-          {getClientName("clientName").map((client, idx) => (
-            <option key={idx} value={client}>{client}</option>
-          ))}
-        </select>
-      </div>
+          {/* Client Name */}
+          <div>
+            <label className="block mb-1 font-semibold">Client Name</label>
+            <select
+              name="clientName"
+              className="border w-full p-2 rounded"
+              value={form.clientName}
+              onChange={handleChange}
+            >
+              <option value="">Select...</option>
+              {clients.map((client, idx) => (
+                <option key={idx} value={client.name}>{client.name}</option>
+              ))}
+            </select>
+          </div>
 
       {/* Event Name */}
       <div>
@@ -327,4 +347,4 @@ export default function InvoiceFollowUpManual({onClose}) {
 </div>
 
     );
-}
+  }
