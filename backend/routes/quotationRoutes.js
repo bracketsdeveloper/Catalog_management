@@ -1,4 +1,3 @@
-// backend/routes/quotations.js
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
@@ -11,7 +10,6 @@ const Quotation = require("../models/Quotation");
 const Log = require("../models/Log");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// Helper to create audit logs
 async function createLog(action, oldValue, newValue, user, ip) {
   try {
     await Log.create({
@@ -28,7 +26,6 @@ async function createLog(action, oldValue, newValue, user, ip) {
   }
 }
 
-// ─── CREATE new quotation ─────────────────────────────────────────────────
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
     console.log("Creating quotation with payload:", req.body);
@@ -69,25 +66,26 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     ];
     const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
-    // Build items array
     const builtItems = items.map((it, idx) => {
       const qty = parseInt(it.quantity, 10) || 1;
       const rate = parseFloat(it.rate) || 0;
       const price = parseFloat(it.productprice) || rate;
-      const amount = parseFloat((price * qty).toFixed(2));
-      const gstVal = parseFloat((amount * (parseFloat(it.productGST) / 100)).toFixed(2));
+      const marginFactor = 1 + (parseFloat(margin) || 0) / 100;
+      const effRate = rate * marginFactor;
+      const amount = parseFloat((effRate * qty).toFixed(2));
+      const gstVal = parseFloat((amount * (parseFloat(it.productGST || gst || 18) / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
       return {
-        slNo: idx + 1,
-        productId: it.productId,
+        slNo: it.slNo || idx + 1,
+        productId: it.productId || null,
         product: it.productName || it.product || "",
         hsnCode: it.hsnCode || "",
         quantity: qty,
         rate,
         productprice: price,
         amount,
-        productGST: parseFloat(it.productGST) || 0,
+        productGST: parseFloat(it.productGST) || parseFloat(gst) || 18,
         total,
         baseCost: parseFloat(it.baseCost) || 0,
         material: it.material || "",
@@ -122,17 +120,16 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       createdBy: req.user.email,
     });
 
-    await quotation.save();
-    await createLog("create", null, quotation, req.user, req.ip);
+    const savedQuotation = await quotation.save();
+    await createLog("create", null, savedQuotation, req.user, req.ip);
 
-    res.status(201).json({ message: "Quotation created", quotation });
+    res.status(201).json({ message: "Quotation created", quotation: savedQuotation });
   } catch (err) {
     console.error("Error creating quotation:", err);
-    res.status(500).json({ message: "Server error creating quotation" });
+    res.status(400).json({ message: err.message || "Server error creating quotation" });
   }
 });
 
-// ─── GET all quotations ───────────────────────────────────────────────────
 router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const list = await Quotation.find()
@@ -148,7 +145,6 @@ router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// ─── GET single quotation ─────────────────────────────────────────────────
 router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quote = await Quotation.findById(req.params.id)
@@ -162,11 +158,10 @@ router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
     res.json(quote);
   } catch (err) {
     console.error("Error fetching quotation:", err);
-    res.status(500).json({ message: "Server error fetching quotation" });
+    res.status(400).json({ message: err.message || "Server error fetching quotation" });
   }
 });
 
-// ─── UPDATE quotation ─────────────────────────────────────────────────────
 router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const existing = await Quotation.findById(req.params.id);
@@ -192,27 +187,28 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       displayHSNCodes,
     } = req.body;
 
-    // Rebuild items if provided
     let builtItems = existing.items;
-    if (Array.isArray(items)) {
+    if (Array.isArray(items) && items.length > 0) {
       builtItems = items.map((it, idx) => {
         const qty = parseInt(it.quantity, 10) || 1;
         const rate = parseFloat(it.rate) || 0;
         const price = parseFloat(it.productprice) || rate;
-        const amount = parseFloat((price * qty).toFixed(2));
-        const gstVal = parseFloat((amount * (parseFloat(it.productGST) / 100)).toFixed(2));
+        const marginFactor = 1 + (parseFloat(margin) || 0) / 100;
+        const effRate = rate * marginFactor;
+        const amount = parseFloat((effRate * qty).toFixed(2));
+        const gstVal = parseFloat((amount * (parseFloat(it.productGST || gst || 18) / 100)).toFixed(2));
         const total = parseFloat((amount + gstVal).toFixed(2));
 
         return {
           slNo: it.slNo || idx + 1,
-          productId: it.productId,
+          productId: it.productId || null,
           product: it.productName || it.product || "",
           hsnCode: it.hsnCode || "",
           quantity: qty,
           rate,
           productprice: price,
           amount,
-          productGST: parseFloat(it.productGST) || 0,
+          productGST: parseFloat(it.productGST) || parseFloat(gst) || 18,
           total,
           baseCost: parseFloat(it.baseCost) || 0,
           material: it.material || "",
@@ -224,39 +220,48 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       });
     }
 
-    const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
-    const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
+    const totalAmount = builtItems.reduce((sum, x) => sum + (x.amount || 0), 0);
+    const grandTotal = builtItems.reduce((sum, x) => sum + (x.total || 0), 0);
 
-    existing.set({
-      opportunityNumber,
-      catalogName,
-      fieldsToDisplay,
-      priceRange,
-      salutation,
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      margin,
-      gst,
+    const updateData = {
+      opportunityNumber: opportunityNumber ?? existing.opportunityNumber,
+      catalogName: catalogName ?? existing.catalogName,
+      fieldsToDisplay: fieldsToDisplay ?? existing.fieldsToDisplay,
+      priceRange: priceRange ?? existing.priceRange,
+      salutation: salutation ?? existing.salutation,
+      customerName: customerName ?? existing.customerName,
+      customerEmail: customerEmail ?? existing.customerEmail,
+      customerCompany: customerCompany ?? existing.customerCompany,
+      customerAddress: customerAddress ?? existing.customerAddress,
+      margin: margin ?? existing.margin,
+      gst: gst ?? existing.gst,
       items: builtItems,
       totalAmount,
       grandTotal,
-      displayTotals: !!displayTotals,
-      displayHSNCodes: !!displayHSNCodes,
-      terms: Array.isArray(terms) && terms.length ? terms : existing.terms,
-    });
+      displayTotals: displayTotals ?? existing.displayTotals,
+      displayHSNCodes: displayHSNCodes ?? existing.displayHSNCodes,
+      terms: Array.isArray(terms) && terms.length > 0 ? terms : existing.terms,
+    };
 
-    const updated = await existing.save();
+    const updated = await Quotation.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).populate("items.productId", "images name productCost category subCategory hsnCode");
+
+    if (!updated) {
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    console.log("Updated quotation:", updated);
     await createLog("update", existing, updated, req.user, req.ip);
-    res.json({ message: "Quotation updated", quotation: updated });
+    res.json({ message: "Quotation updated", quotation: updated.toObject() });
   } catch (err) {
     console.error("Error updating quotation:", err);
-    res.status(500).json({ message: "Server error updating quotation" });
+    res.status(400).json({ message: err.message || "Server error updating quotation" });
   }
 });
 
-// ─── DELETE quotation ─────────────────────────────────────────────────────
 router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const toDelete = await Quotation.findById(req.params.id);
@@ -272,7 +277,6 @@ router.delete("/quotations/:id", authenticate, authorizeAdmin, async (req, res) 
   }
 });
 
-// ─── EXPORT quotation to Word ──────────────────────────────────────────────
 router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quotation = await Quotation.findById(req.params.id)
@@ -318,8 +322,10 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     const itemsData = quotation.items.map((item, index) => {
       const quantity = parseFloat(item.quantity) || 0;
       const rate = parseFloat(item.rate) || 0;
-      const amount = rate * quantity;
-      const total = amount + amount * (item.productGST / 100);
+      const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
+      const effRate = rate * marginFactor;
+      const amount = effRate * quantity;
+      const total = amount + amount * ((item.productGST || quotation.gst || 18) / 100);
       const image = item.productId?.images?.[item.imageIndex || 0] || "https://via.placeholder.com/150";
 
       return {
@@ -328,7 +334,7 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
         product: item.product || "",
         hsnCode: item.hsnCode || item.productId?.hsnCode || "N/A",
         quantity: quantity.toString(),
-        rate: rate.toFixed(2),
+        rate: effRate.toFixed(2),
         amount: amount.toFixed(2),
         total: total.toFixed(2),
         material: item.material || "",
@@ -337,8 +343,8 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
       };
     });
 
-    const totalAmount = itemsData.reduce((sum, i) => sum + parseFloat(i.amount), 0);
-    const grandTotal = itemsData.reduce((sum, i) => sum + parseFloat(i.total), 0);
+    const totalAmount = itemsData.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
+    const grandTotal = itemsData.reduce((sum, i) => sum + parseFloat(i.total || 0), 0);
 
     const docData = {
       date: new Date(quotation.createdAt).toLocaleDateString("en-US", {
@@ -378,7 +384,6 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
   }
 });
 
-// ─── APPROVE quotation ────────────────────────────────────────────────────
 router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const updatedQuotation = await Quotation.findByIdAndUpdate(
@@ -396,7 +401,6 @@ router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, 
   }
 });
 
-// ─── UPDATE remarks ───────────────────────────────────────────────────────
 router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { remarks } = req.body;
