@@ -2,18 +2,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
 import html2pdf from "html2pdf.js";
 
 export default function PrintQuotation() {
   const { id } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
-
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
   const [quotation, setQuotation] = useState(null);
-  const [editableQuotation, setEditableQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,15 +22,20 @@ export default function PrintQuotation() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        throw new Error("Failed to fetch quotation");
-      }
-      const data = await res.json();
-      setQuotation(data);
-      setEditableQuotation(data);
+      const data = res.data;
+      // Sanitize items to ensure valid fields
+      const sanitizedItems = (data.items || []).map((item, idx) => ({
+        ...item,
+        quantity: parseFloat(item.quantity) || 1,
+        slNo: item.slNo || idx + 1,
+        rate: parseFloat(item.rate) || 0,
+        productGST: parseFloat(item.productGST) || data.gst || 18,
+        product: item.product || "Unknown Product",
+      }));
+      setQuotation({ ...data, items: sanitizedItems });
       setError(null);
     } catch (err) {
       console.error("Error fetching quotation:", err);
@@ -43,32 +45,6 @@ export default function PrintQuotation() {
     }
   }
 
-  function computedAmount(quotation) {
-    let sum = 0;
-    quotation.items.forEach((item) => {
-      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-      const baseRate = parseFloat(item.rate) || 0;
-      const quantity = parseFloat(item.quantity) || 0;
-      const amount = baseRate * marginFactor * quantity;
-      sum += amount;
-    });
-    return sum;
-  }
-
-  function computedTotal(quotation) {
-    let sum = 0;
-    quotation.items.forEach((item) => {
-      const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-      const baseRate = parseFloat(item.rate) || 0;
-      const quantity = parseFloat(item.quantity) || 0;
-      const amount = baseRate * marginFactor * quantity;
-      const gstPercent = parseFloat(item.productGST) || 0;
-      const gstVal = parseFloat((amount * (gstPercent / 100)).toFixed(2));
-      sum += amount + gstVal;
-    });
-    return sum;
-  }
-
   const handleExportPDF = () => {
     const element = document.getElementById("printable");
     const clonedElement = element.cloneNode(true);
@@ -76,9 +52,7 @@ export default function PrintQuotation() {
 
     const opt = {
       margin: 0.2,
-      filename: `Quotation-${
-        editableQuotation?.quotationNumber || "Unknown"
-      }.pdf`,
+      filename: `Quotation-${quotation?.quotationNumber || "Unknown"}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 7, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
@@ -93,9 +67,11 @@ export default function PrintQuotation() {
   if (error) {
     return <div className="p-6 text-red-500">{error}</div>;
   }
-  if (!editableQuotation) {
+  if (!quotation) {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
   }
+
+  const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
 
   return (
     <div className="max-w-3xl mx-auto p-4 bg-white shadow-md" id="printable">
@@ -135,7 +111,7 @@ export default function PrintQuotation() {
       <div className="flex justify-between items-start">
         <div>
           <div className="text-xs text-gray-600">
-            {new Date(editableQuotation.createdAt).toLocaleDateString("en-US", {
+            {new Date(quotation.createdAt).toLocaleDateString("en-US", {
               weekday: "long",
               year: "numeric",
               month: "long",
@@ -144,9 +120,9 @@ export default function PrintQuotation() {
           </div>
           <div className="mt-1">
             <div className="text-lg font-bold">
-              Quotation No.: {editableQuotation.quotationNumber}
+              Quotation No.: {quotation.quotationNumber || "N/A"}
             </div>
-            <div className="text-xs">GSTIN : 29ABCFA9924A1ZL</div>
+            <div className="text-xs">GSTIN: 29ABCFA9924A1ZL</div>
           </div>
         </div>
         <div>
@@ -161,54 +137,50 @@ export default function PrintQuotation() {
 
       <div className="mt-4">
         <div className="text-base font-bold">
-          {editableQuotation.salutation} {editableQuotation.customerName}
+          {quotation.salutation || "Mr."} {quotation.customerName || "Customer"}
         </div>
-        <div className="text-xs">{editableQuotation.customerCompany}</div>
-        <div className="text-xs">{editableQuotation.customerAddress}</div>
+        <div className="text-xs">{quotation.customerCompany || ""}</div>
+        <div className="text-xs">{quotation.customerAddress || ""}</div>
       </div>
 
       <div className="mt-4">
         <div className="text-md font-bold">
-          Quotation:{" "}
-          {editableQuotation.catalogName
-            ? editableQuotation.catalogName
-            : "Goodies"}
+          Quotation: {quotation.catalogName || "Goodies"}
         </div>
       </div>
 
-      <div className="mt-4ードoverflow-x-auto">
+      <div className="mt-4 overflow-x-auto">
         <table className="min-w-full border-collapse text-xs">
           <thead>
             <tr>
               <th className="border px-1 py-1">Sl. No.</th>
               <th className="border px-1 py-1">Image</th>
               <th className="border px-1 py-1">Product</th>
-              {editableQuotation.displayHSNCodes && (
+              {quotation.displayHSNCodes && (
                 <th className="border px-1 py-1">HSN</th>
               )}
               <th className="border px-1 py-1">Quantity</th>
-              <th className="border px-1 py-1 text-right">Rate</th>
+              <th className="border px-1 py-1 text-right">Rate (with margin)</th>
               <th className="border px-1 py-1 text-right">Amount</th>
               <th className="border px-1 py-1 text-right">GST (%)</th>
               <th className="border px-1 py-1 text-right">Total</th>
             </tr>
           </thead>
           <tbody>
-            {editableQuotation.items.map((item, idx) => {
-              const marginFactor =
-                1 + ((parseFloat(editableQuotation.margin) || 0) / 100);
-              const qty = Number(item.quantity) || 0;
-              const rate = Number(item.rate) || 0;
-              const amount = rate * marginFactor * qty;
-              const gstPercent = parseFloat(item.productGST) || 0;
+            {quotation.items.map((item, idx) => {
+              const baseRate = parseFloat(item.rate) || 0;
+              const quantity = parseFloat(item.quantity) || 1;
+              const effRate = baseRate * marginFactor;
+              const amount = effRate * quantity;
+              const gstPercent = parseFloat(item.productGST) || quotation.gst || 18;
               const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
-              const total = amount + gstAmt;
-              const imageUrl = getImageUrl(item);
-              const hsnCode = item.hsnCode || (item.productId && item.productId.hsnCode) || "N/A";
+              const total = parseFloat((amount + gstAmt).toFixed(2));
+              const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
+              const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
 
               return (
                 <tr key={idx}>
-                  <td className="border px-1 py-1 text-center">{idx + 1}</td>
+                  <td className="border px-1 py-1 text-center">{item.slNo}</td>
                   <td className="border px-1 py-1 text-center">
                     {imageUrl !== "https://via.placeholder.com/150" ? (
                       <img
@@ -222,12 +194,12 @@ export default function PrintQuotation() {
                     )}
                   </td>
                   <td className="border px-1 py-1">{item.product}</td>
-                  {editableQuotation.displayHSNCodes && (
+                  {quotation.displayHSNCodes && (
                     <td className="border px-1 py-1 text-center">{hsnCode}</td>
                   )}
-                  <td className="border px-1 py-1 text-center">{qty}</td>
+                  <td className="border px-1 py-1 text-center">{quantity}</td>
                   <td className="border px-1 py-1 text-right">
-                    ₹{rate.toFixed(2)}
+                    ₹{effRate.toFixed(2)}
                   </td>
                   <td className="border px-1 py-1 text-right">
                     ₹{amount.toFixed(2)}
@@ -243,13 +215,13 @@ export default function PrintQuotation() {
         </table>
       </div>
 
-      {editableQuotation.displayTotals && (
+      {quotation.displayTotals && (
         <div className="mt-4 text-right">
           <div className="text-base font-bold">
-            Total Amount: ₹{computedAmount(editableQuotation).toFixed(2)}
+            Total Amount: ₹{computedAmount(quotation).toFixed(2)}
           </div>
           <div className="text-base font-bold">
-            Grand Total (with GST): ₹{computedTotal(editableQuotation).toFixed(2)}
+            Grand Total (with GST): ₹{computedTotal(quotation).toFixed(2)}
           </div>
         </div>
       )}
@@ -258,9 +230,8 @@ export default function PrintQuotation() {
         <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
           Product subject to availability at the time of order confirmation
         </div>
-        {editableQuotation.terms &&
-          editableQuotation.terms.length > 0 &&
-          editableQuotation.terms.map((term, idx) => (
+        {quotation.terms?.length > 0 &&
+          quotation.terms.map((term, idx) => (
             <div key={idx} className="mb-1">
               <div className="font-bold text-xs">{term.heading}:</div>
               <div className="text-xs">{term.content}</div>
@@ -298,35 +269,28 @@ export default function PrintQuotation() {
   );
 }
 
-function getImageUrl(item) {
-  if (item.image) return item.image;
-  if (item.productId?.images?.length > 0) {
-    return item.productId.images[0];
-  }
-  return "https://via.placeholder.com/150";
-}
-
-export function computedAmount(quotation) {
+function computedAmount(quotation) {
   let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+  (quotation.items || []).forEach((item) => {
+    const quantity = parseFloat(item.quantity) || 1;
     const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    const amount = baseRate * marginFactor * quantity;
-    sum += amount;
+    const margin = parseFloat(quotation.margin) || 0;
+    const marginFactor = 1 + margin / 100;
+    sum += baseRate * marginFactor * quantity;
   });
   return sum;
 }
 
-export function computedTotal(quotation) {
+function computedTotal(quotation) {
   let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
+  (quotation.items || []).forEach((item) => {
+    const quantity = parseFloat(item.quantity) || 1;
     const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
+    const margin = parseFloat(quotation.margin) || 0;
+    const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gstPercent = parseFloat(item.productGST) || 0;
-    const gstVal = parseFloat((amount * (gstPercent / 100)).toFixed(2));
+    const gst = parseFloat(item.productGST) || quotation.gst || 18;
+    const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });
   return sum;
