@@ -5,11 +5,13 @@ export default function InvoiceFollowUpManual({onClose}) {
     const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
     const [error  , setError] = useState("");
     const [jobSheetSuggestion , setJobSheetSuggestion] = useState([]);
-
+    const [companySuggesion , setCompanySuggestion] = useState([]);
+    
     const [form, setForm] = useState({
         orderDate: "",
         jobSheetNumber: "",
         clientCompanyName: "",
+        clientName: "",
         eventName: "",
         quotationNumber: "",
         crmName: "",
@@ -37,6 +39,7 @@ export default function InvoiceFollowUpManual({onClose}) {
             orderDate: "",
             jobSheetNumber: "",
             clientCompanyName: "",
+            clientName: "",
             eventName: "",
             quotationNumber: "",
             crmName: "",
@@ -65,7 +68,7 @@ export default function InvoiceFollowUpManual({onClose}) {
                 const res = await axios.get(`${BACKEND_URL}/api/admin/companies`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                setJobSheetSuggestion(res.data || []);
+                setCompanySuggestion(res.data || []);
             } catch (err) {
                 console.error("Error fetching job sheet suggestions:", err);
             }
@@ -75,6 +78,28 @@ export default function InvoiceFollowUpManual({onClose}) {
 
 
     const getUniqueOptions = (key) => {
+    return [...new Set(companySuggesion.map(item => item[key]).filter(Boolean))];
+  };
+
+
+  //getch the client and event name from the jobsheet
+
+     useEffect(() => {
+        async function fetchJobSheetSuggestions() {
+            try {
+                const token = localStorage.getItem("token");
+                const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                setJobSheetSuggestion(res.data || []);
+            } catch (err) {
+                console.error("Error fetching job sheet suggestions:", err);
+            }
+        }
+        fetchJobSheetSuggestions();
+    }, []);
+
+  const getClientName = (key) => {
     return [...new Set(jobSheetSuggestion.map(item => item[key]).filter(Boolean))];
   };
 
@@ -137,8 +162,8 @@ export default function InvoiceFollowUpManual({onClose}) {
           onChange={handleChange}
         >
           <option value="">Select...</option>
-          {getUniqueOptions("name").map((name, idx) => (
-            <option key={idx} value={name}>{name}</option>
+          {getClientName("clientName").map((client, idx) => (
+            <option key={idx} value={client}>{client}</option>
           ))}
         </select>
       </div>
@@ -153,7 +178,7 @@ export default function InvoiceFollowUpManual({onClose}) {
           onChange={handleChange}
         >
           <option value="">Select...</option>
-          {getUniqueOptions("eventName").map((name, idx) => (
+          {getClientName("eventName").map((name, idx) => (
             <option key={idx} value={name}>{name}</option>
           ))}
         </select>
