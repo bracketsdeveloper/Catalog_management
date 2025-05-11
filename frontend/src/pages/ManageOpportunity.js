@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import Breadcrumb from "../components/manageopportunities/Breadcrumb";
@@ -8,8 +8,6 @@ import ToggleButtons from "../components/manageopportunities/ToggleButtons";
 import FilterPanel from "../components/manageopportunities/FilterPanel";
 import OpportunityTable from "../components/manageopportunities/OpportunityTable";
 import KanbanView from "../components/manageopportunities/KanbanView";
-
-// ADDED FOR EXCEL EXPORT
 import * as XLSX from "xlsx";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
@@ -25,66 +23,12 @@ function formatClosureDate(dateStr) {
   return d.toLocaleDateString("en-GB");
 }
 
-function getDotColor(action) {
-  switch (action) {
-    case "create":
-      return "bg-green-300";
-    case "update":
-      return "bg-orange-300";
-    case "delete":
-      return "bg-red-300";
-    default:
-      return "bg-gray-500";
-  }
-}
-
-// ADDED FOR EXCEL EXPORT
-function exportToExcel(data, fileName = "OpportunitiesData.xlsx") {
-  // Convert each opportunity into a flat JSON object for your spreadsheet
-  const exportData = data.map((opportunity) => ({
-    opportunityCode: opportunity.opportunityCode,
-    opportunityName: opportunity.opportunityName,
-    account: opportunity.account,
-    contact: opportunity.contact,
-    opportunityType: opportunity.opportunityType,
-    opportunityStage: opportunity.opportunityStage,
-    opportunityStatus: opportunity.opportunityStatus,
-    opportunityDetail: opportunity.opportunityDetail,
-    opportunityValue: opportunity.opportunityValue,
-    currency: opportunity.currency,
-    leadSource: opportunity.leadSource,
-    closureDate: formatClosureDate(opportunity.closureDate),
-    closureProbability: opportunity.closureProbability,
-    grossProfit: opportunity.grossProfit,
-    opportunityPriority: opportunity.opportunityPriority,
-    isRecurring: opportunity.isRecurring,
-    dealRegistrationNumber: opportunity.dealRegistrationNumber,
-    freeTextField: opportunity.freeTextField,
-    opportunityOwner: opportunity.opportunityOwner,
-    isActive: opportunity.isActive,
-    createdBy: opportunity.createdBy,
-    createdAt: opportunity.createdAt,
-    // ...Add or remove fields as needed.
-  }));
-
-  const worksheet = XLSX.utils.json_to_sheet(exportData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Opportunities");
-  XLSX.writeFile(workbook, fileName);
-}
-
-export default function ManageOpportunity() {
+function ManageOpportunity() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin ? "all-opportunities" : "my-opportunities"
   );
-
-  const [opportunities, setOpportunities] = useState({
-    my: [],
-    team: [],
-    all: [],
-  });
-
+  const [opportunities, setOpportunities] = useState({ my: [], team: [], all: [] });
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [filterCriteria, setFilterCriteria] = useState({
@@ -93,13 +37,9 @@ export default function ManageOpportunity() {
     closureToDate: "",
     createdFilter: "All",
   });
-
   const [viewMode, setViewMode] = useState("list");
-  const [logs, setLogs] = useState({
-    show: false,
-    data: [],
-    loading: false,
-  });
+  const [logs, setLogs] = useState({ show: false, data: [], loading: false });
+  const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
 
   const stages = [
     "Lead",
@@ -109,6 +49,23 @@ export default function ManageOpportunity() {
     "Commit",
     "Won/Lost/Discontinued",
   ];
+
+  // Sorting handler
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    } else if (sortConfig.key === key && sortConfig.direction === "desc") {
+      direction = "";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const formatCreatedDate = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-GB");
+  };
 
   // Fetch data based on active tab
   useEffect(() => {
@@ -128,7 +85,6 @@ export default function ManageOpportunity() {
             { headers: getAuthHeaders() }
           ),
         ];
-
         if (isSuperAdmin) {
           requests.push(
             axios.get(
@@ -139,21 +95,16 @@ export default function ManageOpportunity() {
             )
           );
         }
-
         const [myRes, teamRes, allRes] = await Promise.all(requests);
-        console.log("API Responses:", { myRes, teamRes, allRes });
-
-        setOpportunities((prev) => ({
-          ...prev,
+        setOpportunities({
           my: myRes.data || [],
           team: teamRes.data || [],
           all: isSuperAdmin ? allRes?.data || [] : [],
-        }));
+        });
       } catch (error) {
         console.error("Error fetching opportunities:", error);
       }
     };
-
     fetchData();
   }, [activeTab, isSuperAdmin, searchTerm]);
 
@@ -190,30 +141,23 @@ export default function ManageOpportunity() {
     }
   };
 
-  // Filter the data based on filterCriteria (no local search)
+  // Apply filters
   const getFilteredData = () => {
     let data = [...getActiveData()];
-
-    // Stage filter
-    if (filterCriteria.opportunityStage && filterCriteria.opportunityStage !== "All") {
+    if (filterCriteria.opportunityStage !== "All") {
       data = data.filter((op) => op.opportunityStage === filterCriteria.opportunityStage);
     }
-
-    // Date range filter
     if (filterCriteria.closureFromDate) {
-      const fromDate = new Date(filterCriteria.closureFromDate);
-      data = data.filter((op) => new Date(op.closureDate) >= fromDate);
+      const from = new Date(filterCriteria.closureFromDate);
+      data = data.filter((op) => new Date(op.closureDate) >= from);
     }
     if (filterCriteria.closureToDate) {
-      const toDate = new Date(filterCriteria.closureToDate);
-      data = data.filter((op) => new Date(op.closureDate) <= toDate);
+      const to = new Date(filterCriteria.closureToDate);
+      data = data.filter((op) => new Date(op.closureDate) <= to);
     }
-
-    // Created time period filter
-    if (filterCriteria.createdFilter && filterCriteria.createdFilter !== "All") {
+    if (filterCriteria.createdFilter !== "All") {
       const now = new Date();
       let start, end;
-
       switch (filterCriteria.createdFilter) {
         case "Today":
           start = new Date(now.setHours(0, 0, 0, 0));
@@ -256,7 +200,6 @@ export default function ManageOpportunity() {
         default:
           break;
       }
-
       if (start && end) {
         data = data.filter((op) => {
           const created = new Date(op.createdAt);
@@ -264,16 +207,36 @@ export default function ManageOpportunity() {
         });
       }
     }
-
     return data;
   };
 
-  // Updated drag handler that uses the server's returned updated opportunity.
+  // Sorted + filtered data
+  const filteredData = getFilteredData();
+  const sortedData = useMemo(() => {
+    if (!sortConfig.key || !sortConfig.direction) return filteredData;
+    const sorted = [...filteredData].sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+      if (sortConfig.key === "closureDate" || sortConfig.key === "createdAt") {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+      if (typeof aVal === "string") {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      if (aVal > bVal) return 1;
+      if (aVal < bVal) return -1;
+      return 0;
+    });
+    return sortConfig.direction === "desc" ? sorted.reverse() : sorted;
+  }, [filteredData, sortConfig]);
+
+  // Drag end handler unchanged...
+
   const handleDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
     if (!destination || destination.droppableId === source.droppableId) return;
-
-    // Determine update payload based on destination.
     let updatePayload = {};
     if (["Won", "Lost", "Discontinued"].includes(destination.droppableId)) {
       updatePayload = {
@@ -283,24 +246,13 @@ export default function ManageOpportunity() {
     } else {
       updatePayload = { opportunityStage: destination.droppableId };
     }
-
-    console.log("Updating card", draggableId, "with payload", updatePayload);
-
     try {
-      // Perform the API request and get the updated opportunity from the server.
       const response = await axios.put(
         `${BACKEND_URL}/api/admin/opportunities/${draggableId}`,
         updatePayload,
         { headers: getAuthHeaders() }
       );
-
       const updatedOpportunity = response.data.opportunity;
-      if (!updatedOpportunity) {
-        console.error("No updated opportunity returned from server");
-        return;
-      }
-
-      // Update the local state using the returned updated opportunity object.
       setOpportunities((prev) => {
         const updated = { ...prev };
         Object.keys(updated).forEach((key) => {
@@ -315,28 +267,44 @@ export default function ManageOpportunity() {
     }
   };
 
+  // Excel export
+  const exportToExcel = (data, fileName = "OpportunitiesData.xlsx") => {
+    const exportData = data.map((op) => ({
+      opportunityCode: op.opportunityCode,
+      createdDate: formatCreatedDate(op.createdAt),
+      account: op.account,
+      opportunityName: op.opportunityName,
+      opportunityOwner: op.opportunityOwner,
+      opportunityValue: op.opportunityValue,
+      closureDate: formatClosureDate(op.closureDate),
+      opportunityStage: op.opportunityStage,
+      opportunityStatus: op.opportunityStatus,
+      // ...other fields...
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
+    XLSX.writeFile(wb, fileName);
+  };
+
   return (
     <div className="min-h-screen bg-white text-gray-800 p-4">
       <Breadcrumb />
-
       <div className="flex items-center justify-between mb-4">
         <OpportunityTabs
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isSuperAdmin={isSuperAdmin}
         />
-
         <div className="flex items-center space-x-2">
-          {/* Logs dropdown */}
           <div className="relative">
             <button
-              className="bg-[#66C3D0] text-white text-white px-4 py-2 rounded"
+              className="bg-[#66C3D0] text-white px-4 py-2 rounded"
               onMouseEnter={() => handleLogsToggle(true)}
               onMouseLeave={() => handleLogsToggle(false)}
             >
               Logs
             </button>
-
             {logs.show && (
               <div
                 className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border border-gray-300 rounded shadow-md z-50 p-2"
@@ -355,17 +323,19 @@ export default function ManageOpportunity() {
                     >
                       <div className="flex items-center space-x-2">
                         <span
-                          className={`inline-block w-2 h-2 rounded-full ${getDotColor(
-                            log.action
-                          )}`}
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            log.action === "create"
+                              ? "bg-green-300"
+                              : log.action === "update"
+                              ? "bg-orange-300"
+                              : log.action === "delete"
+                              ? "bg-red-300"
+                              : "bg-gray-500"
+                          }`}
                         ></span>
-                        <span className="font-semibold capitalize">
-                          {log.action}
-                        </span>
+                        <span className="font-semibold capitalize">{log.action}</span>
                         {log.field && (
-                          <span className="text-xs text-gray-400 ml-2">
-                            {log.field}
-                          </span>
+                          <span className="text-xs text-gray-400 ml-2">{log.field}</span>
                         )}
                       </div>
                       <div className="text-xs text-gray-500">
@@ -385,36 +355,30 @@ export default function ManageOpportunity() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-gray-500 py-2">
-                    No logs found
-                  </div>
+                  <div className="text-center text-gray-500 py-2">No logs found</div>
                 )}
               </div>
             )}
           </div>
-
           <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-
           <button
             onClick={() => setShowFilter(!showFilter)}
             className="border border-gray-300 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-gray-100"
           >
             {showFilter ? "Hide Filters" : "Add Filter"}
           </button>
-
           <ToggleButtons viewMode={viewMode} setViewMode={setViewMode} />
-
-          {/* ADDED FOR EXCEL EXPORT */}
-          <button
-            onClick={() => exportToExcel(getFilteredData())}
-            className="border border-green-500 text-green-700 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-green-50"
-          >
-            Export to Excel
-          </button>
-
+          {isSuperAdmin && (
+            <button
+              onClick={() => exportToExcel(sortedData)}
+              className="border border-green-500 text-green-700 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-green-50"
+            >
+              Export to Excel
+            </button>
+          )}
           <Link
             to="/admin-dashboard/create-opportunity"
-            className="bg-[#Ff8045] text-white text-white rounded-md p-2 focus:outline-none"
+            className="bg-[#Ff8045] text-white rounded-md p-2 focus:outline-none"
             aria-label="Create new opportunity"
           >
             <svg
@@ -429,7 +393,6 @@ export default function ManageOpportunity() {
           </Link>
         </div>
       </div>
-
       {showFilter && (
         <FilterPanel
           filterCriteria={filterCriteria}
@@ -441,13 +404,18 @@ export default function ManageOpportunity() {
           stages={stages}
         />
       )}
-
       <div className="border-t border-gray-300 mt-4">
         {viewMode === "list" ? (
-          <OpportunityTable data={getFilteredData()} formatClosureDate={formatClosureDate} />
+          <OpportunityTable
+            data={sortedData}
+            formatClosureDate={formatClosureDate}
+            formatCreatedDate={formatCreatedDate}
+            handleSort={handleSort}
+            sortConfig={sortConfig}
+          />
         ) : (
           <KanbanView
-            data={getFilteredData()}
+            data={sortedData}
             stages={stages}
             formatClosureDate={formatClosureDate}
             handleDragEnd={handleDragEnd}
@@ -457,3 +425,5 @@ export default function ManageOpportunity() {
     </div>
   );
 }
+
+export default ManageOpportunity;

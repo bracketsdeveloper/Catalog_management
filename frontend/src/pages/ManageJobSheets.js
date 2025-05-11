@@ -19,6 +19,9 @@ export default function ManageJobSheets() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Add isSuperAdmin state
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
   // Single search query state
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -30,8 +33,10 @@ export default function ManageJobSheets() {
   const [deliveryToDate, setDeliveryToDate] = useState(null);
 
   // Sorting states
-  const [sortField, setSortField] = useState("orderDate"); // Default sort by orderDate
-  const [sortOrder, setSortOrder] = useState("asc"); // asc or desc
+  const [sortConfig, setSortConfig] = useState({
+    field: "jobSheetNumber",
+    order: "desc", // Default: descending order for JobSheet No.
+  });
 
   // Modal for create
   const [modalOpen, setModalOpen] = useState(false);
@@ -43,21 +48,19 @@ export default function ManageJobSheets() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftError, setDraftError] = useState(null);
 
-  //writing sort
+  // Job sheet modal
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      
-      
-      const handleOpenModal = (jobSheetNumber) => {
-        setSelectedJobSheetNumber(jobSheetNumber);
-        setIsModalOpen(true);
-      };
-      
-      const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedJobSheetNumber(null);
-      };
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
   const dateFilterRef = useRef(null);
 
@@ -77,6 +80,11 @@ export default function ManageJobSheets() {
   // Fetch job sheets on mount
   useEffect(() => {
     fetchJobSheets(false);
+  }, []);
+
+  useEffect(() => {
+    // Set isSuperAdmin based on localStorage
+    setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
   }, []);
 
   async function fetchJobSheets(draftOnly = false) {
@@ -134,6 +142,34 @@ export default function ManageJobSheets() {
     }
   }
 
+  // Sorting logic
+  const handleSort = (field, isDate = false) => {
+    let order = "asc";
+    if (sortConfig.field === field && sortConfig.order === "asc") {
+      order = "desc";
+    }
+    setSortConfig({ field, order });
+
+    const sortedJobSheets = [...jobSheets].sort((a, b) => {
+      let valA = a[field] || "";
+      let valB = b[field] || "";
+
+      if (isDate) {
+        valA = valA && isValid(new Date(valA)) ? new Date(valA) : new Date(0);
+        valB = valB && isValid(new Date(valB)) ? new Date(valB) : new Date(0);
+      } else {
+        valA = valA.toString().toLowerCase();
+        valB = valB.toString().toLowerCase();
+      }
+
+      if (valA < valB) return order === "asc" ? -1 : 1;
+      if (valA > valB) return order === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    setJobSheets(sortedJobSheets);
+  };
+
   // Filtering logic with date range
   const filteredJobSheets = jobSheets
     .filter((js) => {
@@ -176,16 +212,6 @@ export default function ManageJobSheets() {
       }
 
       return orderDatePass && deliveryDatePass;
-    })
-    .sort((a, b) => {
-      const fieldA = sortField === "orderDate" ? new Date(a.orderDate) : new Date(a.deliveryDate);
-      const fieldB = sortField === "orderDate" ? new Date(b.orderDate) : new Date(b.deliveryDate);
-
-      if (!isValid(fieldA) && !isValid(fieldB)) return 0;
-      if (!isValid(fieldA)) return 1;
-      if (!isValid(fieldB)) return -1;
-
-      return sortOrder === "asc" ? fieldA - fieldB : fieldB - fieldA;
     });
 
   const exportToExcel = () => {
@@ -213,7 +239,7 @@ export default function ManageJobSheets() {
           exportData.push({
             "Sl. No": serial++,
             "Created At": createdAtFormatted,
-            "Order Date": orderDateFormatted, // Added Order Date
+            "Order Date": orderDateFormatted,
             "Quotation Number": js.referenceQuotation || "",
             "Job Sheet Number": js.jobSheetNumber || "",
             "Opportunity Name": js.eventName || "",
@@ -244,7 +270,7 @@ export default function ManageJobSheets() {
         exportData.push({
           "Sl. No": serial++,
           "Created At": createdAtFormatted,
-          "Order Date": orderDateFormatted, // Added Order Date
+          "Order Date": orderDateFormatted,
           "Quotation Number": js.referenceQuotation || "",
           "Job Sheet Number": js.jobSheetNumber || "",
           "Opportunity Name": js.eventName || "",
@@ -283,6 +309,18 @@ export default function ManageJobSheets() {
     return date instanceof Date && !isNaN(date);
   };
 
+  async function fetchUserEmail() {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    } catch (err) {
+      console.error("Error fetching user email:", err);
+    }
+  }
+
   return (
     <div className="p-6">
       {/* Header Actions */}
@@ -304,12 +342,14 @@ export default function ManageJobSheets() {
           >
             Create Jobsheet
           </button>
-          <button
-            onClick={exportToExcel}
-            className="bg-[#44b977] hover:bg-[#44b977]/90 text-white px-4 py-2 rounded"
-          >
-            Export to Excel
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={exportToExcel}
+              className="bg-[#44b977] hover:bg-[#44b977]/90 text-white px-4 py-2 rounded"
+            >
+              Export to Excel
+            </button>
+          )}
         </div>
       </div>
 
@@ -408,20 +448,24 @@ export default function ManageJobSheets() {
               <h4 className="font-medium mb-2">Sort By</h4>
               <div className="flex space-x-4">
                 <select
-                  value={sortField}
-                  onChange={(e) => setSortField(e.target.value)}
+                  value={sortConfig.field}
+                  onChange={(e) => handleSort(e.target.value, e.target.value === "orderDate" || e.target.value === "deliveryDate")}
                   className="border p-2 rounded"
                 >
+                  <option value="jobSheetNumber">JobSheet No.</option>
+                  <option value="eventName">Event Name</option>
+                  <option value="clientName">Client Name</option>
+                  <option value="clientCompanyName">Company</option>
                   <option value="orderDate">Order Date</option>
                   <option value="deliveryDate">Delivery Date</option>
                 </select>
                 <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
+                  value={sortConfig.order}
+                  onChange={(e) => setSortConfig({ ...sortConfig, order: e.target.value })}
                   className="border p-2 rounded"
                 >
-                  <option value="asc">Ascending</option>
-                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending (A-Z / Oldest)</option>
+                  <option value="desc">Descending (Z-A / Latest)</option>
                 </select>
               </div>
             </div>
@@ -438,16 +482,60 @@ export default function ManageJobSheets() {
         <table className="min-w-full border-collapse">
           <thead>
             <tr className="border-b">
-            
-              <th className="p-2 text-left" >
+              <th
+                className="p-2 text-left cursor-pointer"
+                onClick={() => handleSort("jobSheetNumber")}
+              >
                 JobSheet No.
-              {/*   {isSorted && <span> 🔽 </span>} */}
-                </th>
-                <th className="p-2 text-left">Event Name</th>
-              <th className="p-2 text-left">Client Name</th>
-              <th className="p-2 text-left">Company</th>
-              <th className="p-2 text-left">Order Date</th>
-              <th className="p-2 text-left">Delivery Date</th>
+                {sortConfig.field === "jobSheetNumber" && (
+                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                )}
+              </th>
+              <th
+                className="p-2 text-left cursor-pointer"
+                onClick={() => handleSort("eventName")}
+              >
+                Event Name
+                {sortConfig.field === "eventName" && (
+                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                )}
+              </th>
+              <th
+                className="p-2 text-left cursor-pointer"
+                onClick={() => handleSort("clientName")}
+              >
+                Client Name
+                {sortConfig.field === "clientName" && (
+                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                )}
+              </th>
+              <th
+                className="p-2 text-left cursor-pointer"
+                onClick={() => handleSort("clientCompanyName")}
+              >
+                Company
+                {sortConfig.field === "clientCompanyName" && (
+                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                )}
+              </th>
+              <th
+                className="p-2 text-left cursor-pointer"
+                onClick={() => handleSort("orderDate", true)}
+              >
+                Order Date
+                {sortConfig.field === "orderDate" && (
+                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                )}
+              </th>
+              <th
+                className="p-2 text-left cursor-pointer"
+                onClick={() => handleSort("deliveryDate", true)}
+              >
+                Delivery Date
+                {sortConfig.field === "deliveryDate" && (
+                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                )}
+              </th>
               <th className="p-2 text-left">Actions</th>
             </tr>
           </thead>
@@ -455,7 +543,7 @@ export default function ManageJobSheets() {
             {filteredJobSheets.map((js) => (
               <tr key={js._id} className="border-b">
                 <td className="p-2 border">
-                 <button
+                  <button
                     className="border-b text-blue-500 hover:text-blue-700"
                     onClick={(e) => {
                       e.preventDefault();
@@ -465,9 +553,9 @@ export default function ManageJobSheets() {
                     {js.jobSheetNumber || "(No Number)"}
                   </button>
                 </td>
-                <td className="p-2">{js.eventName}</td>
-                <td className="p-2">{js.clientName}</td>
-                <td className="p-2">{js.clientCompanyName}</td>
+                <td className="p-2">{js.eventName || "N/A"}</td>
+                <td className="p-2">{js.clientName || "N/A"}</td>
+                <td className="p-2">{js.clientCompanyName || "N/A"}</td>
                 <td className="p-2">
                   {js.orderDate && isValidDate(new Date(js.orderDate))
                     ? format(new Date(js.orderDate), "dd/MM/yyyy")
@@ -500,12 +588,6 @@ export default function ManageJobSheets() {
                       >
                         Edit
                       </Dropdown.Item>
-                      {/* <Dropdown.Item
-                        onClick={() => deleteJobSheet(js._id, false)}
-                        className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
-                      >
-                        Delete
-                      </Dropdown.Item> */}
                     </Dropdown.Menu>
                   </Dropdown>
                 </td>
@@ -515,18 +597,12 @@ export default function ManageJobSheets() {
         </table>
       )}
 
-                  {/* {showModal && (
-                     <div className="p-10">
-                      <JobSheetModal jobSheet={jobSheet} onClose={handleCloseModal} />
-                    </div>
-                  )} */}
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
 
-                      <JobSheetGlobal
-                        jobSheetNumber={selectedJobSheetNumber} 
-                        isOpen={isModalOpen}
-                        onClose={handleCloseModal}
-                      />
-                  
       {/* The Modal for "Create Jobsheet" */}
       {modalOpen && (
         <CreateJobsheetModal
@@ -581,8 +657,8 @@ export default function ManageJobSheets() {
                 {draftSheets.map((draft) => (
                   <tr key={draft._id} className="border-b">
                     <td className="p-2">{draft.jobSheetNumber || "(Draft)"}</td>
-                    <td className="p-2">{draft.clientName}</td>
-                    <td className="p-2">{draft.clientCompanyName}</td>
+                    <td className="p-2">{draft.clientName || "N/A"}</td>
+                    <td className="p-2">{draft.clientCompanyName || "N/A"}</td>
                     <td className="p-2">
                       {draft.orderDate && isValidDate(new Date(draft.orderDate))
                         ? format(new Date(draft.orderDate), "dd/MM/yyyy")
@@ -822,7 +898,5 @@ function CreateJobsheetModal({
         )}
       </div>
     </div>
-
-
   );
 }

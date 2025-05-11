@@ -15,7 +15,7 @@ const productSubSchema = new mongoose.Schema({
   baseCost:         { type: Number, default: 0 },
   quantity:         { type: Number, default: 1 },
   productGST:       { type: Number, default: 0 },
-  material:         { type: String, default: "" },
+  material:         { type: String, default: "" }, 
   weight:           { type: String, default: "" },
   brandingTypes:    [{ type: mongoose.Schema.Types.ObjectId, ref: "BrandingCharge" }],
   suggestedBreakdown: {

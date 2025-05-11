@@ -5,6 +5,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import CompanyModal from "../components/company/CompanyModal.js";
 import { TrashIcon } from "@heroicons/react/24/solid";
+import * as XLSX from "xlsx";
 
 export default function ManageCompanies() {
   const navigate = useNavigate();
@@ -25,6 +26,12 @@ export default function ManageCompanies() {
   const [commonLogs, setCommonLogs] = useState([]);
   const [showLogsDropdown, setShowLogsDropdown] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
+
+  /* actions dropdown */
+  const [showActionsDropdown, setShowActionsDropdown] = useState(null);
+
+  // Check if the user is a superadmin (from localStorage)
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
 
   useEffect(() => {
     fetchCompanies();
@@ -108,6 +115,14 @@ export default function ManageCompanies() {
     }
   }
 
+  // Function to export data to Excel
+  const exportToExcel = () => {
+    const worksheet = XLSX.utils.json_to_sheet(filteredCompanies);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Companies");
+    XLSX.writeFile(workbook, "Companies.xlsx");
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -153,6 +168,14 @@ export default function ManageCompanies() {
               </div>
             )}
           </div>
+          {isSuperAdmin && (
+            <button
+              onClick={exportToExcel}
+              className="bg-green-600 text-white px-4 py-2 rounded"
+            >
+              Export to Excel
+            </button>
+          )}
           <button
             onClick={openAddModal}
             className="bg-orange-500 text-white px-4 py-2 rounded"
@@ -178,15 +201,16 @@ export default function ManageCompanies() {
         <div className="text-red-600">{error}</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
+          <table className="min-w-full border-collapse text-xs">
             <thead>
-              <tr className="border-b bg-gray-50 text-left text-sm font-semibold text-gray-700">
+              <tr className="border-b bg-gray-50 text-left font-semibold text-gray-700">
                 <th className="p-3">Company</th>
                 <th className="p-3">Brand</th>
                 <th className="p-3">Segment</th>
                 <th className="p-3">Clients</th>
                 <th className="p-3">Address</th>
                 <th className="p-3">GSTIN</th>
+                <th className="p-3">Pincode</th>
                 <th className="p-3">Vendor Code</th>
                 <th className="p-3">Payment Terms</th>
                 <th className="p-3">Portal Upload</th>
@@ -211,22 +235,41 @@ export default function ManageCompanies() {
                   </td>
                   <td className="p-3">{c.companyAddress || "-"}</td>
                   <td className="p-3">{c.GSTIN || "-"}</td>
+                  <td className="p-3">{c.pincode || "-"}</td>
                   <td className="p-3">{c.vendorCode || "-"}</td>
                   <td className="p-3">{c.paymentTerms || "-"}</td>
                   <td className="p-3">{c.portalUpload || "-"}</td>
-                  <td className="p-3 space-x-1">
-                    <button
-                      onClick={() => openEditModal(c)}
-                      className="bg-yellow-500 text-white px-2 py-1 rounded text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(c._id)}
-                      className="bg-red-600 text-white px-2 py-1 rounded text-sm"
-                    >
-                      Del
-                    </button>
+                  <td className="p-3">
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowActionsDropdown(c._id)}
+                        className="text-gray-600 hover:text-gray-900 focus:outline-none"
+                      >
+                        &#8942; {/* 3 dots icon */}
+                      </button>
+                      {showActionsDropdown === c._id && (
+                        <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow z-50 text-xs">
+                          <button
+                            onClick={() => {
+                              openEditModal(c);
+                              setShowActionsDropdown(null);
+                            }}
+                            className="block w-full px-4 py-2 text-left hover:bg-gray-100"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleDelete(c._id);
+                              setShowActionsDropdown(null);
+                            }}
+                            className="block w-full px-4 py-2 text-left text-red-600 hover:bg-gray-100"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

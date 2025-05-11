@@ -61,6 +61,7 @@ import PotentialClientsList from "../pages/PotentialClientsList";
 import CalendarPage from "../pages/CalendarPage";
 import ManageSegments from "../pages/ManageSegments";
 import ManageBrandingCharges from "../pages/ManageBrandingCharges";
+import QuotationManagementPage from "../pages/QuotationManagementPage";
 
 
 const router = createBrowserRouter([
@@ -339,6 +340,10 @@ const router = createBrowserRouter([
                     {
                         path: "manage-branding-charges",
                         element : <ManageBrandingCharges/>
+                    },
+                    {
+                        path: "manage-quotations",
+                        element : <QuotationManagementPage/>
                     }
 
                 ]

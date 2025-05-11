@@ -1,10 +1,9 @@
-// src/pages/CatalogManagementPage.jsx
 "use client";
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
 
@@ -15,40 +14,38 @@ import PDFTemplateModal from "../components/CatalogManagement/PDFTemplateModal";
 // Utility modules
 import {
   getBase64ImageFromUrl,
-  wrapText
+  wrapText,
 } from "../components/CatalogManagement/exportUtils";
-import {
-  groupItemsByDate,
-  groupQuotationsByTimePeriod
-} from "../components/CatalogManagement/dateUtils";
+import { groupItemsByDate } from "../components/CatalogManagement/dateUtils";
 
 import { fieldMapping, templateConfig } from "../components/CatalogManagement/constants";
 
-const limit = 100;
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CatalogManagementPage() {
-  const { id } = useParams();
   const navigate = useNavigate();
 
-  // States for catalogs and quotations
+  // States for catalogs and opportunities
   const [catalogs, setCatalogs] = useState([]);
-  const [quotations, setQuotations] = useState([]);
-  const [quotation, setQuotation] = useState(null);
-  const [editableQuotation, setEditableQuotation] = useState(null);
+  const [opportunities, setOpportunities] = useState([]);
 
   // UI states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Filter & approval states
-  const [filterType, setFilterType] = useState(
-    localStorage.getItem("catalogManagementFilterType") || "catalogs"
-  );
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [fromDateFilter, setFromDateFilter] = useState("");
   const [toDateFilter, setToDateFilter] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState([]);
+  const [opportunityOwnerFilter, setOpportunityOwnerFilter] = useState([]);
+  const [showFilterWindow, setShowFilterWindow] = useState(false);
+
+  // Sorting states
+  const [sortConfig, setSortConfig] = useState({
+    key: "catalogNumber",
+    direction: "desc",
+  });
 
   // For "create catalog" dropdown
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -62,7 +59,6 @@ export default function CatalogManagementPage() {
   // Remarks modal states
   const [remarksModalOpen, setRemarksModalOpen] = useState(false);
   const [selectedItemForRemarks, setSelectedItemForRemarks] = useState(null);
-  const [itemTypeForRemarks, setItemTypeForRemarks] = useState(""); // "catalog" or "quotation"
 
   // PDF Template modal
   const [pdfTemplateModalOpen, setPdfTemplateModalOpen] = useState(false);
@@ -71,14 +67,15 @@ export default function CatalogManagementPage() {
   // Current user email
   const [userEmail, setUserEmail] = useState("");
 
-  // Additional search input
+  // Search input
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
 
-  // Persist filterType changes to localStorage
-  useEffect(() => {
-    localStorage.setItem("catalogManagementFilterType", filterType);
-  }, [filterType]);
+  // Current user role
+  const [userRole, setUserRole] = useState("");
+
+  // Superadmin status
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // Close the dropdown if clicking anywhere outside
   useEffect(() => {
@@ -91,16 +88,14 @@ export default function CatalogManagementPage() {
     return () => document.removeEventListener("click", handleDocumentClick);
   }, []);
 
-  // Update dropdown position on scroll/resize using a layout effect
+  // Update dropdown position on scroll/resize
   useLayoutEffect(() => {
     function updatePosition() {
       if (!dropdownButtonRef.current) return;
       const rect = dropdownButtonRef.current.getBoundingClientRect();
-      // Approximate dropdown height
       const dropdownHeight = 200;
       let top;
       if (window.innerHeight - rect.bottom < dropdownHeight) {
-        // Not enough space below, position above the button
         top = rect.top + window.pageYOffset - dropdownHeight;
       } else {
         top = rect.bottom + window.pageYOffset;
@@ -123,14 +118,8 @@ export default function CatalogManagementPage() {
   useEffect(() => {
     fetchData();
     fetchUserEmail();
-    // eslint-disable-next-line
-  }, [filterType, approvalFilter, fromDateFilter, toDateFilter, companyFilter]);
-
-  useEffect(() => {
-    if (id) {
-      fetchQuotation();
-    }
-  }, [id]);
+    fetchOpportunities();
+  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchTerm]);
 
   // -------------- API / Data --------------
   async function fetchUserEmail() {
@@ -140,28 +129,21 @@ export default function CatalogManagementPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUserEmail(res.data.email);
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     } catch (err) {
       console.error("Error fetching user email:", err);
     }
   }
 
-  async function fetchQuotation() {
+  async function fetchOpportunities() {
     try {
-      setLoading(true);
       const token = localStorage.getItem("token");
-      const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to fetch quotation");
-      const data = await res.json();
-      setQuotation(data);
-      setEditableQuotation(data);
-      setError(null);
+      setOpportunities(res.data);
     } catch (err) {
-      console.error("Error fetching quotation:", err);
-      setError("Failed to load quotation");
-    } finally {
-      setLoading(false);
+      console.error("Error fetching opportunities:", err);
     }
   }
 
@@ -169,67 +151,95 @@ export default function CatalogManagementPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      if (filterType === "catalogs") {
-        const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        let data =
-          approvalFilter === "all"
-            ? res.data
-            : res.data.filter((cat) =>
-                approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
-              );
-        if (fromDateFilter) {
-          const from = new Date(fromDateFilter);
-          data = data.filter((item) => new Date(item.createdAt) >= from);
-        }
-        if (toDateFilter) {
-          const to = new Date(toDateFilter);
-          data = data.filter((item) => new Date(item.createdAt) <= to);
-        }
-        if (companyFilter) {
-          data = data.filter((item) =>
-            (item.customerCompany || item.catalogName || "")
-              .toLowerCase()
-              .includes(companyFilter.toLowerCase())
-          );
-        }
-        setCatalogs(data);
-      } else {
-        const res = await axios.get(`${BACKEND_URL}/api/admin/quotations`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        let data =
-          approvalFilter === "all"
-            ? res.data
-            : res.data.filter((q) =>
-                approvalFilter === "approved" ? q.approveStatus : !q.approveStatus
-              );
-        if (fromDateFilter) {
-          const from = new Date(fromDateFilter);
-          data = data.filter((item) => new Date(item.createdAt) >= from);
-        }
-        if (toDateFilter) {
-          const to = new Date(toDateFilter);
-          data = data.filter((item) => new Date(item.createdAt) <= to);
-        }
-        if (companyFilter) {
-          data = data.filter((item) =>
-            (item.customerCompany || item.quotationNumber || "")
-              .toLowerCase()
-              .includes(companyFilter.toLowerCase())
-          );
-        }
-        setQuotations(data);
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      let data =
+        approvalFilter === "all"
+          ? res.data
+          : res.data.filter((cat) =>
+              approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
+            );
+      if (fromDateFilter) {
+        const from = new Date(fromDateFilter);
+        data = data.filter((item) => new Date(item.createdAt) >= from);
       }
+      if (toDateFilter) {
+        const to = new Date(toDateFilter);
+        data = data.filter((item) => new Date(item.createdAt) <= to);
+      }
+      if (companyFilter.length > 0) {
+        data = data.filter((item) =>
+          companyFilter.includes(item.customerCompany)
+        );
+      }
+      if (opportunityOwnerFilter.length > 0) {
+        const filteredOpportunities = opportunities.filter((opp) =>
+          opportunityOwnerFilter.includes(opp.opportunityOwner)
+        );
+        const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
+        data = data.filter((cat) => opportunityCodes.includes(cat.opportunityNumber));
+      }
+      if (searchTerm) {
+        data = data.filter((cat) => {
+          const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+          return (
+            cat.catalogNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      }
+      setCatalogs(data);
       setError(null);
     } catch (err) {
-      console.error("Error fetching data:", err);
-      setError("Failed to fetch data");
+      console.error("Error fetching catalogs:", err);
+      setError("Failed to fetch catalogs");
     } finally {
       setLoading(false);
     }
   }
+
+  // -------------- Sorting --------------
+  const handleSort = (key, isDate = false) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+
+    const sortedCatalogs = [...catalogs].sort((a, b) => {
+      let valA = a[key];
+      let valB = b[key];
+
+      if (key === "opportunityOwner") {
+        const oppA = opportunities.find((o) => o.opportunityCode === a.opportunityNumber);
+        const oppB = opportunities.find((o) => o.opportunityCode === b.opportunityNumber);
+        valA = oppA?.opportunityOwner || "";
+        valB = oppB?.opportunityOwner || "";
+      } else if (key === "products.length") {
+        valA = (a.products || []).length;
+        valB = (b.products || []).length;
+      }
+
+      if (isDate) {
+        valA = new Date(valA || 0);
+        valB = new Date(valB || 0);
+      } else {
+        valA = (valA || "").toString().toLowerCase();
+        valB = (valB || "").toString().toLowerCase();
+      }
+
+      if (valA < valB) return direction === "asc" ? -1 : 1;
+      if (valA > valB) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    setCatalogs(sortedCatalogs);
+  };
 
   // -------------- CREATE CATALOG DROPDOWN --------------
   function handleToggleDropdown() {
@@ -262,31 +272,8 @@ export default function CatalogManagementPage() {
     }
   }
 
-  async function handleDeleteQuotation(quotation) {
-    if (!window.confirm(`Are you sure you want to delete Quotation ${quotation.quotationNumber}?`)) return;
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`${BACKEND_URL}/api/admin/quotations/${quotation._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      alert("Quotation deleted successfully!");
-      fetchData();
-    } catch (error) {
-      console.error("Error deleting quotation:", error);
-      alert("Failed to delete quotation.");
-    }
-  }
-
   function handleEditCatalog(catalog) {
     navigate(`/admin-dashboard/catalogs/manual/${catalog._id}`);
-  }
-
-  function handleEditQuotation(quotation) {
-    navigate(`/admin-dashboard/quotation/manual/${quotation._id}`);
-  }
-
-  function handleEditQuotationold(quotation) {
-    navigate(`/admin-dashboard/oldquotation/manual/${quotation._id}`);
   }
 
   // -------------- CREATE QUOTATION FROM CATALOG --------------
@@ -362,20 +349,19 @@ export default function CatalogManagementPage() {
   }
 
   // -------------- REMARKS MODAL --------------
-  const openRemarksModal = (item, type) => {
+  const openRemarksModal = (item) => {
     setSelectedItemForRemarks(item);
-    setItemTypeForRemarks(type);
     setRemarksModalOpen(true);
   };
 
-  async function handleSaveRemarks(remarks, type, id) {
+  async function handleSaveRemarks(remarks, _, id) {
     try {
       const token = localStorage.getItem("token");
-      const endpoint =
-        type === "catalog"
-          ? `${BACKEND_URL}/api/admin/catalogs/${id}/remarks`
-          : `${BACKEND_URL}/api/admin/quotations/${id}/remarks`;
-      await axios.put(endpoint, { remarks }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.put(
+        `${BACKEND_URL}/api/admin/catalogs/${id}/remarks`,
+        { remarks },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       alert("Remarks updated!");
       setRemarksModalOpen(false);
       fetchData();
@@ -396,12 +382,12 @@ export default function CatalogManagementPage() {
         "ProductDescription",
         "ProductBrand",
         "productGST",
-        "productCost"
+        "productCost",
       ];
-      const extraFields = (item.fieldsToDisplay || []).filter(field => !commonFields.includes(field));
+      const extraFields = (item.fieldsToDisplay || []).filter((field) => !commonFields.includes(field));
       const header = [
-        ...commonFields.map(field => fieldMapping[field] || field),
-        ...extraFields.map(field => fieldMapping[field] || field)
+        ...commonFields.map((field) => fieldMapping[field] || field),
+        ...extraFields.map((field) => fieldMapping[field] || field),
       ];
       const data = [header];
       item.products?.forEach((prodObj) => {
@@ -419,7 +405,7 @@ export default function CatalogManagementPage() {
         } else {
           row.push("");
         }
-        extraFields.forEach(field => {
+        extraFields.forEach((field) => {
           if (field === "images") {
             row.push((p.images || []).join(", "));
           } else if (field === "productCost" && p.productCost !== undefined) {
@@ -455,6 +441,7 @@ export default function CatalogManagementPage() {
     setSelectedItemForPDF(item);
     setPdfTemplateModalOpen(true);
   }
+
   async function handleExportCombinedPDF(catalog, templateId = "1") {
     try {
       const tmpl = templateConfig[templateId];
@@ -478,7 +465,6 @@ export default function CatalogManagementPage() {
       const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
       const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
 
-      // Combine the second PDF for each product
       for (let i = 0; i < (catalog.products || []).length; i++) {
         const sub = catalog.products[i];
         const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
@@ -584,7 +570,7 @@ export default function CatalogManagementPage() {
             });
             yText -= lineHeight;
           });
-          yText -= lineHeight * 0.5; // Additional spacing after description
+          yText -= lineHeight * 0.5;
         }
 
         if (sub.quantity) {
@@ -737,9 +723,6 @@ export default function CatalogManagementPage() {
     catalogs.forEach((c) => {
       if (c.customerCompany) companySet.add(c.customerCompany);
     });
-    quotations.forEach((q) => {
-      if (q.customerCompany) companySet.add(q.customerCompany);
-    });
     return Array.from(companySet);
   };
   const companyNames = getUniqueCompanyNames();
@@ -756,31 +739,14 @@ export default function CatalogManagementPage() {
   };
 
   const handleSearch = () => {
-    setCompanyFilter(searchTerm);
+    setCompanyFilter([]); // Clear company filter to allow global search
+    fetchData();
     setSuggestions([]);
   };
 
   // -------------- RENDER HELPERS --------------
   const renderFilterButtons = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
-      <div className="flex space-x-4 mb-2 sm:mb-0">
-        <button
-          onClick={() => setFilterType("catalogs")}
-          className={`px-4 py-2 rounded ${
-            filterType === "catalogs" ? "bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white" : "bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white"
-          }`}
-        >
-          Catalogs
-        </button>
-        <button
-          onClick={() => setFilterType("quotations")}
-          className={`px-4 py-2 rounded ${
-            filterType === "quotations" ? "bg-[#66C3D0] hover:bg-[#66C3D0]/90 text-white" : "bg-[#66C3D0] hover:bg-[#66C3D0]/90 text-white"
-          }`}
-        >
-          Quotations
-        </button>
-      </div>
       <div className="flex space-x-2">
         <button
           onClick={() => setApprovalFilter("all")}
@@ -806,43 +772,138 @@ export default function CatalogManagementPage() {
         >
           Not Approved
         </button>
+        <button
+          onClick={() => setShowFilterWindow(true)}
+          className="px-3 py-1 rounded bg-[#Ff8045] text-white hover:bg-[#Ff8045]/90"
+        >
+          Filters
+        </button>
       </div>
     </div>
   );
 
+  const renderFilterWindow = () => {
+    // Get unique opportunity owners and company names
+    const uniqueOpportunityOwners = [...new Set(opportunities.map(opp => opp.opportunityOwner))];
+    const uniqueCompanyNames = [...new Set(catalogs.map(cat => cat.customerCompany))];
+
+    return (
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-full py-8 px-4">
+          <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
+            <button
+              onClick={() => setShowFilterWindow(false)}
+              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+            >
+              <span className="text-xl font-bold">×</span>
+            </button>
+            <h2 className="text-xl font-bold mb-4 text-[#Ff8045]">Filters</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Opportunity Owner</label>
+                <div className="max-h-40 overflow-y-auto border border-gray-300 rounded p-2">
+                  {uniqueOpportunityOwners.map((owner, index) => (
+                    <div key={index} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`owner-${index}`}
+                        value={owner}
+                        checked={opportunityOwnerFilter.includes(owner)}
+                        onChange={(e) => {
+                          const selected = e.target.checked
+                            ? [...opportunityOwnerFilter, owner]
+                            : opportunityOwnerFilter.filter((item) => item !== owner);
+                          setOpportunityOwnerFilter(selected);
+                        }}
+                        className="mr-2"
+                      />
+                      <label htmlFor={`owner-${index}`} className="text-sm text-gray-700">
+                        {owner}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                <div className="max-h-40 overflow-y-auto border border-gray-300 rounded p-2">
+                  {uniqueCompanyNames.map((company, index) => (
+                    <div key={index} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`company-${index}`}
+                        value={company}
+                        checked={companyFilter.includes(company)}
+                        onChange={(e) => {
+                          const selected = e.target.checked
+                            ? [...companyFilter, company]
+                            : companyFilter.filter((item) => item !== company);
+                          setCompanyFilter(selected);
+                        }}
+                        className="mr-2"
+                      />
+                      <label htmlFor={`company-${index}`} className="text-sm text-gray-700">
+                        {company}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <input
+                  type="date"
+                  value={fromDateFilter}
+                  onChange={(e) => setFromDateFilter(e.target.value)}
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <input
+                  type="date"
+                  value={toDateFilter}
+                  onChange={(e) => setToDateFilter(e.target.value)}
+                  className="border border-gray-300 rounded p-2 w-full"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end space-x-2">
+              <button
+                onClick={() => {
+                  setOpportunityOwnerFilter([]);
+                  setFromDateFilter("");
+                  setToDateFilter("");
+                  setCompanyFilter([]);
+                  setShowFilterWindow(false);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => {
+                  fetchData();
+                  setShowFilterWindow(false);
+                }}
+                className="px-4 py-2 bg-[#Ff8045] text-white rounded hover:bg-[#Ff8045]/90"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderFilterControls = () => (
     <div className="flex flex-wrap gap-4 items-center mb-4">
       <div className="flex flex-col">
-        <label htmlFor="fromDate" className="mb-1 text-gray-700">
-          From Date
-        </label>
-        <input
-          id="fromDate"
-          type="date"
-          value={fromDateFilter}
-          onChange={(e) => setFromDateFilter(e.target.value)}
-          className="border p-2"
-        />
-      </div>
-      <div className="flex flex-col">
-        <label htmlFor="toDate" className="mb-1 text-gray-700">
-          To Date
-        </label>
-        <input
-          id="toDate"
-          type="date"
-          value={toDateFilter}
-          onChange={(e) => setToDateFilter(e.target.value)}
-          className="border p-2"
-        />
-      </div>
-      <div className="flex flex-col">
-        <label htmlFor="companyName" className="mb-1 text-gray-700">
-          Company Name
-        </label>
+        <label htmlFor="search" className="mb-1 text-gray-700">Search</label>
         <div className="flex items-center">
           <input
-            id="companyName"
+            id="search"
             type="text"
             value={searchTerm}
             onChange={(e) => {
@@ -850,9 +911,12 @@ export default function CatalogManagementPage() {
               filterSuggestions(e.target.value);
             }}
             className="border p-2"
-            placeholder="Company Name"
+            placeholder="Search all fields"
           />
-          <button onClick={handleSearch} className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded">
+          <button
+            onClick={handleSearch}
+            className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded"
+          >
             Search
           </button>
         </div>
@@ -864,6 +928,7 @@ export default function CatalogManagementPage() {
               onClick={() => {
                 setSearchTerm(suggestion);
                 setSuggestions([]);
+                handleSearch();
               }}
             >
               {suggestion}
@@ -874,17 +939,8 @@ export default function CatalogManagementPage() {
     </div>
   );
 
-  const filterData = (data) => {
-    if (!companyFilter) return data;
-    return data.filter((item) =>
-      (item.customerCompany || item.catalogName || item.quotationNumber || "")
-        .toLowerCase()
-        .includes(companyFilter.toLowerCase())
-    );
-  };
-
   const renderCatalogList = () => {
-    const filteredCatalogs = filterData(catalogs);
+    const filteredCatalogs = catalogs;
     if (filteredCatalogs.length === 0) {
       return <div className="text-gray-600">Nothing to display.</div>;
     }
@@ -893,26 +949,59 @@ export default function CatalogManagementPage() {
       <div>
         {Object.entries(grouped).map(([groupName, items]) =>
           items.length > 0 ? (
-            <div key={groupName} className="mb-6 ">
+            <div key={groupName} className="mb-6">
               <h3 className="text-lg font-bold mb-2">{groupName}</h3>
-              <div className="overflow-x-auto ">
+              <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 border">
-                  <thead className="bg-orange-200 text-Black">
+                  <thead className="bg-orange-200 text-black">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
-                        Catalog Number
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("catalogNumber")}
+                      >
+                        Catalog Number {sortConfig.key === "catalogNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                        Company Name
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("opportunityNumber")}
+                      >
+                        Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                        Customer Name
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("opportunityOwner")}
+                      >
+                        Opportunity Owner {sortConfig.key === "opportunityOwner" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium  uppercase">
-                        Event Name
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("customerCompany")}
+                      >
+                        Company Name {sortConfig.key === "customerCompany" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                        Products
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("customerName")}
+                      >
+                        Customer Name {sortConfig.key === "customerName" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                      </th>
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("catalogName")}
+                      >
+                        Event Name {sortConfig.key === "catalogName" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                      </th>
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("products.length")}
+                      >
+                        Products {sortConfig.key === "products.length" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                      </th>
+                      <th
+                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                        onClick={() => handleSort("createdAt", true)}
+                      >
+                        Created At {sortConfig.key === "createdAt" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
                       </th>
                       <th className="px-4 py-2 text-left text-xs font-medium uppercase">
                         Actions
@@ -920,36 +1009,78 @@ export default function CatalogManagementPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                   {[...items]
-                      .sort((a, b) => (a.catalogNumber < b.catalogNumber ? 1 : -1)) // Descending order
-                      .map((cat) => (
-                        <tr key={cat._id}>
-                          <td className="px-4 py-2">{cat.catalogNumber}</td>
-                          <td className="px-4 py-2">{cat.customerCompany}</td> 
-                         <td className="px-4 py-2">{cat.customerName}</td>
-                          <td
-                          className="px-4 py-2 underline cursor-pointer"
-                          onClick={() => handleVirtualLink(cat)}
-                        >
-                          {cat.catalogName}
-                        </td>
-                        <td className="px-4 py-2">{cat.products?.length || 0}</td>
-                        <td className="px-4 py-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCatalogForDropdown(cat);
-                              toggleCatalogDropdown(cat._id, e);
-                            }}
-                            className="px-2 py-1 hover:bg-gray-200 rounded"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v.01M12 12v.01M12 18v.01" />
-                            </svg>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {[...items]
+                      .sort((a, b) => {
+                        let valA = a[sortConfig.key];
+                        let valB = b[sortConfig.key];
+
+                        if (sortConfig.key === "opportunityOwner") {
+                          const oppA = opportunities.find((o) => o.opportunityCode === a.opportunityNumber);
+                          const oppB = opportunities.find((o) => o.opportunityCode === b.opportunityNumber);
+                          valA = oppA?.opportunityOwner || "";
+                          valB = oppB?.opportunityOwner || "";
+                        } else if (sortConfig.key === "products.length") {
+                          valA = (a.products || []).length;
+                          valB = (b.products || []).length;
+                        }
+
+                        if (sortConfig.key === "createdAt") {
+                          valA = new Date(valA || 0);
+                          valB = new Date(valB || 0);
+                        } else {
+                          valA = (valA || "").toString().toLowerCase();
+                          valB = (valB || "").toString().toLowerCase();
+                        }
+
+                        if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
+                        if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
+                        return 0;
+                      })
+                      .map((cat) => {
+                        const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+                        return (
+                          <tr key={cat._id}>
+                            <td className="px-4 py-2">{cat.catalogNumber}</td>
+                            <td className="px-4 py-2">{cat.opportunityNumber || "N/A"}</td>
+                            <td className="px-4 py-2">{opp?.opportunityOwner || "N/A"}</td>
+                            <td className="px-4 py-2">{cat.customerCompany}</td>
+                            <td className="px-4 py-2">{cat.customerName}</td>
+                            <td
+                              className="px-4 py-2 underline cursor-pointer"
+                              onClick={() => handleVirtualLink(cat)}
+                            >
+                              {cat.catalogName}
+                            </td>
+                            <td className="px-4 py-2">{cat.products?.length || 0}</td>
+                            <td className="px-4 py-2">{new Date(cat.createdAt).toLocaleDateString()}</td>
+                            <td className="px-4 py-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCatalogForDropdown(cat);
+                                  toggleCatalogDropdown(cat._id, e);
+                                }}
+                                className="px-2 py-1 hover:bg-gray-200 rounded"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-6 w-6"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 6v.01M12 12v.01M12 18v.01"
+                                  />
+                                </svg>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -960,93 +1091,57 @@ export default function CatalogManagementPage() {
     );
   };
 
-  const renderQuotationList = () => {
-    const filteredQuotations = filterData(quotations);
-    if (filteredQuotations.length === 0) {
-      return <div className="text-gray-600">Nothing to display.</div>;
+  // -------------- NEW EXPORT FUNCTION --------------
+  async function handleExportAllToExcel() {
+    try {
+      const wb = XLSX.utils.book_new();
+      const header = [
+        "Catalog Number",
+        "Opportunity Number",
+        "Opportunity Owner",
+        "Company Name",
+        "Customer Name",
+        "Event Name",
+        "Products",
+        "Created At",
+        "Remarks",
+        "Approve Status",
+        // Add other fields as needed
+      ];
+      const data = [header];
+      catalogs.forEach((cat) => {
+        const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+        const row = [
+          cat.catalogNumber,
+          cat.opportunityNumber || "N/A",
+          opp?.opportunityOwner || "N/A",
+          cat.customerCompany,
+          cat.customerName,
+          cat.catalogName,
+          cat.products?.length || 0,
+          new Date(cat.createdAt).toLocaleDateString(),
+          cat.remarks || "",
+          cat.approveStatus ? "Approved" : "Not Approved",
+          // Add other fields as needed
+        ];
+        data.push(row);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, "All Catalogs");
+      const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbOut], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `All_Catalogs.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Excel export error:", error);
+      alert("Excel export failed");
     }
-    const grouped = groupItemsByDate(filteredQuotations);
-    return (
-      <div>
-        {Object.entries(grouped).map(([groupName, items]) =>
-          items.length > 0 ? (
-            <div key={groupName} className="mb-6">
-              <h3 className="text-lg font-bold mb-2">{groupName}</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Quotation No.
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Event Name
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Company Name
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Customer Name
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Items
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {items.map((quotation) => (
-                      <tr key={quotation._id}>
-                        
-                        <td className="px-4 py-2">{quotation.quotationNumber} </td>
-                        <td className="px-4 py-2">{quotation.catalogName || "N/A"}</td>
-                        <td className="px-4 py-2">{quotation.customerCompany || "N/A"}{quotation.quotationNumber < 10496 && (<>(old quotation)</>)}</td>
-                        <td className="px-4 py-2">{quotation.customerName}</td>
-                        <td className="px-4 py-2">{quotation.items?.length || 0}</td>
-                        <td className="px-4 py-2 space-x-2">
-                          <button
-                            onClick={() => navigate(`/admin-dashboard/quotations/${quotation._id}`)}
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                          >
-                            View
-                          </button>
-                          
-                          {quotation.quotationNumber >= 10496 && (
-                            <button
-                            onClick={() => handleEditQuotation(quotation)}
-                            className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                          >
-                            Edit
-                          </button>
-                          )}
-                          {quotation.quotationNumber < 10496 && (
-                            <button
-                              onClick={() => handleEditQuotationold(quotation)}
-                              className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                            >
-                              Edit
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteQuotation(quotation)}
-                            className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null
-        )}
-      </div>
-    );
-  };
+  }
 
   if (loading) {
     return <div className="p-6 text-gray-500">Loading...</div>;
@@ -1059,16 +1154,23 @@ export default function CatalogManagementPage() {
     <div className="min-h-screen bg-white text-gray-900 p-6">
       {renderFilterButtons()}
       {renderFilterControls()}
+      {showFilterWindow && renderFilterWindow()}
 
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">
-          {filterType === "catalogs" ? "Manage Catalogs" : "Manage Quotations"}
-        </h1>
-        {filterType === "catalogs" && (
+        <h1 className="text-2xl font-bold">Manage Catalogs</h1>
+        <div className="flex space-x-2">
+          {isSuperAdmin && (
+            <button
+              onClick={handleExportAllToExcel}
+              className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 px-4 py-2 rounded text-white"
+            >
+              Export All to Excel
+            </button>
+          )}
           <div className="relative inline-block text-left">
             <button
               onClick={handleToggleDropdown}
-              className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 px-4 py-2 rounded hover:bg-blue-700 text-white"
+              className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 px-4 py-2 rounded text-white"
             >
               Create Catalog
             </button>
@@ -1089,15 +1191,15 @@ export default function CatalogManagementPage() {
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      {filterType === "catalogs" ? renderCatalogList() : renderQuotationList()}
+      {renderCatalogList()}
 
       {remarksModalOpen && selectedItemForRemarks && (
         <RemarksModal
           item={selectedItemForRemarks}
-          type={itemTypeForRemarks}
+          type="catalog"
           onClose={() => setRemarksModalOpen(false)}
           onSave={handleSaveRemarks}
           userEmail={userEmail}
@@ -1114,7 +1216,6 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* Catalog actions dropdown via a portal */}
       {openDropdownForCatalog && selectedCatalogForDropdown &&
         createPortal(
           <div
@@ -1202,7 +1303,7 @@ export default function CatalogManagementPage() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                openRemarksModal(selectedCatalogForDropdown, "catalog");
+                openRemarksModal(selectedCatalogForDropdown);
                 setOpenDropdownForCatalog(null);
                 setSelectedCatalogForDropdown(null);
                 dropdownButtonRef.current = null;
@@ -1237,211 +1338,7 @@ export default function CatalogManagementPage() {
             </button>
           </div>,
           document.body
-        )
-      }
-    </div>
-  );
-}
-
-// ----------------------- Reusable Inline Editing Component -----------------------
-function EditableField({ value, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [currentValue, setCurrentValue] = useState(value);
-
-  useEffect(() => {
-    setCurrentValue(value);
-  }, [value]);
-
-  const handleIconClick = () => setEditing(true);
-  const handleBlur = () => {
-    setEditing(false);
-    onSave(currentValue);
-  };
-
-  if (editing) {
-    return (
-      <input
-        type="text"
-        className="border p-1 rounded"
-        autoFocus
-        value={currentValue}
-        onChange={(e) => setCurrentValue(e.target.value)}
-        onBlur={handleBlur}
-      />
-    );
-  }
-
-  return (
-    <div className="flex items-center">
-      <span>{currentValue}</span>
-      <button onClick={handleIconClick} className="ml-2">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-4 w-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
-          />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
-// ----------------------- Helper Functions to Compute Totals -----------------------
-function computedAmount(quotation) {
-  let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    sum += baseRate * marginFactor * quantity;
-  });
-  return sum;
-}
-
-function computedTotal(quotation) {
-  let sum = 0;
-  quotation.items.forEach((item) => {
-    const marginFactor = 1 + ((parseFloat(quotation.margin) || 0) / 100);
-    const baseRate = parseFloat(item.rate) || 0;
-    const quantity = parseFloat(item.quantity) || 0;
-    const amount = baseRate * marginFactor * quantity;
-    const gstVal = parseFloat((amount * (parseFloat(item.productGST) / 100)).toFixed(2));
-    sum += amount + gstVal;
-  });
-  return sum;
-}
-
-// ----------------------- VARIATION EDIT MODAL -----------------------
-function VariationEditModal({ item, onClose, onUpdate }) {
-  const [name, setName] = useState(item.productName || item.name || "");
-  const [productCost, setProductCost] = useState(item.productCost || 0);
-  const [productGST, setProductGST] = useState(item.productGST || 0);
-  const [color, setColor] = useState(item.color || "");
-  const [size, setSize] = useState(item.size || "");
-  const [quantity, setQuantity] = useState(item.quantity || 1);
-  const [material, setMaterial] = useState(item.material || "");
-  const [weight, setWeight] = useState(item.weight || "");
-
-  const handleSave = () => {
-    const parsedCost = parseFloat(productCost);
-    const finalCost = isNaN(parsedCost) || parsedCost === 0 ? item.productprice : parsedCost;
-    const parsedGST = parseFloat(productGST);
-    const finalGST = isNaN(parsedGST) ? item.productGST : parsedGST;
-    const updatedItem = {
-      name: item.productName || name,
-      productCost: finalCost,
-      productprice: finalCost,
-      productGST: finalGST,
-      color,
-      size,
-      quantity: parseInt(quantity) || item.quantity || 1,
-      material,
-      weight,
-    };
-    console.log("Updated item from VariationEditModal:", updatedItem);
-    onUpdate(updatedItem);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-full py-8 px-4">
-        <div className="bg-white p-6 rounded w-full max-w-md relative border border-gray-200 shadow-lg">
-          <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900">
-            <span className="text-xl font-bold">×</span>
-          </button>
-          <h2 className="text-xl font-bold mb-4 text-purple-700">Edit Cart Item</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Product Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Cost</label>
-              <input
-                type="number"
-                value={productCost}
-                onChange={(e) => setProductCost(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">GST (%)</label>
-              <input
-                type="number"
-                value={productGST}
-                onChange={(e) => setProductGST(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Color</label>
-              <input
-                type="text"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Size</label>
-              <input
-                type="text"
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Quantity</label>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Material</label>
-              <input
-                type="text"
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-700 mb-1">Weight</label>
-              <input
-                type="text"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                className="border border-purple-300 rounded p-2 w-full"
-              />
-            </div>
-          </div>
-          <div className="mt-6 flex justify-end space-x-2">
-            <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
-              Cancel
-            </button>
-            <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
+        )}
     </div>
   );
 }

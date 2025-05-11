@@ -118,7 +118,7 @@ const adminPages = [
       },
       {
         name: "Add / Manage Quotation",
-        path: "/admin-dashboard/manage-catalogs",
+        path: "/admin-dashboard/manage-quotations",
         permission: "manage-quotation",
       },
       {
