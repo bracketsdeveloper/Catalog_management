@@ -8,33 +8,52 @@ const dt = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).
 
 /* header filter row */
 function FilterRow({ filters, onChange }) {
+  const statusOptions = ["All", "pending", "received", "alert"];
+
   const cols = [
-    "jobSheetCreatedDate",
-    "jobSheetNumber",
-    "deliveryDateTime",
-    "clientCompanyName",
-    "eventName",
-    "product",
-    "qtyRequired",
-    "qtyOrdered",
-    "expectedReceiveDate",
-    "brandingType",
-    "brandingVendor",
-    "expectedPostBranding",
-    "schedulePickUp",
-    "remarks",
-    "status",
+    { key: "jobSheetCreatedDate", type: "date", label: "Order Date" },
+    { key: "jobSheetNumber", type: "text", label: "Job Sheet" },
+    { key: "deliveryDateTime", type: "date", label: "Delivery Date" },
+    { key: "clientCompanyName", type: "text", label: "Client" },
+    { key: "eventName", type: "text", label: "Event" },
+    { key: "product", type: "text", label: "Product" },
+    { key: "qtyRequired", type: "number", label: "Qty Req" },
+    { key: "qtyOrdered", type: "number", label: "Qty Ord" },
+    { key: "expectedReceiveDate", type: "date", label: "Expected In-Hand" },
+    { key: "brandingType", type: "text", label: "Branding Type" },
+    { key: "brandingVendor", type: "text", label: "Branding Vendor" },
+    { key: "expectedPostBranding", type: "date", label: "Expected Post-Branding" },
+    { key: "schedulePickUp", type: "datetime-local", label: "Schedule Pick-Up" },
+    { key: "followUp", type: "text", label: "Follow Up" },
+    { key: "remarks", type: "text", label: "Remarks" },
+    { key: "status", type: "select", label: "Status", options: statusOptions },
   ];
+
   return (
     <tr className="bg-gray-100">
-      {cols.map((k) => (
-        <th key={k} className="border px-1 py-0.5">
-          <input
-            value={filters[k] || ""}
-            onChange={(e) => onChange(k, e.target.value)}
-            className="w-full border p-0.5 text-[10px] rounded"
-            placeholder="filter…"
-          />
+      {cols.map(({ key, type, options }) => (
+        <th key={key} className="border px-1 py-0.5">
+          {type === "select" ? (
+            <select
+              value={filters[key] || ""}
+              onChange={(e) => onChange(key, e.target.value)}
+              className="w-full border p-0.5 text-[10px] rounded"
+            >
+              {options.map((opt) => (
+                <option key={opt} value={opt === "All" ? "" : opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type={type}
+              value={filters[key] || ""}
+              onChange={(e) => onChange(key, e.target.value)}
+              className="w-full border p-0.5 text-[10px] rounded"
+              placeholder={type === "date" ? "dd-mm-yyyy" : type === "datetime-local" ? "dd-mm-yyyy --:--" : "filter..."}
+            />
+          )}
         </th>
       ))}
       <th className="border px-1 py-0.5"></th>
@@ -100,46 +119,31 @@ export default function ProductionJobSheetTable({
         <thead className="bg-gray-50">
           <tr>
             {[
-              ["jobSheetCreatedDate", "Order Date"],
-              ["jobSheetNumber", "Job Sheet"],
-              ["deliveryDateTime", "Delivery Date"],
-              ["clientCompanyName", "Client"],
-              ["eventName", "Event"],
-              ["product", "Product"],
-            ].map(([k, l]) => (
+              ["jobSheetCreatedDate", "Order Date", "date"],
+              ["jobSheetNumber", "Job Sheet", "string"],
+              ["deliveryDateTime", "Delivery Date", "date"],
+              ["clientCompanyName", "Client", "string"],
+              ["eventName", "Event", "string"],
+              ["product", "Product", "string"],
+              ["qtyRequired", "Qty Req", "number"],
+              ["qtyOrdered", "Qty Ord", "number"],
+              ["expectedReceiveDate", "Expected In-Hand", "date"],
+              ["brandingType", "Branding Type", "string"],
+              ["brandingVendor", "Branding Vendor", "string"],
+              ["expectedPostBranding", "Expected Post-Branding", "date"],
+              ["schedulePickUp", "Schedule Pick-Up", "date"],
+              ["followUp", "Follow Up", "date"],
+              ["remarks", "Remarks", "string"],
+              ["status", "Status", "string"],
+            ].map(([key, label, type]) => (
               <th
-                key={k}
+                key={key}
                 className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
-                onClick={() => onSortChange(k)}
+                onClick={() => onSortChange(key)}
               >
-                {l} {icon(k)}
+                {label} {icon(key)}
               </th>
             ))}
-            <th className="border px-2 py-1 font-semibold">Qty Req</th>
-            <th className="border px-2 py-1 font-semibold">Qty Ord</th>
-            <th className="border px-2 py-1 font-semibold">Expected In-Hand</th>
-            {[
-              ["brandingType", "Branding Type"],
-              ["brandingVendor", "Branding Vendor"],
-            ].map(([k, l]) => (
-              <th
-                key={k}
-                className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
-                onClick={() => onSortChange(k)}
-              >
-                {l} {icon(k)}
-              </th>
-            ))}
-            <th className="border px-2 py-1 font-semibold">Expected Post Branding</th>
-            <th
-              className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
-              onClick={() => onSortChange("schedulePickUp")}
-            >
-              Schedule Pick-Up {icon("schedulePickUp")}
-            </th>
-            <th className="border px-2 py-1 font-semibold">Follow Up</th>
-            <th className="border px-2 py-1 font-semibold">Remarks</th>
-            <th className="border px-2 py-1 font-semibold">Status</th>
             <th className="border px-2 py-1 font-semibold">Action</th>
           </tr>
           <FilterRow filters={headerFilters} onChange={onHeaderFilterChange} />
@@ -151,7 +155,7 @@ export default function ProductionJobSheetTable({
               <tr key={r._id} className={rowCls(r.status)}>
                 <td className="border px-2 py-1">{d(r.jobSheetCreatedDate)}</td>
                 <td className="border px-2 py-1">
-                   <button
+                  <button
                     className="border-b text-blue-500 hover:text-blue-700"
                     onClick={(e) => {
                       e.preventDefault();
@@ -160,7 +164,7 @@ export default function ProductionJobSheetTable({
                   >
                     {t(r.jobSheetNumber) || "(No Number)"}
                   </button>
-                  </td>
+                </td>
                 <td className="border px-2 py-1">{d(r.deliveryDateTime)}</td>
                 <td className="border px-2 py-1">{t(r.clientCompanyName)}</td>
                 <td className="border px-2 py-1">{t(r.eventName)}</td>

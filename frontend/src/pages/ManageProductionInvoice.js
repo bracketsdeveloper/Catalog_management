@@ -45,6 +45,8 @@ export default function ManageProductionInvoice() {
   const [perms, setPerms] = useState([]);
   const [modal, setModal] = useState(null);
 
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
   /* --------------- permissions --------------- */
   useEffect(() => {
     try {
@@ -52,6 +54,10 @@ export default function ManageProductionInvoice() {
     } catch {/* ignore */}
   }, []);
   const canEdit = perms.includes("write-production");
+
+  useEffect(() => {
+    setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+  }, []);
 
   /* --------------- fetch --------------- */
   const fetchInvoices = async () => {
@@ -210,12 +216,14 @@ export default function ManageProductionInvoice() {
         >
           Filters
         </button>
-        <button
-          onClick={exportXlsx}
-          className="bg-green-600 text-white text-xs px-4 py-2 rounded"
-        >
-          Export to Excel
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={exportXlsx}
+            className="bg-green-600 text-white text-xs px-4 py-2 rounded"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
       {/* drawer */}
@@ -259,6 +267,21 @@ export default function ManageProductionInvoice() {
                 <option value="">All</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
+              </select>
+            </div>
+            <div className="col-span-full md:col-span-1">
+              <label className="font-semibold block mb-1">
+                Status
+              </label>
+              <select
+                className="w-full border p-1 rounded"
+                value={headerF.status || ""}
+                onChange={(e) => setHeaderF((p) => ({ ...p, status: e.target.value }))}
+              >
+                <option value="">All</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           </div>

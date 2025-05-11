@@ -7,6 +7,7 @@ import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 /* ────────────────────────── constants ────────────────────────── */
 const INVOICE_RECEIVED_OPTIONS = ["Yes", "No"];
+const PAYMENT_STATUS_OPTIONS = ["Not Paid", "Partially Paid", "Fully Paid"];
 
 const HEADER_COLS = [
   { key: "orderConfirmedDate", label: "Order Confirmation Date", type: "date" },
@@ -32,13 +33,28 @@ function HeaderFilters({ filters, onChange }) {
     <tr className="bg-gray-100">
       {HEADER_COLS.map((c) => (
         <th key={c.key} className="p-1 border">
-          <input
-            type="text"
-            className="w-full p-1 text-xs border rounded"
-            placeholder={`Filter ${c.label}`}
-            value={filters[c.key] || ""}
-            onChange={(e) => onChange(c.key, e.target.value)}
-          />
+          {c.key === "paymentStatus" ? (
+            <select
+              className="w-full p-1 text-xs border rounded"
+              value={filters[c.key] || ""}
+              onChange={(e) => onChange(c.key, e.target.value)}
+            >
+              <option value="">All</option>
+              {PAYMENT_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              className="w-full p-1 text-xs border rounded"
+              placeholder={`Filter ${c.label}`}
+              value={filters[c.key] || ""}
+              onChange={(e) => onChange(c.key, e.target.value)}
+            />
+          )}
         </th>
       ))}
       <th className="p-1 border"></th>
@@ -469,12 +485,14 @@ export default function ManagePurchaseInvoice() {
         >
           Filters
         </button>
-        <button
-          onClick={exportXlsx}
-          className="bg-green-600 text-white text-xs px-4 py-2 rounded"
-        >
-          Export to Excel
-        </button>
+        {localStorage.getItem("isSuperAdmin") === "true" && (
+          <button
+            onClick={exportXlsx}
+            className="bg-green-600 text-white text-xs px-4 py-2 rounded"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
       {/* Filters drawer */}

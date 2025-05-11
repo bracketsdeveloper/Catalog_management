@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 /* ─────────── Header Filters ─────────── */
-function HeaderFilters({ filters, onChange }) {
+function HeaderFilters({ filters, onChange, statusOptions }) {
   const cols = [
     "jobSheetCreatedDate",
     "deliveryDateTime",
@@ -30,13 +30,28 @@ function HeaderFilters({ filters, onChange }) {
     <tr className="bg-gray-100">
       {cols.map((c) => (
         <th key={c} className="p-1 border">
-          <input
-            type="text"
-            className="w-full p-1 text-xs border rounded"
-            placeholder={`Filter ${c}`}
-            value={filters[c] || ""}
-            onChange={(e) => onChange(c, e.target.value)}
-          />
+          {c === "status" ? (
+            <select
+              className="w-full p-1 text-xs border rounded"
+              value={filters[c] || ""}
+              onChange={(e) => onChange(c, e.target.value)}
+            >
+              <option value="">All Status</option>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              className="w-full p-1 text-xs border rounded"
+              placeholder={`Filter ${c}`}
+              value={filters[c] || ""}
+              onChange={(e) => onChange(c, e.target.value)}
+            />
+          )}
         </th>
       ))}
     </tr>
@@ -68,6 +83,9 @@ export default function ClosedPurchases() {
     direction: "asc",
     type: "date",
   });
+
+  // Define available status options
+  const statusOptions = ["Pending", "received"];
 
   // calling jobsheet global
 
@@ -384,7 +402,11 @@ export default function ClosedPurchases() {
               </th>
             ))}
           </tr>
-          <HeaderFilters filters={headerFilters} onChange={changeHeader} />
+          <HeaderFilters
+            filters={headerFilters}
+            onChange={changeHeader}
+            statusOptions={statusOptions}
+          />
         </thead>
         <tbody>
           {sorted.map((p) => (

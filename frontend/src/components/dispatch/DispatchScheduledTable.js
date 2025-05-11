@@ -29,6 +29,40 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
 }
 
 /* ───────────────────────────────────────────────────────── */
+function FilterRow({ filters, onChange, showEdit }) {
+  return (
+    <tr>
+      {[
+        { key: 'batchType', type: 'text' },
+        { key: 'jobSheetCreatedDate', type: 'date' },
+        { key: 'jobSheetNumber', type: 'text' },
+        { key: 'expectedDeliveryDate', type: 'date' },
+        { key: 'clientCompanyName', type: 'text' },
+        { key: 'eventName', type: 'text' },
+        { key: 'product', type: 'text' },
+        { key: 'jobSheetValidated', type: 'text' },
+        { key: 'dispatchQty', type: 'number' },
+        { key: 'sentOn', type: 'date' },
+        { key: 'modeOfDelivery', type: 'text' },
+        { key: 'dcNumber', type: 'text' },
+        { key: 'status', type: 'text' },
+      ].map(({ key, type }) => (
+        <th key={key} className="px-1 py-0.5 border border-gray-300">
+          <input
+            type={type}
+            className="w-full border rounded p-0.5 text-[10px]"
+            placeholder="Filter..."
+            value={filters[key] || ''}
+            onChange={e => onChange(key, e.target.value)}
+          />
+        </th>
+      ))}
+      {showEdit && <th className="px-1 py-0.5 border border-gray-300"></th>}
+    </tr>
+  );
+}
+
+/* ───────────────────────────────────────────────────────── */
 export default function DispatchScheduledTable({
   rows,
   sortField,
@@ -36,6 +70,8 @@ export default function DispatchScheduledTable({
   toggleSort,
   onEdit,
   showEdit = true,
+  headerFilters = {},
+  onHeaderFilterChange,
 }) {
   return (
     <div className="border border-gray-300 rounded-lg">
@@ -56,11 +92,16 @@ export default function DispatchScheduledTable({
             <HeadCell label="DC#" field="dcNumber" {...{ sortField, sortOrder, toggle: toggleSort }} />
             <HeadCell label="Status" field="status" {...{ sortField, sortOrder, toggle: toggleSort }} />
             {showEdit && (
-              <th className="px-2 py-1 border border-gray-300 bg-gray-50">
+              <th className="px-2 py-1 border border-gray-300">
                 Actions
               </th>
             )}
           </tr>
+          <FilterRow 
+            filters={headerFilters}
+            onChange={onHeaderFilterChange}
+            showEdit={showEdit}
+          />
         </thead>
 
         <tbody>

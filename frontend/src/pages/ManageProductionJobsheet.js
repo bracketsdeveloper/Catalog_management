@@ -63,6 +63,7 @@ export default function ManageProductionJobsheet() {
   });
 
   const [permissions, setPermissions] = useState([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const canEdit = permissions.includes("write-production");
 
   /* modal */
@@ -75,6 +76,7 @@ export default function ManageProductionJobsheet() {
     try {
       const p = JSON.parse(localStorage.getItem("permissions") || "[]");
       setPermissions(p);
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     } catch {}
   }, []);
 
@@ -156,21 +158,41 @@ export default function ManageProductionJobsheet() {
   // 5. Sort
   const sorted = useMemo(
     () =>
-      [...adv].sort(
-        (a, b) => cmp(a[sort.key], b[sort.key], sort.type) * (sort.direction === "asc" ? 1 : -1)
-      ),
+      [...adv].sort((a, b) => {
+        let aVal = a[sort.key];
+        let bVal = b[sort.key];
+
+        // Handle special cases
+        if (sort.key === "followUp") {
+          aVal = a.followUp?.length ? Math.max(...a.followUp.map(f => new Date(f.followUpDate))) : 0;
+          bVal = b.followUp?.length ? Math.max(...b.followUp.map(f => new Date(f.followUpDate))) : 0;
+        }
+
+        // Handle different types
+        switch (sort.type) {
+          case "date":
+            return (toDate(aVal) - toDate(bVal)) * (sort.direction === "asc" ? 1 : -1);
+          case "number":
+            return ((Number(aVal) || 0) - (Number(bVal) || 0)) * (sort.direction === "asc" ? 1 : -1);
+          default:
+            return String(aVal ?? "").localeCompare(String(bVal ?? ""), "en", {
+              sensitivity: "base",
+            }) * (sort.direction === "asc" ? 1 : -1);
+        }
+      }),
     [adv, sort]
   );
 
   /* --------------- handlers --------------- */
   const changeHeader = (k, v) => setHeaderFilters((p) => ({ ...p, [k]: v }));
   const changeAdv = (f, k, v) => setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
-  const sortBy = (k, t = "string") =>
+  const sortBy = (k, t = "string") => {
     setSort((p) => ({
       key: k,
       type: t,
       direction: p.key === k && p.direction === "asc" ? "desc" : "asc",
     }));
+  };
 
   const openModal = (rec) => {
     if (!canEdit) return alert("No permission.");
@@ -239,12 +261,14 @@ export default function ManageProductionJobsheet() {
         >
           Filters
         </button>
-        <button
-          onClick={exportXlsx}
-          className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
-        >
-          Export&nbsp;to&nbsp;Excel
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={exportXlsx}
+            className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
+          >
+            Export&nbsp;to&nbsp;Excel
+          </button>
+        )}
       </div>
 
       {/* advanced drawer */}

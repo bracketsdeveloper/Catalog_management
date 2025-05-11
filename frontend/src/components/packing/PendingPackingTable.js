@@ -29,6 +29,41 @@ function Header({ label, field, sortField, sortOrder, toggleSort }) {
 }
 
 /* --------------------------------------------------------------- */
+function FilterRow({ filters, onChange }) {
+  return (
+    <tr>
+      {[
+        { key: 'jobSheetCreatedDate', type: 'date' },
+        { key: 'jobSheetNumber', type: 'text' },
+        { key: 'expectedDeliveryDate', type: 'date' },
+        { key: 'clientCompanyName', type: 'text' },
+        { key: 'eventName', type: 'text' },
+        { key: 'product', type: 'text' },
+        { key: 'jobSheetValidated', type: 'text' },
+        { key: 'brandedProductExpectedOn', type: 'date' },
+        { key: 'qtyOrdered', type: 'number' },
+        { key: 'qtyToBeDelivered', type: 'number' },
+        { key: 'qtyRejected', type: 'number' },
+        { key: 'qcDoneBy', type: 'text' },
+        { key: 'status', type: 'text' },
+        { key: 'latestFollowUp', type: 'date' },
+      ].map(({ key, type }) => (
+        <th key={key} className="px-1 py-0.5 border border-gray-300">
+          <input
+            type={type}
+            className="w-full border rounded p-0.5 text-[10px]"
+            placeholder="Filter..."
+            value={filters[key] || ''}
+            onChange={e => onChange(key, e.target.value)}
+          />
+        </th>
+      ))}
+      <th className="px-1 py-0.5 border border-gray-300"></th>
+    </tr>
+  );
+}
+
+/* --------------------------------------------------------------- */
 export default function PendingPackingTable({
   rows,
   sortField,
@@ -37,6 +72,10 @@ export default function PendingPackingTable({
   onEdit,
   onShowFollowUps,
   showEdit = true, // new prop
+  headerFilters = {},
+  onHeaderFilterChange,
+  clientOptions = [],
+  qcDoneByOptions = [],
 }) {
 
  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
@@ -74,6 +113,10 @@ export default function PendingPackingTable({
             <Header label="Latest Follow‑up" field="latestFollowUp" {...{ sortField, sortOrder, toggleSort }} />
             {showEdit && <th className="px-2 py-1 border border-gray-300 bg-gray-50">Actions</th>}
           </tr>
+          <FilterRow 
+            filters={headerFilters}
+            onChange={onHeaderFilterChange}
+          />
         </thead>
 
         <tbody>

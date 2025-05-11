@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import PendingPackingTable from "../components/packing/PendingPackingTable";
@@ -15,11 +15,33 @@ export default function ManagePendingPackingClosed() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ field: "", dir: "asc" });
   const [fuRow, setFuRow] = useState(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  
+  // Add states for filters
+  const [headerFilters, setHeaderFilters] = useState({});
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [clientOptions, setClientOptions] = useState([]);
+  const [qcDoneByOptions, setQcDoneByOptions] = useState([]);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    jobSheetCreatedDate: { from: '', to: '' },
+    expectedDeliveryDate: { from: '', to: '' },
+    brandedProductExpectedOn: { from: '', to: '' },
+    clientCompanyName: '',
+    status: '',
+    qcDoneBy: ''
+  });
 
   useEffect(() => {
     fetchRows();
+    setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     // eslint-disable-next-line
   }, []);
+
+  // Add helper function for unique values
+  const getUniqueValues = (data, key) => {
+    const values = new Set(data.map(item => item[key]).filter(Boolean));
+    return Array.from(values).sort();
+  };
 
   async function fetchRows() {
     const res = await axios.get(`${BACKEND}/api/admin/packing-pending`, {
@@ -27,12 +49,59 @@ export default function ManagePendingPackingClosed() {
     });
     const { closed } = splitOpenClosed(res.data || []);
     setRows(closed);
+
+    // Get unique values for dropdowns
+    setClientOptions(getUniqueValues(closed, 'clientCompanyName'));
+    setQcDoneByOptions(getUniqueValues(closed, 'qcDoneBy'));
   }
 
-  /* search + sort */
-  const filtered = rows.filter((r) =>
-    JSON.stringify(r).toLowerCase().includes(search.toLowerCase())
-  );
+  /* search + sort + filters */
+  const filtered = useMemo(() => {
+    return rows.filter(row => {
+      // Global search
+      if (!JSON.stringify(row).toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+
+      // Header filters
+      if (!Object.entries(headerFilters).every(([key, value]) => {
+        if (!value) return true;
+        const cellValue = String(row[key] || '').toLowerCase();
+        return cellValue.includes(value.toLowerCase());
+      })) {
+        return false;
+      }
+
+      // Advanced filters
+      const inDateRange = (date, range) => {
+        if (!date) return true;
+        if (!range.from && !range.to) return true;
+        const d = new Date(date);
+        if (range.from && d < new Date(range.from)) return false;
+        if (range.to && d > new Date(range.to)) return false;
+        return true;
+      };
+
+      if (!inDateRange(row.jobSheetCreatedDate, advancedFilters.jobSheetCreatedDate)) return false;
+      if (!inDateRange(row.expectedDeliveryDate, advancedFilters.expectedDeliveryDate)) return false;
+      if (!inDateRange(row.brandedProductExpectedOn, advancedFilters.brandedProductExpectedOn)) return false;
+      
+      if (advancedFilters.clientCompanyName && 
+          !row.clientCompanyName?.toLowerCase().includes(advancedFilters.clientCompanyName.toLowerCase())) {
+        return false;
+      }
+      
+      if (advancedFilters.status && row.status !== advancedFilters.status) return false;
+      
+      if (advancedFilters.qcDoneBy && 
+          !row.qcDoneBy?.toLowerCase().includes(advancedFilters.qcDoneBy.toLowerCase())) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [rows, search, headerFilters, advancedFilters]);
+
   const sorted = [...filtered].sort((a, b) => {
     if (!sort.field) return 0;
     const av = a[sort.field] ?? "";
@@ -42,7 +111,7 @@ export default function ManagePendingPackingClosed() {
 
   /* export */
   const exportToExcel = () => {
-    const data = rows.map((r) => ({
+    const data = sorted.map((r) => ({
       "Job Sheet Created": toDate(r.jobSheetCreatedDate),
       "Job Sheet #": r.jobSheetNumber,
       "Expected Delivery": toDate(r.expectedDeliveryDate),
@@ -80,11 +149,11 @@ export default function ManagePendingPackingClosed() {
         />
         <Link
           to="/admin-dashboard/pending-packing"
-          className="px-3 py-1 bg-[#Ff8045] hover:bg-[#Ff8045]/90 rounded text-xs"
+          className="px-3 py-1 bg-[#Ff8045] hover:bg-[#Ff8045]/90 rounded text-xs text-white"
         >
           ← Open Pending Packing
         </Link>
-        {rows.length > 0 && (
+        {isSuperAdmin && rows.length > 0 && (
           <button
             onClick={exportToExcel}
             className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
@@ -92,7 +161,122 @@ export default function ManagePendingPackingClosed() {
             Export to Excel
           </button>
         )}
+        <button
+          onClick={() => setShowAdvancedFilters(prev => !prev)}
+          className="px-3 py-1 bg-purple-100 text-purple-700 rounded text-xs"
+        >
+          {showAdvancedFilters ? 'Hide Filters' : 'Show Filters'}
+        </button>
       </div>
+
+      {/* Advanced Filters */}
+      {showAdvancedFilters && (
+        <div className="mb-4 p-4 border rounded-lg bg-gray-50">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Date Filters */}
+            {[
+              ['jobSheetCreatedDate', 'Job Sheet Created'],
+              ['expectedDeliveryDate', 'Expected Delivery'],
+              ['brandedProductExpectedOn', 'Branded Product Expected'],
+            ].map(([key, label]) => (
+              <div key={key} className="space-y-2">
+                <label className="block text-sm font-medium">{label}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    className="border rounded p-1 text-xs"
+                    placeholder="From"
+                    value={advancedFilters[key].from}
+                    onChange={e => setAdvancedFilters(prev => ({
+                      ...prev,
+                      [key]: { ...prev[key], from: e.target.value }
+                    }))}
+                  />
+                  <input
+                    type="date"
+                    className="border rounded p-1 text-xs"
+                    placeholder="To"
+                    value={advancedFilters[key].to}
+                    onChange={e => setAdvancedFilters(prev => ({
+                      ...prev,
+                      [key]: { ...prev[key], to: e.target.value }
+                    }))}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* Client Dropdown */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Client</label>
+              <select
+                className="border rounded p-1 text-xs w-full"
+                value={advancedFilters.clientCompanyName}
+                onChange={e => setAdvancedFilters(prev => ({
+                  ...prev,
+                  clientCompanyName: e.target.value
+                }))}
+              >
+                <option value="">All Clients</option>
+                {clientOptions.map(client => (
+                  <option key={client} value={client}>{client}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Dropdown */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Status</label>
+              <select
+                className="border rounded p-1 text-xs w-full"
+                value={advancedFilters.status}
+                onChange={e => setAdvancedFilters(prev => ({
+                  ...prev,
+                  status: e.target.value
+                }))}
+              >
+                <option value="">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+
+            {/* QC Done By Dropdown */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">QC Done By</label>
+              <select
+                className="border rounded p-1 text-xs w-full"
+                value={advancedFilters.qcDoneBy}
+                onChange={e => setAdvancedFilters(prev => ({
+                  ...prev,
+                  qcDoneBy: e.target.value
+                }))}
+              >
+                <option value="">All QC Staff</option>
+                {qcDoneByOptions.map(qc => (
+                  <option key={qc} value={qc}>{qc}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => setAdvancedFilters({
+                jobSheetCreatedDate: { from: '', to: '' },
+                expectedDeliveryDate: { from: '', to: '' },
+                brandedProductExpectedOn: { from: '', to: '' },
+                clientCompanyName: '',
+                status: '',
+                qcDoneBy: ''
+              })}
+              className="bg-gray-200 text-gray-700 px-3 py-1 rounded text-xs"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      )}
 
       <PendingPackingTable
         rows={sorted}
@@ -105,9 +289,11 @@ export default function ManagePendingPackingClosed() {
               : { field: f, dir: "asc" }
           )
         }
-        onEdit={() => {}}          /* ignored */
+        onEdit={() => {}}
         onShowFollowUps={(r) => setFuRow(r)}
         showEdit={false}
+        headerFilters={headerFilters}
+        onHeaderFilterChange={(key, value) => setHeaderFilters(prev => ({ ...prev, [key]: value }))}
       />
 
       {fuRow && (
@@ -116,6 +302,7 @@ export default function ManagePendingPackingClosed() {
     </div>
   );
 }
+
 function toDate(val) {
   const d = new Date(val);
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString();

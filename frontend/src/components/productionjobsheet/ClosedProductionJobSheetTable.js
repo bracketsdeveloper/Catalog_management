@@ -9,35 +9,55 @@ const d = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).t
 
 /* header filter row */
 function FilterRow({ filters, onChange }) {
+  const statusOptions = ["All", "pending", "received", "alert"];
+
   const cols = [
-    "jobSheetCreatedDate",
-    "jobSheetNumber",
-    "deliveryDateTime",
-    "clientCompanyName",
-    "eventName",
-    "product",
-    "qtyRequired",
-    "qtyOrdered",
-    "expectedReceiveDate",
-    "brandingType",
-    "brandingVendor",
-    "expectedPostBranding",
-    "schedulePickUp",
-    "remarks",
-    "status",
+    { key: "jobSheetCreatedDate", type: "date", label: "Order Date" },
+    { key: "jobSheetNumber", type: "text", label: "Job Sheet" },
+    { key: "deliveryDateTime", type: "date", label: "Delivery Date" },
+    { key: "clientCompanyName", type: "text", label: "Client" },
+    { key: "eventName", type: "text", label: "Event" },
+    { key: "product", type: "text", label: "Product" },
+    { key: "qtyRequired", type: "number", label: "Qty Req" },
+    { key: "qtyOrdered", type: "number", label: "Qty Ord" },
+    { key: "expectedReceiveDate", type: "date", label: "Expected In-Hand" },
+    { key: "brandingType", type: "text", label: "Branding Type" },
+    { key: "brandingVendor", type: "text", label: "Branding Vendor" },
+    { key: "expectedPostBranding", type: "date", label: "Expected Post-Branding" },
+    { key: "schedulePickUp", type: "datetime-local", label: "Schedule Pick-Up" },
+    { key: "followUp", type: "text", label: "Follow Up" },
+    { key: "status", type: "select", label: "Status", options: statusOptions },
+    { key: "remarks", type: "text", label: "Remarks" },
   ];
+
   return (
     <tr className="bg-gray-100">
-      {cols.map((k) => (
-        <th key={k} className="border px-1 py-0.5">
-          <input
-            value={filters[k] || ""}
-            onChange={(e) => onChange(k, e.target.value)}
-            className="w-full border p-0.5 text-[10px] rounded"
-            placeholder="filter…"
-          />
+      {cols.map(({ key, type, options }) => (
+        <th key={key} className="border px-1 py-0.5">
+          {type === "select" ? (
+            <select
+              value={filters[key] || ""}
+              onChange={(e) => onChange(key, e.target.value)}
+              className="w-full border p-0.5 text-[10px] rounded"
+            >
+              {options.map((opt) => (
+                <option key={opt} value={opt === "All" ? "" : opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type={type}
+              value={filters[key] || ""}
+              onChange={(e) => onChange(key, e.target.value)}
+              className="w-full border p-0.5 text-[10px] rounded"
+              placeholder={type === "date" ? "dd-mm-yyyy" : type === "datetime-local" ? "dd-mm-yyyy --:--" : "filter..."}
+            />
+          )}
         </th>
       ))}
+      <th className="border px-1 py-0.5"></th> {/* Action column */}
     </tr>
   );
 }
@@ -70,101 +90,65 @@ const exportToExcel = (data) => {
 
 export default function ClosedProductionJobSheetTable({
   data,
+  onActionClick,
   sortField,
   sortOrder,
   onSortChange,
   headerFilters,
   onHeaderFilterChange,
 }) {
-
-    const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      
-      
-      const handleOpenModal = (jobSheetNumber) => {
-        setSelectedJobSheetNumber(jobSheetNumber);
-        setIsModalOpen(true);
-      };
-      
-      const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedJobSheetNumber(null);
-      };
-
+  console.log('Table data:', data);
 
   const icon = (f) =>
     sortField !== f ? (
-      <span className="opacity-50 ml-0.5 text-xs">↕</span>
+      <span className="opacity-50 ml-0.5">↕</span>
     ) : sortOrder === "asc" ? (
-      <span className="ml-0.5 text-xs">▲</span>
+      <span className="ml-0.5">▲</span>
     ) : (
-      <span className="ml-0.5 text-xs">▼</span>
+      <span className="ml-0.5">▼</span>
     );
 
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <button
+        {/* <button
           onClick={() => exportToExcel(data)}
           className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
         >
           Export&nbsp;to&nbsp;Excel
-        </button>
+        </button> */}
       </div>
 
-      <table className="min-w-full border-collapse text-xs">
+      <table className="min-w-full table-auto border-collapse text-xs">
         <thead className="bg-gray-50">
           <tr>
             {[
-              ["jobSheetCreatedDate", "Order Date"],
-              ["jobSheetNumber", "Job Sheet"],
-              ["deliveryDateTime", "Delivery Date"],
-              ["clientCompanyName", "Client"],
-              ["eventName", "Event"],
-              ["product", "Product"],
-            ].map(([k, l]) => (
+              ["jobSheetCreatedDate", "Order Date", "date"],
+              ["jobSheetNumber", "Job Sheet", "string"],
+              ["deliveryDateTime", "Delivery Date", "date"],
+              ["clientCompanyName", "Client", "string"],
+              ["eventName", "Event", "string"],
+              ["product", "Product", "string"],
+              ["qtyRequired", "Qty Req", "number"],
+              ["qtyOrdered", "Qty Ord", "number"],
+              ["expectedReceiveDate", "Expected In-Hand", "date"],
+              ["brandingType", "Branding Type", "string"],
+              ["brandingVendor", "Branding Vendor", "string"],
+              ["expectedPostBranding", "Expected Post-Branding", "date"],
+              ["schedulePickUp", "Schedule Pick-Up", "date"],
+              ["followUp", "Follow Up", "date"],
+              ["status", "Status", "string"],
+              ["remarks", "Remarks", "string"],
+            ].map(([key, label, type]) => (
               <th
-                key={k}
-                onClick={() => onSortChange(k)}
-                className="p-2 border cursor-pointer"
+                key={key}
+                className="border px-2 py-1 font-semibold text-blue-800 cursor-pointer"
+                onClick={() => onSortChange(key)}
               >
-                {l} {icon(k)}
+                {label} {icon(key)}
               </th>
             ))}
-            <th className="p-2 border">Qty Req</th>
-            <th className="p-2 border">Qty Ord</th>
-            <th className="p-2 border">Expected In-Hand</th>
-            {[
-              ["brandingType", "Branding Type"],
-              ["brandingVendor", "Branding Vendor"],
-            ].map(([k, l]) => (
-              <th
-                key={k}
-                onClick={() => onSortChange(k)}
-                className="p-2 border cursor-pointer"
-              >
-                {l} {icon(k)}
-              </th>
-            ))}
-            <th className="p-2 border">Expected Post Brand</th>
-            <th
-              className="p-2 border cursor-pointer"
-              onClick={() => onSortChange("schedulePickUp")}
-            >
-              Schedule Pick-Up {icon("schedulePickUp")}
-            </th>
-            {[
-              ["remarks", "Remarks"],
-              ["status", "Status"],
-            ].map(([k, l]) => (
-              <th
-                key={k}
-                onClick={() => onSortChange(k)}
-                className="p-2 border cursor-pointer"
-              >
-                {l} {icon(k)}
-              </th>
-            ))}
+            <th className="border px-2 py-1 font-semibold">Action</th>
           </tr>
           <FilterRow filters={headerFilters} onChange={onHeaderFilterChange} />
         </thead>
@@ -177,7 +161,7 @@ export default function ClosedProductionJobSheetTable({
                     className="border-b text-blue-500 hover:text-blue-700"
                     onClick={(e) => {
                       e.preventDefault();
-                      handleOpenModal(r.jobSheetNumber);
+                      onActionClick(r);
                     }}
                   >
                     {t(r.jobSheetNumber) || "(No Number)"}
@@ -194,21 +178,28 @@ export default function ClosedProductionJobSheetTable({
               <td className="p-2 border">{t(r.brandingVendor)}</td>
               <td className="p-2 border">{t(r.expectedPostBranding)}</td>
               <td className="p-2 border">{d(r.schedulePickUp)}</td>
-              <td className="p-2 border">{t(r.remarks)}</td>
+              <td className="p-2 border">
+                {r.followUp?.length ? d(Math.max(...r.followUp.map(f => new Date(f.followUpDate)))) : ""}
+              </td>
               <td className="p-2 border">{t(r.status)}</td>
+              <td className="p-2 border">{t(r.remarks)}</td>
+              <td className="p-2 border">
+                {onActionClick && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onActionClick(r);
+                    }}
+                    className="hover:text-gray-600"
+                  >
+                    &#8942;
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-
-        <JobSheetGlobal
-          jobSheetNumber={selectedJobSheetNumber} 
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-        />
-
-            
-
     </div>
   );
 }

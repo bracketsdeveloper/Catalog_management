@@ -37,18 +37,56 @@ export default function DeliveryReportsTable({
   onShowExcel,
 }) {
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [headerFilters, setHeaderFilters] = useState({
+    batchType: "",
+    jobSheetNumber: "",
+    clientCompanyName: "",
+    eventName: "",
+    product: "",
+    dispatchQty: "",
+    deliveredSentThrough: "",
+    dcNumber: "",
+    status: "",
+  });
 
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
 
-const handleOpenModal = (jobSheetNumber) => {
-  setSelectedJobSheetNumber(jobSheetNumber);
-  setIsModalOpen(true);
-};
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
-const handleCloseModal = () => {
-  setIsModalOpen(false);
-  setSelectedJobSheetNumber(null);
-};
+  const FilterRow = () => (
+    <tr>
+      {Object.keys(headerFilters).map((key) => (
+        <td key={key} className="px-2 py-1 border border-gray-300">
+          <input
+            type="text"
+            value={headerFilters[key]}
+            onChange={(e) => 
+              setHeaderFilters({...headerFilters, [key]: e.target.value})
+            }
+            className="w-full p-1 text-xs border rounded"
+            placeholder="Filter..."
+          />
+        </td>
+      ))}
+      <td className="px-2 py-1 border border-gray-300"></td>
+    </tr>
+  );
+
+  const filteredRows = rows.filter(row => {
+    return Object.entries(headerFilters).every(([key, value]) => {
+      if (!value) return true;
+      const cellValue = String(row[key] || "").toLowerCase();
+      return cellValue.includes(value.toLowerCase());
+    });
+  });
+
   return (
     <div className="border border-gray-300 rounded-lg">
       <table className="w-full table-auto text-xs">
@@ -68,10 +106,11 @@ const handleCloseModal = () => {
             <Head label="Status" field="status" {...{ sortField, sortOrder, toggleSort }} />
             <th className="px-2 py-1 border border-gray-300 bg-gray-50">Actions</th>
           </tr>
+          <FilterRow />
         </thead>
 
         <tbody>
-          {rows.map((r) => {
+          {filteredRows.map((r) => {
             const key = r.dispatchId || r._id;
             const bg =
               r.status === "Delivered"
@@ -84,18 +123,15 @@ const handleCloseModal = () => {
             return (
               <tr key={key} className={`${bg} hover:bg-opacity-80`}>
                 <Cell val={r.batchType} />
-                   <button
-                    className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(r.jobSheetNumber);
-                    }}
-                  >
-                    <Cell val= 
-                    {(r.jobSheetNumber) || "No Number" }
-                    />
-                  </button>
-               
+                <button
+                  className="border-b text-blue-500 hover:text-blue-700"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOpenModal(r.jobSheetNumber);
+                  }}
+                >
+                  <Cell val={(r.jobSheetNumber) || "No Number"} />
+                </button>
                 <Cell val={r.clientCompanyName} />
                 <Cell val={r.eventName} />
                 <Cell val={r.product} />
@@ -124,7 +160,7 @@ const handleCloseModal = () => {
               </tr>
             );
           })}
-          {rows.length === 0 && (
+          {filteredRows.length === 0 && (
             <tr>
               <td
                 colSpan={13}
@@ -137,11 +173,11 @@ const handleCloseModal = () => {
         </tbody>
       </table>
 
-          <JobSheetGlobal
-            jobSheetNumber={selectedJobSheetNumber} 
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-          />
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber} 
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }
@@ -155,6 +191,7 @@ function Cell({ val }) {
     </td>
   );
 }
+
 function date(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();

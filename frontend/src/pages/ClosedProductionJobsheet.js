@@ -50,6 +50,12 @@ export default function ClosedProductionJobsheet() {
     type: "date",
   });
 
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // Add this state for modal handling
+  const [modalOpen, setModalOpen] = useState(false);
+  const [current, setCurrent] = useState(null);
+
   /* --------------- fetch --------------- */
   const fetchRows = async () => {
     try {
@@ -67,6 +73,12 @@ export default function ClosedProductionJobsheet() {
   };
   useEffect(() => {
     fetchRows();
+  }, []);
+
+  useEffect(() => {
+    try {
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    } catch {}
   }, []);
 
   /* --------------- filtering pipeline --------------- */
@@ -131,6 +143,12 @@ export default function ClosedProductionJobsheet() {
       direction: p.key === k && p.direction === "asc" ? "desc" : "asc",
     }));
 
+  // Add this handler function
+  const handleActionClick = (record) => {
+    setCurrent(record);
+    setModalOpen(true);
+  };
+
   /* --------------- export --------------- */
   const exportXlsx = () => {
     const wb = XLSX.utils.book_new();
@@ -184,12 +202,14 @@ export default function ClosedProductionJobsheet() {
         >
           Filters
         </button>
-        <button
-          onClick={exportXlsx}
-          className="bg-green-600 text-white text-xs px-4 py-2 rounded"
-        >
-          Export&nbsp;to&nbsp;Excel
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={exportXlsx}
+            className="bg-green-600 text-white text-xs px-4 py-2 rounded"
+          >
+            Export&nbsp;to&nbsp;Excel
+          </button>
+        )}
       </div>
 
       {showFilters && (
@@ -267,6 +287,7 @@ export default function ClosedProductionJobsheet() {
         }
         headerFilters={headerFilters}
         onHeaderFilterChange={setHeaderFilter}
+        onActionClick={handleActionClick}
       />
     </div>
   );
