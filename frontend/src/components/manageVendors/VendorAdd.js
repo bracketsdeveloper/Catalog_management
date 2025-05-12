@@ -182,7 +182,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
 
           {/* --- clients --- */}
           <div className="col-span-2 border-t pt-4">
-            <label className="block text-sm font-medium mb-2">Clients</label>
+            <label className="block text-sm font-medium mb-2">Contact</label>
 
             {/* add client */}
             <div className="flex flex-wrap gap-2 mb-3">
@@ -215,8 +215,8 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
                 <table className="min-w-full text-xs border">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="p-2 border">Name</th>
-                      <th className="p-2 border">Contact</th>
+                      <th className="p-2 border">Contact Name</th>
+                      <th className="p-2 border">Contact Number</th>
                       <th className="p-2 border"></th>
                     </tr>
                   </thead>

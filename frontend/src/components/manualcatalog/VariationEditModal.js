@@ -70,24 +70,31 @@ export default function VariationEditModal({
   }
 
   function handleSave() {
-    onUpdate({
-      productName:        name,
-      productCost:        editableCost,
-      productprice:       editableCost,
-      productGST:         parseFloat(productGST) || 0,
-      color:              color || "N/A",
-      size:               size || "N/A",
-      quantity:           parseInt(quantity) || 1,
-      material,
-      weight,
-      ProductDescription: productDescription,
-      ProductBrand:       productBrand,
-      brandingTypes,
-      baseCost:           initialCost.current,
-      suggestedBreakdown: breakdown,
-      imageIndex:         selectedImageIndex,
-    });
+    try {
+      const payload = {
+        productName:        name,
+        productCost:        parseFloat(editableCost) || 0,
+        productprice:       parseFloat(editableCost) || 0,
+        productGST:         parseFloat(productGST) || 0,
+        color:              color || "N/A",
+        size:               size || "N/A",
+        quantity:           parseInt(quantity) || 1,
+        material,
+        weight:             parseFloat(weight) || 0,
+        ProductDescription: productDescription,
+        ProductBrand:       productBrand,
+        brandingTypes,
+        baseCost:           initialCost.current,
+        suggestedBreakdown: breakdown,
+        imageIndex:         selectedImageIndex,
+      };
+      console.log("Saving with data:", payload);
+      onUpdate(payload);
+    } catch (err) {
+      console.error("Save failed:", err);
+    }
   }
+  
 
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-40 overflow-y-auto">
