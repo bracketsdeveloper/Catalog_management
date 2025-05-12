@@ -65,6 +65,7 @@ export default function ManageProductionJobsheet() {
   const [permissions, setPermissions] = useState([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const canEdit = permissions.includes("write-production");
+  const canExport = isSuperAdmin || permissions.includes("export-production");
 
   /* modal */
   const [modalOpen, setModalOpen] = useState(false);
@@ -261,7 +262,7 @@ export default function ManageProductionJobsheet() {
         >
           Filters
         </button>
-        {isSuperAdmin && (
+        {canExport && (
           <button
             onClick={exportXlsx}
             className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"

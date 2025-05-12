@@ -103,6 +103,21 @@ export default function ClosedPurchases() {
     setSelectedJobSheetNumber(null);
   };
 
+  // Add permission state
+  const [perms, setPerms] = useState([]);
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const canExport = isSuperAdmin || perms.includes("export-purchase");
+
+  // Add permission load effect
+  useEffect(() => {
+    const str = localStorage.getItem("permissions");
+    if (str) {
+      try {
+        setPerms(JSON.parse(str));
+      } catch {}
+    }
+  }, []);
+
   /* -------- fetch closed purchases -------- */
   useEffect(() => {
     (async () => {
@@ -214,6 +229,11 @@ export default function ClosedPurchases() {
 
   /* -------- export -------- */
   const exportToExcel = () => {
+    if (!canExport) {
+      alert("You don't have permission to export purchase records.");
+      return;
+    }
+
     const data = sorted.map((r) => ({
       "Job Sheet Created": r.jobSheetCreatedDate
         ? new Date(r.jobSheetCreatedDate).toLocaleDateString()
@@ -282,12 +302,14 @@ export default function ClosedPurchases() {
         >
           Filters
         </button>
-        <button
-          onClick={exportToExcel}
-          className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
-        >
-          Export to Excel
-        </button>
+        {canExport && (
+          <button
+            onClick={exportToExcel}
+            className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
       {/* advanced filters */}

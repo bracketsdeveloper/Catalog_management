@@ -14,6 +14,8 @@ export default function ManageExpenses() {
   const [expenses, setExpenses] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const hasExportPermission = localStorage.getItem("permissions")?.includes("expenses-export");
 
   const [filters, setFilters] = useState({
     opptyFrom:    "",
@@ -192,12 +194,14 @@ export default function ManageExpenses() {
           </button>
         </div>
         <div className="flex space-x-2">
-          <button
-            onClick={exportToExcel}
-            className="bg-blue-600 text-white px-3 py-1 rounded text-xs"
-          >
-            Export to Excel
-          </button>
+          {(isSuperAdmin || hasExportPermission) && (
+            <button
+              onClick={exportToExcel}
+              className="bg-blue-600 text-white px-3 py-1 rounded text-xs"
+            >
+              Export to Excel
+            </button>
+          )}
           <button
             onClick={() => setNewModalOpen(true)}
             className="bg-green-600 text-white px-3 py-1 rounded text-xs"

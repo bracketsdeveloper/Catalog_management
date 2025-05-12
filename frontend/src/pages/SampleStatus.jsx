@@ -20,6 +20,8 @@ export default function SampleStatus() {
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const token       = localStorage.getItem("token");
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const hasExportPermission = localStorage.getItem("permissions")?.includes("export-samples");
 
   useEffect(() => {
     async function fetchData() {
@@ -140,12 +142,14 @@ export default function SampleStatus() {
           Filter
         </button>
 
-        <button
-          onClick={handleExport}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-        >
-          Export Excel
-        </button>
+        {(isSuperAdmin || hasExportPermission) && (
+          <button
+            onClick={handleExport}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
+            Export Excel
+          </button>
+        )}
       </div>
 
       <SampleStatusTable samples={displayed} outs={outs} />

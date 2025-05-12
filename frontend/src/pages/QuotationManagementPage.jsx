@@ -59,6 +59,10 @@ export default function QuotationManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
 
+  // Add permissions check near the top with other state variables
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const canExportCRM = permissions.includes("export-crm");
+
   // Close the dropdown if clicking anywhere outside
   useEffect(() => {
     function handleDocumentClick() {
@@ -758,7 +762,7 @@ export default function QuotationManagementPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Manage Quotations</h1>
         <div className="flex space-x-2">
-          {isSuperAdmin && (
+          {(isSuperAdmin || canExportCRM) && (
             <button
               onClick={handleExportAllToExcel}
               className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 px-4 py-2 rounded text-white"

@@ -77,6 +77,10 @@ export default function CatalogManagementPage() {
   // Superadmin status
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
+  // Add permissions check near the top with other state variables
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const canExportCRM = permissions.includes("export-crm");
+
   // Close the dropdown if clicking anywhere outside
   useEffect(() => {
     function handleDocumentClick() {
@@ -1159,7 +1163,7 @@ export default function CatalogManagementPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Manage Catalogs</h1>
         <div className="flex space-x-2">
-          {isSuperAdmin && (
+          {(isSuperAdmin || canExportCRM) && (
             <button
               onClick={handleExportAllToExcel}
               className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 px-4 py-2 rounded text-white"
@@ -1228,18 +1232,20 @@ export default function CatalogManagementPage() {
             className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExportExcel(selectedCatalogForDropdown);
-                setOpenDropdownForCatalog(null);
-                setSelectedCatalogForDropdown(null);
-                dropdownButtonRef.current = null;
-              }}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-            >
-              Excel
-            </button>
+            {(isSuperAdmin || canExportCRM) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleExportExcel(selectedCatalogForDropdown);
+                  setOpenDropdownForCatalog(null);
+                  setSelectedCatalogForDropdown(null);
+                  dropdownButtonRef.current = null;
+                }}
+                className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+              >
+                Excel
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();

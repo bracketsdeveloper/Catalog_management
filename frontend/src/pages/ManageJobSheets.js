@@ -52,6 +52,10 @@ export default function ManageJobSheets() {
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Add permissions check near the top with other state variables
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const canExportCRM = permissions.includes("export-crm");
+
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
     setIsModalOpen(true);
@@ -342,7 +346,7 @@ export default function ManageJobSheets() {
           >
             Create Jobsheet
           </button>
-          {isSuperAdmin && (
+          {(isSuperAdmin || canExportCRM) && (
             <button
               onClick={exportToExcel}
               className="bg-[#44b977] hover:bg-[#44b977]/90 text-white px-4 py-2 rounded"

@@ -54,6 +54,7 @@ export default function ManageProductionInvoice() {
     } catch {/* ignore */}
   }, []);
   const canEdit = perms.includes("write-production");
+  const canExport = isSuperAdmin || perms.includes("export-production");
 
   useEffect(() => {
     setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
@@ -150,6 +151,11 @@ export default function ManageProductionInvoice() {
 
   /* --------------- export --------------- */
   const exportXlsx = () => {
+    if (!canExport) {
+      alert("You don't have permission to export production invoices.");
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       wb,
@@ -216,10 +222,10 @@ export default function ManageProductionInvoice() {
         >
           Filters
         </button>
-        {isSuperAdmin && (
+        {canExport && (
           <button
             onClick={exportXlsx}
-            className="bg-green-600 text-white text-xs px-4 py-2 rounded"
+            className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
           >
             Export to Excel
           </button>

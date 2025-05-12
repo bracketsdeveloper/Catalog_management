@@ -22,6 +22,8 @@ export const ManageVendors = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
 
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const canExportPurchase = permissions.includes("export-purchase");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const fetchVendors = async () => {
@@ -210,7 +212,7 @@ export const ManageVendors = () => {
           >
             Bulk Upload
           </button>
-          {isSuperAdmin && (
+          {(isSuperAdmin || canExportPurchase) && (
             <button
               onClick={exportToExcel}
               className="bg-blue-500 text-white px-3 py-1 rounded"

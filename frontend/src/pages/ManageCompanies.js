@@ -33,6 +33,10 @@ export default function ManageCompanies() {
   // Check if the user is a superadmin (from localStorage)
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
 
+  // Add permissions check
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const canExportCRM = permissions.includes("export-crm");
+
   useEffect(() => {
     fetchCompanies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,7 +172,7 @@ export default function ManageCompanies() {
               </div>
             )}
           </div>
-          {isSuperAdmin && (
+          {(isSuperAdmin || canExportCRM) && (
             <button
               onClick={exportToExcel}
               className="bg-green-600 text-white px-4 py-2 rounded"

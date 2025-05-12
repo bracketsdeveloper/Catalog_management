@@ -29,6 +29,7 @@ const groupedPermissions = {
     "manage-catalog",
     "manage-quotation",
     "manage-jobsheets",
+    "crm-export"
   ],
 
   /* ↓ Purchasing flow */
@@ -37,6 +38,7 @@ const groupedPermissions = {
     "closed-purchases",
     "manage-purchaseinvoice",
     "write-purchase",
+    "export-purchase"
   ],
 
   /* ↓ Production flow */
@@ -45,27 +47,31 @@ const groupedPermissions = {
     "closed-productionjobsheet",
     "production-invoice",
     "write-production",
+    "export-production"
   ],
 
   /* ↓ Packing & QC */
-  "Packing & QC": ["pending-packing", "closed-packing-completed"],
+  "Packing & QC": ["pending-packing", "closed-packing-completed", "packing-delivery-export"],
 
   /* ↓ Delivery & logistics */
-  Delivery: ["dispatch-scheduled", "delivery-reports", "delivery-completed"],
+  Delivery: ["dispatch-scheduled", "delivery-reports", "delivery-completed","packing-delivery-export"],
 
   /* ↓ Invoices follow up & summary */
   "Invoices Follow up & Summary": [
     "invoices-followup",
     "invoices-summary",
     "payment-followup",
+    "invoice-followup-export"
   ],
   "Samples":[
     "manage-samples",
     "sample-out",
-    "sample-status"
+    "sample-status",
+    "export-samples"
   ],
   "Expenses Records" :[
-    "manage-expenses"
+    "manage-expenses",
+    "expenses-export"
   ],
   
     "FollowUp Tracker" :[

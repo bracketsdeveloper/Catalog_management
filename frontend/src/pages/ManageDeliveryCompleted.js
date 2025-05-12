@@ -27,6 +27,7 @@ export default function ManageDeliveryCompleted() {
   const [statusOptions] = useState(["Delivered", "Pending", "Alert"]);
   const [batchTypeOptions] = useState(["Batch", "Full"]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const hasExportPermission = localStorage.getItem("permissions")?.includes("packing-delivery-export");
 
   /* viewer modals */
   const [fuRow, setFuRow] = useState(null);
@@ -123,7 +124,7 @@ export default function ManageDeliveryCompleted() {
           <FunnelIcon className="w-5 h-5 mr-2" />
           Filters
         </button>
-        {rows.length > 0 && isSuperAdmin && (
+        {rows.length > 0 && (isSuperAdmin || hasExportPermission) && (
           <button
             onClick={exportToExcel}
             className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"

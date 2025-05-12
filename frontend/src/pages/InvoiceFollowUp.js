@@ -12,6 +12,8 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function ManageInvoiceFollowUp() {
   const token = localStorage.getItem("token");
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const hasExportPermission = localStorage.getItem("permissions")?.includes("invoice-followup-export");
 
   /* Raw data */
   const [rows, setRows] = useState([]);
@@ -197,12 +199,14 @@ const handleSubmitInvoice = () => {
         >
           Filters
         </button>
-        <button
-          onClick={exportToExcel}
-          className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
-        >
-          Export to Excel
-        </button>
+        {(isSuperAdmin || hasExportPermission) && (
+          <button
+            onClick={exportToExcel}
+            className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
      

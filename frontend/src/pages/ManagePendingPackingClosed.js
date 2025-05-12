@@ -16,6 +16,8 @@ export default function ManagePendingPackingClosed() {
   const [sort, setSort] = useState({ field: "", dir: "asc" });
   const [fuRow, setFuRow] = useState(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [permissions, setPermissions] = useState([]);
+  const canExport = isSuperAdmin || permissions.includes("packing-delivery-export");
   
   // Add states for filters
   const [headerFilters, setHeaderFilters] = useState({});
@@ -33,7 +35,11 @@ export default function ManagePendingPackingClosed() {
 
   useEffect(() => {
     fetchRows();
-    setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    try {
+      const p = JSON.parse(localStorage.getItem("permissions") || "[]");
+      setPermissions(p);
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    } catch {}
     // eslint-disable-next-line
   }, []);
 
@@ -111,6 +117,11 @@ export default function ManagePendingPackingClosed() {
 
   /* export */
   const exportToExcel = () => {
+    if (!canExport) {
+      alert("You don't have permission to export packing/delivery records.");
+      return;
+    }
+
     const data = sorted.map((r) => ({
       "Job Sheet Created": toDate(r.jobSheetCreatedDate),
       "Job Sheet #": r.jobSheetNumber,
@@ -153,7 +164,7 @@ export default function ManagePendingPackingClosed() {
         >
           ← Open Pending Packing
         </Link>
-        {isSuperAdmin && rows.length > 0 && (
+        {canExport && rows.length > 0 && (
           <button
             onClick={exportToExcel}
             className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"

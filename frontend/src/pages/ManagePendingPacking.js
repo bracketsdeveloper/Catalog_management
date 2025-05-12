@@ -16,6 +16,7 @@ export default function ManagePendingPacking() {
   /* state                                                            */
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
+  const [permissions, setPermissions] = useState([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [sortField, setSortField] = useState("");
@@ -44,14 +45,25 @@ export default function ManagePendingPacking() {
   const [clientOptions, setClientOptions] = useState([]);
   const [qcDoneByOptions, setQcDoneByOptions] = useState([]);
 
+  const canExport = isSuperAdmin || permissions.includes("packing-delivery-export");
+
   /* ---------------------------------------------------------------- */
   useEffect(() => {
     fetchRows();
     setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    try {
+      const p = JSON.parse(localStorage.getItem("permissions") || "[]");
+      setPermissions(p);
+    } catch {}
     // eslint-disable-next-line
   }, []);
 
   const exportToExcel = () => {
+    if (!canExport) {
+      alert("You don't have permission to export packing/delivery records.");
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
     const sheetData = sorted.map((r) => ({
       "Job Sheet Created": r.jobSheetCreatedDate ? new Date(r.jobSheetCreatedDate).toLocaleDateString() : "",
@@ -252,7 +264,7 @@ export default function ManagePendingPacking() {
             Open Pending Packing ({openRows.length})
           </button>
           
-          {isSuperAdmin && (
+          {canExport && (
             <button
               onClick={exportToExcel}
               className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs"

@@ -31,6 +31,8 @@ export default function Samples() {
   /* --------------------------------------------------------------- env */
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const token       = localStorage.getItem("token");
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const hasExportPermission = localStorage.getItem("permissions")?.includes("export-samples");
 
   /* -------------------------------------------------------------- data */
   const fetchSamples = async () => {
@@ -110,10 +112,12 @@ export default function Samples() {
           className="px-4 py-2 bg-slate-600 text-white rounded"
         >Filters</button>
 
-        <button
-          onClick={handleExport}
-          className="px-4 py-2 bg-emerald-600 text-white rounded"
-        >Export Excel</button>
+        {(isSuperAdmin || hasExportPermission) && (
+          <button
+            onClick={handleExport}
+            className="px-4 py-2 bg-emerald-600 text-white rounded"
+          >Export Excel</button>
+        )}
 
         <button
           onClick={openCreate}

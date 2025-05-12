@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -58,6 +59,10 @@ export default function ClosedProductionJobsheetList() {
 
   const navigate = useNavigate();
 
+  const [permissions, setPermissions] = useState([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const canExport = isSuperAdmin || permissions.includes("export-production");
+
   useEffect(() => {
     (async () => {
       try {
@@ -70,6 +75,14 @@ export default function ClosedProductionJobsheetList() {
         console.error("Error fetching production jobsheets:", err);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem("permissions") || "[]");
+      setPermissions(p);
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    } catch {}
   }, []);
 
   const closedJobsheets = jobsheets.filter(
@@ -109,11 +122,36 @@ export default function ClosedProductionJobsheetList() {
       return sortSchedulePickup === "asc" ? dA - dB : dB - dA;
     });
 
+  const exportToExcel = () => {
+    if (!canExport) {
+      alert("You don't have permission to export production records.");
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const data = sortedJobsheets.map((js) => {
+      const statusCounts = getStatusCounts(js.items);
+      const { qtyRequired, qtyOrdered } = getQtyTotals(js);
+      return {
+        "Job Sheet #": js.jobSheetNumber,
+        "Client Company": js.clientCompanyName,
+        "Event Name": js.eventName,
+        "Schedule Pickup": js.items?.[0] ? formatSchedulePickup(js.items[0].schedulePickup) : "-",
+        "Qty Required": qtyRequired,
+        "Qty Ordered": qtyOrdered,
+        "Status Summary": `Pending (${statusCounts.pending}) | Received (${statusCounts.received}) | Alert (${statusCounts.alert})`
+      };
+    });
+    
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "ClosedProduction");
+    XLSX.writeFile(wb, "closed_production_jobsheets.xlsx");
+  };
+
   return (
     <div className="min-h-screen p-6 bg-white text-gray-800">
       <h1 className="text-2xl font-bold text-purple-700 mb-4">Closed Production Jobsheets</h1>
 
-      <div className="mb-4">
+      <div className="flex gap-4 mb-4">
         <input
           type="text"
           placeholder="Search by Job Sheet, Client, or Event..."
@@ -121,6 +159,14 @@ export default function ClosedProductionJobsheetList() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-40 border border-purple-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
+        {canExport && (
+          <button
+            onClick={exportToExcel}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
       <div className="bg-white shadow rounded overflow-x-auto">

@@ -25,6 +25,8 @@ function formatClosureDate(dateStr) {
 
 function ManageOpportunity() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const canExportCRM = permissions.includes("export-crm");
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin ? "all-opportunities" : "my-opportunities"
   );
@@ -368,7 +370,7 @@ function ManageOpportunity() {
             {showFilter ? "Hide Filters" : "Add Filter"}
           </button>
           <ToggleButtons viewMode={viewMode} setViewMode={setViewMode} />
-          {isSuperAdmin && (
+          {(isSuperAdmin || canExportCRM) && (
             <button
               onClick={() => exportToExcel(sortedData)}
               className="border border-green-500 text-green-700 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-green-50"

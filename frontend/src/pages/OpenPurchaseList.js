@@ -342,7 +342,8 @@ export default function OpenPurchaseList() {
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
 
   const [perms, setPerms] = useState([]);
-  const canEdit = perms.includes("write-purchase");
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const canExport = isSuperAdmin || perms.includes("export-purchase");
 
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -500,6 +501,11 @@ export default function OpenPurchaseList() {
 
   /* ─────────── Export to Excel ─────────── */
   const exportToExcel = () => {
+    if (!canExport) {
+      alert("You don't have permission to export purchase records.");
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(
       sortedRows.map((r) => ({
@@ -535,7 +541,6 @@ export default function OpenPurchaseList() {
   };
 
   // Add this line to check if the user is a superadmin
-  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   if (loading)
     return (
       <div className="p-6">
@@ -551,7 +556,7 @@ export default function OpenPurchaseList() {
 
   return (
     <div className="p-6">
-      {!canEdit && (
+      {!perms.includes("write-purchase") && (
         <div className="mb-4 p-2 bg-red-200 text-red-800 rounded">
           You don't have permission to edit purchase records.
         </div>
@@ -576,12 +581,14 @@ export default function OpenPurchaseList() {
         >
           Filters
         </button>
-        <button
-          onClick={exportToExcel}
-          className="bg-green-600 text-white px-4 py-2 rounded text-xs"
-        >
-          Export to Excel
-        </button>
+        {canExport && (
+          <button
+            onClick={exportToExcel}
+            className="bg-green-600 text-white px-4 py-2 rounded text-xs"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
       {/* advanced filter UI */}
@@ -785,9 +792,9 @@ export default function OpenPurchaseList() {
                 </td>
                 <td className="p-2 border space-y-1">
                   <button
-                    disabled={!canEdit || p.status === "received"}
+                    disabled={!perms.includes("write-purchase") || p.status === "received"}
                     onClick={() => {
-                      if (!canEdit || p.status === "received") return;
+                      if (!perms.includes("write-purchase") || p.status === "received") return;
                       setCurrentEdit(p);
                       setEditModal(true);
                     }}
@@ -796,9 +803,9 @@ export default function OpenPurchaseList() {
                     Edit
                   </button>
                   <button
-                    disabled={!canEdit}
+                    disabled={!perms.includes("write-purchase")}
                     onClick={async () => {
-                      if (!canEdit || !window.confirm("Delete this purchase?"))
+                      if (!perms.includes("write-purchase") || !window.confirm("Delete this purchase?"))
                         return;
                       try {
                         const token = localStorage.getItem("token");

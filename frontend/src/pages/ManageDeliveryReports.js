@@ -36,6 +36,7 @@ export default function ManageDeliveryReports() {
   const [statusOptions] = useState(["Delivered", "Pending", "Alert"]);
   const [batchTypeOptions] = useState(["Batch", "Full"]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const hasExportPermission = localStorage.getItem("permissions")?.includes("packing-delivery-export");
 
   /* ---------------------------------------------------------------- */
   useEffect(() => {
@@ -136,7 +137,7 @@ export default function ManageDeliveryReports() {
           <FunnelIcon className="w-5 h-5 mr-2" />
           Filters
         </button>
-        {rows.length > 0 && isSuperAdmin && (
+        {rows.length > 0 && (isSuperAdmin || hasExportPermission) && (
           <button
             onClick={exportAll}
             className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
