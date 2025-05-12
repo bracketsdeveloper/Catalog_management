@@ -209,7 +209,7 @@ export default function QuotationView() {
         const parsedValue = parseFloat(newValue);
         newItems[index] = {
           ...newItems[index],
-          [field]: isNaN(parsedValue) || parsedValue < 0 ? 1 : parsedValue, // Default to 1 if invalid
+          [field]: isNaN(parsedValue) || parsedValue < 0 ? 1 : parsedValue,
         };
       } else {
         newItems[index] = { ...newItems[index], [field]: newValue };
@@ -324,6 +324,7 @@ export default function QuotationView() {
         </div>
         <div>
           <span
+            type="text"
             contentEditable
             suppressContentEditableWarning
             onBlur={(e) => handleHeaderBlur("customerCompany", e)}
@@ -417,6 +418,7 @@ export default function QuotationView() {
             {editableQuotation.displayHSNCodes && <th className="p-2 text-left">HSN</th>}
             <th className="p-2 text-left">Quantity</th>
             <th className="p-2 text-left">Rate (with margin)</th>
+            <th className="p-2 text-left">Price Breakdown</th> {/* New column for "i" button */}
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (%)</th>
             <th className="p-2 text-left">Total</th>
@@ -486,6 +488,9 @@ export default function QuotationView() {
                       }
                     }}
                   />
+                </td>
+                <td className="p-2">
+                  <PriceBreakdownTooltip breakdown={item.suggestedBreakdown} />
                 </td>
                 <td className="p-2">{amount.toFixed(2)}</td>
                 <td className="p-2">
@@ -565,7 +570,7 @@ function EditableField({ value, onSave, type = "text" }) {
           xmlns="http://www.w3.org/2000/svg"
           className="h-4 w-4"
           fill="none"
-          viewBox="0 0 24 24"
+          viewBox="0 24 24"
           stroke="currentColor"
         >
           <path
@@ -576,6 +581,41 @@ function EditableField({ value, onSave, type = "text" }) {
           />
         </svg>
       </button>
+    </div>
+  );
+}
+
+function PriceBreakdownTooltip({ breakdown }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Ensure breakdown exists, or provide defaults
+  const {
+    baseCost = 0,
+    marginPct = 0,
+    marginAmount = 0,
+    logisticsCost = 0,
+    brandingCost = 0,
+    finalPrice = 0,
+  } = breakdown || {};
+
+  return (
+    <div className="relative inline-block">
+      <button
+        className="text-blue-600 hover:text-blue-800 text-xs font-bold"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        i
+      </button>
+      {isHovered && (
+        <div className="absolute z-10 bg-gray-800 text-white text-xs rounded p-2 w-64 shadow-lg -left-20 top-6">
+          <h4 className="font-bold mb-1">Price Breakdown</h4>
+          <p>Cost: ₹{(baseCost+marginAmount).toFixed(2)}</p>
+          <p>Logistics Cost: ₹{logisticsCost.toFixed(2)}</p>
+          <p>Branding Cost: ₹{brandingCost.toFixed(2)}</p>
+          <p>Final Price: ₹{finalPrice.toFixed(2)}</p>
+        </div>
+      )}
     </div>
   );
 }
