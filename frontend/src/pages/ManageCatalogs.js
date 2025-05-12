@@ -1,4 +1,3 @@
-// src/pages/CreateManualCatalog.jsx
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -24,8 +23,8 @@ export default function CreateManualCatalog() {
   const location = useLocation();
 
   // Determine mode based on URL path
-  const isCatalogEditMode = location.pathname.includes("/catalogs/manual");
-  const isQuotationEditMode = location.pathname.includes("/quotation/manual");
+  const isCatalogEditMode = location.pathname.includes("/catalogs/manual") && !!id;
+  const isQuotationEditMode = location.pathname.includes("/quotation/manual") && !!id;
   const isCreateMode = !isCatalogEditMode && !isQuotationEditMode;
 
   // ─── State ────────────────────────────────────────────────────────────────
@@ -516,7 +515,6 @@ export default function CreateManualCatalog() {
       margin: selectedMargin,
       gst: selectedGst,
       fieldsToDisplay,
-      priceRange: { from: null, to: null },
       items: selectedProducts.map((p, i) => {
         const qty = p.quantity || 1;
         const base = p.productCost || 0;
@@ -552,20 +550,32 @@ export default function CreateManualCatalog() {
 
   // ─── Save (Create or Update) Quotation ────────────────────────────────────
   const handleSaveQuotation = async () => {
+    // Validation check
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
     }
+
+    // Build the payload using helper function
     const payload = buildQuotationPayload();
+
     try {
       const token = localStorage.getItem("token");
+      
+      // Determine if it's an update (PUT) or create (POST) operation
       const method = isQuotationEditMode && quotationId ? "put" : "post";
       const url = isQuotationEditMode && quotationId
         ? `${BACKEND_URL}/api/admin/quotations/${quotationId}`
         : `${BACKEND_URL}/api/admin/quotations`;
+
+      // Make the API call
       const { data } = await axios[method](url, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      // Update the quotation ID in state
       setQuotationId(data.quotation._id);
+      
+      // Show success message
       alert(isQuotationEditMode && quotationId ? "Quotation updated!" : "Quotation created!");
     } catch {
       alert("Error saving quotation");
@@ -589,7 +599,7 @@ export default function CreateManualCatalog() {
       margin: selectedMargin,
       gst: selectedGst,
       products: selectedProducts.map((p) => ({
-        _id: p._id,
+        ...(p._id && { _id: p._id }),
         productId: p.productId,
         productName: p.productName,
         ProductDescription: p.ProductDescription,
@@ -611,16 +621,18 @@ export default function CreateManualCatalog() {
 
     try {
       const token = localStorage.getItem("token");
-      const method = isCatalogEditMode ? "put" : "post";
-      const url = isCatalogEditMode
+      // Use POST for create mode (no id or not in edit mode), PUT for edit mode
+      const method = isCatalogEditMode && id ? "put" : "post";
+      const url = isCatalogEditMode && id
         ? `${BACKEND_URL}/api/admin/catalogs/${id}`
         : `${BACKEND_URL}/api/admin/catalogs`;
-      await axios[method](url, payload, {
+      const { data } = await axios[method](url, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      alert(isCatalogEditMode ? "Catalog updated!" : "Catalog created!");
+      alert(isCatalogEditMode && id ? "Catalog updated!" : "Catalog created!");
       navigate("/admin-dashboard/manage-catalogs");
     } catch (e) {
+      console.error("Error saving catalog:", e);
       alert(e.response?.data?.message || "Error saving catalog");
     }
   };
@@ -743,7 +755,7 @@ export default function CreateManualCatalog() {
             onClick={handleSaveCatalog}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
-            {isCatalogEditMode ? "Update Catalog" : "Create Catalog"}
+            {isCatalogEditMode && id ? "Update Catalog" : "Create Catalog"}
           </button>
           <button
             onClick={handleSaveQuotation}
