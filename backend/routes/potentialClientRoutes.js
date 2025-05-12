@@ -1,13 +1,13 @@
 const express = require("express");
 const PotentialClient = require("../models/PotentialClient");
-const User            = require("../models/User");
+const User = require("../models/User");
 const multer = require("multer");
-const xlsx = require("xlsx")
+const xlsx = require("xlsx");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 const router = express.Router();
 
-    const upload = multer({
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5MB max, 1 file
   fileFilter: (req, file, cb) => {
@@ -56,7 +56,7 @@ router.post(
   }
 );
 
-
+/** BULK UPLOAD */
 router.post(
   "/upload-potential-clients",
   authenticate,
@@ -129,12 +129,15 @@ router.get(
   authorizeAdmin,
   async (req, res) => {
     try {
-      const { filter = "my", searchTerm } = req.query;
+      const { filter = "my", searchTerm, all } = req.query;
       const userId = req.user._id;
+      const isSuperAdmin = req.user.isSuperAdmin; // Assuming isSuperAdmin is set in req.user
       const and = [];
 
       // 1) filter scope
-      if (filter === "my") {
+      if (all === "true" && isSuperAdmin) {
+        // Superadmin with ?all=true: no filtering, return all potential clients
+      } else if (filter === "my") {
         and.push({ createdBy: userId });
       } else if (filter === "team") {
         // any contact assigned to me, but not created by me
@@ -143,7 +146,7 @@ router.get(
           { createdBy: { $ne: userId } }
         );
       }
-      // filter === "all": no extra clause
+      // filter === "all" (non-superadmin): no extra clause, but still subject to other filters
 
       // 2) text search across all fields
       if (searchTerm) {

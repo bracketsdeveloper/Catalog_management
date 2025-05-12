@@ -22,28 +22,28 @@ function splitTo12h(dtString) {
   };
 }
 
-export default function AddEventModal({ ev, onClose }) {
+export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
   const isEdit = Boolean(ev);
 
-  const [allPCs, setAllPCs]             = useState([]);
-  const [pcSugs, setPCSugs]             = useState([]);
-  const [users, setUsers]               = useState([]);
-  const [userSugs, setUserSugs]         = useState([]);
-  const [potentialClient, setPC]        = useState("");
-  const [potentialClientName, setName]  = useState("");
-  const [clientName, setClientName]     = useState("");
-  const [schedules, setSchedules]       = useState([]);
+  const [allPCs, setAllPCs] = useState([]);
+  const [pcSugs, setPCSugs] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [userSugs, setUserSugs] = useState([]);
+  const [potentialClient, setPC] = useState("");
+  const [potentialClientName, setName] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [schedules, setSchedules] = useState([]);
 
   // Load PCs & users
   useEffect(() => {
-    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/potential-clients`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    }).then(r => setAllPCs(r.data));
+    const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+    // Add ?all=true for superadmins to bypass isolation
+    const pcEndpoint = `${process.env.REACT_APP_BACKEND_URL}/api/admin/potential-clients${isSuperAdmin ? "?all=true" : ""}`;
+    
+    axios.get(pcEndpoint, { headers }).then(r => setAllPCs(r.data));
 
-    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users?all=true`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    }).then(r => setUsers(r.data));
-  }, []);
+    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users?all=true`, { headers }).then(r => setUsers(r.data));
+  }, [isSuperAdmin]);
 
   // Init when editing
   useEffect(() => {
@@ -55,28 +55,32 @@ export default function AddEventModal({ ev, onClose }) {
 
       setSchedules(ev.schedules.map(s => {
         const so = s.scheduledOn ? splitTo12h(s.scheduledOn) : {};
-        const rs = s.reschedule   ? splitTo12h(s.reschedule)   : {};
+        const rs = s.reschedule ? splitTo12h(s.reschedule) : {};
         return {
-          scheduledDate:  so.date || "",
-          scheduledHour:  so.hour || "",
-          scheduledMinute:so.minute || "",
-          scheduledAmpm:  so.ampm || "AM",
-          action:         s.action || "",
-          assignedTo:     s.assignedTo?._id || "",
+          scheduledDate: so.date || "",
+          scheduledHour: so.hour || "",
+          scheduledMinute: so.minute || "",
+          scheduledAmpm: so.ampm || "AM",
+          action: s.action || "",
+          assignedTo: s.assignedTo?._id || "",
           assignedToName: s.assignedTo?.name || "",
-          discussion:     s.discussion || "",
-          status:         s.status || "",
+          discussion: s.discussion || "",
+          status: s.status || "",
           rescheduleDate: rs.date || "",
           rescheduleHour: rs.hour || "",
-          rescheduleMinute:rs.minute || "",
+          rescheduleMinute: rs.minute || "",
           rescheduleAmpm: rs.ampm || "AM",
-          remarks:        s.remarks || ""
+          remarks: s.remarks || ""
         };
       }));
     } else {
       setName(""); setPC(""); setClientName(""); setSchedules([]);
+      // For superadmins, show all potential clients initially
+      if (isSuperAdmin) {
+        setPCSugs(allPCs);
+      }
     }
-  }, [ev, allPCs, isEdit]);
+  }, [ev, allPCs, isEdit, isSuperAdmin]);
 
   // Add a blank row
   const addRow = () => {
@@ -85,20 +89,20 @@ export default function AddEventModal({ ev, onClose }) {
     setSchedules(prev => [
       ...prev,
       {
-        scheduledDate:  date,
-        scheduledHour:  hour,
-        scheduledMinute:minute,
-        scheduledAmpm:  ampm,
-        action:         "",
-        assignedTo:     "",
+        scheduledDate: date,
+        scheduledHour: hour,
+        scheduledMinute: minute,
+        scheduledAmpm: ampm,
+        action: "",
+        assignedTo: "",
         assignedToName: "",
-        discussion:     "",
-        status:         "",
+        discussion: "",
+        status: "",
         rescheduleDate: "",
         rescheduleHour: "",
-        rescheduleMinute:"",
+        rescheduleMinute: "",
         rescheduleAmpm: "AM",
-        remarks:        ""
+        remarks: ""
       }
     ]);
   };
@@ -123,10 +127,18 @@ export default function AddEventModal({ ev, onClose }) {
 
   const onPCChange = txt => {
     setName(txt); setClientName(""); setPC("");
-    setPCSugs(allPCs.filter(pc =>
-      pc.companyName.toLowerCase().includes(txt.toLowerCase())
-    ));
+    // For superadmins, show all PCs if input is empty, else filter
+    if (isSuperAdmin && txt === "") {
+      setPCSugs(allPCs);
+    } else {
+      setPCSugs(
+        allPCs.filter(pc =>
+          pc.companyName.toLowerCase().includes(txt.toLowerCase())
+        )
+      );
+    }
   };
+
   const pickPC = pc => {
     setPC(pc._id);
     setName(pc.companyName);
@@ -140,6 +152,7 @@ export default function AddEventModal({ ev, onClose }) {
       u.name.toLowerCase().includes(txt.toLowerCase())
     ));
   };
+
   const pickUser = (i, u) => {
     updateRow(i, "assignedTo", u._id);
     updateRow(i, "assignedToName", u.name);
@@ -153,6 +166,7 @@ export default function AddEventModal({ ev, onClose }) {
     if (row.scheduledAmpm === "AM" && h === 12) h = 0;
     return String(h).padStart(2, "0") + ":" + row.scheduledMinute;
   };
+
   const convertReschedule = row => {
     let h = parseInt(row.rescheduleHour, 10);
     if (row.rescheduleAmpm === "PM" && h < 12) h += 12;
@@ -169,16 +183,16 @@ export default function AddEventModal({ ev, onClose }) {
           `${s.scheduledDate}T${convertTo24hr(s)}:00`
         );
       }
-      if (s.action)        sch.action     = s.action;
-      if (s.assignedTo)    sch.assignedTo = s.assignedTo;
-      if (s.discussion)    sch.discussion = s.discussion;
-      if (s.status)        sch.status     = s.status;
+      if (s.action) sch.action = s.action;
+      if (s.assignedTo) sch.assignedTo = s.assignedTo;
+      if (s.discussion) sch.discussion = s.discussion;
+      if (s.status) sch.status = s.status;
       if (s.rescheduleDate) {
         sch.reschedule = new Date(
           `${s.rescheduleDate}T${convertReschedule(s)}:00`
         );
       }
-      if (s.remarks)       sch.remarks    = s.remarks;
+      if (s.remarks) sch.remarks = s.remarks;
       return sch;
     });
 
@@ -445,7 +459,7 @@ export default function AddEventModal({ ev, onClose }) {
                 className="text-red-600 text-xl"
                 onClick={() => removeRow(i)}
               >
-                &times;
+                ×
               </button>
             </div>
           </div>

@@ -1,10 +1,10 @@
 // client/src/pages/EventManager.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import ToggleButtons          from "../components/potentialclientsList/ToggleButtons.jsx";
-import EventTable             from "../components/event/EventTable.jsx";
-import AddEventModal          from "../components/event/AddEventModal.jsx";
-import FullScheduleModal      from "../components/event/FullScheduleModal.jsx";
+import ToggleButtons from "../components/potentialclientsList/ToggleButtons.jsx";
+import EventTable from "../components/event/EventTable.jsx";
+import AddEventModal from "../components/event/AddEventModal.jsx";
+import FullScheduleModal from "../components/event/FullScheduleModal.jsx";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
@@ -17,18 +17,18 @@ export default function EventManager() {
 
   // store fetched events by filter
   const [data, setData] = useState({
-    my:   [],
+    my: [],
     team: [],
-    all:  []
+    all: []
   });
 
   // add/edit modal state
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editing,     setEditing]       = useState(null);
+  const [editing, setEditing] = useState(null);
 
   // full-schedule view modal state
   const [showSchedModal, setShowSchedModal] = useState(false);
-  const [schedToView,    setSchedToView]    = useState([]);
+  const [schedToView, setSchedToView] = useState([]);
 
   // fetch events for all three tabs in parallel
   const fetchData = async () => {
@@ -37,7 +37,7 @@ export default function EventManager() {
       const qs = (q) => `?filter=${q}`;
 
       const [myRes, teamRes, allRes] = await Promise.all([
-        axios.get(`${BACKEND}/api/admin/events${qs("my")}`,   { headers }),
+        axios.get(`${BACKEND}/api/admin/events${qs("my")}`, { headers }),
         axios.get(`${BACKEND}/api/admin/events${qs("team")}`, { headers }),
         isSuperAdmin
           ? axios.get(`${BACKEND}/api/admin/events${qs("all")}`, { headers })
@@ -45,9 +45,9 @@ export default function EventManager() {
       ]);
 
       setData({
-        my:   myRes.data,
+        my: myRes.data,
         team: teamRes.data,
-        all:  allRes.data
+        all: allRes.data
       });
     } catch (err) {
       console.error("Error fetching events:", err);
@@ -87,6 +87,7 @@ export default function EventManager() {
       {showAddModal && (
         <AddEventModal
           ev={editing}
+          isSuperAdmin={isSuperAdmin} // Pass isSuperAdmin prop
           onClose={() => {
             setShowAddModal(false);
             setEditing(null);
