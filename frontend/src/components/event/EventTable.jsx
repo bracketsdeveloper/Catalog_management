@@ -1,80 +1,82 @@
+// client/src/components/event/EventTable.jsx
 import React from "react";
-import axios from "axios";
 
-export default function EventTable({ data, onEdit, onDelete }) {
-  // Flatten one row per schedule
-  const rows = data.flatMap(ev =>
-    ev.schedules.map(s => ({
-      eventId:             ev._id,
-      potentialClientName: ev.potentialClientName,
-      scheduledOn:         new Date(s.scheduledOn).toLocaleDateString(),
-      action:              s.action,
-      assignedTo:          s.assignedTo?.name || "—",
-      discussion:          s.discussion || "",
-      status:              s.status,
-      reschedule:          s.reschedule ? new Date(s.reschedule).toLocaleString() : "",
-      remarks:             s.remarks,
-      createdBy:           ev.createdBy?.name || "—",
-      createdAt:           new Date(ev.createdAt).toLocaleString()
-    }))
-  );
+export default function EventTable({ data, onEdit, onDelete, onViewFull }) {
+  if (!data.length) {
+    return <div className="italic text-gray-600">No events found.</div>;
+  }
 
-  const handleDelete = async id => {
-    if (!window.confirm("Really delete this event?")) return;
-    await axios.delete(
-      `${process.env.REACT_APP_BACKEND_URL}/api/admin/events/${id}`,
-      { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-    );
-    onDelete();
-  };
+  // For each event, pick its most recent schedule entry
+  const rows = data.map(ev => {
+    const latest = [...(ev.schedules || [])]
+      .sort((a, b) => new Date(b.scheduledOn) - new Date(a.scheduledOn))[0] || {};
+    return { ...ev, latest };
+  });
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-gray-700 border">
         <thead className="bg-gray-50">
           <tr>
-            {[
-              "Client",
-              "Scheduled On",
-              "Action",
-              "Assigned To",
-              "Discussion",
-              "Status",
-              "Reschedule",
-              "Remarks",
-              "Created By",
-              "Created At",
-              "Actions"
-            ].map(h => (
-              <th key={h} className="px-3 py-2 border text-left">{h}</th>
-            ))}
+            <th className="px-3 py-2 border">Client Company</th>
+            <th className="px-3 py-2 border">Scheduled On</th>
+            <th className="px-3 py-2 border">Latest Action</th>
+            <th className="px-3 py-2 border">Latest Discussion</th>
+            <th className="px-3 py-2 border">Latest Status</th>
+            <th className="px-3 py-2 border">Edit</th>
+            <th className="px-3 py-2 border">View Full</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="hover:bg-gray-50">
-              <td className="px-3 py-2 border">{r.potentialClientName}</td>
-              <td className="px-3 py-2 border">{r.scheduledOn}</td>
-              <td className="px-3 py-2 border">{r.action}</td>
-              <td className="px-3 py-2 border">{r.assignedTo}</td>
-              <td className="px-3 py-2 border">{r.discussion}</td>
-              <td className="px-3 py-2 border">{r.status}</td>
-              <td className="px-3 py-2 border">{r.reschedule}</td>
-              <td className="px-3 py-2 border">{r.remarks}</td>
-              <td className="px-3 py-2 border">{r.createdBy}</td>
-              <td className="px-3 py-2 border">{r.createdAt}</td>
-              <td className="px-3 py-2 border space-x-2">
+          {rows.map(ev => (
+            <tr key={ev._id} className="hover:bg-gray-50">
+              <td className="px-3 py-2 border">
+                {ev.potentialClientName || "—"}
+              </td>
+
+              {/* Scheduled On formatted with date + time in 12-hour AM/PM */}
+              <td className="px-3 py-2 border">
+                {ev.latest.scheduledOn
+                  ? new Date(ev.latest.scheduledOn).toLocaleString("en-US", {
+                      month: "short",    // e.g. "Jan"
+                      day: "numeric",    // e.g. "5"
+                      year: "numeric",   // e.g. "2025"
+                      hour: "numeric",   // e.g. "4"
+                      minute: "2-digit", // e.g. "04"
+                      hour12: true       // AM/PM
+                    })
+                  : "—"}
+              </td>
+
+              <td className="px-3 py-2 border">
+                {ev.latest.action || "—"}
+              </td>
+              <td className="px-3 py-2 border">
+                {ev.latest.discussion
+                  ? new Date(ev.latest.discussion).toLocaleString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true
+                    })
+                  : "—"}
+              </td>
+              <td className="px-3 py-2 border">
+                {ev.latest.status || "—"}
+              </td>
+              <td className="px-3 py-2 border text-center">
                 <button
-                  onClick={() => onEdit(data.find(ev => ev._id === r.eventId))}
+                  onClick={() => onEdit(ev)}
                   className="text-blue-600 hover:underline"
                 >
                   Edit
                 </button>
+              </td>
+              <td className="px-3 py-2 border text-center">
                 <button
-                  onClick={() => handleDelete(r.eventId)}
-                  className="text-red-600 hover:underline"
+                  onClick={() => onViewFull(ev.schedules || [])}
+                  className="text-indigo-600 hover:underline"
                 >
-                  Delete
+                  View
                 </button>
               </td>
             </tr>

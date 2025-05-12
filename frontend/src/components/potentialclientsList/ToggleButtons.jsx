@@ -3,9 +3,9 @@ import React from "react";
 
 export default function ToggleButtons({ activeTab, setActiveTab, isSuperAdmin }) {
   const tabs = [
-    { key: "my",   label: "My Potential Clients"   },
-    { key: "team", label: "Team Potential Clients" },
-    ...(isSuperAdmin ? [{ key: "all", label: "All Potential Clients" }] : [])
+    { key: "my",   label: "My"   },
+    { key: "team", label: "Team" },
+    ...(isSuperAdmin ? [{ key: "all", label: "All" }] : [])
   ];
 
   return (

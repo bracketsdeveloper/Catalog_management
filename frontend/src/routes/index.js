@@ -57,7 +57,7 @@ import ManageExpenses from "../pages/ManageExpenses";
 import { ManageVendors } from "../components/manageVendors/manageVendors";
 import ManagePotentialClients from "../pages/ManagePotentialClients";
 import EventManager from "../pages/EventManager";
-import PotentialClientsList from "../pages/PotentialClientsList";
+// import PotentialClientsList from "../pages/PotentialClientsList";
 import CalendarPage from "../pages/CalendarPage";
 import ManageSegments from "../pages/ManageSegments";
 import ManageBrandingCharges from "../pages/ManageBrandingCharges";
@@ -320,10 +320,6 @@ const router = createBrowserRouter([
                     {
                         path:"manage-events",
                         element:<EventManager/>
-                    },
-                    {
-                        path:"filter-potential-clients",
-                        element:<PotentialClientsList/>
                     },
                     {
                         path:"events-calender",
