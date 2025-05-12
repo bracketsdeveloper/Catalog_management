@@ -159,6 +159,27 @@ export const ManageVendors = () => {
     fontSize: "0.875rem",
     padding: "0.5rem 1rem",
     color: "#4a5568",
+    transition: "all 0.2s ease",
+    cursor: "pointer",
+  };
+
+  const dropdownEditStyle = {
+    ...dropdownItemStyle,
+    backgroundColor : "white",
+    "&:hover": {
+      backgroundColor: "#EDF2F7",
+      color: "#2D3748",
+    },
+  };
+
+  const dropdownDeleteStyle = {
+    ...dropdownItemStyle,
+    color: "#e53e3e",
+    backgroundColor : "white",
+    "&:hover": {
+      backgroundColor: "#FED7D7",
+      color: "#C53030",
+    },
   };
 
   if (loading) return <div className="p-6 text-xs">Loading...</div>;
@@ -310,13 +331,15 @@ export const ManageVendors = () => {
                     <Dropdown.Menu style={dropdownMenuStyle}>
                       <Dropdown.Item
                         onClick={() => openEditModal(v)}
-                        style={dropdownItemStyle}
+                        style={dropdownEditStyle}
+                        className="bg-grey-100 hover:bg-gray-100 "
                       >
                         Edit
                       </Dropdown.Item>
                       <Dropdown.Item
                         onClick={() => handleDelete(v._id)}
-                        style={{ ...dropdownItemStyle, color: "#e53e3e" }}
+                        style={dropdownDeleteStyle}
+                        className="hover:bg-red-100"
                       >
                         Delete
                       </Dropdown.Item>
