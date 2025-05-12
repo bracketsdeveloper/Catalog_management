@@ -202,85 +202,85 @@ export const ManageVendors = () => {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse">
+        <table className="min-w-full border-collapse border border-gray-200">
           <thead>
-            <tr className="border-b bg-gray-50 text-left">
+            <tr className="bg-gray-50 text-left">
               <th
                 onClick={() => handleSort("vendorName")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 WhatsApp Group
                 <SortIndicator field="vendorName" />
               </th>
               <th
                 onClick={() => handleSort("vendorCompany")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 Company
                 <SortIndicator field="vendorCompany" />
               </th>
               <th
                 onClick={() => handleSort("brandDealing")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 Brand
                 <SortIndicator field="brandDealing" />
               </th>
               <th
                 onClick={() => handleSort("location")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 Location
                 <SortIndicator field="location" />
               </th>
               <th
                 onClick={() => handleSort("postalCode")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 Postal Code
                 <SortIndicator field="postalCode" />
               </th>
-              <th className="p-2">Contact Person</th>
+              <th className="p-2 border border-gray-200">Contact Person</th>
               <th
                 onClick={() => handleSort("gst")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 GST#
                 <SortIndicator field="gst" />
               </th>
               <th
                 onClick={() => handleSort("bankName")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 Bank
                 <SortIndicator field="bankName" />
               </th>
               <th
                 onClick={() => handleSort("accountNumber")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 A/C No.
                 <SortIndicator field="accountNumber" />
               </th>
               <th
                 onClick={() => handleSort("ifscCode")}
-                className="p-2 cursor-pointer"
+                className="p-2 cursor-pointer border border-gray-200"
               >
                 IFSC
                 <SortIndicator field="ifscCode" />
               </th>
-              <th className="p-2">Actions</th>
+              <th className="p-2 border border-gray-200">Actions</th>
             </tr>
           </thead>
           <tbody>
             {displayedVendors.map((v) => (
-              <tr key={v._id} className="border-b hover:bg-gray-50">
-                <td className="p-2">{v.vendorName}</td>
-                <td className="p-2">{v.vendorCompany}</td>
-                <td className="p-2">{v.brandDealing}</td>
-                <td className="p-2">{v.location}</td>
-                <td className="p-2">{v.postalCode}</td>
-                <td className="p-2">
+              <tr key={v._id} className="hover:bg-gray-50">
+                <td className="p-2 border border-gray-200">{v.vendorName}</td>
+                <td className="p-2 border border-gray-200">{v.vendorCompany}</td>
+                <td className="p-2 border border-gray-200">{v.brandDealing}</td>
+                <td className="p-2 border border-gray-200">{v.location}</td>
+                <td className="p-2 border border-gray-200">{v.postalCode}</td>
+                <td className="p-2 border border-gray-200">
                   {v.clients?.length ? (
                     <ul>
                       {v.clients.map((c, i) => (
@@ -293,11 +293,11 @@ export const ManageVendors = () => {
                     "-"
                   )}
                 </td>
-                <td className="p-2">{v.gst}</td>
-                <td className="p-2">{v.bankName}</td>
-                <td className="p-2">{v.accountNumber}</td>
-                <td className="p-2">{v.ifscCode}</td>
-                <td className="p-2">
+                <td className="p-2 border border-gray-200">{v.gst}</td>
+                <td className="p-2 border border-gray-200">{v.bankName}</td>
+                <td className="p-2 border border-gray-200">{v.accountNumber}</td>
+                <td className="p-2 border border-gray-200">{v.ifscCode}</td>
+                <td className="p-2 border border-gray-200">
                   <Dropdown>
                     <Dropdown.Toggle
                       variant="link"
