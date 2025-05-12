@@ -1,10 +1,10 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
-import { VendorAdd } from "./VendorAdd";
-import VendorUploader from "../invoicefollowup/invoiceBulkUpload";
 import * as XLSX from "xlsx";
 import { Dropdown } from "react-bootstrap";
 import { FaEllipsisV } from "react-icons/fa";
+import { VendorAdd } from "./VendorAdd";
+import VendorUploader from "../invoicefollowup/invoiceBulkUpload";
 
 export const ManageVendors = () => {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -72,8 +72,10 @@ export const ManageVendors = () => {
 
   const handleSort = (key) => {
     let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
-    else if (sortConfig.key === key && sortConfig.direction === "desc") direction = "";
+    if (sortConfig.key === key && sortConfig.direction === "asc")
+      direction = "desc";
+    else if (sortConfig.key === key && sortConfig.direction === "desc")
+      direction = "";
     setSortConfig({ key, direction });
   };
   const SortIndicator = ({ field }) => {
@@ -94,7 +96,8 @@ export const ManageVendors = () => {
         v.bankName,
         v.accountNumber,
         v.ifscCode,
-        ...(v.clients || []).flatMap((c) => [c.name, c.contactNumber])
+        v.postalCode,
+        ...(v.clients || []).flatMap((c) => [c.name, c.contactNumber]),
       ]
         .filter(Boolean)
         .join(" ")
@@ -119,11 +122,14 @@ export const ManageVendors = () => {
   const exportToExcel = () => {
     const data = displayedVendors.map((v) => ({
       "Vendor Name": v.vendorName,
-      "Company": v.vendorCompany,
+      Company: v.vendorCompany,
       "Brand Dealing": v.brandDealing,
-      "Location": v.location,
-      "Contact Person": v.clients?.map((c) => `${c.name} | ${c.contactNumber}`).join(", ") || "-",
-      "GST": v.gst,
+      Location: v.location,
+      "Postal Code": v.postalCode,
+      "Contact Person":
+        v.clients?.map((c) => `${c.name} | ${c.contactNumber}`).join(", ") ||
+        "-",
+      GST: v.gst,
       "Bank Name": v.bankName,
       "Account Number": v.accountNumber,
       "IFSC Code": v.ifscCode,
@@ -135,7 +141,6 @@ export const ManageVendors = () => {
     XLSX.writeFile(workbook, "Vendors.xlsx");
   };
 
-  // Add this CSS to your styles or inline styles
   const dropdownStyle = {
     backgroundColor: "transparent",
     border: "none",
@@ -204,50 +209,65 @@ export const ManageVendors = () => {
                 onClick={() => handleSort("vendorName")}
                 className="p-2 cursor-pointer"
               >
-                WhatsApp Group<SortIndicator field="vendorName" />
+                WhatsApp Group
+                <SortIndicator field="vendorName" />
               </th>
               <th
                 onClick={() => handleSort("vendorCompany")}
                 className="p-2 cursor-pointer"
               >
-                Company<SortIndicator field="vendorCompany" />
+                Company
+                <SortIndicator field="vendorCompany" />
               </th>
               <th
                 onClick={() => handleSort("brandDealing")}
                 className="p-2 cursor-pointer"
               >
-                Brand<SortIndicator field="brandDealing" />
+                Brand
+                <SortIndicator field="brandDealing" />
               </th>
               <th
                 onClick={() => handleSort("location")}
                 className="p-2 cursor-pointer"
               >
-                Location<SortIndicator field="location" />
+                Location
+                <SortIndicator field="location" />
+              </th>
+              <th
+                onClick={() => handleSort("postalCode")}
+                className="p-2 cursor-pointer"
+              >
+                Postal Code
+                <SortIndicator field="postalCode" />
               </th>
               <th className="p-2">Contact Person</th>
               <th
                 onClick={() => handleSort("gst")}
                 className="p-2 cursor-pointer"
               >
-                GST#<SortIndicator field="gst" />
+                GST#
+                <SortIndicator field="gst" />
               </th>
               <th
                 onClick={() => handleSort("bankName")}
                 className="p-2 cursor-pointer"
               >
-                Bank<SortIndicator field="bankName" />
+                Bank
+                <SortIndicator field="bankName" />
               </th>
               <th
                 onClick={() => handleSort("accountNumber")}
                 className="p-2 cursor-pointer"
               >
-                A/C No.<SortIndicator field="accountNumber" />
+                A/C No.
+                <SortIndicator field="accountNumber" />
               </th>
               <th
                 onClick={() => handleSort("ifscCode")}
                 className="p-2 cursor-pointer"
               >
-                IFSC<SortIndicator field="ifscCode" />
+                IFSC
+                <SortIndicator field="ifscCode" />
               </th>
               <th className="p-2">Actions</th>
             </tr>
@@ -259,6 +279,7 @@ export const ManageVendors = () => {
                 <td className="p-2">{v.vendorCompany}</td>
                 <td className="p-2">{v.brandDealing}</td>
                 <td className="p-2">{v.location}</td>
+                <td className="p-2">{v.postalCode}</td>
                 <td className="p-2">
                   {v.clients?.length ? (
                     <ul>

@@ -15,6 +15,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
     bankName: "",
     accountNumber: "",
     ifscCode: "",
+    postalCode: "",
   });
 
   const [clientTmp, setClientTmp] = useState({
@@ -34,6 +35,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
         bankName: vendor.bankName || "",
         accountNumber: vendor.accountNumber || "",
         ifscCode: vendor.ifscCode || "",
+        postalCode: vendor.postalCode || "",
       });
     }
   }, [isEdit, vendor]);
@@ -87,7 +89,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
     const payload = {
       ...form,
       vendorName: form.vendorName.trim(),
-      vendorCompanyName: form.vendorCompany.trim(),
+      vendorCompany: form.vendorCompany.trim(),
       brandDealing: form.brandDealing.trim(),
       location: form.location.trim(),
       clients: sanitiseContacts(form.clients),
@@ -95,9 +97,13 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
       bankName: form.bankName.trim(),
       accountNumber: form.accountNumber.trim(),
       ifscCode: form.ifscCode.trim(),
+      postalCode: form.postalCode.trim(),
     };
 
     if (!payload.vendorName) return setErr("Vendor name required");
+    if (payload.postalCode && !/^\d{6}$/.test(payload.postalCode))
+      return setErr("Postal code must be 6 digits");
+
     try {
       setSaving(true);
       const token = localStorage.getItem("token");
@@ -117,7 +123,6 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
           payload,
           config
         );
-        console.log(payload);
         alert("Vendor created successfully!");
       }
       onSuccess();
@@ -153,19 +158,27 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Vendor Company Name</label>
+            <label className="block text-sm font-medium mb-1">
+              Vendor Company Name
+            </label>
             <input
               className="w-full p-2 border rounded"
               value={form.vendorCompany}
-              onChange={(e) => setForm({ ...form, vendorCompany: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, vendorCompany: e.target.value })
+              }
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Brand Dealing</label>
+            <label className="block text-sm font-medium mb-1">
+              Brand Dealing
+            </label>
             <input
               className="w-full p-2 border rounded"
               value={form.brandDealing}
-              onChange={(e) => setForm({ ...form, brandDealing: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, brandDealing: e.target.value })
+              }
             />
           </div>
           <div className="col-span-2">
@@ -177,6 +190,17 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
               onChange={(e) =>
                 setForm({ ...form, location: e.target.value })
               }
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-1">Postal Code</label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.postalCode}
+              onChange={(e) =>
+                setForm({ ...form, postalCode: e.target.value })
+              }
+              placeholder="6-digit postal code"
             />
           </div>
 
@@ -249,39 +273,42 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
               </div>
             )}
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">GST Number</label>
-          <input
-            className="w-full p-2 border rounded"
-            value={form.gst}
-            onChange={(e) => setForm({ ...form, gst: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Bank Name</label>
-          <input
-            className="w-full p-2 border rounded"
-            value={form.bankName}
-            onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Account Number</label>
-          <input
-            className="w-full p-2 border rounded"
-            value={form.accountNumber}
-            onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">IFSC Code</label>
-          <input
-            className="w-full p-2 border rounded"
-            value={form.ifscCode}
-            onChange={(e) => setForm({ ...form, ifscCode: e.target.value })}
-          />
+          <div>
+            <label className="block text-sm font-medium mb-1">GST Number</label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.gst}
+              onChange={(e) => setForm({ ...form, gst: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Bank Name</label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.bankName}
+              onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Account Number
+            </label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.accountNumber}
+              onChange={(e) =>
+                setForm({ ...form, accountNumber: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">IFSC Code</label>
+            <input
+              className="w-full p-2 border rounded"
+              value={form.ifscCode}
+              onChange={(e) => setForm({ ...form, ifscCode: e.target.value })}
+            />
+          </div>
         </div>
 
         {/* --- actions --- */}
@@ -298,7 +325,9 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
           >
             {saving ? "Saving…" : isEdit ? "Update" : "Create"}
           </button>
-          {error && <div className="bg-red-100 text-red-700 p-2 mb-3">{error}</div>}
+          {error && (
+            <div className="bg-red-100 text-red-700 p-2 mb-3">{error}</div>
+          )}
         </div>
       </div>
     </div>

@@ -2,9 +2,8 @@ const express = require("express");
 const router = express.Router();
 const xlsx = require("xlsx");
 const multer = require("multer");
-const Vendor = require("../models/Vendor"); 
+const Vendor = require("../models/Vendor");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
-
 
 const sanitiseClients = (raw = []) =>
   Array.isArray(raw)
@@ -16,8 +15,7 @@ const sanitiseClients = (raw = []) =>
         }))
     : [];
 
-
-    const upload = multer({
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5MB max, 1 file
   fileFilter: (req, file, cb) => {
@@ -35,12 +33,9 @@ const sanitiseClients = (raw = []) =>
 // Get all active (non-deleted) vendors
 router.get("/vendors", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const vendors = await Vendor.find({ deleted: false })
-      .select(
-        "vendorName vendorCompany brandDealing location clients gst bankName accountNumber ifscCode createdAt createdBy updatedAt updatedBy deletedAt deletedBy"
-      );
-    
-    // Send the vendors data in the response
+    const vendors = await Vendor.find({ deleted: false }).select(
+      "vendorName vendorCompany brandDealing location clients gst bankName accountNumber ifscCode postalCode createdAt createdBy updatedAt updatedBy deletedAt deletedBy"
+    );
     res.json(vendors);
   } catch (e) {
     console.error(e);
@@ -48,25 +43,28 @@ router.get("/vendors", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// Get all active (non-deleted) vendors
-
-/* ===== Create ===== */
+// Create a new vendor
 router.post("/vendors", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { vendorName,
-            vendorCompany, 
-            brandDealing,
-            location, 
-            clients: rawClients = [],
-            gst, 
-            bankName, 
-            accountNumber,
-            ifscCode } = req.body;
+    const {
+      vendorName,
+      vendorCompany,
+      brandDealing,
+      location,
+      clients: rawClients = [],
+      gst,
+      bankName,
+      accountNumber,
+      ifscCode,
+      postalCode,
+    } = req.body;
 
     if (!vendorName)
       return res.status(400).json({ message: "Vendor name is required" });
 
-     
+    if (postalCode && !/^\d{6}$/.test(postalCode))
+      return res.status(400).json({ message: "Postal code must be 6 digits" });
+
     const doc = await Vendor.create({
       vendorName,
       vendorCompany,
@@ -77,21 +75,18 @@ router.post("/vendors", authenticate, authorizeAdmin, async (req, res) => {
       bankName,
       accountNumber,
       ifscCode,
+      postalCode,
       createdBy: req.user.id,
     });
 
     res.status(201).json({ message: "Vendor created", vendor: doc });
-  
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Create failed" });
+  }
+});
 
-        }catch (e) {
-        console.error(e);
-        res.status(500).json({ message: "Create failed" });
-        }
-    });
-
-    //bulk upload via excel sheet
- /* ===== Multer Memory Storage Config ===== */
-
+// Bulk upload via Excel sheet
 router.post(
   "/upload-vendors",
   authenticate,
@@ -113,35 +108,41 @@ router.post(
       }
 
       // Sanitize vendors
-    const sanitizedVendors = vendors.map((vendor, index) => {
-  let clients = [];
+      const sanitizedVendors = vendors.map((vendor, index) => {
+        let clients = [];
 
-  // Safe JSON parse
-  if (vendor.clients && typeof vendor.clients === "string") {
-    try {
-      const parsed = JSON.parse(vendor.clients);
-      if (Array.isArray(parsed)) {
-        clients = sanitiseClients(parsed); // your existing sanitizer
-      }
-    } catch (e) {
-      console.warn(`Row ${index + 2} has invalid clients JSON`);
-    }
-  }
+        // Safe JSON parse for clients
+        if (vendor.clients && typeof vendor.clients === "string") {
+          try {
+            const parsed = JSON.parse(vendor.clients);
+            if (Array.isArray(parsed)) {
+              clients = sanitiseClients(parsed);
+            }
+          } catch (e) {
+            console.warn(`Row ${index + 2} has invalid clients JSON`);
+          }
+        }
 
-  return {
-    vendorName: vendor.vendorName?.trim(),
-    vendorCompany: vendor.vendorCompany?.trim(),
-    brandDealing: vendor.brandDealing?.trim(),
-    location: vendor.location?.trim(),
-    gst: vendor.gst?.trim(),
-    bankName: vendor.bankName?.trim(),
-    accountNumber: vendor.accountNumber?.toString().trim(),
-    ifscCode: vendor.ifscCode?.trim(),
-    clients,
-    createdBy: req.user.id,
-  };
-});
+        // Validate postalCode
+        const postalCode = vendor.postalCode?.toString().trim();
+        if (postalCode && !/^\d{6}$/.test(postalCode)) {
+          console.warn(`Row ${index + 2} has invalid postal code`);
+        }
 
+        return {
+          vendorName: vendor.vendorName?.trim(),
+          vendorCompany: vendor.vendorCompany?.trim(),
+          brandDealing: vendor.brandDealing?.trim(),
+          location: vendor.location?.trim(),
+          gst: vendor.gst?.trim(),
+          bankName: vendor.bankName?.trim(),
+          accountNumber: vendor.accountNumber?.toString().trim(),
+          ifscCode: vendor.ifscCode?.trim(),
+          postalCode: postalCode,
+          clients,
+          createdBy: req.user.id,
+        };
+      });
 
       const created = await Vendor.insertMany(sanitizedVendors);
 
@@ -153,16 +154,16 @@ router.post(
       console.error("Bulk upload error:", error);
       res.status(500).json({ message: "Bulk upload failed" });
     }
-  });
+  }
+);
 
-//write put endpoint
+// Update a vendor
 router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
- try {
+  try {
     const vendorId = req.params.id;
-
     const {
       vendorName,
-      vendorCompanyName,
+      vendorCompany,
       brandDealing,
       location,
       clients,
@@ -170,6 +171,7 @@ router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
       bankName,
       accountNumber,
       ifscCode,
+      postalCode,
     } = req.body;
 
     // Basic validation
@@ -177,18 +179,25 @@ router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(400).json({ message: "Vendor name is required" });
     }
 
+    if (postalCode && !/^\d{6}$/.test(postalCode)) {
+      return res.status(400).json({ message: "Postal code must be 6 digits" });
+    }
+
     const updatedVendor = await Vendor.findByIdAndUpdate(
       vendorId,
       {
         vendorName,
-        vendorCompanyName,
+        vendorCompany,
         brandDealing,
         location,
-        clients,
+        clients: sanitiseClients(clients),
         gst,
         bankName,
         accountNumber,
         ifscCode,
+        postalCode,
+        updatedAt: new Date(),
+        updatedBy: req.user.id,
       },
       { new: true }
     );
@@ -201,39 +210,34 @@ router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
-  } 
+  }
 });
 
+// Delete a vendor (soft or hard delete)
+router.delete("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const hardDelete = req.query.hard === "true"; // ?hard=true
 
-router.delete(
-  "/vendors/:id",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const hardDelete = req.query.hard === "true"; // ?hard=true
+    const doc = await Vendor.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Vendor not found" });
 
-      const doc = await Vendor.findById(req.params.id);
-      if (!doc) return res.status(404).json({ message: "Vendor not found" });
-
-      if (hardDelete) {
-        await Vendor.findByIdAndDelete(req.params.id);
-        return res.json({ message: "Permanently deleted" });
-      }
-
-      // Soft delete
-      doc.deleted = true;
-      doc.deletedAt = new Date();
-      doc.deletedBy = req.user.id;
-
-      await doc.save();
-
-      res.json({ message: "Soft deleted successfully" });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ message: "Delete failed" });
+    if (hardDelete) {
+      await Vendor.findByIdAndDelete(req.params.id);
+      return res.json({ message: "Permanently deleted" });
     }
-  }
-);
 
-    module.exports = router;
+    // Soft delete
+    doc.deleted = true;
+    doc.deletedAt = new Date();
+    doc.deletedBy = req.user.id;
+
+    await doc.save();
+
+    res.json({ message: "Soft deleted successfully" });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+module.exports = router;
