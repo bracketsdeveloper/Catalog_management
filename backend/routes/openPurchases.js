@@ -7,7 +7,7 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const sendMail = require("../utils/sendMail");
 const User = require("../models/User");
 
-// routes/openPurchases.js (snippet from the GET endpoint)
+// GET endpoint
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sortKey = req.query.sortKey || "deliveryDateTime";
@@ -15,7 +15,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
     const jobSheets = await JobSheet.find({});
     let aggregated = [];
-    jobSheets.forEach(js => {
+    jobSheets.forEach((js) => {
       js.items.forEach((item, index) => {
         const deliveryDate = js.deliveryDate ? new Date(js.deliveryDate) : null;
         aggregated.push({
@@ -25,8 +25,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           clientCompanyName: js.clientCompanyName,
           eventName: js.eventName,
           product: item.product,
-          size: item.size || "", // Include size from JobSheet item
-          sorucedBy: item.sorucedBy,
+          size: item.size || "",
+          sourcedBy: item.sourcedBy,
           sourcingFrom: item.sourcingFrom,
           qtyRequired: item.quantity,
           qtyOrdered: 0,
@@ -39,20 +39,21 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           remarks: "",
           status: "",
           jobSheetId: js._id,
-          isTemporary: true
+          isTemporary: true,
         });
       });
     });
 
     // Merge in records stored in the database
     const updatedRecords = await OpenPurchase.find({});
-    updatedRecords.forEach(updated => {
+    updatedRecords.forEach((updated) => {
       if (updated.jobSheetId) {
-        const index = aggregated.findIndex(rec =>
-          rec.jobSheetId &&
-          rec.jobSheetId.toString() === updated.jobSheetId.toString() &&
-          rec.product === updated.product &&
-          rec.size === updated.size // Match on size as well
+        const index = aggregated.findIndex(
+          (rec) =>
+            rec.jobSheetId &&
+            rec.jobSheetId.toString() === updated.jobSheetId.toString() &&
+            rec.product === updated.product &&
+            rec.size === updated.size
         );
         if (index !== -1) {
           aggregated[index] = { ...updated.toObject(), isTemporary: false };
@@ -62,16 +63,12 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       } else {
         aggregated.push({ ...updated.toObject(), isTemporary: false });
       }
-     
-    
-    ///aggregated.push({ ...updated.toObject(), isTemporary: false });
-
     });
 
     // Remove duplicates based on jobSheetNumber, product, and size
     const seen = new Set();
     const finalAggregated = aggregated.filter((rec) => {
-      const key = `${rec.jobSheetNumber}_${rec.product}_${rec.size || ""}`; // Include size in the key
+      const key = `${rec.jobSheetNumber}_${rec.product}_${rec.size || ""}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -84,7 +81,11 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       if (!aVal && !bVal) return 0;
       if (!aVal) return sortDirection === 1 ? 1 : -1;
       if (!bVal) return sortDirection === 1 ? -1 : 1;
-      if (sortKey.includes("Date") || sortKey === "schedulePickUp" || sortKey === "deliveryDateTime") {
+      if (
+        sortKey.includes("Date") ||
+        sortKey === "schedulePickUp" ||
+        sortKey === "deliveryDateTime"
+      ) {
         aVal = new Date(aVal).getTime();
         bVal = new Date(bVal).getTime();
       } else if (typeof aVal === "string" && typeof bVal === "string") {
@@ -103,81 +104,64 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// routes/openPurchases.js (snippet from POST endpoint)
+// POST endpoint
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const data = { ...req.body };
     if (data._id && data._id.startsWith("temp_")) {
-      delete data._id;
+      delete data._id; // Remove temp _id
     }
     if (data.jobSheetId) {
       const js = await JobSheet.findById(data.jobSheetId);
-      if (js && js.deliveryDate) {
+      if (!js) {
+        return res.status(404).json({ message: "JobSheet not found" });
+      }
+      if (js.deliveryDate) {
         data.deliveryDateTime = new Date(js.deliveryDate);
       }
     }
-    // data.qtyRequired should ideally be coming from the aggregated JobSheet item.
-    // data.qtyOrdered will come from the form input.
+    console.log("POST data:", data); // Log payload for debugging
     const newPurchase = new OpenPurchase(data);
     await newPurchase.save();
     res.status(201).json({ message: "Open purchase created", purchase: newPurchase });
   } catch (error) {
     console.error("Error creating open purchase:", error);
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
     res.status(500).json({ message: "Server error creating open purchase" });
   }
 });
 
-// And in the PUT endpoint, the same pattern applies:
+// PUT endpoint
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const updateData = { ...req.body };
     if (updateData.jobSheetId) {
       const js = await JobSheet.findById(updateData.jobSheetId);
-      if (js && js.deliveryDate) {
+      if (!js) {
+        return res.status(404).json({ message: "JobSheet not found" });
+      }
+      if (js.deliveryDate) {
         updateData.deliveryDateTime = new Date(js.deliveryDate);
       }
     }
+    console.log("PUT data:", updateData); // Log payload for debugging
     const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!updatedPurchase)
+    if (!updatedPurchase) {
       return res.status(404).json({ message: "Open purchase not found" });
-    
-    // (Logic to move records to ClosedPurchase if all items are received remains unchanged.)
-    // ...
-
-    // Email alert if status is "alert" remains unchanged.
-    // ...
-
-    res.json({ message: "Open purchase updated", purchase: updatedPurchase });
-  } catch (error) {
-    console.error("Error updating open purchase:", error);
-    res.status(500).json({ message: "Server error updating open purchase" });
-  }
-});
-
-
-router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const updateData = { ...req.body };
-    if (updateData.jobSheetId) {
-      const js = await JobSheet.findById(updateData.jobSheetId);
-      if (js && js.deliveryDate) {
-        updateData.deliveryDateTime = new Date(js.deliveryDate);
-      }
     }
-    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!updatedPurchase)
-      return res.status(404).json({ message: "Open purchase not found" });
 
     const jobSheetId = updatedPurchase.jobSheetId;
     if (jobSheetId) {
       const jobSheet = await JobSheet.findById(jobSheetId);
       if (jobSheet) {
-        const products = jobSheet.items.map(item => item.product);
+        const products = jobSheet.items.map((item) => item.product);
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          product: { $in: products }
+          product: { $in: products },
         });
-        if (openPurchases.length > 0 && openPurchases.every(p => p.status === "received")) {
+        if (openPurchases.length > 0 && openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
             const closedData = {
               jobSheetCreatedDate: p.jobSheetCreatedDate,
@@ -185,7 +169,8 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               clientCompanyName: p.clientCompanyName,
               eventName: p.eventName,
               product: p.product,
-              sourcedBy : p.sourcedBy,
+              size: p.size,
+              sourcedBy: p.sourcedBy,
               sourcingFrom: p.sourcingFrom,
               vendorContactNumber: p.vendorContactNumber,
               orderConfirmedDate: p.orderConfirmedDate,
@@ -196,7 +181,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               status: p.status,
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
-              deliveryDateTime: p.deliveryDateTime
+              deliveryDateTime: p.deliveryDateTime,
             };
             const newClosed = new ClosedPurchase(closedData);
             await newClosed.save();
@@ -207,11 +192,11 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // If updated status is alert, send email to all super-admin users.
+    // If updated status is alert, send email to all super-admin users
     if (updatedPurchase.status === "alert") {
       const purchaseObj = updatedPurchase.toObject();
 
-      // Create an HTML email body with bold headings.
+      // Create an HTML email body with bold headings
       let mailBody = "";
       const fields = [
         "jobSheetCreatedDate",
@@ -219,28 +204,28 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         "clientCompanyName",
         "eventName",
         "product",
+        "size",
         "sourcingFrom",
         "status",
         "jobSheetId",
-        "deliveryDateTime"
+        "deliveryDateTime",
       ];
-      fields.forEach(field => {
+      fields.forEach((field) => {
         let value = purchaseObj[field];
-        // If the field is a date, format it.
         if (value && (field.includes("Date") || field === "deliveryDateTime")) {
           value = new Date(value).toLocaleString();
         }
         mailBody += `<b>${field}:</b> ${value}<br/>`;
       });
 
-      // Fetch emails of all users with isSuperAdmin true.
+      // Fetch emails of all users with isSuperAdmin true
       const superAdmins = await User.find({ isSuperAdmin: true });
-      const emails = superAdmins.map(user => user.email);
+      const emails = superAdmins.map((user) => user.email);
       if (emails.length > 0) {
         await sendMail({
           to: emails.join(","),
           subject: "Alert Raised 🔥🔥!! IN PURCHASES",
-          html: mailBody
+          html: mailBody,
         });
       }
     }
@@ -248,15 +233,20 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.json({ message: "Open purchase updated", purchase: updatedPurchase });
   } catch (error) {
     console.error("Error updating open purchase:", error);
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ message: "Validation error", errors: error.errors });
+    }
     res.status(500).json({ message: "Server error updating open purchase" });
   }
 });
 
+// DELETE endpoint
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const deletedPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
-    if (!deletedPurchase)
+    if (!deletedPurchase) {
       return res.status(404).json({ message: "Open purchase not found" });
+    }
     res.json({ message: "Open purchase deleted" });
   } catch (error) {
     console.error("Error deleting open purchase:", error);
@@ -265,6 +255,3 @@ router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
-
-

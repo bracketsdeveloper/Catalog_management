@@ -1,4 +1,3 @@
-// src/pages/OpenPurchaseList.js
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -92,7 +91,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
       <div className="bg-white p-6 rounded w-full max-w-lg text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
-          <button onClick={close} className="text-2xl">&times;</button>
+          <button onClick={close} className="text-2xl">×</button>
         </div>
 
         <div className="mb-4 space-y-2">
@@ -163,7 +162,12 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   const save = () => {
     if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
       return;
-    onSave(data);
+    // Exclude status if it's an empty string
+    const payload = { ...data };
+    if (payload.status === "") {
+      delete payload.status;
+    }
+    onSave(payload);
   };
 
   return (
@@ -172,7 +176,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-2xl">&times;</button>
+            <button onClick={onClose} className="text-2xl">×</button>
           </div>
 
           <form className="space-y-4">
@@ -835,16 +839,37 @@ export default function OpenPurchaseList() {
           onSave={async (u) => {
             try {
               const token = localStorage.getItem("token");
-              await axios.put(
-                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
-                u,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
+              const headers = { Authorization: `Bearer ${token}` };
+              let updatedPurchase;
+
+              console.log("Saving purchase:", u); // Log payload for debugging
+
+              if (u._id && u._id.startsWith("temp_")) {
+                // Temporary record: Use POST
+                const { _id, ...data } = u; // Remove temp _id
+                const response = await axios.post(
+                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
+                  data,
+                  { headers }
+                );
+                updatedPurchase = response.data.purchase;
+              } else {
+                // Existing record: Use PUT
+                const response = await axios.put(
+                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
+                  u,
+                  { headers }
+                );
+                updatedPurchase = response.data.purchase;
+              }
+
               setPurchases((prev) =>
-                prev.map((x) => (x._id === u._id ? u : x))
+                prev.map((x) => (x._id === u._id ? updatedPurchase : x))
               );
-            } catch {
-              alert("Error saving.");
+            } catch (error) {
+              console.error("Error saving purchase:", error);
+              const message = error.response?.data?.message || "Error saving purchase";
+              alert(message); // Show server error message
             } finally {
               setEditModal(false);
             }
