@@ -24,6 +24,7 @@ function splitTo12h(dtString) {
 
 export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
   const isEdit = Boolean(ev);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [allPCs, setAllPCs] = useState([]);
   const [pcSugs, setPCSugs] = useState([]);
@@ -176,6 +177,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
 
   // Submit
   const handleSubmit = async () => {
+    setIsSubmitting(true);
     const cleaned = schedules.map(s => {
       const sch = {};
       if (s.scheduledDate) {
@@ -220,6 +222,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     } catch (err) {
       console.error(err);
       alert("Failed to save event");
+      setIsSubmitting(false);
     }
   };
 
@@ -475,7 +478,8 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
           </button>
           <button
             onClick={handleSubmit}
-            className="px-4 py-2 bg-green-600 text-white rounded text-sm"
+            disabled={isSubmitting}
+            className={`px-4 py-2 bg-green-600 text-white rounded text-sm ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             {isEdit ? "Update" : "Save"}
           </button>
