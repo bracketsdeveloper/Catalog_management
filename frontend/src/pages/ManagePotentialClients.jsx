@@ -1,12 +1,11 @@
-// client/src/pages/ManagePotentialClients.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import SearchBar                from "../components/manageopportunities/SearchBar.jsx";
-import FilterPanel              from "../components/potentialclientsList/FilterPanel.jsx";
-import ToggleButtons            from "../components/potentialclientsList/ToggleButtons.jsx";
-import PotentialClientTable     from "../components/potentialclientsList/PotentialClientTable.jsx";
-import AddPotentialClientModal  from "../components/followup/AddPotentialClientModal.jsx";
-import BulkUploadPopup          from "../components/potentialclientsList/bulkUploadcli.js";
+import SearchBar from "../components/manageopportunities/SearchBar.jsx";
+import FilterPanel from "../components/potentialclientsList/FilterPanel.jsx";
+import ToggleButtons from "../components/potentialclientsList/ToggleButtons.jsx";
+import PotentialClientTable from "../components/potentialclientsList/PotentialClientTable.jsx";
+import AddPotentialClientModal from "../components/followup/AddPotentialClientModal.jsx";
+import BulkUploadPopup from "../components/potentialclientsList/bulkUploadcli.js";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
@@ -14,18 +13,18 @@ export default function ManagePotentialClients() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
 
   // top‐level state
-  const [activeTab, setActiveTab]   = useState(isSuperAdmin ? "all" : "my");
+  const [activeTab, setActiveTab] = useState(isSuperAdmin ? "all" : "my");
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [filterVals, setFilterVals]   = useState({
+  const [filterVals, setFilterVals] = useState({
     companyName: "", clientName: "", designation: "",
     source: "", mobile: "", email: "", location: ""
   });
   const [data, setData] = useState({ my: [], team: [], all: [] });
 
   // modal state
-  const [showAddModal, setShowAddModal]   = useState(false);
-  const [editing, setEditing]             = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   // fetch from server whenever tab/searchTerm changes
@@ -164,3 +163,4 @@ export default function ManagePotentialClients() {
     </div>
   );
 }
+
