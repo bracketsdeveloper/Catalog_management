@@ -169,12 +169,12 @@ const adminPages = [
     ),
     subItems: [
       {
-        name: "Manage Production Jobsheets",
+        name: "Open Production",
         path: "/admin-dashboard/manage-productionjobsheet",
         permission: "manage-productionjobsheet",
       },
       {
-        name: "Closed Production Jobsheets",
+        name: "Closed Production",
         path: "/admin-dashboard/closed-productionjobsheet",
         permission: "closed-productionjobsheet",
       },
