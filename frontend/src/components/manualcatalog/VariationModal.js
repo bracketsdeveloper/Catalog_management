@@ -70,12 +70,12 @@ export default function VariationModal({
       return;
     }
     // ensure every variation has a breakdown
-    for (let i = 0; i < variations.length; i++) {
-      if (!variations[i].suggestedBreakdown) {
-        alert(`Waiting for price calc on line ${i + 1}…`);
-        return;
-      }
-    }
+    // for (let i = 0; i < variations.length; i++) {
+    //   if (!variations[i].suggestedBreakdown) {
+    //     alert(`Waiting for price calc on line ${i + 1}…`);
+    //     return;
+    //   }
+    // }
     onSave(variations);
   };
 
@@ -196,7 +196,7 @@ export default function VariationModal({
                 </div>
 
                 {/* Suggested Price */}
-                <SuggestedPriceCalculator
+                {/* <SuggestedPriceCalculator
                   product={{
                     baseCost: product.baseCost ?? product.productCost,
                     productCost: product.productCost,
@@ -209,7 +209,7 @@ export default function VariationModal({
                   brandingTypesList={brandingTypesList}
                   segmentsList={segmentsList}
                   onBreakdown={makeBreakdownHandler(idx)}
-                />
+                /> */}
               </div>
             ))}
           </div>
