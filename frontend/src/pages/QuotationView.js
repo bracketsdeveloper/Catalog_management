@@ -614,6 +614,7 @@ function PriceBreakdownTooltip({ breakdown }) {
           <p>Logistics Cost: ₹{logisticsCost.toFixed(2)}</p>
           <p>Branding Cost: ₹{brandingCost.toFixed(2)}</p>
           <p>Final Price: ₹{finalPrice.toFixed(2)}</p>
+          <p>Profit: ₹{marginAmount.toFixed(2)}</p>
         </div>
       )}
     </div>
