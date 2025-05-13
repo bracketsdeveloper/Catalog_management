@@ -550,11 +550,9 @@ export default function CreateManualCatalog() {
 
   // ─── Save (Create or Update) Quotation ────────────────────────────────────
   const handleSaveQuotation = async () => {
-    // Validation check
-    if (!catalogName || !selectedProducts.length) {
-      return alert("Enter Catalog Name & add ≥1 product");
+    if (!catalogName || !selectedProducts.length || !customerName) {
+      return alert("Enter Catalog Name, Customer Name & add ≥1 product");
     }
-
     // Build the payload using helper function
     const payload = buildQuotationPayload();
 
@@ -584,8 +582,8 @@ export default function CreateManualCatalog() {
 
   // ─── Save (Create or Update) Catalog ──────────────────────────────────────
   const handleSaveCatalog = async () => {
-    if (!opportunityNumber || !catalogName || !selectedProducts.length) {
-      alert("Please fill required fields and add at least one product");
+    if (!opportunityNumber || !catalogName || !selectedProducts.length || !customerName) {
+      alert("Please fill required fields (Opportunity Number, Catalog Name, Customer Name) and add at least one product");
       return;
     }
     const payload = {
