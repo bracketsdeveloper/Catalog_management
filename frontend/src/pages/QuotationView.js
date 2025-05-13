@@ -306,22 +306,24 @@ export default function QuotationView() {
       </div>
 
       <div className="mb-4 space-y-2 text-xs">
-        <div>
-          <span
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) => handleHeaderBlur("salutation", e)}
-          >
-            {editableQuotation.salutation || "Mr."}
-          </span>{" "}
-          <span
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) => handleHeaderBlur("customerName", e)}
-          >
-            {editableQuotation.customerName}
-          </span>
-        </div>
+        {editableQuotation.customerName && (
+          <div>
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(e) => handleHeaderBlur("salutation", e)}
+            >
+              {editableQuotation.salutation || "Mr."}
+            </span>{" "}
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(e) => handleHeaderBlur("customerName", e)}
+            >
+              {editableQuotation.customerName}
+            </span>
+          </div>
+        )}
         <div>
           <span
             type="text"

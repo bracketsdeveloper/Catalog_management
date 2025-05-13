@@ -550,30 +550,68 @@ export default function CreateManualCatalog() {
 
   // ─── Save (Create or Update) Quotation ────────────────────────────────────
   const handleSaveQuotation = async () => {
-    if (!catalogName || !selectedProducts.length || !customerName) {
-      return alert("Enter Catalog Name, Customer Name & add ≥1 product");
+    if (!catalogName || !selectedProducts.length) {
+      return alert("Enter Catalog Name & add ≥1 product");
     }
-    // Build the payload using helper function
-    const payload = buildQuotationPayload();
+
+    // Ensure customerName is empty if not entered
+    const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
+
+    const payload = {
+      _id: quotationId,
+      opportunityNumber,
+      catalogId: isCatalogEditMode ? id : undefined,
+      catalogName,
+      salutation,
+      customerName: sanitizedCustomerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      margin: selectedMargin,
+      gst: selectedGst,
+      fieldsToDisplay,
+      items: selectedProducts.map((p, i) => {
+        const qty = p.quantity || 1;
+        const base = p.productCost || 0;
+        const rate = parseFloat(base.toFixed(2));
+        const amount = rate * qty;
+        const gst = p.productGST ?? selectedGst;
+        const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
+        const total = parseFloat((amount + gstVal).toFixed(2));
+        return {
+          slNo: i + 1,
+          productId: typeof p.productId === "object" ? p.productId._id : p.productId,
+          product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
+          hsnCode: p.hsnCode || "",
+          quantity: qty,
+          rate,
+          productprice: base,
+          amount,
+          productGST: gst,
+          total,
+          baseCost: p.baseCost || 0,
+          material: p.material || "",
+          weight: p.weight || "",
+          brandingTypes: p.brandingTypes || [],
+          suggestedBreakdown: p.suggestedBreakdown || {},
+          imageIndex: p.imageIndex || 0,
+        };
+      }),
+      terms: [],
+      displayTotals: true,
+      displayHSNCodes: true,
+    };
 
     try {
       const token = localStorage.getItem("token");
-      
-      // Determine if it's an update (PUT) or create (POST) operation
       const method = isQuotationEditMode && quotationId ? "put" : "post";
       const url = isQuotationEditMode && quotationId
         ? `${BACKEND_URL}/api/admin/quotations/${quotationId}`
         : `${BACKEND_URL}/api/admin/quotations`;
-
-      // Make the API call
       const { data } = await axios[method](url, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      // Update the quotation ID in state
       setQuotationId(data.quotation._id);
-      
-      // Show success message
       alert(isQuotationEditMode && quotationId ? "Quotation updated!" : "Quotation created!");
     } catch {
       alert("Error saving quotation");
@@ -582,15 +620,19 @@ export default function CreateManualCatalog() {
 
   // ─── Save (Create or Update) Catalog ──────────────────────────────────────
   const handleSaveCatalog = async () => {
-    if (!opportunityNumber || !catalogName || !selectedProducts.length || !customerName) {
-      alert("Please fill required fields (Opportunity Number, Catalog Name, Customer Name) and add at least one product");
+    if (!opportunityNumber || !catalogName || !selectedProducts.length) {
+      alert("Please fill required fields and add at least one product");
       return;
     }
+
+    // Ensure customerName is empty if not entered
+    const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
+
     const payload = {
       opportunityNumber,
       catalogName,
       salutation,
-      customerName,
+      customerName: sanitizedCustomerName,
       customerEmail,
       customerAddress,
       customerCompany,
@@ -619,7 +661,6 @@ export default function CreateManualCatalog() {
 
     try {
       const token = localStorage.getItem("token");
-      // Use POST for create mode (no id or not in edit mode), PUT for edit mode
       const method = isCatalogEditMode && id ? "put" : "post";
       const url = isCatalogEditMode && id
         ? `${BACKEND_URL}/api/admin/catalogs/${id}`

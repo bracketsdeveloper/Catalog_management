@@ -136,9 +136,11 @@ export default function PrintQuotation() {
       </div>
 
       <div className="mt-4">
-        <div className="text-base font-bold">
-          {quotation.salutation || "Mr."} {quotation.customerName || "Customer"}
-        </div>
+        {quotation.customerName && (
+          <div className="text-base font-bold">
+            {quotation.salutation || "Mr."} {quotation.customerName}
+          </div>
+        )}
         <div className="text-xs">{quotation.customerCompany || ""}</div>
         <div className="text-xs">{quotation.customerAddress || ""}</div>
       </div>
