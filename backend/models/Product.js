@@ -10,7 +10,7 @@ const productSchema = new mongoose.Schema(
     variationHinge: String,
     name: { type: String, required: true },
     brandName: String,
-    images: [String],
+    images: [String], 
     // New field for storing precomputed image hashes
     imageHashes: [String],
     productDetails: { type: String, default: "" },

@@ -10,6 +10,8 @@ import VariationModal from "../components/manualcatalog/VariationModal.js";
 import VariationEditModal from "../components/manualcatalog/VariationEditModal.js";
 import SuggestedPriceCalculator from "../components/SuggestedPriceCalculator.jsx";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import AdminProductDetails from "../pages/AdminProductDetails"; // <-- import
+
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const limit = 100;
@@ -107,6 +109,18 @@ export default function CreateManualCatalog() {
   const [vhOpen, setVhOpen] = useState(false);
 
   const finalProducts = advancedSearchActive ? advancedSearchResults : products;
+
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [detailsProdId, setDetailsProdId] = useState(null);
+
+  const openDetails = (prodId) => {
+    setDetailsProdId(prodId);
+    setDetailsModalOpen(true);
+  };
+  const closeDetails = () => {
+    setDetailsModalOpen(false);
+    setDetailsProdId(null);
+  };
 
   // ─── Helpers & Network ────────────────────────────────────────────────────
   const buildParams = () => {
@@ -1082,6 +1096,7 @@ export default function CreateManualCatalog() {
                 product={prod}
                 onAddSelected={handleAddSingle}
                 openVariationSelector={() => openVariationSelector(prod)}
+                onViewDetails={() => openDetails(prod._id)}
               />
             ))}
           </div>
@@ -1258,6 +1273,19 @@ export default function CreateManualCatalog() {
       {/* Company Creation Modal */}
       {showCompanyModal && (
         <CompanyModal onClose={handleCloseCompanyModal} />
+      )}
+      {detailsModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 z-50">
+          <div className="bg-white w-full max-w-5xl h-[100vh] overflow-auto rounded-lg shadow-lg relative">
+            <button
+              onClick={closeDetails}
+              className="absolute top-3 right-3 text-gray-600 hover:text-gray-900 text-3xl leading-none"
+            >
+              &times;
+            </button>
+            <AdminProductDetails prodId={detailsProdId} /> {/* <-- render details */}
+          </div>
+        </div>
       )}
     </div>
   );

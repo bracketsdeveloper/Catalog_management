@@ -13,7 +13,7 @@ const Log = require("../models/Log");
 // UTILITY FUNCTIONS
 // ------------------------------
 
-async function createLog(action, field, oldValue, newValue, performedBy, ip) {
+async function createLog(action, field, oldValue, newValue, performedBy, ip) { 
   try {
     await Log.create({
       action,

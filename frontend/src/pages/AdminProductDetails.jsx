@@ -1,24 +1,40 @@
+// src/pages/AdminProductDetails.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { ChevronLeftIcon } from "@heroicons/react/24/solid";
 import Loader from "../components/Loader";
-import SingleProductModal from "../components/manageproducts/SingleProductModal"; // Import the modal
-
-// Helpers
+import SingleProductModal from "../components/manageproducts/SingleProductModal";
 import uploadImage from "../helpers/uploadImage";
+import colorsList from "../helpers/colors.json";
 
-export default function AdminProductDetails() {
-  const { prodId } = useParams();
+// Build exact lookup from JSON
+const COLOR_MAP = {};
+colorsList.forEach(({ name, hex }) => {
+  COLOR_MAP[name.trim().toLowerCase()] = hex;
+});
+
+// Fuzzy-match helper
+function getColorHex(colorName) {
+  const key = colorName.trim().toLowerCase();
+  if (COLOR_MAP[key]) return COLOR_MAP[key];
+  const found = Object.keys(COLOR_MAP).find(k => k.includes(key));
+  return found ? COLOR_MAP[found] : "#ffffff";
+}
+
+export default function AdminProductDetails({ prodId: propProdId }) {
+  const { prodId: routeProdId } = useParams();
+  const prodId = propProdId || routeProdId;
+
   const navigate = useNavigate();
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-  // ----------------- STATE -----------------
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
-
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [formData, setFormData] = useState({
     productTag: "",
     productId: "",
@@ -46,10 +62,14 @@ export default function AdminProductDetails() {
     productCost_Unit: "",
     productGST: 0
   });
-  const [uploadProgress, setUploadProgress] = useState(0);
 
-  // ----------------- FETCH PRODUCT -----------------
+  // Fetch product details
   const fetchProduct = async () => {
+    if (!prodId) {
+      setError("No product ID provided");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -59,9 +79,8 @@ export default function AdminProductDetails() {
       );
       const prod = res.data.product || res.data;
       setProduct(prod);
-      setActiveImageIndex(0); // reset active image on new fetch
+      setActiveImageIndex(0);
       setError(null);
-      // Populate formData with the product details for editing
       setFormData({
         productTag: prod.productTag || "",
         productId: prod.productId || "",
@@ -101,72 +120,33 @@ export default function AdminProductDetails() {
     fetchProduct();
   }, [prodId]);
 
-  // ----------------- HANDLERS -----------------
+  // Handlers
   const handleBack = () => navigate(-1);
-
-  const handleEditToggle = () => setEditing((prev) => !prev);
-
-  const handleChange = (e) => {
+  const handleEditToggle = () => setEditing(prev => !prev);
+  const handleChange = e => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
-
-  const handleFileChange = async (e) => {
-    const newImages = [...e.target.files];
-    const uploadedImages = [];
-
-    for (let i = 0; i < newImages.length; i++) {
-      const uploadedImage = await uploadImage(newImages[i]);
-      uploadedImages.push(uploadedImage.secure_url);
+  const handleFileChange = async e => {
+    const files = Array.from(e.target.files);
+    const urls = [];
+    for (let file of files) {
+      const up = await uploadImage(file);
+      urls.push(up.secure_url);
     }
-
-    // Set the images to the uploaded image URLs
-    setFormData((prev) => ({
-      ...prev,
-      images: [...prev.images, ...uploadedImages]
-    }));
+    setFormData(prev => ({ ...prev, images: [...prev.images, ...urls] }));
   };
-
-  const handleProductUpdate = async (e) => {
+  const handleProductUpdate = async e => {
     e.preventDefault();
     setUploadProgress(0);
-    
     try {
       const token = localStorage.getItem("token");
-      const payload = {
-        productTag: formData.productTag,
-        productId: formData.productId,
-        variantId: formData.variantId,
-        category: formData.category,
-        subCategory: formData.subCategory,
-        variationHinge: formData.variationHinge,
-        name: formData.name,
-        brandName: formData.brandName,
-        images: formData.images, // The images are already URLs from Cloudinary
-        productDetails: formData.productDetails,
-        qty: formData.qty,
-        MRP_Currency: formData.MRP_Currency,
-        MRP: formData.MRP,
-        MRP_Unit: formData.MRP_Unit,
-        deliveryTime: formData.deliveryTime,
-        size: formData.size,
-        color: formData.color,
-        material: formData.material,
-        priceRange: formData.priceRange,
-        weight: formData.weight,
-        hsnCode: formData.hsnCode,
-        productCost_Currency: formData.productCost_Currency,
-        productCost: formData.productCost,
-        productCost_Unit: formData.productCost_Unit,
-        productGST: Number(formData.productGST)
-      };
-
+      const payload = { ...formData, productGST: Number(formData.productGST) };
       await axios.put(`${BACKEND_URL}/api/admin/products/${prodId}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      setEditing(false); // Toggle editing off after the update
-      fetchProduct(); // Refresh product details after update
+      setEditing(false);
+      fetchProduct();
     } catch (err) {
       console.error("Error updating product:", err);
       setError("Failed to update product");
@@ -175,166 +155,217 @@ export default function AdminProductDetails() {
     }
   };
 
-  // ----------------- RENDER -----------------
+  // Render
   if (loading) return <Loader />;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
   if (!product) return <div className="p-4">Product not found</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-100 py-6">
       <div className="mx-auto max-w-6xl p-4 md:p-6">
-        {/* Breadcrumb Navigation */}
-        <nav className="mb-4 text-sm text-gray-600">
-          <span
-            className="text-blue-600 hover:underline cursor-pointer"
-            onClick={() => navigate("/admin-dashboard/manage-products")}
-          >
-            Admin Dashboard
-          </span>{" "}
-          /{" "}
-          <span
-            className="text-blue-600 hover:underline cursor-pointer"
-            onClick={() => navigate("/admin-dashboard/manage-products")}
-          >
-            Manage Products
-          </span>{" "}
-          /{" "}
-          <span className="font-semibold text-gray-900">Product Details</span>
-        </nav>
 
-        <button onClick={handleBack} className="mb-6 text-sm text-blue-600 hover:underline">
-          &larr; Back
-        </button>
+      {!propProdId && (
+          <button
+            onClick={handleBack}
+            className="mb-6 inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-50 shadow"
+          >
+            <ChevronLeftIcon className="h-5 w-5 mr-2 text-gray-500" />
+            Back
+          </button>
+        )}
 
-        {/* VIEW MODE */}
         {!editing ? (
-          <div className="flex flex-col md:flex-row bg-white rounded-lg shadow-lg overflow-hidden">
-            {/* Left Section: Image Gallery */}
-            <div className="md:w-1/2 p-4 flex flex-col items-center bg-gray-50">
-              {product.images && product.images.length > 0 ? (
-                <div className="relative w-full h-96 bg-gray-200 flex items-center justify-center">
-                  <img
-                    src={product.images[activeImageIndex]}
-                    alt={product.name}
-                    className="object-contain w-full h-full" // Ensures the image fills the container
-                  />
-                </div>
+          <div className="flex flex-col md:flex-row bg-white rounded-lg shadow-lg ring-1 ring-gray-200 overflow-hidden">
+            {/* Image Gallery */}
+            <div className="md:w-1/2 bg-gray-50 p-4 flex flex-col items-center">
+              {product.images?.length ? (
+                <>
+                  <div className="relative w-full h-96 bg-gray-200 flex items-center justify-center">
+                    <img
+                      src={product.images[activeImageIndex]}
+                      alt={product.name}
+                      className="object-contain w-full h-full"
+                    />
+                  </div>
+                  {product.images.length > 1 && (
+                    <div className="flex gap-2 mt-4">
+                      {product.images.map((thumb, idx) => (
+                        <img
+                          key={idx}
+                          src={thumb}
+                          alt={`Thumb ${idx}`}
+                          className={`h-20 w-20 object-cover border border-gray-300 cursor-pointer ${activeImageIndex === idx ? "opacity-80" : ""}`}
+                          onClick={() => setActiveImageIndex(idx)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="h-96 w-full bg-gray-200 flex items-center justify-center text-gray-500">
                   No Image
                 </div>
               )}
-              {product.images && product.images.length > 1 && (
-                <div className="flex gap-2">
-                  {product.images.map((thumbUrl, idx) => (
-                    <img
-                      key={idx}
-                      src={thumbUrl}
-                      alt={`Thumbnail ${idx}`}
-                      className={`h-20 w-20 object-cover border border-gray-300 cursor-pointer ${
-                        activeImageIndex === idx ? "opacity-80" : ""
-                      }`}
-                      onClick={() => setActiveImageIndex(idx)}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* Right Section: Details */}
-            <div className="md:w-1/2 p-6 space-y-4">
-              <h1 className="text-2xl font-bold text-gray-800">{product.name}</h1>
-              <div className="text-xl font-semibold text-purple-700">
-                ₹ {product.productCost}
-                {product.productCost_Unit ? ` / ${product.productCost_Unit}` : ""}
-              </div>
+            {/* Details Panel */}
+            <div className="md:w-1/2 p-6">
+              <h1 className="text-2xl font-semibold text-gray-900">{product.name}</h1>
+              <p className="mt-2 text-xl font-bold text-purple-600">
+                ₹{product.productCost}
+                {product.productCost_Unit && ` / ${product.productCost_Unit}`}
+              </p>
 
-              {/* Key Fields */}
-              <div className="space-y-1 text-gray-700">
-                <p className="text-sm">
-                  <span className="font-semibold">Product Tag:</span> {product.productTag}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Product ID:</span> {product.productId}
-                </p>
+              <div className="mt-6 grid grid-cols-2 gap-y-4 gap-x-6 text-gray-700">
+                {/* Product Tag */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-600">Product Tag</h3>
+                  <p className="text-sm">{product.productTag}</p>
+                </div>
+                {/* Product ID */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-600">Product ID</h3>
+                  <p className="text-sm">{product.productId}</p>
+                </div>
+                {/* Variant ID */}
                 {product.variantId && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Variant ID:</span> {product.variantId}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">Variant ID</h3>
+                    <p className="text-sm">{product.variantId}</p>
+                  </div>
                 )}
-                <p className="text-sm">
-                  <span className="font-semibold">Category:</span> {product.category}
-                  {product.subCategory && ` / ${product.subCategory}`}
-                </p>
+                {/* Category */}
+                <div className="col-span-2">
+                  <h3 className="text-sm font-medium text-gray-600">Category</h3>
+                  <p className="text-sm">
+                    {product.category}
+                    {product.subCategory && ` / ${product.subCategory}`}
+                  </p>
+                </div>
+                {/* Variation Hinge */}
                 {product.variationHinge && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Variation Hinge:</span> {product.variationHinge}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">Variation Hinge</h3>
+                    <p className="text-sm">{product.variationHinge}</p>
+                  </div>
                 )}
+                {/* Brand */}
                 {product.brandName && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Brand:</span> {product.brandName}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">Brand</h3>
+                    <p className="text-sm">{product.brandName}</p>
+                  </div>
                 )}
-                <p className="text-sm">
-                  <span className="font-semibold">Quantity:</span> {product.qty}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Delivery Time:</span> {product.deliveryTime}
-                </p>
+                {/* Quantity */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-600">Quantity</h3>
+                  <p className="text-sm">{product.qty}</p>
+                </div>
+                {/* Delivery Time */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-600">Delivery Time</h3>
+                  <p className="text-sm">{product.deliveryTime}</p>
+                </div>
+
+                {/* Size badges */}
                 {product.size && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Size:</span> {product.size}
-                  </p>
+                  <div className="col-span-2">
+                    <h3 className="text-sm font-medium text-gray-600">Size</h3>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {product.size.split(",").map(sz => (
+                        <span
+                          key={sz}
+                          className="text-sm font-medium border border-gray-300 rounded px-2 py-1"
+                        >
+                          {sz.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
+
+                {/* Color swatches */}
                 {product.color && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Color:</span> {product.color}
-                  </p>
+                  <div className="col-span-2">
+                    <h3 className="text-sm font-medium text-gray-600">Color</h3>
+                    <div className="flex flex-wrap gap-4 mt-1">
+                      {product.color.split(",").map(clr => {
+                        const name = clr.trim();
+                        const hex = getColorHex(name);
+                        return (
+                          <div key={name} className="flex items-center space-x-2">
+                            <span
+                              className="inline-block w-6 h-6 rounded-full border"
+                              style={{ backgroundColor: hex }}
+                            />
+                            <span className="text-sm text-gray-700">{name}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
+
+                {/* Material */}
                 {product.material && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Material:</span> {product.material}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">Material</h3>
+                    <p className="text-sm">{product.material}</p>
+                  </div>
                 )}
+                {/* Price Range */}
                 {product.priceRange && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Price Range:</span> {product.priceRange}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">Price Range</h3>
+                    <p className="text-sm">{product.priceRange}</p>
+                  </div>
                 )}
+                {/* Weight */}
                 {product.weight && (
-                  <p className="text-sm">
-                    <span className="font-semibold">Weight:</span> {product.weight}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">Weight</h3>
+                    <p className="text-sm">{product.weight}</p>
+                  </div>
                 )}
+                {/* HSN Code */}
                 {product.hsnCode && (
-                  <p className="text-sm">
-                    <span className="font-semibold">HSN Code:</span> {product.hsnCode}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">HSN Code</h3>
+                    <p className="text-sm">{product.hsnCode}</p>
+                  </div>
                 )}
+                {/* MRP */}
                 {product.MRP !== 0 && (
-                  <p className="text-sm">
-                    <span className="font-semibold">MRP:</span> {product.MRP_Currency} {product.MRP}
-                    {product.MRP_Unit ? ` / ${product.MRP_Unit}` : ""}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">MRP</h3>
+                    <p className="text-sm">
+                      {product.MRP_Currency} {product.MRP}
+                      {product.MRP_Unit && ` / ${product.MRP_Unit}`}
+                    </p>
+                  </div>
                 )}
+                {/* GST */}
                 {product.productGST > 0 && (
-                  <p className="text-sm">
-                    <span className="font-semibold">GST (%):</span> {product.productGST}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600">GST (%)</h3>
+                    <p className="text-sm">{product.productGST}</p>
+                  </div>
                 )}
               </div>
 
+              {/* Details */}
               {product.productDetails && (
-                <div className="text-sm text-gray-600 pt-2">
-                  <span className="font-semibold">Details:</span> {product.productDetails}
+                <div className="mt-6 text-sm text-gray-600">
+                  <h3 className="text-sm font-medium text-gray-600">Details</h3>
+                  <p className="mt-1">{product.productDetails}</p>
                 </div>
               )}
 
-              {localStorage.getItem("role") === "ADMIN" && (
+              {/* Edit Button */}
+              {!propProdId && localStorage.getItem("role") === "ADMIN" && (
                 <button
                   onClick={handleEditToggle}
-                  className="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-medium"
+                  className="mt-6 px-6 py-2 bg-blue-600 rounded text-white font-medium hover:bg-blue-700 shadow"
                 >
                   Edit Product
                 </button>
@@ -342,7 +373,7 @@ export default function AdminProductDetails() {
             </div>
           </div>
         ) : (
-          // Using the SingleProductModal for editing
+          /* SingleProductModal for editing */
           <SingleProductModal
             editProductId={product._id}
             newProductData={formData}
