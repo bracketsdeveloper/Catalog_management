@@ -446,6 +446,13 @@ export default function CatalogManagementPage() {
     setPdfTemplateModalOpen(true);
   }
 
+  function sanitizeText(text) {
+    return text
+      .replace(/≥/g, '>=')
+      .replace(/≤/g, '<=')
+      .replace(/[^\x00-\x7F]/g, ''); // remove other unsupported characters
+  }
+  
   async function handleExportCombinedPDF(catalog, templateId = "1") {
     try {
       const tmpl = templateConfig[templateId];
@@ -561,7 +568,7 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
 
-          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
+          const descriptionText = sanitizeText((prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " "));
           const wrapped = wrapText(descriptionText, 500, normalFont, 7);
           wrapped.forEach((line) => {
             page.drawText(line, {
