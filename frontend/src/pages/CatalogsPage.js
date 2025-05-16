@@ -22,11 +22,23 @@ import { fieldMapping, templateConfig } from "../components/CatalogManagement/co
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Add a debounce function at the top of the file
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func.apply(this, args);
+    }, delay);
+  };
+};
+
 export default function CatalogManagementPage() {
   const navigate = useNavigate();
 
   // States for catalogs and opportunities
   const [catalogs, setCatalogs] = useState([]);
+  const [originalCatalogs, setOriginalCatalogs] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
 
   // UI states
@@ -69,7 +81,6 @@ export default function CatalogManagementPage() {
 
   // Search input
   const [searchTerm, setSearchTerm] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
 
   // Current user role
   const [userRole, setUserRole] = useState("");
@@ -123,7 +134,7 @@ export default function CatalogManagementPage() {
     fetchData();
     fetchUserEmail();
     fetchOpportunities();
-  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchTerm]);
+  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter]);
 
   // -------------- API / Data --------------
   async function fetchUserEmail() {
@@ -184,20 +195,8 @@ export default function CatalogManagementPage() {
         const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
         data = data.filter((cat) => opportunityCodes.includes(cat.opportunityNumber));
       }
-      if (searchTerm) {
-        data = data.filter((cat) => {
-          const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
-          return (
-            cat.catalogNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-      }
       setCatalogs(data);
+      setOriginalCatalogs(data);
       setError(null);
     } catch (err) {
       console.error("Error fetching catalogs:", err);
@@ -452,7 +451,7 @@ export default function CatalogManagementPage() {
       .replace(/≤/g, '<=')
       .replace(/[^\x00-\x7F]/g, ''); // remove other unsupported characters
   }
-  
+
   async function handleExportCombinedPDF(catalog, templateId = "1") {
     try {
       const tmpl = templateConfig[templateId];
@@ -728,31 +727,26 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- SEARCH SUGGESTIONS --------------
-  const getUniqueCompanyNames = () => {
-    const companySet = new Set();
-    catalogs.forEach((c) => {
-      if (c.customerCompany) companySet.add(c.customerCompany);
-    });
-    return Array.from(companySet);
-  };
-  const companyNames = getUniqueCompanyNames();
-
-  const filterSuggestions = (input) => {
-    if (!input) {
-      setSuggestions([]);
+  // -------------- SEARCH --------------
+  const handleSearch = () => {
+    if (!searchTerm) {
+      setCatalogs(originalCatalogs);
       return;
     }
-    const filtered = companyNames.filter((name) =>
-      name.toLowerCase().includes(input.toLowerCase())
-    );
-    setSuggestions(filtered);
-  };
 
-  const handleSearch = () => {
-    setCompanyFilter([]); // Clear company filter to allow global search
-    fetchData();
-    setSuggestions([]);
+    const filtered = originalCatalogs.filter((cat) => {
+      const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+      return (
+        (cat.catalogNumber?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    });
+
+    setCatalogs(filtered);
   };
 
   // -------------- RENDER HELPERS --------------
@@ -919,32 +913,11 @@ export default function CatalogManagementPage() {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              filterSuggestions(e.target.value);
+              handleSearch();
             }}
             className="border p-2"
             placeholder="Search all fields"
           />
-          <button
-            onClick={handleSearch}
-            className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded"
-          >
-            Search
-          </button>
-        </div>
-        <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
-          {suggestions.map((suggestion, index) => (
-            <div
-              key={index}
-              className="p-2 cursor-pointer hover:bg-gray-200"
-              onClick={() => {
-                setSearchTerm(suggestion);
-                setSuggestions([]);
-                handleSearch();
-              }}
-            >
-              {suggestion}
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -976,7 +949,7 @@ export default function CatalogManagementPage() {
                         className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
                         onClick={() => handleSort("opportunityNumber")}
                       >
-                        Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                        Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑,": "↓") : ""}
                       </th>
                       <th
                         className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
@@ -1117,7 +1090,6 @@ export default function CatalogManagementPage() {
         "Created At",
         "Remarks",
         "Approve Status",
-        // Add other fields as needed
       ];
       const data = [header];
       catalogs.forEach((cat) => {
@@ -1133,7 +1105,6 @@ export default function CatalogManagementPage() {
           new Date(cat.createdAt).toLocaleDateString(),
           cat.remarks || "",
           cat.approveStatus ? "Approved" : "Not Approved",
-          // Add other fields as needed
         ];
         data.push(row);
       });
@@ -1354,4 +1325,4 @@ export default function CatalogManagementPage() {
         )}
     </div>
   );
-} 
+}

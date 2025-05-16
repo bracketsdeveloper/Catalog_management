@@ -20,6 +20,7 @@ export default function QuotationManagementPage() {
 
   // States for quotations and opportunities
   const [quotations, setQuotations] = useState([]);
+  const [originalQuotations, setOriginalQuotations] = useState([]);
   const [quotation, setQuotation] = useState(null);
   const [opportunities, setOpportunities] = useState([]);
 
@@ -57,7 +58,6 @@ export default function QuotationManagementPage() {
 
   // Search input
   const [searchTerm, setSearchTerm] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
 
   // Add permissions check near the top with other state variables
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
@@ -108,7 +108,7 @@ export default function QuotationManagementPage() {
     if (id) {
       fetchQuotation();
     }
-  }, [id, approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchTerm]);
+  }, [id, approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter]);
 
   // -------------- API / Data --------------
   async function fetchUserEmail() {
@@ -188,20 +188,8 @@ export default function QuotationManagementPage() {
         const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
         data = data.filter((q) => opportunityCodes.includes(q.opportunityNumber));
       }
-      if (searchTerm) {
-        data = data.filter((q) => {
-          const opp = opportunities.find((o) => o.opportunityCode === q.opportunityNumber);
-          return (
-            q.quotationNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (q.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (q.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (q.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (q.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-      }
       setQuotations(data);
+      setOriginalQuotations(data);
       setError(null);
     } catch (err) {
       console.error("Error fetching quotations:", err);
@@ -294,33 +282,28 @@ export default function QuotationManagementPage() {
       console.error("Error saving remarks:", error);
       alert("Failed to save remarks");
     }
-  }
-
-  // -------------- SEARCH SUGGESTIONS --------------
-  const getUniqueCompanyNames = () => {
-    const companySet = new Set();
-    quotations.forEach((q) => {
-      if (q.customerCompany) companySet.add(q.customerCompany);
-    });
-    return Array.from(companySet);
   };
-  const companyNames = getUniqueCompanyNames();
 
-  const filterSuggestions = (input) => {
-    if (!input) {
-      setSuggestions([]);
+  // -------------- SEARCH --------------
+  const handleSearch = () => {
+    if (!searchTerm) {
+      setQuotations(originalQuotations);
       return;
     }
-    const filtered = companyNames.filter((name) =>
-      name.toLowerCase().includes(input.toLowerCase())
-    );
-    setSuggestions(filtered);
-  };
 
-  const handleSearch = () => {
-    setCompanyFilter([]); // Clear company filter to allow global search
-    fetchData();
-    setSuggestions([]);
+    const filtered = originalQuotations.filter((q) => {
+      const opp = opportunities.find((o) => o.opportunityCode === q.opportunityNumber);
+      return (
+        (q.quotationNumber?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    });
+
+    setQuotations(filtered);
   };
 
   // -------------- RENDER HELPERS --------------
@@ -493,32 +476,11 @@ export default function QuotationManagementPage() {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              filterSuggestions(e.target.value);
+              handleSearch();
             }}
             className="border p-2"
             placeholder="Search all fields"
           />
-          <button
-            onClick={handleSearch}
-            className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded"
-          >
-            Search
-          </button>
-        </div>
-        <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
-          {suggestions.map((suggestion, index) => (
-            <div
-              key={index}
-              className="p-2 cursor-pointer hover:bg-gray-200"
-              onClick={() => {
-                setSearchTerm(suggestion);
-                setSuggestions([]);
-                handleSearch();
-              }}
-            >
-              {suggestion}
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -709,7 +671,6 @@ export default function QuotationManagementPage() {
         "Created At",
         "Remarks",
         "Approve Status",
-        // Add other fields as needed
       ];
       const data = [header];
       quotations.forEach((q) => {
@@ -725,7 +686,6 @@ export default function QuotationManagementPage() {
           new Date(q.createdAt).toLocaleDateString(),
           q.remarks || "",
           q.approveStatus ? "Approved" : "Not Approved",
-          // Add other fields as needed
         ];
         data.push(row);
       });
@@ -794,7 +754,7 @@ export default function QuotationManagementPage() {
               position: "absolute",
               zIndex: 9999,
             }}
-            className="w-48 bg-white border border-gray_200 rounded shadow-md p-2"
+            className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
             onClick={(e) => e.stopPropagation()}
           >
             <button
