@@ -14,7 +14,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
       ? new Date(record.expectedPostBranding).toISOString().split("T")[0]
       : "",
     schedulePickUp: record.schedulePickUp
-      ? record.schedulePickUp.split("T")[0]
+      ? new Date(record.schedulePickUp).toISOString().slice(0,16)
       : "",
     qtyRequired: record.qtyRequired || 0,
     qtyOrdered: record.qtyOrdered || 0,
@@ -39,11 +39,13 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
     try {
       let url = `${BACKEND_URL}/api/admin/productionjobsheets`;
       let method = "post";
+      const payload = { ...formData };
+
       if (record._id && !record.isTemporary) {
         url = `${BACKEND_URL}/api/admin/productionjobsheets/${record._id}`;
         method = "put";
       } else {
-        Object.assign(formData, {
+        Object.assign(payload, {
           openPurchaseId: record._id,
           jobSheetId: record.jobSheetId,
           jobSheetCreatedDate: record.jobSheetCreatedDate,
@@ -57,16 +59,15 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
           brandingVendor: record.brandingVendor,
         });
       }
-      await axios[method](url, formData, {
+
+      await axios[method](url, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Saved successfully!");
       onClose();
     } catch (error) {
       console.error("Error saving production job sheet", error);
-      toast.error(
-        `Error: ${error.response?.data?.message || error.message}`
-      );
+      toast.error(`Error: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -76,28 +77,19 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
         <h2 className="text-xl text-purple-700 font-bold mb-4">
           Edit Production Job Sheet
         </h2>
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-        >
-          {/* STATIC / NON‑EDITABLE */}
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* STATIC / NON-EDITABLE */}
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Order Date
-            </label>
+            <label className="block text-purple-600 font-semibold">Order Date</label>
             <input
               type="text"
-              value={new Date(
-                record.jobSheetCreatedDate
-              ).toLocaleDateString()}
+              value={new Date(record.jobSheetCreatedDate).toLocaleDateString()}
               disabled
               className="w-full border border-blue-300 p-1 rounded bg-gray-50"
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Job Sheet #
-            </label>
+            <label className="block text-purple-600 font-semibold">Job Sheet #</label>
             <input
               type="text"
               value={record.jobSheetNumber}
@@ -106,22 +98,16 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Delivery Date to Client
-            </label>
+            <label className="block text-purple-600 font-semibold">Delivery Date to Client</label>
             <input
               type="text"
-              value={new Date(
-                record.deliveryDateTime
-              ).toLocaleDateString()}
+              value={new Date(record.deliveryDateTime).toLocaleDateString()}
               disabled
               className="w-full border border-blue-300 p-1 rounded bg-gray-50"
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Client Company
-            </label>
+            <label className="block text-purple-600 font-semibold">Client Company</label>
             <input
               type="text"
               value={record.clientCompanyName}
@@ -130,9 +116,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Event Name
-            </label>
+            <label className="block text-purple-600 font-semibold">Event Name</label>
             <input
               type="text"
               value={record.eventName}
@@ -141,9 +125,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Product
-            </label>
+            <label className="block text-purple-600 font-semibold">Product</label>
             <input
               type="text"
               value={record.product}
@@ -152,9 +134,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Product Expected In Hand
-            </label>
+            <label className="block text-purple-600 font-semibold">Product Expected In Hand</label>
             <input
               type="text"
               value={
@@ -167,20 +147,20 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Branding Type
-            </label>
+            <label className="block text-purple-600 font-semibold">Branding Type</label>
             <input
               type="text"
-              value={record.brandingType || "-"}
+              value={
+                Array.isArray(record.brandingType)
+                  ? record.brandingType.join(", ")
+                  : record.brandingType || "-"
+              }
               disabled
               className="w-full border border-blue-300 p-1 rounded bg-gray-50"
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Branding Vendor
-            </label>
+            <label className="block text-purple-600 font-semibold">Branding Vendor</label>
             <input
               type="text"
               value={record.brandingVendor || "-"}
@@ -191,9 +171,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
 
           {/* EDITABLE */}
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Qty Required
-            </label>
+            <label className="block text-purple-600 font-semibold">Qty Required</label>
             <input
               type="number"
               name="qtyRequired"
@@ -203,9 +181,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Qty Ordered
-            </label>
+            <label className="block text-purple-600 font-semibold">Qty Ordered</label>
             <input
               type="number"
               name="qtyOrdered"
@@ -215,9 +191,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Expected Post Branding
-            </label>
+            <label className="block text-purple-600 font-semibold">Expected Post Branding</label>
             <input
               type="date"
               name="expectedPostBranding"
@@ -227,9 +201,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Schedule Pick Up
-            </label>
+            <label className="block text-purple-600 font-semibold">Schedule Pick Up</label>
             <input
               type="datetime-local"
               name="schedulePickUp"
@@ -239,9 +211,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1">
-            <label className="block text-purple-600 font-semibold">
-              Status
-            </label>
+            <label className="block text-purple-600 font-semibold">Status</label>
             <select
               name="status"
               value={formData.status}
@@ -255,9 +225,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             </select>
           </div>
           <div className="col-span-1 md:col-span-2">
-            <label className="block text-purple-600 font-semibold">
-              Remarks
-            </label>
+            <label className="block text-purple-600 font-semibold">Remarks</label>
             <textarea
               name="remarks"
               value={formData.remarks}
@@ -266,9 +234,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
             />
           </div>
           <div className="col-span-1 md:col-span-2">
-            <label className="block text-purple-600 font-semibold">
-              Follow Up
-            </label>
+            <label className="block text-purple-600 font-semibold">Follow Up</label>
             <button
               type="button"
               onClick={() => setShowFollowUpModal(true)}
@@ -303,10 +269,7 @@ const ProductionJobSheetModal = ({ record, onClose }) => {
         </form>
 
         {showFollowUpModal && (
-          <FollowUpModal
-            onClose={() => setShowFollowUpModal(false)}
-            onSave={addFollowUp}
-          />
+          <FollowUpModal onClose={() => setShowFollowUpModal(false)} onSave={addFollowUp} />
         )}
       </div>
     </div>
