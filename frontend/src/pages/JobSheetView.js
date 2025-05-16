@@ -1,9 +1,12 @@
+// src/pages/JobSheetView.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -13,9 +16,7 @@ export default function JobSheetView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // ────────────────────────────────────────────────
-  // Fetch job‑sheet data
-  // ────────────────────────────────────────────────
+  // Fetch job-sheet data
   useEffect(() => {
     (async () => {
       try {
@@ -34,12 +35,10 @@ export default function JobSheetView() {
     })();
   }, [id]);
 
-  // Helper
+  // Format date helper
   const formatDate = (d) => (d ? format(new Date(d), "dd-MMM-yyyy") : "N/A");
 
-  // ────────────────────────────────────────────────
-  // Export buttons → download generated DOCX or PDF
-  // ────────────────────────────────────────────────
+  // Export to Word
   const exportToDocx = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -50,12 +49,10 @@ export default function JobSheetView() {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-
       const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = Object.assign(document.createElement("a"), {
-        href: url,
-        download: `job-sheet-${id}.docx`,
-      });
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `job-sheet-${id}.docx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -66,11 +63,31 @@ export default function JobSheetView() {
     }
   };
 
- 
+  // Export to PDF (landscape, margins)
+  const exportToPdf = async () => {
+    const input = document.getElementById("job-sheet-content");
+    if (!input) return alert("Nothing to export");
+    try {
+      const canvas = await html2canvas(input, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
+      const margin = 40;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const contentWidth = pdfWidth - margin * 2;
+      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+      pdf.addImage(imgData, "PNG", margin, margin, contentWidth, contentHeight);
+      pdf.save(`job-sheet-${jobSheet.eventName}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("PDF export failed");
+    }
+  };
 
-  // ────────────────────────────────────────────────
-  // Render
-  // ────────────────────────────────────────────────
+  // Render states
   if (loading) return <p className="text-xs">Loading job sheet…</p>;
   if (error) return <p className="text-xs text-red-500">{error}</p>;
   if (!jobSheet) return <p className="text-xs">No job sheet found.</p>;
@@ -85,9 +102,15 @@ export default function JobSheetView() {
         >
           Export to Word
         </button>
+        <button
+          onClick={exportToPdf}
+          className="px-4 py-2 bg-green-500 text-white text-xs rounded"
+        >
+          Export to PDF
+        </button>
       </div>
 
-      {/* Job‑sheet preview (unchanged, still useful in browser) */}
+      {/* Job-sheet preview */}
       <div
         id="job-sheet-content"
         className="mx-auto border border-black text-xs"
@@ -111,15 +134,12 @@ export default function JobSheetView() {
 
         {/* 3×3 Grid Header */}
         <div className="grid grid-cols-3 gap-0">
-          {/* Row 1 */}
           <Cell label="ORDER FORM #:" value={jobSheet.jobSheetNumber} />
           <Cell label="DELIVERY DATE:" value={formatDate(jobSheet.deliveryDate)} />
           <Cell label="CLIENT COMPANY:" value={jobSheet.clientCompanyName} />
-          {/* Row 2 */}
           <Cell label="REF QUOTATION:" value={jobSheet.referenceQuotation} />
           <Cell label="DELIVERY TIME:" value={jobSheet.deliveryTime} />
           <Cell label="CLIENT NAME:" value={jobSheet.clientName} />
-          {/* Row 3 */}
           <Cell label="ORDER DATE:" value={formatDate(jobSheet.orderDate)} />
           <Cell label="CRM INCHARGE:" value={jobSheet.crmIncharge} />
           <Cell label="CONTACT:" value={jobSheet.contactNumber} />
@@ -164,22 +184,26 @@ export default function JobSheetView() {
         </table>
 
         {/* Additional Details */}
-        <Section rows={[
-          [{ label: "PO NUMBER:", val: jobSheet.poNumber },
-           { label: "PO STATUS:", val: jobSheet.poStatus }],
-          [
-            { label: "DELIVERY TYPE:", val: jobSheet.deliveryType },
-            { label: "DELIVERY MODE:", val: jobSheet.deliveryMode },
-            { label: "DELIVERY CHARGES:", val: jobSheet.deliveryCharges },
-          ],
-        ]} />
+        <Section
+          rows={[
+            [
+              { label: "PO NUMBER:", val: jobSheet.poNumber },
+              { label: "PO STATUS:", val: jobSheet.poStatus },
+            ],
+            [
+              { label: "DELIVERY TYPE:", val: jobSheet.deliveryType },
+              { label: "DELIVERY MODE:", val: jobSheet.deliveryMode },
+              { label: "DELIVERY CHARGES:", val: jobSheet.deliveryCharges },
+            ],
+          ]}
+        />
 
         <Line label="DELIVERY ADDRESS:" value={jobSheet.deliveryAddress} />
         <Line label="GIFT BOX / BAGS DETAILS:" value={jobSheet.giftBoxBagsDetails} />
         <Line label="PACKAGING INSTRUCTIONS:" value={jobSheet.packagingInstructions} />
         <Line label="ANY OTHER DETAILS:" value={jobSheet.otherDetails} />
 
-        {/* Hand‑written fields */}
+        {/* Hand-written fields */}
         <div className="mt-2">
           <div className="flex justify-between mb-20 px-6">
             {["QTY DISPATCHED:", "SENT ON:", "SEAL/SIGN:"].map((t) => (
@@ -195,9 +219,8 @@ export default function JobSheetView() {
   );
 }
 
-/* ───────────────────────────────
-   Small presentational helpers  
-──────────────────────────────── */
+// Presentational helpers
+
 function Cell({ label, value }) {
   return (
     <div className="border border-black flex items-center">
@@ -233,7 +256,9 @@ function Section({ rows }) {
           {row.map((cell) => (
             <div
               key={cell.label}
-              className={`p-1 ${row.length === 3 ? "border-r border-black" : ""}`}
+              className={`p-1 ${
+                row.length === 3 ? "border-r border-black" : ""
+              }`}
             >
               <span className="font-bold uppercase">{cell.label}</span>
               <span className="ml-1 font-semibold">{cell.val || "N/A"}</span>
