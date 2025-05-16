@@ -1140,7 +1140,7 @@ export default function CreateManualCatalog() {
         <BagIcon />
         {selectedProducts.length > 0 && (
           <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-center text-xs">
-            {selectedProducts.length}
+            {selectedProducts.length} 
           </span>
         )}
       </div>
