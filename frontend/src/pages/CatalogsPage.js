@@ -1354,4 +1354,4 @@ export default function CatalogManagementPage() {
         )}
     </div>
   );
-}
+} 
