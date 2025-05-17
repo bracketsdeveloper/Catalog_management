@@ -1,13 +1,51 @@
-// src/components/FilterDropdown.jsx
-import React, { useState } from "react";
+// src/components/manualcatalog/FilterDropdown.jsx
+import React, { useState, useEffect } from "react";
 
-export default function FilterDropdown({ label, open, setOpen, options, selected, toggle, counts }) {
+export default function FilterDropdown({
+  label,
+  open,
+  setOpen,
+  options,
+  selected,
+  toggle,
+  counts,
+  dependsOn = {},
+  allSelections = {},
+  parentChildMap = {}
+}) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [filteredOptions, setFilteredOptions] = useState([]);
 
-  // Filter options based on search term
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const filtered = options.filter((opt) => {
+      // 1. Match search term
+      const matchesSearch = opt.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // 2. Has at least 1 product
+      const hasProducts = (counts[norm(opt)] || 0) > 0;
+      
+      // 3. Respects parent filter dependencies
+      let respectsDependencies = true;
+      
+      if (dependsOn[label]) {
+        respectsDependencies = dependsOn[label].every((parentFilter) => {
+          const parentOptions = allSelections[parentFilter] || [];
+          
+          // If no parents selected, show all (but still respect product counts)
+          if (parentOptions.length === 0) return true;
+          
+          // Check if this option is valid for any of the selected parents
+          return parentOptions.some((parent) => {
+            return parentChildMap[parentFilter]?.[opt]?.includes(parent);
+          });
+        });
+      }
+
+      return matchesSearch && hasProducts && respectsDependencies;
+    });
+
+    setFilteredOptions(filtered);
+  }, [searchTerm, counts, options, dependsOn, allSelections, label, parentChildMap]);
 
   return (
     <div className="relative">
@@ -19,7 +57,6 @@ export default function FilterDropdown({ label, open, setOpen, options, selected
       </button>
       {open && (
         <div className="absolute mt-2 w-48 bg-white border border-purple-200 p-2 rounded z-20 max-h-60 overflow-y-auto">
-          {/* Search bar */}
           <div className="p-1 border-b border-gray-200">
             <input
               type="text"
@@ -29,7 +66,6 @@ export default function FilterDropdown({ label, open, setOpen, options, selected
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          {/* Filtered options */}
           {filteredOptions.length > 0 ? (
             filteredOptions.map((opt) => (
               <label

@@ -27,9 +27,9 @@ export default function DropdownFilter({
     };
   }, [setIsOpen]);
 
-  // Filter options based on search term
+  // Filter options based on search term and count > 0
   const filteredOptions = options.filter(option =>
-    option.toLowerCase().includes(searchTerm.toLowerCase())
+    option.toLowerCase().includes(searchTerm.toLowerCase()) && (filterCounts[option] || 0) > 0
   );
 
   return (

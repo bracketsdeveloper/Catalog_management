@@ -113,6 +113,19 @@ export default function CreateManualCatalog() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailsProdId, setDetailsProdId] = useState(null);
 
+  const [filterDependencies, setFilterDependencies] = useState({
+    subCategories: ["categories"],
+    variationHinges: ["categories", "subCategories"]
+  });
+
+  const [parentChildMap, setParentChildMap] = useState({
+    categories: {},
+    subCategories: {},
+    brands: {},
+    priceRanges: {},
+    variationHinges: {}
+  });
+
   const openDetails = (prodId) => {
     setDetailsProdId(prodId);
     setDetailsModalOpen(true);
@@ -140,11 +153,15 @@ export default function CreateManualCatalog() {
       const { data } = await axios.get(`${BACKEND_URL}/api/admin/products/filters${extraQS}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
+      // Set the options
       setFullCategories(data.categories.map((x) => x.name));
       setFullSubCategories(data.subCategories.map((x) => x.name));
       setFullBrands(data.brands.map((x) => x.name));
       setFullPriceRanges(data.priceRanges.map((x) => x.name));
       setFullVariationHinges(data.variationHinges.map((x) => x.name));
+      
+      // Set the counts
       setFilterCounts({
         categories: obj(data.categories),
         subCategories: obj(data.subCategories),
@@ -152,6 +169,11 @@ export default function CreateManualCatalog() {
         priceRanges: obj(data.priceRanges),
         variationHinges: obj(data.variationHinges),
       });
+
+      // Build parent-child relationships
+      if (data.relationships) {
+        setParentChildMap(data.relationships);
+      }
     } catch {
       setFilterCounts({ categories: {}, subCategories: {}, brands: {}, priceRanges: {}, variationHinges: {} });
       setFullCategories([]);
@@ -1047,13 +1069,22 @@ export default function CreateManualCatalog() {
           counts={filterCounts.categories}
         />
         <FilterDropdown
-          label="SubCats"
+          label="SubCategories"
           open={subOpen}
           setOpen={setSubOpen}
           options={fullSubCategories}
           selected={selectedSubCategories}
           toggle={(v) => toggleFilter(v, selectedSubCategories, setSelectedSubCategories)}
           counts={filterCounts.subCategories}
+          dependsOn={filterDependencies}
+          allSelections={{
+            categories: selectedCategories,
+            subCategories: selectedSubCategories,
+            brands: selectedBrands,
+            priceRanges: selectedPriceRanges,
+            variationHinges: selectedVariationHinges
+          }}
+          parentChildMap={parentChildMap}
         />
         <FilterDropdown
           label="Brands"
@@ -1074,13 +1105,22 @@ export default function CreateManualCatalog() {
           counts={filterCounts.priceRanges}
         />
         <FilterDropdown
-          label="Variation Hinge"
+          label="Variation Hinges"
           open={vhOpen}
           setOpen={setVhOpen}
           options={fullVariationHinges}
           selected={selectedVariationHinges}
           toggle={(v) => toggleFilter(v, selectedVariationHinges, setSelectedVariationHinges)}
           counts={filterCounts.variationHinges}
+          dependsOn={filterDependencies}
+          allSelections={{
+            categories: selectedCategories,
+            subCategories: selectedSubCategories,
+            brands: selectedBrands,
+            priceRanges: selectedPriceRanges,
+            variationHinges: selectedVariationHinges
+          }}
+          parentChildMap={parentChildMap}
         />
       </div>
 
@@ -1140,7 +1180,7 @@ export default function CreateManualCatalog() {
         <BagIcon />
         {selectedProducts.length > 0 && (
           <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-center text-xs">
-            {selectedProducts.length} 
+            {selectedProducts.length}
           </span>
         )}
       </div>
