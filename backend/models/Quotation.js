@@ -6,11 +6,11 @@ const quotationItemSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
   product: { type: String, default: "" },
   hsnCode: { type: String, default: "" },
-  quantity: { type: Number, default: 1 }, // Added quantity field
+  quantity: { type: Number, default: 1 },
   rate: { type: Number, default: 0 },
   productprice: { type: Number, default: 0 },
   amount: { type: Number, default: 0 },
-  productGST: { type: Number, default: 18 },
+  productGST: { type: Number, default: 18 }, // Updated with default value
   total: { type: Number, default: 0 },
   baseCost: { type: Number, default: 0 },
   material: { type: String, default: "" },

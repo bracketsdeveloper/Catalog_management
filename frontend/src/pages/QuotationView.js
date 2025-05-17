@@ -73,7 +73,7 @@ export default function QuotationView() {
         ...item,
         quantity: parseFloat(item.quantity) || 1,
         slNo: item.slNo || idx + 1,
-        productGST: parseFloat(item.productGST) || data.gst || 18,
+        productGST: item.productGST != null ? parseFloat(item.productGST) : 18, // Respect 0
         rate: parseFloat(item.rate) || 0,
         product: item.product || "Unknown Product",
       }));
@@ -114,7 +114,7 @@ export default function QuotationView() {
         const marginFactor = 1 + updatedMargin / 100;
         const effRate = baseRate * marginFactor;
         const amount = effRate * quantity;
-        const gstRate = parseFloat(item.productGST) || gst || 18;
+        const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18; // Respect 0
         const gstAmount = parseFloat((amount * (gstRate / 100)).toFixed(2));
         const total = parseFloat((amount + gstAmount).toFixed(2));
         return {
@@ -124,7 +124,7 @@ export default function QuotationView() {
           total,
           productprice: baseRate,
           productGST: gstRate,
-          quantity: quantity,
+          quantity,
           productId: item.productId?._id || item.productId,
         };
       });
@@ -148,7 +148,6 @@ export default function QuotationView() {
 
       console.log("Updating quotation with payload:", body);
 
-      // Update current quotation
       const updateRes = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
         method: "PUT",
         headers: {
@@ -164,7 +163,6 @@ export default function QuotationView() {
 
       console.log("Creating new quotation with payload:", body);
 
-      // Create new quotation with updated data
       const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
         method: "POST",
         headers: {
@@ -209,7 +207,7 @@ export default function QuotationView() {
         const parsedValue = parseFloat(newValue);
         newItems[index] = {
           ...newItems[index],
-          [field]: isNaN(parsedValue) || parsedValue < 0 ? 1 : parsedValue,
+          [field]: isNaN(parsedValue) ? (field === "productGST" ? 18 : 1) : parsedValue, // Allow 0 for productGST
         };
       } else {
         newItems[index] = { ...newItems[index], [field]: newValue };
@@ -420,7 +418,7 @@ export default function QuotationView() {
             {editableQuotation.displayHSNCodes && <th className="p-2 text-left">HSN</th>}
             <th className="p-2 text-left">Quantity</th>
             <th className="p-2 text-left">Rate (with margin)</th>
-            <th className="p-2 text-left">Price Breakdown</th> {/* New column for "i" button */}
+            <th className="p-2 text-left">Price Breakdown</th>
             <th className="p-2 text-left">Amount</th>
             <th className="p-2 text-left">GST (%)</th>
             <th className="p-2 text-left">Total</th>
@@ -433,7 +431,7 @@ export default function QuotationView() {
             const quantity = parseFloat(item.quantity) || 1;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
-            const gstRate = parseFloat(item.productGST) || editableQuotation.gst || 18;
+            const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18; // Respect 0
             const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
             const total = parseFloat((amount + gstVal).toFixed(2));
             const imageUrl =
@@ -497,11 +495,11 @@ export default function QuotationView() {
                 <td className="p-2">{amount.toFixed(2)}</td>
                 <td className="p-2">
                   <EditableField
-                    value={(item.productGST || editableQuotation.gst || 18).toString()}
+                    value={gstRate.toString()}
                     type="number"
                     onSave={(newVal) => {
                       const newGST = parseFloat(newVal);
-                      updateItemField(index, "productGST", isNaN(newGST) || newGST < 0 ? 18 : newGST);
+                      updateItemField(index, "productGST", isNaN(newGST) ? 18 : newGST); // Allow 0
                     }}
                   />
                   %
@@ -590,7 +588,6 @@ function EditableField({ value, onSave, type = "text" }) {
 function PriceBreakdownTooltip({ breakdown }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Ensure breakdown exists, or provide defaults
   const {
     baseCost = 0,
     marginPct = 0,
@@ -612,7 +609,7 @@ function PriceBreakdownTooltip({ breakdown }) {
       {isHovered && (
         <div className="absolute z-10 bg-gray-800 text-white text-xs rounded p-2 w-64 shadow-lg -left-20 top-6">
           <h4 className="font-bold mb-1">Price Breakdown</h4>
-          <p>Cost: ₹{(baseCost+marginAmount).toFixed(2)}</p>
+          <p>Cost: ₹{(baseCost + marginAmount).toFixed(2)}</p>
           <p>Logistics Cost: ₹{logisticsCost.toFixed(2)}</p>
           <p>Branding Cost: ₹{brandingCost.toFixed(2)}</p>
           <p>Final Price: ₹{finalPrice.toFixed(2)}</p>
@@ -643,7 +640,7 @@ function computedTotal(quotation) {
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gst = parseFloat(item.productGST) || quotation.gst || 18;
+    const gst = item.productGST != null ? parseFloat(item.productGST) : 18; // Respect 0
     const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });
