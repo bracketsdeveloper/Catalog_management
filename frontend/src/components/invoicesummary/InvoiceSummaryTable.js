@@ -1,5 +1,5 @@
-// components/invoicesummary/InvoicesSummaryTable.js
-import React, { useState } from "react";
+// components/invoicesummary/InvoiceSummaryTable.js
+import React, { useState, useMemo } from "react";
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -16,7 +16,6 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
         <ArrowDownIcon className="h-3 w-3 inline ml-0.5" />
       )
     ) : null;
-
   return (
     <th
       onClick={() => toggle(field)}
@@ -28,27 +27,64 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   );
 }
 
-export default function InvoicesSummaryTable({
+export default function InvoiceSummaryTable({
   rows,
   sortField,
   sortOrder,
   toggleSort,
   onEdit,
 }) {
-
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // header-level filters
+  const [headerFilters, setHeaderFilters] = useState({
+    jobSheetNumber: "",
+    clientCompanyName: "",
+    eventName: "",
+    invoiceNumber: "",
+    invoiceDate: "",
+    invoiceAmount: "",
+    invoiceMailed: "",
+    invoiceUploadedOnPortal: "",
+  });
 
-const handleOpenModal = (jobSheetNumber) => {
-  setSelectedJobSheetNumber(jobSheetNumber);
-  setIsModalOpen(true);
-};
+  const handleFilterChange = (field, value) => {
+    setHeaderFilters((h) => ({ ...h, [field]: value }));
+  };
 
-const handleCloseModal = () => {
-  setIsModalOpen(false);
-  setSelectedJobSheetNumber(null);
-};
+  // flatten comma-separated invoiceNumber
+  const flattenedRows = useMemo(() => {
+    return rows.flatMap((r) => {
+      const invNums = typeof r.invoiceNumber === "string"
+        ? r.invoiceNumber.split(",").map((s) => s.trim()).filter(Boolean)
+        : Array.isArray(r.invoiceNumber)
+        ? r.invoiceNumber
+        : [r.invoiceNumber];
+      return invNums.map((num) => ({ ...r, invoiceNumber: num }));
+    });
+  }, [rows]);
+
+  // apply header filters
+  const filtered = useMemo(() => {
+    return flattenedRows.filter((r) =>
+      Object.entries(headerFilters).every(([field, value]) => {
+        if (!value) return true;
+        const cell = r[field] ?? "";
+        return cell.toString().toLowerCase().includes(value.toLowerCase());
+      })
+    );
+  }, [flattenedRows, headerFilters]);
+
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-x-auto">
@@ -99,22 +135,37 @@ const handleCloseModal = () => {
               Actions
             </th>
           </tr>
-        </thead>
-
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r._id} className="hover:bg-gray-100">
-               <button
-                className="border-b text-blue-500 hover:text-blue-700"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleOpenModal(r.jobSheetNumber);
-                }}
-              >
-                <Cell val= 
-                {(r.jobSheetNumber) || "No Number" }
+          <tr>
+            {Object.keys(headerFilters).map((field) => (
+              <td key={field} className="px-2 py-1 border border-gray-300">
+                <input
+                  type="text"
+                  value={headerFilters[field]}
+                  onChange={(e) =>
+                    handleFilterChange(field, e.target.value)
+                  }
+                  placeholder="Search…"
+                  className="w-full p-1 text-xs border rounded"
                 />
-              </button>
+              </td>
+            ))}
+            <td className="px-2 py-1 border border-gray-300"></td>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((r) => (
+            <tr key={`${r._id}-${r.invoiceNumber}`} className="hover:bg-gray-100">
+              <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
+                <button
+                  className="border-b text-blue-500 hover:text-blue-700"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOpenModal(r.jobSheetNumber);
+                  }}
+                >
+                  {r.jobSheetNumber || "No Number"}
+                </button>
+              </td>
               <Cell val={r.clientCompanyName} />
               <Cell val={r.eventName} />
               <Cell val={r.invoiceNumber} />
@@ -129,8 +180,7 @@ const handleCloseModal = () => {
               </td>
             </tr>
           ))}
-
-          {rows.length === 0 && (
+          {filtered.length === 0 && (
             <tr>
               <td
                 colSpan={9}
@@ -142,11 +192,11 @@ const handleCloseModal = () => {
           )}
         </tbody>
       </table>
-        <JobSheetGlobal
-            jobSheetNumber={selectedJobSheetNumber} 
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-          />
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }

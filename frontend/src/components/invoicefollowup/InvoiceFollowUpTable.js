@@ -37,20 +37,23 @@ export default function InvoiceFollowUpTable({
   toggleSort,
   onEdit,
 }) {
-
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
-const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchValues, setSearchValues] = useState({});
 
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
 
-const handleOpenModal = (jobSheetNumber) => {
-  setSelectedJobSheetNumber(jobSheetNumber);
-  setIsModalOpen(true);
-};
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
-const handleCloseModal = () => {
-  setIsModalOpen(false);
-  setSelectedJobSheetNumber(null);
-};
+  const handleSearchChange = (field, value) => {
+    setSearchValues((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-x-auto">
@@ -166,47 +169,83 @@ const handleCloseModal = () => {
               Actions
             </th>
           </tr>
+          <tr>
+            {[
+              "orderDate",
+              "jobSheetNumber",
+              "clientCompanyName",
+              "clientName",
+              "eventName",
+              "quotationNumber",
+              "crmName",
+              "product",
+              "partialQty",
+              "dispatchedOn",
+              "deliveredThrough",
+              "poStatus",
+              "invoiceGenerated",
+              "invoiceNumber",
+              "pendingFromDays",
+            ].map((field) => (
+              <td key={field} className="px-2 py-1 border border-gray-300">
+                <input
+                  type="text"
+                  placeholder={`Search ${field}`}
+                  className="w-full p-1 border border-gray-300 rounded"
+                  value={searchValues[field] || ""}
+                  onChange={(e) => handleSearchChange(field, e.target.value)}
+                />
+              </td>
+            ))}
+            <td className="px-2 py-1 border border-gray-300"></td>
+          </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.dispatchId || r._id}
-              className={`hover:bg-gray-100 ${
-                r.invoiceGenerated === "Yes" ? "bg-green-100" : ""
-              }`}
-            >
-              <Cell val={r.orderDate} />
-              <button
-                className="border-b text-blue-500 hover:text-blue-700"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleOpenModal(r.jobSheetNumber);
-                }}
+          {rows
+            .filter((row) => {
+              return Object.entries(searchValues).every(([field, value]) => {
+                if (!value) return true;
+                const rowValue = row[field]?.toString().toLowerCase() || "";
+                return rowValue.includes(value.toLowerCase());
+              });
+            })
+            .map((r) => (
+              <tr
+                key={r.dispatchId || r._id}
+                className={`hover:bg-gray-100 ${
+                  r.invoiceGenerated === "Yes" ? "bg-green-100" : ""
+                }`}
               >
-                <Cell val= 
-                {(r.jobSheetNumber) || "No Number" }
-                />
-              </button>
-              <Cell val={r.clientCompanyName} />
-              <Cell val={r.clientName} />
-              <Cell val={r.eventName} />
-              <Cell val={r.quotationNumber} />
-              <Cell val={r.crmName} />
-              <Cell val={r.product} />
-              <Cell val={r.partialQty} />
-              <Cell val={r.dispatchedOn} />
-              <Cell val={r.deliveredThrough} />
-              <Cell val={r.poStatus} />
-              <Cell val={r.invoiceGenerated} />
-              <Cell val={r.invoiceNumber} />
-              <Cell val={r.pendingFromDays} />
-              <td className="px-2 py-1 border border-gray-300">
-                <button onClick={() => onEdit(r)}>
-                  <EllipsisVerticalIcon className="h-4 w-4" />
+                <Cell val={r.orderDate} />
+                <button
+                  className="border-b text-blue-500 hover:text-blue-700"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOpenModal(r.jobSheetNumber);
+                  }}
+                >
+                  <Cell val={(r.jobSheetNumber) || "No Number"} />
                 </button>
-              </td>
-            </tr>
-          ))}
+                <Cell val={r.clientCompanyName} />
+                <Cell val={r.clientName} />
+                <Cell val={r.eventName} />
+                <Cell val={r.quotationNumber} />
+                <Cell val={r.crmName} />
+                <Cell val={r.product} />
+                <Cell val={r.partialQty} />
+                <Cell val={r.dispatchedOn} />
+                <Cell val={r.deliveredThrough} />
+                <Cell val={r.poStatus} />
+                <Cell val={r.invoiceGenerated} />
+                <Cell val={r.invoiceNumber} />
+                <Cell val={r.pendingFromDays} />
+                <td className="px-2 py-1 border border-gray-300">
+                  <button onClick={() => onEdit(r)}>
+                    <EllipsisVerticalIcon className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
           {rows.length === 0 && (
             <tr>
               <td
@@ -220,11 +259,11 @@ const handleCloseModal = () => {
         </tbody>
       </table>
 
-         <JobSheetGlobal
-            jobSheetNumber={selectedJobSheetNumber} 
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-          />
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }

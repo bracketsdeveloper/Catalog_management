@@ -1,19 +1,97 @@
-/*********************************************************************/
-/*  client/src/components/samples/SampleOutTable.jsx                 */
-/*********************************************************************/
+// client/src/components/samples/SampleOutTable.jsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { format, differenceInCalendarDays } from "date-fns";
 
-export default function SampleOutTable({ data, onEdit }) {
+export default function SampleOutTable({
+  data,
+  sortField,
+  sortOrder,
+  toggleSort,
+  onEdit
+}) {
   const [preview, setPreview] = useState(null);
 
-  /* helper – days since out date (0 if received back) */
-  const outSince = (row) =>
-    row.receivedBack
-      ? 0
-      : differenceInCalendarDays(new Date(), new Date(row.sampleOutDate));
+  // define columns
+  const columns = [
+    { label: "Out Date", field: "sampleOutDate", isDate: true },
+    { label: "Company", field: "clientCompanyName" },
+    { label: "Client", field: "clientName" },
+    { label: "Sent By", field: "sentByName" },
+    { label: "Sample Ref", field: "sampleReferenceCode" },
+    { label: "Picture", field: null },
+    { label: "Product", field: "productName" },
+    { label: "Brand", field: "brand" },
+    { label: "Qty", field: "qty" },
+    { label: "Color", field: "color" },
+    { label: "Status", field: "sampleOutStatus" },
+    { label: "Received Back", field: "receivedBack" },
+    { label: "Out Since (d)", field: "outSince" },
+    { label: "Actions", field: null }
+  ];
+
+  // header filters state
+  const [headerFilters, setHeaderFilters] = useState(
+    columns.reduce((acc, col) => {
+      if (col.field) acc[col.field] = "";
+      return acc;
+    }, {})
+  );
+  const handleFilterChange = (field, val) =>
+    setHeaderFilters((h) => ({ ...h, [field]: val }));
+
+  // compute "out since" days
+  const computeOutSince = (r) =>
+    r.receivedBack ? 0 : differenceInCalendarDays(new Date(), new Date(r.sampleOutDate));
+
+  // apply header filters
+  const filtered = useMemo(() => {
+    return data.filter((r) =>
+      Object.entries(headerFilters).every(([field, fVal]) => {
+        if (!fVal) return true;
+        let cell;
+        if (field === "sampleOutDate") {
+          cell = format(new Date(r.sampleOutDate), "dd/MM/yyyy");
+        } else if (field === "receivedBack") {
+          cell = r.receivedBack ? "Yes" : "No";
+        } else if (field === "outSince") {
+          cell = computeOutSince(r).toString();
+        } else {
+          cell = (r[field] ?? "").toString();
+        }
+        return cell.toLowerCase().includes(fVal.toLowerCase());
+      })
+    );
+  }, [data, headerFilters]);
+
+  // apply sorting
+  const sorted = useMemo(() => {
+    if (!sortField) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av, bv;
+      switch (sortField) {
+        case "sampleOutDate":
+          av = new Date(a.sampleOutDate).getTime();
+          bv = new Date(b.sampleOutDate).getTime();
+          break;
+        case "receivedBack":
+          av = a.receivedBack ? 1 : 0;
+          bv = b.receivedBack ? 1 : 0;
+          break;
+        case "outSince":
+          av = computeOutSince(a);
+          bv = computeOutSince(b);
+          break;
+        default:
+          av = a[sortField] ?? "";
+          bv = b[sortField] ?? "";
+      }
+      if (av === bv) return 0;
+      const cmp = av > bv ? 1 : -1;
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+  }, [filtered, sortField, sortOrder]);
 
   return (
     <>
@@ -21,58 +99,112 @@ export default function SampleOutTable({ data, onEdit }) {
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {[
-                "Out Date","Company","Client","Sent By","Sample Ref","Picture",
-                "Product","Brand","Qty","Color","Status",
-                "Received Back","Out Since (d)","Actions"
-              ].map(h=>(
-                <th key={h} className="px-3 py-2 text-left font-medium text-gray-600 uppercase">
-                  {h}
+              {columns.map((col) => (
+                <th
+                  key={col.label}
+                  onClick={() => col.field && toggleSort(col.field)}
+                  className={`px-3 py-2 text-left font-medium text-gray-600 uppercase select-none ${
+                    col.field ? "cursor-pointer hover:bg-gray-100" : ""
+                  }`}
+                >
+                  {col.label}
+                  {col.field && sortField === col.field && (
+                    <span>{sortOrder === "asc" ? " ▲" : " ▼"}</span>
+                  )}
                 </th>
+              ))}
+            </tr>
+            <tr className="bg-gray-100">
+              {columns.map((col) => (
+                <td key={col.label} className="px-3 py-1">
+                  {col.field ? (
+                    <input
+                      type="text"
+                      placeholder="Filter…"
+                      value={headerFilters[col.field]}
+                      onChange={(e) =>
+                        handleFilterChange(col.field, e.target.value)
+                      }
+                      className="w-full p-1 border rounded text-xs"
+                    />
+                  ) : (
+                    <div />
+                  )}
+                </td>
               ))}
             </tr>
           </thead>
 
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.map(so=>(
-              <tr key={so._id}>
-                <td className="px-3 py-2">{format(new Date(so.sampleOutDate),"dd/MM/yyyy")}</td>
-                <td className="px-3 py-2">{so.clientCompanyName}</td>
-                <td className="px-3 py-2">{so.clientName}</td>
-                <td className="px-3 py-2">{so.sentByName}</td>
-                <td className="px-3 py-2">{so.sampleReferenceCode}</td>
-
-                <td className="px-3 py-2">
-                  {so.productPicture
-                    ? <img
-                        src={so.productPicture}
-                        alt=""
-                        className="h-10 w-10 object-contain cursor-pointer"
-                        onClick={()=>setPreview(so.productPicture)}
-                      />
-                    : <div className="h-10 w-10 border flex items-center justify-center text-xs">No</div>}
-                </td>
-
-                <td className="px-3 py-2">{so.productName}</td>
-                <td className="px-3 py-2">{so.brand}</td>
-                <td className="px-3 py-2">{so.qty}</td>
-                <td className="px-3 py-2">{so.color}</td>
-                <td className="px-3 py-2">{so.sampleOutStatus || "-"}</td>
-                <td className="px-3 py-2">{so.receivedBack ? "Yes":"No"}</td>
-                <td className="px-3 py-2">{outSince(so)}</td>
-
-                <td className="px-3 py-2">
-                  <button
-                    onClick={()=>onEdit(so)}
-                    className="text-blue-600 hover:underline"
-                  >Edit</button>
-                </td>
+            {sorted.map((r) => (
+              <tr key={r._id}>
+                {columns.map((col) => {
+                  if (col.field === "sampleOutDate") {
+                    return (
+                      <td key="date" className="px-3 py-2">
+                        {format(new Date(r.sampleOutDate), "dd/MM/yyyy")}
+                      </td>
+                    );
+                  }
+                  if (col.field === null && col.label === "Picture") {
+                    return (
+                      <td key="pic" className="px-3 py-2">
+                        {r.productPicture ? (
+                          <img
+                            src={r.productPicture}
+                            alt=""
+                            className="h-10 w-10 object-contain cursor-pointer"
+                            onClick={() => setPreview(r.productPicture)}
+                          />
+                        ) : (
+                          <div className="h-10 w-10 border flex items-center justify-center text-xs">
+                            No
+                          </div>
+                        )}
+                      </td>
+                    );
+                  }
+                  if (col.field === null && col.label === "Actions") {
+                    return (
+                      <td key="act" className="px-3 py-2">
+                        <button
+                          onClick={() => onEdit(r)}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    );
+                  }
+                  if (col.field === "receivedBack") {
+                    return (
+                      <td key="rb" className="px-3 py-2">
+                        {r.receivedBack ? "Yes" : "No"}
+                      </td>
+                    );
+                  }
+                  if (col.field === "outSince") {
+                    return (
+                      <td key="os" className="px-3 py-2">
+                        {computeOutSince(r)}
+                      </td>
+                    );
+                  }
+                  return (
+                    <td key={col.field} className="px-3 py-2">
+                      {r[col.field]}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
 
-            {!data.length && (
+            {!sorted.length && (
               <tr>
-                <td colSpan="14" className="px-3 py-6 text-center text-gray-500">
+                <td
+                  colSpan={columns.length}
+                  className="px-3 py-6 text-center text-gray-500"
+                >
                   No records.
                 </td>
               </tr>
@@ -81,17 +213,19 @@ export default function SampleOutTable({ data, onEdit }) {
         </table>
       </div>
 
-      {/* -------------------- lightbox -------------------- */}
+      {/* image light-box */}
       {preview && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="relative">
             <button
-              onClick={()=>setPreview(null)}
+              onClick={() => setPreview(null)}
               className="absolute top-2 right-2 text-white text-xl"
-            >&times;</button>
+            >
+              &times;
+            </button>
             <img
               src={preview}
-              alt=""
+              alt="Preview"
               className="max-h-[80vh] max-w-[90vw] object-contain rounded"
             />
           </div>

@@ -1,6 +1,4 @@
-/*********************************************************************/
-/*  client/src/pages/SamplesOut.jsx                                  */
-/*********************************************************************/
+// client/src/pages/SamplesOut.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -10,40 +8,46 @@ import SampleOutModal from "../components/samples/SampleOutModal";
 import SampleOutTable from "../components/samples/SampleOutTable";
 
 export default function SamplesOut() {
-  /* ---------------------------------------------------------------- */
-  /* STATE                                                            */
-  /* ---------------------------------------------------------------- */
+  /* STATE */
   const [list, setList] = useState([]);
   const [search, setSearch] = useState("");
   const [viewFilter, setViewFilter] = useState("sent"); // sent | received
   const [modalOpen, setModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
 
-  /* --- filter panel --- */
+  /* header-level sort state */
+  const [sort, setSort] = useState({ field: "", dir: "asc" });
+  const toggleSort = (field) => {
+    setSort((s) => ({
+      field,
+      dir: s.field === field && s.dir === "asc" ? "desc" : "asc"
+    }));
+  };
+
+  /* filter panel */
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    dateFrom: "", // yyyy-MM-dd
+    dateFrom: "",
     dateTo: "",
     company: "",
     sentBy: "",
-    status: "", // sent | not sent | (blank=all)
+    status: "" // sent | not sent | blank = all
   });
 
-  /* ---------------------------------------------------------------- */
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const token = localStorage.getItem("token");
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
-  const hasExportPermission = localStorage.getItem("permissions")?.includes("export-samples");
+  const hasExportPermission = localStorage
+    .getItem("permissions")
+    ?.includes("export-samples");
 
-  /* ---------------------------------------------------------------- */
-  /* FETCH                                                            */
-  /* ---------------------------------------------------------------- */
+  /* FETCH */
   const fetchAll = async () => {
     try {
       let url = `${BACKEND_URL}/api/admin/sample-outs`;
       if (search.trim()) url += `?search=${encodeURIComponent(search)}`;
       const { data } = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }
       });
       setList(data);
     } catch (err) {
@@ -55,9 +59,7 @@ export default function SamplesOut() {
     fetchAll();
   }, [search]);
 
-  /* ---------------------------------------------------------------- */
-  /* CREATE / EDIT                                                    */
-  /* ---------------------------------------------------------------- */
+  /* CREATE / EDIT */
   const openCreate = () => {
     setEditData(null);
     setModalOpen(true);
@@ -76,9 +78,7 @@ export default function SamplesOut() {
     }
   };
 
-  /* ---------------------------------------------------------------- */
-  /* FILTER & SEARCH LOGIC                                            */
-  /* ---------------------------------------------------------------- */
+  /* FILTER & SEARCH LOGIC */
   const inRange = (d, f, t) => {
     if (!f && !t) return true;
     const ts = new Date(d).setHours(0, 0, 0, 0);
@@ -88,32 +88,24 @@ export default function SamplesOut() {
   };
 
   const matchesFilters = (so) =>
-    // sent / received toggle
     (viewFilter === "sent" ? !so.receivedBack : so.receivedBack) &&
-    // date range
     inRange(so.sampleOutDate, filters.dateFrom, filters.dateTo) &&
-    // company filter
     (!filters.company ||
       so.clientCompanyName
         ?.toLowerCase()
         .includes(filters.company.toLowerCase())) &&
-    // sent-by filter
     (!filters.sentBy ||
       so.sentByName?.toLowerCase().includes(filters.sentBy.toLowerCase())) &&
-    // status filter
     (!filters.status || so.sampleOutStatus === filters.status);
 
   const filtered = list.filter(matchesFilters);
 
-  /* ---------------------------------------------------------------- */
-  /* EXPORT → EXCEL                                                   */
-  /* ---------------------------------------------------------------- */
+  /* EXPORT → EXCEL */
   const handleExport = () => {
     if (!filtered.length) {
       alert("Nothing to export");
       return;
     }
-
     const rows = filtered.map((r) => ({
       "Out Date": new Date(r.sampleOutDate).toLocaleDateString("en-GB"),
       Company: r.clientCompanyName,
@@ -124,20 +116,18 @@ export default function SamplesOut() {
       Brand: r.brand,
       Qty: r.qty,
       Color: r.color,
-      Status: r.sampleOutStatus ?? "",
-      "Received Back": r.receivedBack ? "Yes" : "No",
+      Status: r.sampleOutStatus || "",
+      "Received Back": r.receivedBack ? "Yes" : "No"
     }));
-
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sample-Outs");
     XLSX.writeFile(wb, "sample-outs.xlsx");
   };
 
-  /* ---------------------------------------------------------------- */
   return (
     <div className="p-6">
-      {/* ---------------------------------------------------------------- search / toolbar */}
+      {/* search / toolbar */}
       <div className="flex flex-wrap gap-2 items-center mb-4">
         <input
           type="text"
@@ -147,7 +137,6 @@ export default function SamplesOut() {
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        {/* sent / received toggle */}
         {["sent", "received"].map((k) => (
           <button
             key={k}
@@ -186,10 +175,9 @@ export default function SamplesOut() {
         </button>
       </div>
 
-      {/* ---------------------------------------------------------------- filter panel */}
+      {/* filter panel */}
       {showFilters && (
         <div className="border rounded p-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50">
-          {/* date range */}
           <div>
             <label className="block text-xs mb-1">From (Out Date)</label>
             <input
@@ -212,8 +200,6 @@ export default function SamplesOut() {
               }
             />
           </div>
-
-          {/* company */}
           <div>
             <label className="block text-xs mb-1">Company</label>
             <input
@@ -224,8 +210,6 @@ export default function SamplesOut() {
               }
             />
           </div>
-
-          {/* sent by */}
           <div>
             <label className="block text-xs mb-1">Sent By</label>
             <input
@@ -236,8 +220,6 @@ export default function SamplesOut() {
               }
             />
           </div>
-
-          {/* status */}
           <div>
             <label className="block text-xs mb-1">Status</label>
             <select
@@ -255,10 +237,16 @@ export default function SamplesOut() {
         </div>
       )}
 
-      {/* ---------------------------------------------------------------- table */}
-      <SampleOutTable data={filtered} onEdit={openEdit} />
+      {/* table */}
+      <SampleOutTable
+        data={filtered}
+        sortField={sort.field}
+        sortOrder={sort.dir}
+        toggleSort={toggleSort}
+        onEdit={openEdit}
+      />
 
-      {/* ---------------------------------------------------------------- modal */}
+      {/* modal */}
       {modalOpen && (
         <SampleOutModal
           initialData={editData}

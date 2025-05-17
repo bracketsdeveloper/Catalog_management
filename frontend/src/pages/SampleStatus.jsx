@@ -8,15 +8,24 @@ import SampleStatusTable from "../components/samples/SampleStatusTable";
 import FilterModal from "../components/samples/FilterModal";
 
 export default function SampleStatus() {
-  const [samples, setSamples]       = useState([]);
-  const [outs, setOuts]             = useState([]);
-  const [search, setSearch]         = useState("");
-  const [fromRef, setFromRef]       = useState("");
-  const [toRef, setToRef]           = useState("");
+  const [samples, setSamples] = useState([]);
+  const [outs, setOuts] = useState([]);
+  const [search, setSearch] = useState("");
+  const [fromRef, setFromRef] = useState("");
+  const [toRef, setToRef] = useState("");
   const [showFilter, setShowFilter] = useState(false);
-  const [filters, setFilters]       = useState({
+  const [filters, setFilters] = useState({
     categories: [], subCategories: [], brands: [], returnable: []
   });
+
+  /* header sort state */
+  const [sort, setSort] = useState({ field: "", dir: "asc" });
+  const toggleSort = (field) => {
+    setSort(s => ({
+      field,
+      dir: s.field === field && s.dir === "asc" ? "desc" : "asc"
+    }));
+  };
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const token       = localStorage.getItem("token");
@@ -27,12 +36,8 @@ export default function SampleStatus() {
     async function fetchData() {
       try {
         const [sRes, oRes] = await Promise.all([
-          axios.get(`${BACKEND_URL}/api/admin/samples`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${BACKEND_URL}/api/admin/sample-outs`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          axios.get(`${BACKEND_URL}/api/admin/samples`, { headers:{ Authorization:`Bearer ${token}` } }),
+          axios.get(`${BACKEND_URL}/api/admin/sample-outs`, { headers:{ Authorization:`Bearer ${token}` } }),
         ]);
         setSamples(sRes.data);
         setOuts(oRes.data);
@@ -43,47 +48,30 @@ export default function SampleStatus() {
     fetchData();
   }, []);
 
-  // apply search, from/to, and filters
+  // pre‐filter by search, ref range, modal filters
   const displayed = samples
-    .filter((s) => {
+    .filter(s => {
       const code = s.sampleReferenceCode.toLowerCase();
       if (search && !code.includes(search.toLowerCase())) return false;
       if (fromRef && code < fromRef.toLowerCase()) return false;
       if (toRef && code > toRef.toLowerCase()) return false;
       return true;
     })
-    .filter((s) =>
-      filters.categories.length
-        ? filters.categories.includes(s.category)
-        : true
-    )
-    .filter((s) =>
-      filters.subCategories.length
-        ? filters.subCategories.includes(s.subCategory)
-        : true
-    )
-    .filter((s) =>
-      filters.brands.length
-        ? filters.brands.includes(s.brandName)
-        : true
-    )
-    .filter((s) =>
-      filters.returnable.length
-        ? filters.returnable.includes(s.returnable)
-        : true
-    );
+    .filter(s => filters.categories.length ? filters.categories.includes(s.category) : true)
+    .filter(s => filters.subCategories.length ? filters.subCategories.includes(s.subCategory) : true)
+    .filter(s => filters.brands.length ? filters.brands.includes(s.brandName) : true)
+    .filter(s => filters.returnable.length ? filters.returnable.includes(s.returnable) : true);
 
-  // export to Excel
   const handleExport = () => {
     const mapByRef = outs.reduce((acc, o) => {
       acc[o.sampleReferenceCode] = acc[o.sampleReferenceCode] || [];
       acc[o.sampleReferenceCode].push(o);
       return acc;
     }, {});
-    const rows = displayed.map((s) => {
+    const rows = displayed.map(s => {
       const list     = mapByRef[s.sampleReferenceCode] || [];
-      const totalOut = list.reduce((sum, o) => sum + Number(o.qty), 0);
-      const totalRet = list.reduce((sum, o) => sum + Number(o.qtyReceivedBack), 0);
+      const totalOut = list.reduce((sum,o) => sum + Number(o.qty), 0);
+      const totalRet = list.reduce((sum,o) => sum + Number(o.qtyReceivedBack), 0);
       return {
         "Ref Code":     s.sampleReferenceCode,
         "Prod Code":    s.productId,
@@ -101,7 +89,6 @@ export default function SampleStatus() {
         Days:           s.returnableDays,
       };
     });
-
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "SampleStatus");
@@ -112,27 +99,27 @@ export default function SampleStatus() {
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Sample Status</h1>
 
-      <div className="flex items-center mb-4 space-x-4">
+      <div className="flex flex-wrap items-center mb-4 space-x-4">
         <input
           type="text"
           placeholder="Search samples…"
           className="border p-2 rounded flex-grow"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={e => setSearch(e.target.value)}
         />
         <input
           type="text"
           placeholder="From Ref Code…"
           className="border p-2 rounded w-40"
           value={fromRef}
-          onChange={(e) => setFromRef(e.target.value)}
+          onChange={e => setFromRef(e.target.value)}
         />
         <input
           type="text"
           placeholder="To Ref Code…"
           className="border p-2 rounded w-40"
           value={toRef}
-          onChange={(e) => setToRef(e.target.value)}
+          onChange={e => setToRef(e.target.value)}
         />
 
         <button
@@ -152,13 +139,19 @@ export default function SampleStatus() {
         )}
       </div>
 
-      <SampleStatusTable samples={displayed} outs={outs} />
+      <SampleStatusTable
+        samples={displayed}
+        outs={outs}
+        sortField={sort.field}
+        sortOrder={sort.dir}
+        toggleSort={toggleSort}
+      />
 
       {showFilter && (
         <FilterModal
           samples={samples}
           initialFilters={filters}
-          onApply={(f) => setFilters(f)}
+          onApply={f => { setFilters(f); setShowFilter(false); }}
           onClose={() => setShowFilter(false)}
         />
       )}

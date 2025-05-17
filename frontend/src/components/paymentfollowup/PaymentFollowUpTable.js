@@ -1,5 +1,5 @@
 // components/paymentfollowup/PaymentFollowUpTable.js
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -15,7 +15,6 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
         <ArrowDownIcon className="h-3 w-3 inline ml-0.5" />
       )
     ) : null;
-
   return (
     <th
       onClick={() => toggle(field)}
@@ -35,6 +34,60 @@ export default function PaymentFollowUpTable({
   onEdit,
 }) {
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
+
+  // header-level filters
+  const [headerFilters, setHeaderFilters] = useState({
+    invoiceNumber: "",
+    invoiceDate: "",
+    invoiceAmount: "",
+    invoiceMailed: "",
+    dueDate: "",
+    overDueSince: "",
+    latestFollowUp: "",
+    paymentReceived: "",
+  });
+
+  const handleFilterChange = (field, value) =>
+    setHeaderFilters((h) => ({ ...h, [field]: value }));
+
+  // Flatten comma-separated invoiceNumber into individual rows
+  const flattenedRows = useMemo(() => {
+    return rows.flatMap((r) => {
+      const invNums = typeof r.invoiceNumber === "string"
+        ? r.invoiceNumber.split(",").map((s) => s.trim()).filter(Boolean)
+        : Array.isArray(r.invoiceNumber)
+        ? r.invoiceNumber
+        : [r.invoiceNumber];
+      return invNums.map((num) => ({ ...r, invoiceNumber: num }));
+    });
+  }, [rows]);
+
+  // helper to get latest follow-up
+  const getLatestFollowUp = (followUps = []) => {
+    if (!followUps.length) return null;
+    return followUps.reduce((latest, current) =>
+      new Date(current.updatedOn) > new Date(latest.updatedOn)
+        ? current
+        : latest
+    );
+  };
+
+  // apply header filters
+  const filteredRows = useMemo(() => {
+    return flattenedRows.filter((r) =>
+      Object.entries(headerFilters).every(([field, value]) => {
+        if (!value) return true;
+        let cell = "";
+        if (field === "latestFollowUp") {
+          const fu = getLatestFollowUp(r.followUps);
+          cell = fu ? fu.date : "";
+        } else {
+          cell = r[field] ?? "";
+        }
+        return cell.toString().toLowerCase().includes(value.toLowerCase());
+      })
+    );
+  }, [flattenedRows, headerFilters]);
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-x-auto">
@@ -72,8 +125,8 @@ export default function PaymentFollowUpTable({
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
-              label="Follow Ups"
-              field="followUps"
+              label="Latest Follow-Up"
+              field="latestFollowUp"
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
@@ -85,20 +138,39 @@ export default function PaymentFollowUpTable({
               Actions
             </th>
           </tr>
+          <tr>
+            {[
+              "invoiceNumber",
+              "invoiceDate",
+              "invoiceAmount",
+              "invoiceMailed",
+              "dueDate",
+              "overDueSince",
+              "latestFollowUp",
+              "paymentReceived",
+            ].map((field) => (
+              <td key={field} className="px-2 py-1 border border-gray-300">
+                <input
+                  type="text"
+                  value={headerFilters[field]}
+                  onChange={(e) =>
+                    handleFilterChange(field, e.target.value)
+                  }
+                  placeholder="Search…"
+                  className="w-full p-1 text-xs border rounded"
+                />
+              </td>
+            ))}
+            <td className="px-2 py-1 border border-gray-300"></td>
+          </tr>
         </thead>
 
         <tbody>
-          {rows.map((r) => {
-            const latestFollowUp = r.followUps?.length
-              ? r.followUps.reduce((latest, current) =>
-                  new Date(current.updatedOn) > new Date(latest.updatedOn)
-                    ? current
-                    : latest
-                )
-              : null;
-
+          {filteredRows.map((r) => {
+            const latestFU = getLatestFollowUp(r.followUps);
+            const key = `${r._id}-${r.invoiceNumber}`;
             return (
-              <tr key={r._id} className="hover:bg-gray-100">
+              <tr key={key} className="hover:bg-gray-100">
                 <Cell val={r.invoiceNumber} />
                 <Cell val={r.invoiceDate} />
                 <Cell val={r.invoiceAmount} />
@@ -108,12 +180,11 @@ export default function PaymentFollowUpTable({
                 <td
                   className="px-2 py-1 border border-gray-300 whitespace-normal break-words cursor-pointer text-blue-600 hover:underline"
                   onClick={() =>
-                    latestFollowUp ? setSelectedFollowUp(latestFollowUp) : null
+                    latestFU ? setSelectedFollowUp(latestFU) : null
                   }
                 >
-                  {latestFollowUp ? fmt(latestFollowUp.date) : "-"}
+                  {latestFU ? fmt(latestFU.date) : "-"}
                 </td>
-            
                 <Cell val={r.paymentReceived} />
                 <td className="px-2 py-1 border border-gray-300">
                   <button onClick={() => onEdit(r)}>
@@ -124,7 +195,7 @@ export default function PaymentFollowUpTable({
             );
           })}
 
-          {rows.length === 0 && (
+          {filteredRows.length === 0 && (
             <tr>
               <td
                 colSpan={9}
