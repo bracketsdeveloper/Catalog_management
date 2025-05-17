@@ -97,7 +97,7 @@ export default function InvoiceSummaryTable({
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
-              label="Client"
+              label="Client Company"
               field="clientCompanyName"
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />

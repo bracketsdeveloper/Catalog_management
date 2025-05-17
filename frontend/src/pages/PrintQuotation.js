@@ -32,7 +32,7 @@ export default function PrintQuotation() {
         quantity: parseFloat(item.quantity) || 1,
         slNo: item.slNo || idx + 1,
         rate: parseFloat(item.rate) || 0,
-        productGST: parseFloat(item.productGST) || data.gst || 18,
+        productGST: parseFloat(item.productGST),
         product: item.product || "Unknown Product",
       }));
       setQuotation({ ...data, items: sanitizedItems });
@@ -174,7 +174,7 @@ export default function PrintQuotation() {
               const quantity = parseFloat(item.quantity) || 1;
               const effRate = baseRate * marginFactor;
               const amount = effRate * quantity;
-              const gstPercent = parseFloat(item.productGST) || quotation.gst || 18;
+              const gstPercent = parseFloat(item.productGST);
               const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
               const total = parseFloat((amount + gstAmt).toFixed(2));
               const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
@@ -291,7 +291,7 @@ function computedTotal(quotation) {
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gst = parseFloat(item.productGST) || quotation.gst || 18;
+    const gst = parseFloat(item.productGST);
     const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });
