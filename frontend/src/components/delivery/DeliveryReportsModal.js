@@ -16,6 +16,7 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
   const [form, setForm] = useState({
     ...row,
     status: row.status || "none",
+    sentOn: row.sentOn ? new Date(row.sentOn).toISOString().slice(0, 10) : "",
     deliveredOn: row.deliveredOn
       ? new Date(row.deliveredOn).toISOString().slice(0, 10)
       : "",
@@ -33,6 +34,7 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
       "data",
       JSON.stringify({
         ...form,
+        sentOn: form.sentOn ? new Date(form.sentOn) : null,
         deliveredOn: form.deliveredOn ? new Date(form.deliveredOn) : null,
       })
     );
@@ -85,6 +87,7 @@ export default function DeliveryReportsModal({ row, onClose, onSaved }) {
           <Field label="Product" value={form.product} />
           <Field label="Client" value={form.clientCompanyName} />
           <Field label="Dispatch Qty" value={form.dispatchQty} />
+          <Field label="Sent On" value={fmt(form.sentOn)} />
         </div>
 
         {/* --- editable section --- */}

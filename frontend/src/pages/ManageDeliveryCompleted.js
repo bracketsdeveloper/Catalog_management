@@ -1,3 +1,4 @@
+// pages/ManageDeliveryCompleted.js
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -46,9 +47,8 @@ export default function ManageDeliveryCompleted() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setRows(res.data || []);
-      
-      // Get unique clients for filter dropdown
-      const uniqueClients = [...new Set(res.data.map(r => r.clientCompanyName))].filter(Boolean).sort();
+      const uniqueClients = [...new Set(res.data.map(r => r.clientCompanyName))]
+        .filter(Boolean).sort();
       setClientOptions(uniqueClients);
     } catch (e) {
       console.error(e);
@@ -63,7 +63,6 @@ export default function ManageDeliveryCompleted() {
     const matchesStatus = !filters.status || r.status === filters.status;
     const matchesClient = !filters.client || r.clientCompanyName === filters.client;
     const matchesBatchType = !filters.batchType || r.batchType === filters.batchType;
-
     return matchesSearch && matchesDateFrom && matchesDateTo && matchesStatus && matchesClient && matchesBatchType;
   });
 
@@ -86,17 +85,17 @@ export default function ManageDeliveryCompleted() {
     const data = filtered.map((r) => ({
       "Batch / Full": r.batchType,
       "Job Sheet #": r.jobSheetNumber,
-      "Client": r.clientCompanyName,
-      "Event": r.eventName,
-      "Product": r.product,
+      Client: r.clientCompanyName,
+      Event: r.eventName,
+      Product: r.product,
       "Dispatch Qty": r.dispatchQty,
       "Sent Through": r.deliveredSentThrough,
       "DC#": r.dcNumber,
+      "Sent On": date(r.sentOn),
       "Latest Follow-up": r.latestFollowUp ? date(r.latestFollowUp) : "",
       "Delivered On": date(r.deliveredOn),
-      "Status": r.status,
+      Status: r.status,
     }));
-
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "DeliveryCompleted");
@@ -137,13 +136,11 @@ export default function ManageDeliveryCompleted() {
         </span>
       </div>
 
-      {/* Filter Modal */}
       <Dialog open={showFilters} onClose={() => setShowFilters(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="bg-white rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-medium mb-4">Filters</h3>
-            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Delivered Date Range</label>
@@ -151,72 +148,60 @@ export default function ManageDeliveryCompleted() {
                   <input
                     type="date"
                     value={filters.dateFrom}
-                    onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
+                    onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
                     className="border rounded p-1 text-sm w-full"
                   />
                   <input
                     type="date"
                     value={filters.dateTo}
-                    onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
+                    onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
                     className="border rounded p-1 text-sm w-full"
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700">Status</label>
                 <select
                   value={filters.status}
-                  onChange={(e) => setFilters({...filters, status: e.target.value})}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm"
                 >
                   <option value="">All</option>
-                  {statusOptions.map(status => (
-                    <option key={status} value={status}>{status}</option>
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700">Client</label>
                 <select
                   value={filters.client}
-                  onChange={(e) => setFilters({...filters, client: e.target.value})}
+                  onChange={(e) => setFilters({ ...filters, client: e.target.value })}
                   className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm"
                 >
                   <option value="">All</option>
-                  {clientOptions.map(client => (
-                    <option key={client} value={client}>{client}</option>
+                  {clientOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700">Batch Type</label>
                 <select
                   value={filters.batchType}
-                  onChange={(e) => setFilters({...filters, batchType: e.target.value})}
+                  onChange={(e) => setFilters({ ...filters, batchType: e.target.value })}
                   className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm"
                 >
                   <option value="">All</option>
-                  {batchTypeOptions.map(type => (
-                    <option key={type} value={type}>{type}</option>
+                  {batchTypeOptions.map((b) => (
+                    <option key={b} value={b}>{b}</option>
                   ))}
                 </select>
               </div>
             </div>
-
             <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => {
-                  setFilters({
-                    dateFrom: "",
-                    dateTo: "",
-                    status: "",
-                    client: "",
-                    batchType: "",
-                  });
-                }}
+                onClick={() => setFilters({ dateFrom: "", dateTo: "", status: "", client: "", batchType: "" })}
                 className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
               >
                 Reset
@@ -232,24 +217,19 @@ export default function ManageDeliveryCompleted() {
         </div>
       </Dialog>
 
-      {/* read‑only table */}
       <DeliveryReportsTable
         rows={sorted}
         sortField={sort.field}
         sortOrder={sort.dir}
         toggleSort={toggleSort}
-        showEdit={false}           /* hides Actions col */
-        onEdit={() => {}}          /* noop */
+        showEdit={false}
+        onEdit={() => {}}
         onShowFollowUps={setFuRow}
         onShowExcel={setExcelRow}
       />
 
-      {fuRow && (
-        <FollowUpsViewerModal row={fuRow} onClose={() => setFuRow(null)} />
-      )}
-      {excelRow && (
-        <ExcelViewerModal row={excelRow} onClose={() => setExcelRow(null)} />
-      )}
+      {fuRow && <FollowUpsViewerModal row={fuRow} onClose={() => setFuRow(null)} />}
+      {excelRow && <ExcelViewerModal row={excelRow} onClose={() => setExcelRow(null)} />}
     </div>
   );
 }

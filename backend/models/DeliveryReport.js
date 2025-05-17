@@ -30,7 +30,8 @@ const deliveryReportSchema = new mongoose.Schema(
     product: String,
     dispatchQty: Number,
     deliveredSentThrough: String, // Mode of Delivery
-    dcNumber: String, // New DC# field
+    dcNumber: String, // DC# field
+    sentOn: Date,    // <--- new field
 
     /* report-specific fields */
     deliveredOn: Date,

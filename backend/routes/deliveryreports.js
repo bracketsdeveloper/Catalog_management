@@ -8,36 +8,39 @@ const DispatchSchedule = require("../models/DispatchSchedule");
 const DeliveryReport = require("../models/DeliveryReport");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-/* storage for uploaded Excel (in memory) */
 const upload = multer({ storage: multer.memoryStorage() });
 
-/* -------------------------------------------------------------- */
-/* GET  /api/admin/delivery-reports (aggregated)                   */
-/* -------------------------------------------------------------- */
+/* GET aggregated delivery reports */
 router.get("/", authenticate, authorizeAdmin, async (_req, res) => {
   try {
     const dispatched = await DispatchSchedule.find({ status: "sent" }).lean();
     const reports = await DeliveryReport.find({}).lean();
 
-    const map = {};
-    reports.forEach((r) => (map[r.dispatchId.toString()] = r));
+    const reportMap = {};
+    reports.forEach((r) => (reportMap[r.dispatchId.toString()] = r));
 
-    const merged = dispatched.map((d) =>
-      map[d._id.toString()]
-        ? map[d._id.toString()]
-        : {
-            dispatchId: d._id,
-            batchType: d.batchType,
-            jobSheetNumber: d.jobSheetNumber,
-            clientCompanyName: d.clientCompanyName,
-            eventName: d.eventName,
-            product: d.product,
-            dispatchQty: d.dispatchQty,
-            deliveredSentThrough: d.modeOfDelivery,
-            dcNumber: d.dcNumber || "", // Initialize DC#
-            status: "Pending",
-          }
-    );
+    const merged = dispatched.map((d) => {
+      const existing = reportMap[d._id.toString()];
+      if (existing) {
+        return {
+          ...existing,
+          sentOn: existing.sentOn || d.sentOn,
+        };
+      }
+      return {
+        dispatchId: d._id,
+        batchType: d.batchType,
+        jobSheetNumber: d.jobSheetNumber,
+        clientCompanyName: d.clientCompanyName,
+        eventName: d.eventName,
+        product: d.product,
+        dispatchQty: d.dispatchQty,
+        deliveredSentThrough: d.modeOfDelivery,
+        dcNumber: d.dcNumber || "",
+        status: "Pending",
+        sentOn: d.sentOn,
+      };
+    });
 
     res.json(merged);
   } catch (e) {
@@ -46,7 +49,7 @@ router.get("/", authenticate, authorizeAdmin, async (_req, res) => {
   }
 });
 
-/* POST create (with optional excel upload) */
+/* POST create */
 router.post(
   "/",
   authenticate,
@@ -54,7 +57,7 @@ router.post(
   upload.single("excel"),
   async (req, res) => {
     try {
-      const body = JSON.parse(req.body.data); // front-end sends JSON string
+      const body = JSON.parse(req.body.data);
       if (req.file) {
         const wb = XLSX.read(req.file.buffer, { type: "buffer" });
         const first = wb.SheetNames[0];
@@ -73,7 +76,7 @@ router.post(
   }
 );
 
-/* PUT update (also supports excel upload / replace) */
+/* PUT update */
 router.put(
   "/:id",
   authenticate,
@@ -90,11 +93,7 @@ router.put(
       }
       body.updatedAt = Date.now();
 
-      const updated = await DeliveryReport.findByIdAndUpdate(
-        req.params.id,
-        body,
-        { new: true }
-      );
+      const updated = await DeliveryReport.findByIdAndUpdate(req.params.id, body, { new: true });
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);
     } catch (e) {

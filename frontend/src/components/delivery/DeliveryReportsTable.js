@@ -47,6 +47,7 @@ export default function DeliveryReportsTable({
     dispatchQty: "",
     deliveredSentThrough: "",
     dcNumber: "",
+    sentOn: "",      // new filter
     status: "",
   });
 
@@ -67,8 +68,8 @@ export default function DeliveryReportsTable({
           <input
             type="text"
             value={headerFilters[key]}
-            onChange={(e) => 
-              setHeaderFilters({...headerFilters, [key]: e.target.value})
+            onChange={(e) =>
+              setHeaderFilters({ ...headerFilters, [key]: e.target.value })
             }
             className="w-full p-1 text-xs border rounded"
             placeholder="Filter..."
@@ -79,7 +80,7 @@ export default function DeliveryReportsTable({
     </tr>
   );
 
-  const filteredRows = rows.filter(row => {
+  const filteredRows = rows.filter((row) => {
     return Object.entries(headerFilters).every(([key, value]) => {
       if (!value) return true;
       const cellValue = String(row[key] || "").toLowerCase();
@@ -100,6 +101,7 @@ export default function DeliveryReportsTable({
             <Head label="Dispatch Qty" field="dispatchQty" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Sent Through" field="deliveredSentThrough" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="DC#" field="dcNumber" {...{ sortField, sortOrder, toggleSort }} />
+            <Head label="Sent On" field="sentOn" {...{ sortField, sortOrder, toggleSort }} /> {/* new */}
             <Head label="Latest Follow-up" field="latestFollowUp" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Delivered On" field="deliveredOn" {...{ sortField, sortOrder, toggleSort }} />
             <Head label="Excel File" field="excelFileName" {...{ sortField, sortOrder, toggleSort }} />
@@ -130,7 +132,7 @@ export default function DeliveryReportsTable({
                     handleOpenModal(r.jobSheetNumber);
                   }}
                 >
-                  <Cell val={(r.jobSheetNumber) || "No Number"} />
+                  <Cell val={r.jobSheetNumber || "No Number"} />
                 </button>
                 <Cell val={r.clientCompanyName} />
                 <Cell val={r.eventName} />
@@ -138,6 +140,7 @@ export default function DeliveryReportsTable({
                 <Cell val={r.dispatchQty} />
                 <Cell val={r.deliveredSentThrough} />
                 <Cell val={r.dcNumber} />
+                <Cell val={r.sentOn} /> {/* new */}
                 <td
                   className="px-2 py-1 border border-gray-300 text-blue-600 underline cursor-pointer whitespace-nowrap"
                   onClick={() => onShowFollowUps(r)}
@@ -162,10 +165,7 @@ export default function DeliveryReportsTable({
           })}
           {filteredRows.length === 0 && (
             <tr>
-              <td
-                colSpan={13}
-                className="text-center py-4 text-gray-500 border border-gray-300"
-              >
+              <td colSpan={14} className="text-center py-4 text-gray-500 border border-gray-300">
                 No records
               </td>
             </tr>
@@ -174,7 +174,7 @@ export default function DeliveryReportsTable({
       </table>
 
       <JobSheetGlobal
-        jobSheetNumber={selectedJobSheetNumber} 
+        jobSheetNumber={selectedJobSheetNumber}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
