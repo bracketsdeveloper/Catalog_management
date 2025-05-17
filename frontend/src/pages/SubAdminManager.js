@@ -25,6 +25,7 @@ const groupedPermissions = {
   CRM: [
     "manage-companies",
     "opportunities",
+    "viewallopp",
     "manage-products",
     "manage-catalog",
     "manage-quotation",

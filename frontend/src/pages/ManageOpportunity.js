@@ -27,8 +27,9 @@ function ManageOpportunity() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("export-crm");
+  const canViewAllOpp = permissions.includes("viewallopp");
   const [activeTab, setActiveTab] = useState(
-    isSuperAdmin ? "all-opportunities" : "my-opportunities"
+    isSuperAdmin || canViewAllOpp ? "all-opportunities" : "my-opportunities"
   );
   const [opportunities, setOpportunities] = useState({ my: [], team: [], all: [] });
   const [searchTerm, setSearchTerm] = useState("");
@@ -87,7 +88,7 @@ function ManageOpportunity() {
             { headers: getAuthHeaders() }
           ),
         ];
-        if (isSuperAdmin) {
+        if (isSuperAdmin || canViewAllOpp) {
           requests.push(
             axios.get(
               `${BACKEND_URL}/api/admin/opportunities${
@@ -101,14 +102,14 @@ function ManageOpportunity() {
         setOpportunities({
           my: myRes.data || [],
           team: teamRes.data || [],
-          all: isSuperAdmin ? allRes?.data || [] : [],
+          all: isSuperAdmin || canViewAllOpp ? allRes?.data || [] : [],
         });
       } catch (error) {
         console.error("Error fetching opportunities:", error);
       }
     };
     fetchData();
-  }, [activeTab, isSuperAdmin, searchTerm]);
+  }, [activeTab, isSuperAdmin, canViewAllOpp, searchTerm]);
 
   // Fetch logs when dropdown is shown
   const fetchAllLogs = async () => {
@@ -297,6 +298,7 @@ function ManageOpportunity() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isSuperAdmin={isSuperAdmin}
+          canViewAllOpp={canViewAllOpp}
         />
         <div className="flex items-center space-x-2">
           <div className="relative">
