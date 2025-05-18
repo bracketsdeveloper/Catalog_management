@@ -1242,7 +1242,7 @@ export default function CatalogManagementPage() {
             className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
             onClick={(e) => e.stopPropagation()}
           >
-            {(isSuperAdmin || canExportCRM) && (
+           
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1255,7 +1255,7 @@ export default function CatalogManagementPage() {
               >
                 Excel
               </button>
-            )}
+            
             <button
               onClick={(e) => {
                 e.stopPropagation();
