@@ -391,51 +391,66 @@ export default function CreateManualCatalog() {
     setLoading(false);
   }, [id, isCatalogEditMode, isQuotationEditMode]);
 
-  // ─── Auto‐populate Company on Opportunity change ──────────────────────────
-  useEffect(() => {
-    if (!opportunityNumber) {
-      setCustomerCompany("");
-      setSelectedCompanyData(null);
-      setCustomerAddress("");
-      setClients([]);
-      setCustomerName("");
-      setCustomerEmail("");
-      return;
-    }
-    const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
-    if (opp && opp.account) {
-      setCustomerCompany(opp.account);
-      axios
-        .get(`${BACKEND_URL}/api/admin/companies`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-          params: { companyName: opp.account },
-        })
-        .then((res) => {
-          const comp = Array.isArray(res.data) ? res.data[0] : res.data;
-          if (comp) {
-            setSelectedCompanyData(comp);
-            setCustomerAddress(comp.companyAddress || "");
-            setClients(comp.clients || []);
-            setCustomerName("");
-            setCustomerEmail(comp.companyEmail || "");
-          }
-        })
-        .catch(() => {
-          setSelectedCompanyData(null);
-          setCustomerAddress("");
-          setClients([]);
-          setCustomerName("");
-          setCustomerEmail("");
-        });
+ // ─── Auto‐populate Company and Customer Details on Opportunity change ──────
+useEffect(() => {
+  if (!opportunityNumber) {
+    setCustomerCompany("");
+    setSelectedCompanyData(null);
+    setCustomerAddress("");
+    setClients([]);
+    setCustomerName("");
+    setSalutation("Mr.");
+    setCustomerEmail("");
+    return;
+  }
+  const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
+  if (opp && opp.account) {
+    setCustomerCompany(opp.account);
+    // Set customer name and salutation from opportunity contact
+    if (opp.contact) {
+      const contactParts = opp.contact.split(" ");
+      const sal = contactParts[0].toLowerCase().includes("ms.") ? "Ms." : "Mr.";
+      setSalutation(sal);
+      setCustomerName(opp.contact);
     } else {
-      setCustomerCompany("");
-      setSelectedCompanyData(null);
-      setCustomerAddress("");
-      setClients([]);
+      setSalutation("Mr.");
       setCustomerName("");
-      setCustomerEmail("");
     }
-  }, [opportunityNumber, opportunityCodes]);
+    // Fetch company details
+    axios
+      .get(`${BACKEND_URL}/api/admin/companies`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        params: { companyName: opp.account },
+      })
+      .then((res) => {
+        const comp = Array.isArray(res.data) ? res.data[0] : res.data;
+        if (comp) {
+          setSelectedCompanyData(comp);
+          setCustomerAddress(comp.companyAddress || "");
+          setClients(comp.clients || []);
+          // Set email from client matching opportunity contact
+          const matchingClient = comp.clients?.find(
+            (c) => c.name?.toLowerCase() === opp.contact?.toLowerCase()
+          );
+          setCustomerEmail(matchingClient?.email || comp.companyEmail || "");
+        }
+      })
+      .catch(() => {
+        setSelectedCompanyData(null);
+        setCustomerAddress("");
+        setClients([]);
+        setCustomerEmail("");
+      });
+  } else {
+    setCustomerCompany("");
+    setSelectedCompanyData(null);
+    setCustomerAddress("");
+    setClients([]);
+    setSalutation("Mr.");
+    setCustomerName("");
+    setCustomerEmail("");
+  }
+}, [opportunityNumber, opportunityCodes]);
 
   // ─── Re‐fetch on searchTerm or filter change ──────────────────────────────
   useEffect(() => {
