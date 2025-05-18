@@ -52,7 +52,7 @@ export default function PrintQuotation() {
 
     const opt = {
       margin: 0.2,
-      filename: `Quotation-${quotation?.quotationNumber || "Unknown"}.pdf`,
+      filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany} || "").pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 7, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },

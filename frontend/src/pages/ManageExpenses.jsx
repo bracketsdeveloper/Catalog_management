@@ -43,13 +43,21 @@ export default function ManageExpenses() {
   // Apply search + filters
   const displayed = useMemo(() => {
     return expenses.filter(exp => {
-      // text search
-      if (
-        searchTerm &&
-        !exp.opportunityCode.includes(searchTerm) &&
-        !exp.clientCompanyName.toLowerCase().includes(searchTerm.toLowerCase())
-      ) {
-        return false;
+      // text search across all relevant fields
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const fieldsToSearch = [
+          exp.opportunityCode,
+          exp.clientCompanyName,
+          exp.clientName,
+          exp.eventName,
+          exp.crmName,
+          exp.jobSheetNumber || "",
+        ];
+        const hasMatch = fieldsToSearch.some(field => 
+          field.toLowerCase().includes(searchLower)
+        );
+        if (!hasMatch) return false;
       }
       // opportunity range
       if (filters.opptyFrom && exp.opportunityCode < filters.opptyFrom) return false;
