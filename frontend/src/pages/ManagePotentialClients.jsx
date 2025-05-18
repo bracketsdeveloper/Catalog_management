@@ -1,3 +1,6 @@
+// client/src/pages/ManagePotentialClients.jsx
+"use client";
+
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import SearchBar from "../components/manageopportunities/SearchBar.jsx";
@@ -17,8 +20,13 @@ export default function ManagePotentialClients() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filterVals, setFilterVals] = useState({
-    companyName: "", clientName: "", designation: "",
-    source: "", mobile: "", email: "", location: ""
+    companyName: "",
+    clientName: "",
+    designation: "",
+    source: "",
+    mobile: "",
+    email: "",
+    location: ""
   });
   const [data, setData] = useState({ my: [], team: [], all: [] });
 
@@ -151,7 +159,7 @@ export default function ManagePotentialClients() {
         />
       )}
 
-      {/* Data table */}
+      {/* Data table with header search + sort */}
       <PotentialClientTable
         data={displayed}
         onEdit={pc => {
@@ -163,4 +171,3 @@ export default function ManagePotentialClients() {
     </div>
   );
 }
-
