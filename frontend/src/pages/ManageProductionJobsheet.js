@@ -125,6 +125,7 @@ export default function ManageProductionJobsheet() {
       global.filter((r) =>
         Object.entries(headerFilters).every(([k, v]) => {
           if (!v) return true;
+          if (k === "status" && v === "Not Set") return !r[k];
           let val = r[k] ?? "";
           if (dateKeys.includes(k) && val) val = new Date(val).toLocaleDateString();
           return String(val).toLowerCase().includes(v.toLowerCase());

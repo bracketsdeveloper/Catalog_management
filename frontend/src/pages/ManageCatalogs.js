@@ -464,11 +464,19 @@ export default function CreateManualCatalog() {
     o.opportunityCode?.toLowerCase().includes(opportunityNumber.toLowerCase())
   );
 
-  const isDuplicate = (pid, c, s) =>
-    selectedProducts.some((p) => p.productId === pid && (p.color || "") === c && (p.size || "") === s);
+  const isDuplicate = (pid, c, s, productName) => {
+    // Skip duplication check for products with "voucher", "giftcard", or "e-vouchers" in their name (case-insensitive)
+    const skipKeywords = ["voucher", "giftcard", "e-vouchers"];
+    const shouldSkip = skipKeywords.some(keyword => 
+      productName?.toLowerCase().includes(keyword.toLowerCase())
+    );
+    if (shouldSkip) return false;
+
+    return selectedProducts.some((p) => p.productId === pid && (p.color || "") === c && (p.size || "") === s);
+  };
 
   const handleAddSingle = (item) => {
-    if (isDuplicate(item.productId, item.color, item.size)) {
+    if (isDuplicate(item.productId, item.color, item.size, item.productName)) {
       alert("This item with the same color & size is already added!");
       return;
     }
@@ -506,7 +514,7 @@ export default function CreateManualCatalog() {
       suggestedBreakdown: { baseCost: 0, marginPct: 0, marginAmount: 0, logisticsCost: 0, brandingCost: 0, finalPrice: 0 },
       imageIndex: 0,
     }));
-    const filtered = newItems.filter((i) => !isDuplicate(i.productId, i.color, i.size));
+    const filtered = newItems.filter((i) => !isDuplicate(i.productId, i.color, i.size, i.productName));
     if (filtered.length < newItems.length) alert("Some variations were duplicates and were not added.");
     setSelectedProducts((prev) => [...prev, ...filtered]);
     closeVariationModal();

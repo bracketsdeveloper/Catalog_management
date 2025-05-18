@@ -8,7 +8,7 @@ const dt = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).
 
 /* header filter row */
 function FilterRow({ filters, onChange }) {
-  const statusOptions = ["All", "pending", "received", "alert"];
+  const statusOptions = ["All", "pending", "received", "alert", "Not Set"];
 
   const cols = [
     { key: "jobSheetCreatedDate", type: "date", label: "Order Date" },

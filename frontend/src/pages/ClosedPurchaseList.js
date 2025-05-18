@@ -173,7 +173,7 @@ export default function ClosedPurchases() {
           let val = r[k] ?? "";
           if (isDate(k) && val) val = new Date(val).toLocaleDateString();
           return String(val).toLowerCase().includes(v.toLowerCase());
-        })
+        }) && r.status === "received"
       ),
     [globalFiltered, headerFilters]
   );
@@ -200,7 +200,8 @@ export default function ClosedPurchases() {
         inRange(r.deliveryDateTime, advFilters.deliveryDateTime) &&
         inRange(r.orderConfirmedDate, advFilters.orderConfirmedDate) &&
         inRange(r.expectedReceiveDate, advFilters.expectedReceiveDate) &&
-        inRange(r.schedulePickUp, advFilters.schedulePickUp)
+        inRange(r.schedulePickUp, advFilters.schedulePickUp) &&
+        r.status === "received"
       );
     });
   }, [headerFiltered, advFilters]);

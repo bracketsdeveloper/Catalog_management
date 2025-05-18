@@ -33,6 +33,8 @@ export default function OpportunityDetails({
   // Add error state
   const [errors, setErrors] = useState({});
 
+  // Add state for opportunity name suggestions
+  const [opportunityNameSuggestions, setOpportunityNameSuggestions] = useState([]);
 
   const openModal = () => {
     setIsOpportunityName(true);
@@ -51,7 +53,8 @@ export default function OpportunityDetails({
       opportunityValue: 'Opportunity Value',
       currency: 'Currency',
       closureDate: 'Closure Date',
-      opportunityOwner: 'Opportunity Owner'
+      opportunityOwner: 'Opportunity Owner',
+      contact: 'Contact'
     };
 
     setErrors(prev => ({
@@ -179,6 +182,21 @@ const opportunityName = [
   "Others"
 ];
 
+  // Handle opportunity name input change with suggestions
+  const handleOpportunityNameChange = (e) => {
+    const value = e.target.value;
+    setData((prev) => ({ ...prev, opportunityName: value }));
+    // Filter suggestions based on input
+    const suggestions = opportunityName.filter((name) =>
+      name.toLowerCase().includes(value.toLowerCase())
+    );
+    setOpportunityNameSuggestions(suggestions);
+  };
+
+  const handleSelectOpportunityNameSuggestion = (name) => {
+    setData((prev) => ({ ...prev, opportunityName: name }));
+    setOpportunityNameSuggestions([]);
+  };
 
   return (
     <div className="flex flex-col md:flex-row gap-6">
@@ -186,74 +204,38 @@ const opportunityName = [
       <div className="w-full md:w-2/3 space-y-4">
         {/* Row 1: Opportunity Name, Account, Contact */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Opportunity Name */}
-          <div>
-            
-            
-        <label className="block text-sm font-semibold text-gray-700 mb-1">
-          Opportunity Name <span className="text-red-500">*</span>
-        </label>
-         <div className="flex">
-          <div>
-            <select
-              name="opportunityName"
-              value={data.opportunityName}
-              onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
-            > 
-              <option value="">Select Opportunity Type</option>
-              {opportunityName.map((type, index) => (
-                <option key={index} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            </div>
-
-            <div>
-             <label>
-                  <button
-                type="button"
-                onClick={openModal}
-                className="bg-blue-500 text-white px-2 py-1 rounded-r text-sm"
-                >
-                +
-              </button>
-             </label>
-            </div>
-            </div>
-        
-          
-            {/* Modal structure */}
-      {isOpportunityName && (
-        
-          <div>
-            {/* Opportunity Name Input */}
+          {/* Opportunity Name (updated to text field with suggestions) */}
+          <div className="relative">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Opportunity Name <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               name="opportunityName"
               value={data.opportunityName}
-              onChange={handleChange}
+              onChange={handleOpportunityNameChange}
               onBlur={(e) => validateField('opportunityName', e.target.value)}
               className={`border rounded w-full px-2 py-1 text-sm ${
                 errors.opportunityName ? 'border-red-500' : ''
               }`}
               placeholder="Enter Opportunity Name"
             />
-
-            {/* Submit and Close Button */}
-            <div className="flex justify-between mt-4">
-              <button onClick={closeModal} className="btn btn-secondary">
-                Close
-              </button>
-            </div>
-           </div>
-      )}
-
             {errors.opportunityName && (
               <div className="text-red-500 text-xs mt-1">{errors.opportunityName}</div>
             )}
-
+            {opportunityNameSuggestions.length > 0 && (
+              <div className="absolute z-10 bg-white border border-gray-300 w-full mt-1 max-h-40 overflow-auto">
+                {opportunityNameSuggestions.map((name, index) => (
+                  <div
+                    key={index}
+                    className="px-2 py-1 hover:bg-gray-200 cursor-pointer"
+                    onClick={() => handleSelectOpportunityNameSuggestion(name)}
+                  >
+                    {name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {/* Account with suggestions and Create button */}
           <div className="relative">
@@ -297,10 +279,10 @@ const opportunityName = [
               </div>
             )}
           </div>
-          {/* Contact with suggestions and Create button */}
+          {/* Contact with suggestions and Create button (updated to be mandatory) */}
           <div className="relative">
             <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Contact
+              Contact <span className="text-red-500">*</span>
             </label>
             <div className="flex">
               <input
@@ -308,7 +290,10 @@ const opportunityName = [
                 name="contact"
                 value={data.contact}
                 onChange={handleContactChange}
-                className="border rounded-l w-full px-2 py-1 text-sm"
+                onBlur={(e) => validateField('contact', e.target.value)}
+                className={`border rounded-l w-full px-2 py-1 text-sm ${
+                  errors.contact ? 'border-red-500' : ''
+                }`}
                 placeholder="Enter Contact Name"
                 disabled={!data.account}
               />
@@ -321,6 +306,9 @@ const opportunityName = [
                 +
               </button>
             </div>
+            {errors.contact && (
+              <div className="text-red-500 text-xs mt-1">{errors.contact}</div>
+            )}
             {contactSuggestions.length > 0 && (
               <div className="absolute z-10 bg-white border border-gray-300 w-full mt-1 max-h-40 overflow-auto">
                 {contactSuggestions.map((client, idx) => (

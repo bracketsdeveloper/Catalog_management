@@ -14,6 +14,7 @@ function OpportunityTableRow({ oppty, formatClosureDate, formatCreatedDate }) {
       <td className="py-2 px-3 text-blue-600 font-medium">{oppty.opportunityCode}</td>
       <td className="py-2 px-3">{formatCreatedDate(oppty.createdAt)}</td>
       <td className="py-2 px-3 text-blue-500 font-medium">{oppty.account}</td>
+      <td className="py-2 px-3">{oppty.contact || "-"}</td>
       <td className="py-2 px-3">{oppty.opportunityName}</td>
       <td className="py-2 px-3 text-blue-500 font-medium">{oppty.opportunityOwner}</td>
       <td className="py-2 px-3">{oppty.opportunityValue?.toLocaleString()}</td>
@@ -47,7 +48,7 @@ export default function OpportunityTable({
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-gray-700 border-b border-gray-200">
-        <thead className="bg-gray-50 border-b text-gray-500 uppercase">
+        <thead className="bg-gray-50 border-b text-gray-500 uppercase sticky top-0 z-10">
           <tr>
             <th
               onClick={() => handleSort("opportunityCode")}
@@ -67,6 +68,7 @@ export default function OpportunityTable({
             >
               Account<SortIndicator sortConfig={sortConfig} field="account" />
             </th>
+            <th className="py-2 px-3 text-left">Company Contact</th>
             <th
               onClick={() => handleSort("opportunityName")}
               className="py-2 px-3 text-left cursor-pointer"
