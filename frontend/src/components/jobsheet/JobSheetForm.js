@@ -1,8 +1,8 @@
+// JobSheetForm.jsx
 import React, { useState, forwardRef, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import { format, parse } from "date-fns";
 import UserSuggestionInput from "./UserSuggestionInput";
-import PurchaseOrderSuggestionInput from "./PurchaseOrderSuggestionInput";
 import QuotationSuggestionInput from "./QuotationSuggestionInput";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from "axios";
@@ -64,11 +64,11 @@ const JobSheetForm = ({
   setClientDropdownOpen,
   handleClientSelect,
   brandingTypeOptions = [
-  " Screen Printing",
+    "Screen Printing",
     "Sublimation Printing",
     "HT Printing",
     "Engraving",
-    "Embriodery",
+    "Embroidery",
     "UV Printing",
     "DTF Stickering",
     "Embossing",
@@ -78,11 +78,12 @@ const JobSheetForm = ({
     "Others",
   ],
 }) => {
-  const [addresses, setAddresses] = useState(
-    deliveryAddress && deliveryAddress.length > 0 ? deliveryAddress : [""]
-  );
+  const [addresses, setAddresses] = useState(deliveryAddress.length > 0 ? deliveryAddress : [""]);
   const [customDeliveryType, setCustomDeliveryType] = useState("");
   const [customDeliveryMode, setCustomDeliveryMode] = useState("");
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+  const [vendorOtherMap, setVendorOtherMap] = useState({});
+  const [sourcingOtherMap, setSourcingOtherMap] = useState({});
 
   const deliveryTypeOptions = [
     "Single office delivery",
@@ -94,17 +95,32 @@ const JobSheetForm = ({
   const deliveryModeOptions = ["Surface", "Air", "Other"];
   const deliveryChargesOptions = ["Included in cost", "Additional at actual"];
 
-  const orderDateObj = orderDate
-    ? parse(orderDate, "yyyy-MM-dd", new Date())
-    : null;
-  const deliveryDateObj = deliveryDate
-    ? parse(deliveryDate, "yyyy-MM-dd", new Date())
-    : null;
+  const orderDateObj = orderDate ? parse(orderDate, "yyyy-MM-dd", new Date()) : null;
+  const deliveryDateObj = deliveryDate ? parse(deliveryDate, "yyyy-MM-dd", new Date()) : null;
+
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+  useEffect(() => {
+    fetchVendors();
+    setAddresses(deliveryAddress.length > 0 ? deliveryAddress : [""]);
+  }, [deliveryAddress]);
+
+  const fetchVendors = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/vendors`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVendorSuggestions(res.data || []);
+    } catch (err) {
+      console.error("Error fetching vendors:", err);
+    }
+  };
 
   const syncWithParent = (newArray) => {
     setAddresses(newArray);
     const filtered = newArray.filter((addr) => addr.trim() !== "");
-    setDeliveryAddress(filtered);
+    setDeliveryAddress(filtered.length > 0 ? filtered : [""]);
   };
 
   const handleOrderDateChange = (date) => {
@@ -143,38 +159,13 @@ const JobSheetForm = ({
       placeholder="DD/MM/YYYY"
     />
   ));
-  const [vendorSuggestions, setVendorSuggestions] = useState([]);
- const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-  const fetchVendors = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/vendors`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setVendorSuggestions(res.data || []);
-    } catch (err) {
-      console.error("Error fetching vendors:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchVendors();
-  },   []);
-
- //const [isVendorOther, setIsVendorOther] = useState(false);
-
-
-  const [vendorOtherMap, setVendorOtherMap] = useState({});
-
 
   return (
     <div className="space-y-4 mb-6">
       {/* Row: Reference Quotation with Fetch button */}
       <div className="flex w-full justify-between space-x-4">
         <div className="w-1/2">
-          <label className="block mb-1 font-medium text-purple-700">
-            Reference Quotation
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Reference Quotation</label>
           <div className="flex space-x-3">
             <QuotationSuggestionInput
               value={referenceQuotation}
@@ -194,9 +185,7 @@ const JobSheetForm = ({
         </div>
         <div className="w-1/2 space-y-2">
           <div>
-            <label className="block mb-1 font-medium text-purple-700">
-              PO Number
-            </label>
+            <label className="block mb-1 font-medium text-purple-700">PO Number</label>
             <input
               type="text"
               className="border border-purple-300 rounded w-full p-2"
@@ -206,9 +195,7 @@ const JobSheetForm = ({
             />
           </div>
           <div>
-            <label className="block mb-1 font-medium text-purple-700">
-              PO Status
-            </label>
+            <label className="block mb-1 font-medium text-purple-700">PO Status</label>
             <div className="flex items-center space-x-2">
               <select
                 className="border border-purple-300 rounded p-2 w-full"
@@ -216,12 +203,8 @@ const JobSheetForm = ({
                 onChange={(e) => setPoStatus(e.target.value)}
               >
                 <option value="">Select PO Status</option>
-                <option value="PO Awaited, Wait for Invoice">
-                  PO Awaited, Wait for Invoice
-                </option>
-                <option value="PO Received, Generate Invoice">
-                  PO Received, Generate Invoice
-                </option>
+                <option value="PO Awaited, Wait for Invoice">PO Awaited, Wait for Invoice</option>
+                <option value="PO Received, Generate Invoice">PO Received, Generate Invoice</option>
                 <option value="No PO, No Invoice">No PO, No Invoice</option>
                 <option value="No PO, Direct Invoice">No PO, Direct Invoice</option>
                 <option value="Custom">Custom</option>
@@ -242,9 +225,7 @@ const JobSheetForm = ({
 
       {/* Row: Client Company */}
       <div className="relative">
-        <label className="block mb-1 font-medium text-purple-700">
-          Client Company *
-        </label>
+        <label className="block mb-1 font-medium text-purple-700">Client Company *</label>
         <input
           type="text"
           className="border border-purple-300 rounded w-full p-2"
@@ -259,9 +240,7 @@ const JobSheetForm = ({
           <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
             {companies
               .filter((company) =>
-                company.companyName
-                  .toLowerCase()
-                  .includes(clientCompanyName.toLowerCase())
+                company.companyName.toLowerCase().includes(clientCompanyName.toLowerCase())
               )
               .map((company) => (
                 <div
@@ -285,9 +264,7 @@ const JobSheetForm = ({
       {/* Row: Client Name and Contact Number with Client Dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="relative">
-          <label className="block mb-1 font-medium text-purple-700">
-            Client Name *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Client Name *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -298,7 +275,7 @@ const JobSheetForm = ({
             }}
             required
           />
-          {clientDropdownOpen && clients.length > 0 && (
+          {clientDropdownOpen && clients?.length > 0 && (
             <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
               {clients.map((client, index) => (
                 <div
@@ -313,9 +290,7 @@ const JobSheetForm = ({
           )}
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Contact Number
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Contact Number</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -328,9 +303,7 @@ const JobSheetForm = ({
       {/* Row: Event Name, Order Date, CRM Incharge */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Event Name *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Event Name *</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -340,9 +313,7 @@ const JobSheetForm = ({
           />
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Order Date *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Order Date *</label>
           <DatePicker
             selected={orderDateObj}
             onChange={handleOrderDateChange}
@@ -353,9 +324,7 @@ const JobSheetForm = ({
           />
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            CRM Incharge *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">CRM Incharge *</label>
           <UserSuggestionInput
             value={crmIncharge}
             onChange={setCrmIncharge}
@@ -417,95 +386,114 @@ const JobSheetForm = ({
                         min="1"
                         className="w-16 border rounded p-1"
                         value={item.quantity}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "quantity", e.target.value)
-                        }
+                        onChange={(e) => handleInlineUpdate(idx, "quantity", e.target.value)}
                       />
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      <input
-                        type="text"
-                        className="border rounded p-1 w-full"
-                        value={item.sourcingFrom || ""}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "sourcingFrom", e.target.value)
-                        }
-                        placeholder="Enter sourcing"
-                      />
+                      {sourcingOtherMap[idx] ? (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            className="border rounded p-1 w-full"
+                            value={item.sourcingFrom || ""}
+                            onChange={(e) =>
+                              handleInlineUpdate(idx, "sourcingFrom", e.target.value)
+                            }
+                            placeholder="Enter Sourcing"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSourcingOtherMap((prev) => ({ ...prev, [idx]: false }))
+                            }
+                            className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                          >
+                            Go to option
+                          </button>
+                        </div>
+                      ) : (
+                        <select
+                          className="border rounded p-1 w-full"
+                          value={item.sourcingFrom || ""}
+                          onChange={(e) => {
+                            const selected = e.target.value;
+                            if (selected === "Other") {
+                              setSourcingOtherMap((prev) => ({ ...prev, [idx]: true }));
+                              handleInlineUpdate(idx, "sourcingFrom", "");
+                            } else {
+                              handleInlineUpdate(idx, "sourcingFrom", selected);
+                            }
+                          }}
+                        >
+                          <option value="">Select Sourcing</option>
+                          {vendorSuggestions.map((vendor, i) => (
+                            <option key={i} value={vendor.vendorName}>
+                              {vendor.vendorName}
+                            </option>
+                          ))}
+                          <option value="Other">Other</option>
+                        </select>
+                      )}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                       <select
                         className="border rounded p-1 w-full"
                         value={item.brandingType || ""}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "brandingType", e.target.value)
-                        }
+                        onChange={(e) => handleInlineUpdate(idx, "brandingType", e.target.value)}
                       >
                         <option value="">Select Branding Type</option>
                         {brandingTypeOptions.map((option, optionIdx) => (
                           <option key={optionIdx} value={option}>
                             {option}
-                            
                           </option>
                         ))}
                       </select>
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                     <div>
-                      
-                           {vendorOtherMap[idx] ? (
-                                <div className="relative">
-                                  <div>
-                                  <input  
-                                    type="text"
-                                    className="border rounded p-1 w-full"
-                                    value={item.brandingVendor || ""}
-                                    onChange={(e) =>
-                                      handleInlineUpdate(idx, "brandingVendor", e.target.value)
-                                    }
-                                    placeholder="Enter Vendor"
-                                  />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setVendorOtherMap(prev => ({ ...prev, [idx]: false }))
-                                    }
-                                    className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
-                                  >
-                                    Go to option
-                                  </button>
-                                </div>
-                              ) : (
-                                <div>
-                                  {vendorSuggestions.length > 0 && (
-                                    <select
-                                      name="vendorName"
-                                      className="border w-full p-2 rounded text-sm"
-                                      value={item.brandingVendor || ""}
-                                      onChange={(e) => {
-                                        const selected = e.target.value;
-                                        if (selected === "Other") {
-                                          setVendorOtherMap(prev => ({ ...prev, [idx]: true }));
-                                          handleInlineUpdate(idx, "brandingVendor", "");
-                                        } else {
-                                          handleInlineUpdate(idx, "brandingVendor", selected);
-                                        }
-                                      }}
-                                    >
-                                      <option value="">Select Vendor</option>
-                                      {vendorSuggestions.map((vendor, i) => (
-                                        <option key={i} value={vendor.vendorName}>
-                                          {vendor.vendorName}
-                                        </option>
-                                      ))}
-                                      <option value="Other">Other</option>
-                                    </select>
-                                  )}
-                                </div>
-                              )}
-
-                      </div>
+                      {vendorOtherMap[idx] ? (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            className="border rounded p-1 w-full"
+                            value={item.brandingVendor || ""}
+                            onChange={(e) =>
+                              handleInlineUpdate(idx, "brandingVendor", e.target.value)
+                            }
+                            placeholder="Enter Vendor"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVendorOtherMap((prev) => ({ ...prev, [idx]: false }))
+                            }
+                            className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                          >
+                            Go to option
+                          </button>
+                        </div>
+                      ) : (
+                        <select
+                          className="border rounded p-1 w-full"
+                          value={item.brandingVendor || ""}
+                          onChange={(e) => {
+                            const selected = e.target.value;
+                            if (selected === "Other") {
+                              setVendorOtherMap((prev) => ({ ...prev, [idx]: true }));
+                              handleInlineUpdate(idx, "brandingVendor", "");
+                            } else {
+                              handleInlineUpdate(idx, "brandingVendor", selected);
+                            }
+                          }}
+                        >
+                          <option value="">Select Vendor</option>
+                          {vendorSuggestions.map((vendor, i) => (
+                            <option key={i} value={vendor.vendorName}>
+                              {vendor.vendorName}
+                            </option>
+                          ))}
+                          <option value="Other">Other</option>
+                        </select>
+                      )}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                       <button
@@ -532,9 +520,7 @@ const JobSheetForm = ({
       {/* Row: Delivery Type, Delivery Mode, Delivery Charges */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Delivery Type *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Delivery Type *</label>
           <select
             className="border border-purple-300 rounded w-full p-2"
             value={deliveryType}
@@ -559,9 +545,7 @@ const JobSheetForm = ({
           )}
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Delivery Mode *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Delivery Mode *</label>
           <select
             className="border border-purple-300 rounded w-full p-2"
             value={deliveryMode}
@@ -586,9 +570,7 @@ const JobSheetForm = ({
           )}
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Delivery Charges *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Delivery Charges *</label>
           <select
             className="border border-purple-300 rounded w-full p-2"
             value={deliveryCharges}
@@ -608,9 +590,7 @@ const JobSheetForm = ({
       {/* Row: Delivery Date and Time */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Delivery Date *
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Delivery Date *</label>
           <DatePicker
             selected={deliveryDateObj}
             onChange={handleDeliveryDateChange}
@@ -621,9 +601,7 @@ const JobSheetForm = ({
           />
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Delivery Time
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Delivery Time</label>
           <input
             type="text"
             className="border border-purple-300 rounded w-full p-2"
@@ -636,9 +614,7 @@ const JobSheetForm = ({
 
       {/* Row: Delivery Addresses */}
       <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Delivery Addresses
-        </label>
+        <label className="block mb-1 font-medium text-purple-700">Delivery Addresses</label>
         {addresses.map((address, index) => (
           <div key={index} className="flex items-center mb-2">
             <textarea
@@ -669,9 +645,7 @@ const JobSheetForm = ({
 
       {/* Row: Branding File Name */}
       <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Branding File Name
-        </label>
+        <label className="block mb-1 font-medium text-purple-700">Branding File Name</label>
         <input
           type="text"
           className="border border-purple-300 rounded w-full p-2"
@@ -684,9 +658,7 @@ const JobSheetForm = ({
       {/* Row: Gift Box/Bags Details and Packaging Instructions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Gift Box/Bags Details
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Gift Box/Bags Details</label>
           <textarea
             className="border border-purple-300 rounded w-full p-2"
             value={giftBoxBagsDetails}
@@ -694,9 +666,7 @@ const JobSheetForm = ({
           />
         </div>
         <div>
-          <label className="block mb-1 font-medium text-purple-700">
-            Packaging Instructions
-          </label>
+          <label className="block mb-1 font-medium text-purple-700">Packaging Instructions</label>
           <textarea
             className="border border-purple-300 rounded w-full p-2"
             value={packagingInstructions}
@@ -707,9 +677,7 @@ const JobSheetForm = ({
 
       {/* Row: Other Details */}
       <div>
-        <label className="block mb-1 font-medium text-purple-700">
-          Other Details
-        </label>
+        <label className="block mb-1 font-medium text-purple-700">Other Details</label>
         <textarea
           className="border border-purple-300 rounded w-full p-2"
           value={otherDetails}
