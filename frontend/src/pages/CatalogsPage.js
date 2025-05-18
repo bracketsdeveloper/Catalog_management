@@ -6,6 +6,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
+import PptxGenJS from "pptxgenjs";
 
 // Sub-components
 import RemarksModal from "../components/CatalogManagement/RemarksModal";
@@ -22,23 +23,11 @@ import { fieldMapping, templateConfig } from "../components/CatalogManagement/co
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Add a debounce function at the top of the file
-const debounce = (func, delay) => {
-  let timeoutId;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      func.apply(this, args);
-    }, delay);
-  };
-};
-
 export default function CatalogManagementPage() {
   const navigate = useNavigate();
 
   // States for catalogs and opportunities
   const [catalogs, setCatalogs] = useState([]);
-  const [originalCatalogs, setOriginalCatalogs] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
 
   // UI states
@@ -81,6 +70,7 @@ export default function CatalogManagementPage() {
 
   // Search input
   const [searchTerm, setSearchTerm] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
 
   // Current user role
   const [userRole, setUserRole] = useState("");
@@ -88,7 +78,7 @@ export default function CatalogManagementPage() {
   // Superadmin status
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  // Add permissions check near the top with other state variables
+  // Permissions check
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("export-crm");
 
@@ -134,7 +124,7 @@ export default function CatalogManagementPage() {
     fetchData();
     fetchUserEmail();
     fetchOpportunities();
-  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter]);
+  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchTerm]);
 
   // -------------- API / Data --------------
   async function fetchUserEmail() {
@@ -195,8 +185,20 @@ export default function CatalogManagementPage() {
         const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
         data = data.filter((cat) => opportunityCodes.includes(cat.opportunityNumber));
       }
+      if (searchTerm) {
+        data = data.filter((cat) => {
+          const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+          return (
+            cat.catalogNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      }
       setCatalogs(data);
-      setOriginalCatalogs(data);
       setError(null);
     } catch (err) {
       console.error("Error fetching catalogs:", err);
@@ -445,13 +447,6 @@ export default function CatalogManagementPage() {
     setPdfTemplateModalOpen(true);
   }
 
-  function sanitizeText(text) {
-    return text
-      .replace(/≥/g, '>=')
-      .replace(/≤/g, '<=')
-      .replace(/[^\x00-\x7F]/g, ''); // remove other unsupported characters
-  }
-
   async function handleExportCombinedPDF(catalog, templateId = "1") {
     try {
       const tmpl = templateConfig[templateId];
@@ -567,7 +562,7 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
 
-          const descriptionText = sanitizeText((prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " "));
+          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
           const wrapped = wrapText(descriptionText, 500, normalFont, 7);
           wrapped.forEach((line) => {
             page.drawText(line, {
@@ -667,6 +662,196 @@ export default function CatalogManagementPage() {
     }
   }
 
+  // -------------- PPT EXPORT --------------
+  async function handleExportPPT(catalog) {
+    try {
+      const pptx = new PptxGenJS();
+      pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 inches
+
+      // Add title slide
+      const titleSlide = pptx.addSlide();
+      titleSlide.addText(`Catalog: ${catalog.catalogName}`, {
+        x: 0.5,
+        y: 0.5,
+        w: 12.33,
+        h: 1,
+        fontSize: 24,
+        bold: true,
+        color: "000000",
+        align: "center",
+      });
+      titleSlide.addText(`Company: ${catalog.customerCompany || "N/A"}`, {
+        x: 0.5,
+        y: 2,
+        w: 12.33,
+        h: 0.5,
+        fontSize: 18,
+        color: "000000",
+        align: "center",
+      });
+      titleSlide.addText(`Customer: ${catalog.customerName || "N/A"}`, {
+        x: 0.5,
+        y: 2.7,
+        w: 12.33,
+        h: 0.5,
+        fontSize: 18,
+        color: "000000",
+        align: "center",
+      });
+
+      // Add product slides
+      for (const sub of catalog.products || []) {
+        const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
+        const slide = pptx.addSlide();
+
+        // Add product image
+        let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
+        if (mainImg && mainImg.startsWith("http://")) {
+          mainImg = mainImg.replace("http://", "https://");
+        }
+        let imageData = "";
+        if (mainImg) {
+          try {
+            imageData = await getBase64ImageFromUrl(mainImg);
+          } catch (err) {
+            console.error("Error fetching product image for PPT:", err);
+          }
+        }
+        if (imageData) {
+          slide.addImage({
+            data: imageData,
+            x: 0.5,
+            y: 0.5,
+            w: 6,
+            h: 4,
+          });
+        } else {
+          slide.addShape(pptx.shapes.RECTANGLE, {
+            x: 0.5,
+            y: 0.5,
+            w: 6,
+            h: 4,
+            line: { color: "D3D3D3", width: 1 },
+            fill: { color: "F5F5F5" },
+          });
+          slide.addText("No Image", {
+            x: 2.5,
+            y: 2.5,
+            w: 2,
+            h: 0.5,
+            fontSize: 14,
+            color: "808080",
+            align: "center",
+          });
+        }
+
+        // Add product details
+        let yPos = 0.5;
+        const xText = 7;
+        const lineHeight = 0.6;
+
+        slide.addText(prod.name || sub.productName || "N/A", {
+          x: xText,
+          y: yPos,
+          w: 6,
+          h: 0.5,
+          fontSize: 18,
+          bold: true,
+          color: "000000",
+        });
+        yPos += lineHeight * 1.5;
+
+        if (prod.ProductBrand || sub.ProductBrand) {
+          slide.addText(`Brand: ${prod.ProductBrand || sub.ProductBrand || "N/A"}`, {
+            x: xText,
+            y: yPos,
+            w: 6,
+            h: 0.5,
+            fontSize: 14,
+            color: "000000",
+          });
+          yPos += lineHeight;
+        }
+
+        if (prod.ProductDescription || sub.ProductDescription) {
+          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
+          slide.addText("Description:", {
+            x: xText,
+            y: yPos,
+            w: 6,
+            h: 0.5,
+            fontSize: 14,
+            bold: true,
+            color: "000000",
+          });
+          yPos += lineHeight;
+          slide.addText(descriptionText, {
+            x: xText,
+            y: yPos,
+            w: 6,
+            h: 2,
+            fontSize: 12,
+            color: "000000",
+            valign: "top",
+          });
+          yPos += lineHeight * 3;
+        }
+
+        if (sub.quantity) {
+          slide.addText(`Qty: ${sub.quantity}`, {
+            x: xText,
+            y: yPos,
+            w: 6,
+            h: 0.5,
+            fontSize: 14,
+            color: "000000",
+          });
+          yPos += lineHeight;
+        }
+
+        if (sub.productCost !== undefined) {
+          const baseCost = sub.productCost;
+          const margin = catalog.margin || 0;
+          const effPrice = baseCost * (1 + margin / 100);
+          slide.addText(`Rate (INR): ${effPrice.toFixed(2)}/-`, {
+            x: xText,
+            y: yPos,
+            w: 6,
+            h: 0.5,
+            fontSize: 14,
+            color: "000000",
+          });
+          yPos += lineHeight;
+        }
+
+        if (sub.productGST !== undefined) {
+          slide.addText(`GST: ${sub.productGST}%`, {
+            x: xText,
+            y: yPos,
+            w: 6,
+            h: 0.5,
+            fontSize: 14,
+            color: "000000",
+          });
+        }
+      }
+
+      // Save the presentation
+      pptx.write("blob").then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `Catalog-${catalog.catalogName}.pptx`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    } catch (error) {
+      console.error("PPT export error:", error);
+      alert("PPT export failed");
+    }
+  }
+
   // -------------- VIRTUAL LINK --------------
   function handleVirtualLink(item) {
     const link = `${window.location.origin}/catalog/${item._id}`;
@@ -727,26 +912,31 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- SEARCH --------------
-  const handleSearch = () => {
-    if (!searchTerm) {
-      setCatalogs(originalCatalogs);
+  // -------------- SEARCH SUGGESTIONS --------------
+  const getUniqueCompanyNames = () => {
+    const companySet = new Set();
+    catalogs.forEach((c) => {
+      if (c.customerCompany) companySet.add(c.customerCompany);
+    });
+    return Array.from(companySet);
+  };
+  const companyNames = getUniqueCompanyNames();
+
+  const filterSuggestions = (input) => {
+    if (!input) {
+      setSuggestions([]);
       return;
     }
+    const filtered = companyNames.filter((name) =>
+      name.toLowerCase().includes(input.toLowerCase())
+    );
+    setSuggestions(filtered);
+  };
 
-    const filtered = originalCatalogs.filter((cat) => {
-      const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
-      return (
-        (cat.catalogNumber?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    });
-
-    setCatalogs(filtered);
+  const handleSearch = () => {
+    setCompanyFilter([]); // Clear company filter to allow global search
+    fetchData();
+    setSuggestions([]);
   };
 
   // -------------- RENDER HELPERS --------------
@@ -788,7 +978,6 @@ export default function CatalogManagementPage() {
   );
 
   const renderFilterWindow = () => {
-    // Get unique opportunity owners and company names
     const uniqueOpportunityOwners = [...new Set(opportunities.map(opp => opp.opportunityOwner))];
     const uniqueCompanyNames = [...new Set(catalogs.map(cat => cat.customerCompany))];
 
@@ -913,11 +1102,32 @@ export default function CatalogManagementPage() {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              handleSearch();
+              filterSuggestions(e.target.value);
             }}
             className="border p-2"
             placeholder="Search all fields"
           />
+          <button
+            onClick={handleSearch}
+            className="ml-2 bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white p-2 rounded"
+          >
+            Search
+          </button>
+        </div>
+        <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
+          {suggestions.map((suggestion, index) => (
+            <div
+              key={index}
+              className="p-2 cursor-pointer hover:bg-gray-200"
+              onClick={() => {
+                setSearchTerm(suggestion);
+                setSuggestions([]);
+                handleSearch();
+              }}
+            >
+              {suggestion}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -949,7 +1159,7 @@ export default function CatalogManagementPage() {
                         className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
                         onClick={() => handleSort("opportunityNumber")}
                       >
-                        Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑,": "↓") : ""}
+                        Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
                       </th>
                       <th
                         className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
@@ -1222,6 +1432,20 @@ export default function CatalogManagementPage() {
                 className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
               >
                 Excel
+              </button>
+            )}
+            {(isSuperAdmin || canExportCRM) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleExportPPT(selectedCatalogForDropdown);
+                  setOpenDropdownForCatalog(null);
+                  setSelectedCatalogForDropdown(null);
+                  dropdownButtonRef.current = null;
+                }}
+                className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+              >
+                PPT
               </button>
             )}
             <button

@@ -40,7 +40,6 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           />
         </th>
       ))}
-
       {/* Status filter */}
       <th className="p-1 border">
         <select
@@ -55,7 +54,6 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="__empty__">No Status</option>
         </select>
       </th>
-
       {/* Actions */}
       <th className="p-1 border"></th>
     </tr>
@@ -93,7 +91,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
           <button onClick={close} className="text-2xl">×</button>
         </div>
-
         <div className="mb-4 space-y-2">
           <label className="font-bold">Add New Follow-Up:</label>
           <div className="flex gap-2">
@@ -115,7 +112,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
             </button>
           </div>
         </div>
-
         <div className="max-h-64 overflow-y-auto border p-2 mb-4">
           {local.length === 0 && <p className="text-gray-600">No follow-ups.</p>}
           {local.map((fu, i) => (
@@ -141,7 +137,6 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
             </div>
           ))}
         </div>
-
         <div className="flex justify-end">
           <button onClick={close} className="bg-green-700 text-white px-4 py-1 rounded">
             Close
@@ -162,7 +157,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   const save = () => {
     if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
       return;
-    // Exclude status if it's an empty string
     const payload = { ...data };
     if (payload.status === "") {
       delete payload.status;
@@ -178,7 +172,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
             <button onClick={onClose} className="text-2xl">×</button>
           </div>
-
           <form className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div><label className="font-bold">Job Sheet #:</label> {data.jobSheetNumber}</div>
@@ -188,13 +181,11 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               </div>
               <div><label className="font-bold">Client:</label> {data.clientCompanyName}</div>
             </div>
-
             <div className="grid grid-cols-3 gap-4">
               <div><label className="font-bold">Event:</label> {data.eventName}</div>
               <div><label className="font-bold">Product:</label> {data.product}</div>
               <div><label className="font-bold">Size:</label> {data.size || "N/A"}</div>
             </div>
-
             <div className="grid grid-cols-3 gap-4">
               <div><label className="font-bold">Sourced From:</label> {data.sourcingFrom}</div>
               <div>
@@ -205,7 +196,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               </div>
               <div><label className="font-bold">Qty Req'd:</label> {data.qtyRequired}</div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="font-bold">Qty Ordered:</label>
@@ -228,7 +218,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="font-bold">Remarks:</label>
@@ -251,7 +240,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="font-bold">Expected Recv':</label>
@@ -288,7 +276,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 </select>
               </div>
             </div>
-
             <div className="flex justify-end">
               <button
                 type="button"
@@ -299,7 +286,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               </button>
             </div>
           </form>
-
           <div className="flex justify-end gap-4 mt-6">
             <button onClick={onClose} className="px-4 py-2 border rounded">
               Cancel
@@ -310,7 +296,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
           </div>
         </div>
       </div>
-
       {fuModal && (
         <FollowUpModal
           followUps={data.followUp}
@@ -347,11 +332,21 @@ export default function OpenPurchaseList() {
 
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const [editModal, setEditModal] = useState(false);
   const [currentEdit, setCurrentEdit] = useState(null);
   const [viewFuModal, setViewFuModal] = useState(false);
   const [viewFuId, setViewFuId] = useState(null);
+
+  /* ─────────── Modal Handlers ─────────── */
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
   /* ─────────── Permissions load ─────────── */
   useEffect(() => {
@@ -505,7 +500,6 @@ export default function OpenPurchaseList() {
       alert("You don't have permission to export purchase records.");
       return;
     }
-
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(
       sortedRows.map((r) => ({
@@ -540,7 +534,6 @@ export default function OpenPurchaseList() {
     XLSX.writeFile(wb, "open_purchases.xlsx");
   };
 
-  // Add this line to check if the user is a superadmin
   if (loading)
     return (
       <div className="p-6">
@@ -561,12 +554,9 @@ export default function OpenPurchaseList() {
           You don't have permission to edit purchase records.
         </div>
       )}
-
       <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
         Open Purchases
       </h1>
-
-      {/* global search + filters + export */}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           type="text"
@@ -590,8 +580,6 @@ export default function OpenPurchaseList() {
           </button>
         )}
       </div>
-
-      {/* advanced filter UI */}
       {showFilters && (
         <div className="border p-4 mb-4 bg-gray-50 rounded text-xs">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -627,7 +615,6 @@ export default function OpenPurchaseList() {
                 }
               />
             </div>
-
             {[
               ["jobSheetCreatedDate", "Job Sheet Created Date"],
               ["deliveryDateTime", "Delivery Date"],
@@ -683,8 +670,6 @@ export default function OpenPurchaseList() {
           </div>
         </div>
       )}
-
-      {/* main table */}
       <table className="min-w-full border-collapse border border-gray-300 text-xs">
         <thead className="bg-gray-50">
           <tr>
@@ -755,7 +740,17 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">
                   {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
                 </td>
-                <td className="p-2 border">{p.jobSheetNumber}</td>
+                <td className="p-2 border">
+                  <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(p.jobSheetNumber);
+                    }}
+                  >
+                    {p.jobSheetNumber || "(No Number)"}
+                  </button>
+                </td>
                 <td className="p-2 border">{p.clientCompanyName}</td>
                 <td className="p-2 border">{p.eventName}</td>
                 <td className="p-2 border">{p.product}</td>
@@ -830,15 +825,11 @@ export default function OpenPurchaseList() {
           })}
         </tbody>
       </table>
-
-      {/* JobSheetGlobal Modal */}
       <JobSheetGlobal
         jobSheetNumber={selectedJobSheetNumber}
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
       />
-
-      {/* EditPurchaseModal */}
       {editModal && currentEdit && (
         <EditPurchaseModal
           purchase={currentEdit}
@@ -848,12 +839,8 @@ export default function OpenPurchaseList() {
               const token = localStorage.getItem("token");
               const headers = { Authorization: `Bearer ${token}` };
               let updatedPurchase;
-
-              console.log("Saving purchase:", u); // Log payload for debugging
-
               if (u._id && u._id.startsWith("temp_")) {
-                // Temporary record: Use POST
-                const { _id, ...data } = u; // Remove temp _id
+                const { _id, ...data } = u;
                 const response = await axios.post(
                   `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
                   data,
@@ -861,7 +848,6 @@ export default function OpenPurchaseList() {
                 );
                 updatedPurchase = response.data.purchase;
               } else {
-                // Existing record: Use PUT
                 const response = await axios.put(
                   `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
                   u,
@@ -869,22 +855,19 @@ export default function OpenPurchaseList() {
                 );
                 updatedPurchase = response.data.purchase;
               }
-
               setPurchases((prev) =>
                 prev.map((x) => (x._id === u._id ? updatedPurchase : x))
               );
             } catch (error) {
               console.error("Error saving purchase:", error);
               const message = error.response?.data?.message || "Error saving purchase";
-              alert(message); // Show server error message
+              alert(message);
             } finally {
               setEditModal(false);
             }
           }}
         />
       )}
-
-      {/* View FollowUp Modal */}
       {viewFuModal && viewFuId && (
         <FollowUpModal
           followUps={purchases.find((x) => x._id === viewFuId)?.followUp || []}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { format } from "date-fns";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -8,79 +10,145 @@ export default function JobSheetGlobal({ jobSheetNumber, isOpen, onClose }) {
   const [jobSheet, setJobSheet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-    const modalRef = useRef(null);
+  const modalRef = useRef(null);
 
- useEffect(() => {
-  const handleClickOutside = (event) => {
-    if (modalRef.current && !modalRef.current.contains(event.target)) {
-      onClose();
-    }
-  };
-
-  if (isOpen) {
-    document.addEventListener("mousedown", handleClickOutside);
-  }
-
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, [isOpen, onClose]);
-
-
+  // Handle click outside to close modal
   useEffect(() => {
-  if (!jobSheetNumber || !isOpen) return;
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, onClose]);
 
-  const fetchJobSheet = async () => {
+  // Fetch job sheet data
+  useEffect(() => {
+    if (!jobSheetNumber || !isOpen) return;
+    const fetchJobSheet = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const token = localStorage.getItem("token");
+        const { data } = await axios.get(
+          `${BACKEND_URL}/api/admin/jobsheets/${jobSheetNumber}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setJobSheet(data);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to fetch job sheet");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchJobSheet();
+  }, [jobSheetNumber, isOpen]);
+
+  // Format date helper
+  const formatDate = (d) => (d ? format(new Date(d), "dd-MMM-yyyy") : "N/A");
+
+  // Export to Word
+  const exportToDocx = async () => {
     try {
-      console.log("Fetching job sheet...");
-      setLoading(true);
-      setError(null);
       const token = localStorage.getItem("token");
-      const { data } = await axios.get(
-        `${BACKEND_URL}/api/admin/jobsheets/${jobSheetNumber}`,
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/jobsheets/${jobSheetNumber}/export-docx`,
         {
+          responseType: "blob",
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setJobSheet(data);
-      console.log("Fetched job sheet:", data);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `job-sheet-${jobSheetNumber}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Error fetching job sheet:", err);
-      setError("Failed to fetch job sheet");
-    } finally {
-      setLoading(false);
+      console.error(err);
+      alert("Document export failed");
     }
   };
 
-  fetchJobSheet();
-}, [jobSheetNumber, isOpen]);
-
-
-  const formatDate = (date) => (date ? format(new Date(date), "dd-MM-yyyy") : "N/A");
+  // Export to PDF
+  const exportToPdf = async () => {
+    const input = document.getElementById("job-sheet-content");
+    if (!input) return alert("Nothing to export");
+    try {
+      const canvas = await html2canvas(input, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
+      const margin = 40;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const contentWidth = pdfWidth - margin * 2;
+      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+      pdf.addImage(imgData, "PNG", margin, margin, contentWidth, contentHeight);
+      pdf.save(`job-sheet-${jobSheet?.eventName || jobSheetNumber}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("PDF export failed");
+    }
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div
-      ref={modalRef}
-      className="bg-white max-h-[90vh] overflow-y-auto p-4 border rounded-lg w-full max-w-[1200px] relative"
-    >
-      <button onClick={onClose} className="absolute top-2 right-2 text-3xl font-bold">×</button>
-      {loading ? (
-        <div>Loading...</div>
-      ) : error ? (
-        <div className="text-red-500">{error}</div>
-      ) : (
-        <JobSheetContent jobSheet={jobSheet} formatDate={formatDate} />
-      )}
-    </div>
-
+      <div
+        ref={modalRef}
+        className="bg-white max-h-[90vh] overflow-y-auto p-4 border rounded-lg w-full max-w-[1200px] relative"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 text-3xl font-bold"
+        >
+          ×
+        </button>
+        {loading ? (
+          <p className="text-xs">Loading job sheet…</p>
+        ) : error ? (
+          <p className="text-xs text-red-500">{error}</p>
+        ) : !jobSheet ? (
+          <p className="text-xs">No job sheet found.</p>
+        ) : (
+          <>
+            {/* Export buttons */}
+            <div className="mb-4 space-x-2">
+              <button
+                onClick={exportToDocx}
+                className="px-4 py-2 bg-blue-500 text-white text-xs rounded"
+              >
+                Export to Word
+              </button>
+              <button
+                onClick={exportToPdf}
+                className="px-4 py-2 bg-green-500 text-white text-xs rounded"
+              >
+                Export to PDF
+              </button>
+            </div>
+            {/* Job sheet content */}
+            <JobSheetContent jobSheet={jobSheet} formatDate={formatDate} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-// Extracted presentational content (same as you had)
+// Job sheet content component (from JobSheetView.jsx)
 function JobSheetContent({ jobSheet, formatDate }) {
   return (
     <div
@@ -88,109 +156,118 @@ function JobSheetContent({ jobSheet, formatDate }) {
       className="mx-auto border border-black text-xs"
       style={{ width: "90%", maxWidth: "1123px", boxSizing: "border-box" }}
     >
-        <p><strong>Job Sheet Number:</strong> {jobSheet.jobSheetNumber || "(No Number)"}</p>
-        <p><strong>ID:</strong> {jobSheet._id}</p>
-         
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-4 text-xs sm:text-sm border border-black">
-          <div className="border border-black p-2 flex flex-col sm:flex-row items-start sm:items-center">
-            <span className="font-bold uppercase">Event Name:</span>
-            <span className="ml-1 font-semibold break-words">{jobSheet.eventName || "N/A"}</span>
-          </div>
-          <div className="border border-black flex items-center justify-center font-bold uppercase p-2">
-            ORDER FORM
-          </div>
-          <div className="border border-black flex items-center justify-center p-2">
-            <img src="/logo.png" alt="Logo" className="h-10 sm:h-12 md:h-16 object-contain" />
-          </div>
+      {/* Top Header Row */}
+      <div className="grid grid-cols-[1fr_2fr_1fr] gap-0">
+        <div className="border border-black flex items-center justify-center text-left">
+          <span className="font-bold uppercase">EVENT NAME:</span>
+          <span className="ml-1 font-semibold">
+            {jobSheet.eventName || "N/A"}
+          </span>
         </div>
-
-        {/* Grid Header */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2">
-          <Cell label="ORDER FORM #:" value={jobSheet.jobSheetNumber} />
-          <Cell label="CLIENT COMPANY:" value={jobSheet.clientCompanyName} />
-          <Cell label="REF QUOTATION:" value={jobSheet.referenceQuotation} />
-          <Cell label="DELIVERY TIME:" value={jobSheet.deliveryTime} />
-          <Cell label="CLIENT NAME:" value={jobSheet.clientName} />
-          <Cell label="CRM INCHARGE:" value={jobSheet.crmIncharge} />
-          <Cell label="CONTACT:" value={jobSheet.contactNumber} />
+        <div className="border border-black flex items-center justify-center">
+          <span className="font-bold uppercase">ORDER FORM</span>
         </div>
-
-        {/* Product Table */}
-        <div className="overflow-x-auto mt-4">
-          <table className="min-w-full border-collapse border border-black text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-gray-100">
-                {[
-                  "SL NO.", "PRODUCTS", "COLOR", "SIZE/CAPACITY", "QTY", "SOURCING FROM",
-                  "BRANDING TYPE", "BRANDING VENDOR", "REMARKS"
-                ].map((h) => (
-                  <th key={h} className="p-1 border border-black whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {jobSheet.items.map((it, i) => (
-                <tr key={i} className="border border-black font-semibold">
-                  <td className="p-1 border border-black">{i + 1}</td>
-                  <td className="p-1 border border-black">{it.product}</td>
-                  <td className="p-1 border border-black">{it.color}</td>
-                  <td className="p-1 border border-black">{it.size}</td>
-                  <td className="p-1 border border-black">{it.quantity}</td>
-                  <td className="p-1 border border-black">{it.sourcingFrom || "N/A"}</td>
-                  <td className="p-1 border border-black">{it.brandingType || "N/A"}</td>
-                  <td className="p-1 border border-black">{it.brandingVendor || "N/A"}</td>
-                  <td className="p-1 border border-black">{it.remarks || "N/A"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="border border-black flex items-center justify-center">
+          <img src="/logo.png" alt="Logo" className="h-16 inline-block" />
         </div>
-
-        {/* Additional Details */}
-        <Section
-          rows={[
-            [
-              { label: "PO NUMBER:", val: jobSheet.poNumber },
-              { label: "PO STATUS:", val: jobSheet.poStatus },
-            ],
-            [
-              { label: "DELIVERY TYPE:", val: jobSheet.deliveryType },
-              { label: "DELIVERY MODE:", val: jobSheet.deliveryMode },
-              { label: "DELIVERY CHARGES:", val: jobSheet.deliveryCharges },
-            ],
-          ]}
-        />
-
-        <Line label="DELIVERY ADDRESS:" value={jobSheet.deliveryAddress} />
-        <Line label="GIFT BOX / BAGS DETAILS:" value={jobSheet.giftBoxBagsDetails} />
-        <Line label="PACKAGING INSTRUCTIONS:" value={jobSheet.packagingInstructions} />
-        <Line label="ANY OTHER DETAILS:" value={jobSheet.otherDetails} />
-
-        {/* Hand-written fields */}
-        <div className="mt-4">
-          <div className="flex flex-col sm:flex-row justify-between mb-8 gap-4">
-            {["QTY DISPATCHED:", "SENT ON:", "SEAL/SIGN:"].map((t) => (
-              <div key={t} className="w-full sm:w-1/3 text-center">
-                <span className="font-bold uppercase">{t}</span>
-                <span className="block border-b border-black mt-1 w-full h-6"></span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* <div className="mt-4 flex justify-end">
-          <button
-            onClick={onCloseModal}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Close
-          </button>
-        </div> */}
       </div>
+
+      {/* 3×3 Grid Header */}
+      <div className="grid grid-cols-3 gap-0">
+        <Cell label="ORDER FORM #:" value={jobSheet.jobSheetNumber} />
+        <Cell
+          label="DELIVERY DATE:"
+          value={formatDate(jobSheet.deliveryDate)}
+        />
+        <Cell label="CLIENT COMPANY:" value={jobSheet.clientCompanyName} />
+        <Cell label="REF QUOTATION:" value={jobSheet.referenceQuotation} />
+        <Cell label="DELIVERY TIME:" value={jobSheet.deliveryTime} />
+        <Cell label="CLIENT NAME:" value={jobSheet.clientName} />
+        <Cell label="ORDER DATE:" value={formatDate(jobSheet.orderDate)} />
+        <Cell label="CRM INCHARGE:" value={jobSheet.crmIncharge} />
+        <Cell label="CONTACT:" value={jobSheet.contactNumber} />
+      </div>
+
+      {/* Product Table */}
+      <table className="min-w-full border-collapse border border-black">
+        <thead>
+          <tr className="border border-black">
+            {[
+              "SL NO.",
+              "PRODUCTS",
+              "COLOR",
+              "SIZE/CAPACITY",
+              "QTY",
+              "SOURCING FROM",
+              "BRANDING TYPE",
+              "BRANDING VENDOR",
+              "REMARKS",
+            ].map((h) => (
+              <th key={h} className="p-1 border border-black uppercase">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {jobSheet.items.map((it, i) => (
+            <tr key={i} className="border border-black font-semibold">
+              <td className="p-1 border border-black">{i + 1}</td>
+              <td className="p-1 border border-black">{it.product}</td>
+              <td className="p-1 border border-black">{it.color}</td>
+              <td className="p-1 border border-black">{it.size}</td>
+              <td className="p-1 border border-black">{it.quantity}</td>
+              <td className="p-1 border border-black">
+                {it.sourcingFrom || "N/A"}
+              </td>
+              <td className="p-1 border border-black">
+                {it.brandingType || "N/A"}
+              </td>
+              <td className="p-1 border border-black">
+                {it.brandingVendor || "N/A"}
+              </td>
+              <td className="p-1 border border-black">{it.remarks || "N/A"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Additional Details */}
+      <Section
+        rows={[
+          [
+            { label: "PO NUMBER:", val: jobSheet.poNumber },
+            { label: "PO STATUS:", val: jobSheet.poStatus },
+          ],
+          [
+            { label: "DELIVERY TYPE:", val: jobSheet.deliveryType },
+            { label: "DELIVERY MODE:", val: jobSheet.deliveryMode },
+            { label: "DELIVERY CHARGES:", val: jobSheet.deliveryCharges },
+          ],
+        ]}
+      />
+
+      <Line label="DELIVERY ADDRESS:" value={jobSheet.deliveryAddress} />
+      <Line label="GIFT BOX / BAGS DETAILS:" value={jobSheet.giftBoxBagsDetails} />
+      <Line label="PACKAGING INSTRUCTIONS:" value={jobSheet.packagingInstructions} />
+      <Line label="ANY OTHER DETAILS:" value={jobSheet.otherDetails} />
+
+      {/* Hand-written fields */}
+      <div className="mt-2">
+        <div className="flex justify-between mb-20 px-6">
+          {["QTY DISPATCHED:", "SENT ON:", "SEAL/SIGN:"].map((t) => (
+            <div key={t} className="w-1/3 text-center">
+              <span className="font-bold uppercase">{t}</span>
+              <span className="border-b border-black inline-block w-full"></span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// Reuse the helpers from your original code
+// Presentational helpers
 function Cell({ label, value }) {
   return (
     <div className="border border-black flex items-center">
