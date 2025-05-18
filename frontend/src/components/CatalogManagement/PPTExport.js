@@ -1,215 +1,97 @@
-// src/components/CatalogManagement/PPTExport.js
 import PptxGenJS from "pptxgenjs";
-import { getBase64ImageFromUrl } from "./exportUtils";
-import { templateConfig } from "./constants";
 
-function sanitizeText(text) {
-  return text
-    .replace(/≥/g, ">=")
-    .replace(/≤/g, "<=")
-    .replace(/[^\x00-\x7F]/g, "");
+// Mapping for field names to display labels
+const pptFieldMapping = {
+  name: "Name",
+  ProductBrand: "Brand Name",
+  ProductDescription: "Description",
+  quantity: "Qty",
+  productCost: "Rate in INR (per pc)",
+  productGST: "GST",
+};
+
+// Utility to wrap text for PPT slides
+function wrapText(text, maxWidth, fontSize) {
+  const words = text.split(" ");
+  const lines = [];
+  let currentLine = "";
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    // Approximate width: 1 char ≈ fontSize/2 pixels
+    if (testLine.length * (fontSize / 2) <= maxWidth) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+  });
+  if (currentLine) lines.push(currentLine);
+  return lines;
 }
 
-export default async function PPTExport({ catalog, templateId = "1" }) {
+export async function exportToPPT(catalog, getBase64ImageFromUrl) {
   try {
-    const tmpl = templateConfig[templateId];
-    if (!tmpl) {
-      throw new Error("Invalid template selection");
+    const pptx = new PptxGenJS();
+    pptx.title = `Catalog - ${catalog.catalogName}`;
+
+    // Fetch template images as base64
+    let coverBgData = "";
+    let template2BgData = "";
+    let productBgData = "";
+    let closingBgData = "";
+    
+    try {
+      coverBgData = await getBase64ImageFromUrl("/ppttemplates/templateSlide1.jpg");
+    } catch (err) {
+      console.error("Error fetching cover slide background:", err);
+    }
+    
+    try {
+      template2BgData = await getBase64ImageFromUrl("/ppttemplates/templateSlide2.jpg");
+    } catch (err) {
+      console.error("Error fetching templateSlide2 background:", err);
+    }
+    
+    try {
+      productBgData = await getBase64ImageFromUrl("/ppttemplates/templateSlide3.jpg");
+    } catch (err) {
+      console.error("Error fetching product slide background:", err);
+    }
+    
+    try {
+      closingBgData = await getBase64ImageFromUrl("/ppttemplates/templateSlideLast.jpg");
+    } catch (err) {
+      console.error("Error fetching closing slide background:", err);
     }
 
-    const pptx = new PptxGenJS();
-    pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 inches
+    // Slide 1: Cover Slide (templateSlide1.jpg, no text)
+    const coverSlide = pptx.addSlide();
+    coverSlide.background = coverBgData
+      ? { data: coverBgData }
+      : { color: "F5F5F5" }; // Fallback to light gray
 
-    // Define slide masters
-    pptx.defineSlideMaster({
-      title: "COVER_SLIDE",
-      background: { color: tmpl.ppt1?.background || "FFFFFF" },
-      objects: [
-        {
-          image: {
-            x: 0.5,
-            y: 0.5,
-            w: 2,
-            h: 1,
-            path: tmpl.ppt1?.logo || "",
-          },
-        },
-        {
-          text: {
-            text: "{catalogName}",
-            options: {
-              x: 0.5,
-              y: 2,
-              w: 12,
-              h: 1,
-              fontSize: 36,
-              bold: true,
-              color: tmpl.ppt1?.fontColor || "000000",
-              align: "center",
-            },
-          },
-        },
-        {
-          text: {
-            text: "{customerCompany}",
-            options: {
-              x: 0.5,
-              y: 3.5,
-              w: 12,
-              h: 0.5,
-              fontSize: 24,
-              color: tmpl.ppt1?.fontColor || "000000",
-              align: "center",
-            },
-          },
-        },
-      ],
-    });
+    // Slide 2: TemplateSlide2 (templateSlide2.jpg, no content)
+    const template2Slide = pptx.addSlide();
+    template2Slide.background = template2BgData
+      ? { data: template2BgData }
+      : { color: "F5F5F5" }; // Fallback to light gray
 
-    pptx.defineSlideMaster({
-      title: "PRODUCT_SLIDE",
-      background: { color: tmpl.ppt2?.background || "FFFFFF" },
-      objects: [
-        {
-          image: {
-            x: 0.5,
-            y: 1,
-            w: 6,
-            h: 4,
-            path: tmpl.ppt2?.logo || "",
-          },
-        },
-        {
-          text: {
-            text: "{productName}",
-            options: {
-              x: 7,
-              y: 1,
-              w: 6,
-              h: 0.5,
-              fontSize: 24,
-              bold: true,
-              color: tmpl.ppt2?.fontColor || "000000",
-            },
-          },
-        },
-        {
-          text: {
-            text: "Brand Name: {productBrand}",
-            options: {
-              x: 7,
-              y: 1.8,
-              w: 6,
-              h: 0.4,
-              fontSize: 18,
-              color: tmpl.ppt2?.fontColor || "000000",
-            },
-          },
-        },
-        {
-          text: {
-            text: "Description: {productDescription}",
-            options: {
-              x: 7,
-              y: 2.4,
-              w: 5.5,
-              h: 1.5,
-              fontSize: 14,
-              color: tmpl.ppt2?.fontColor || "000000",
-            },
-          },
-        },
-        {
-          text: {
-            text: "Qty: {quantity}",
-            options: {
-              x: 7,
-              y: 4.1,
-              w: 5,
-              h: 0.4,
-              fontSize: 18,
-              color: tmpl.ppt2?.fontColor || "000000",
-            },
-          },
-        },
-        {
-          text: {
-            text: "Rate in INR (per pc): {rate}",
-            options: {
-              x: 7,
-              y: 4.7,
-              w: 5,
-              h: 0.4,
-              fontSize: 18,
-              color: tmpl.ppt2?.fontColor || "000000",
-            },
-          },
-        },
-        {
-          text: {
-            text: "GST: {gst}%",
-            options: {
-              x: 7,
-              y: 5.3,
-              w: 5,
-              h: 0.4,
-              fontSize: 18,
-              color: tmpl.ppt2?.fontColor || "000000",
-            },
-          },
-        },
-      ],
-    });
-
-    pptx.defineSlideMaster({
-      title: "END_SLIDE",
-      background: { color: tmpl.ppt3?.background || "FFFFFF" },
-      objects: [
-        {
-          image: {
-            x: 0.5,
-            y: 0.5,
-            w: 2,
-            h: 1,
-            path: tmpl.ppt3?.logo || "",
-          },
-        },
-        {
-          text: {
-            text: "Thank You",
-            options: {
-              x: 0.5,
-              y: 2,
-              w: 12,
-              h: 1,
-              fontSize: 36,
-              bold: true,
-              color: tmpl.ppt3?.fontColor || "000000",
-              align: "center",
-            },
-          },
-        },
-      ],
-    });
-
-    // Cover Slide
-    const coverSlide = pptx.addSlide({ masterName: "COVER_SLIDE" });
-    coverSlide.addText(catalog.catalogName || "Catalog", {
-      placeholder: "{catalogName}",
-    });
-    coverSlide.addText(catalog.customerCompany || "", {
-      placeholder: "{customerCompany}",
-    });
-
-    // Product Slides
-    for (let i = 0; i < (catalog.products || []).length; i++) {
+    // Product Slides (templateSlide3.jpg)
+    for (let i = 0; i < (catalog.products?.length || 0); i++) {
       const sub = catalog.products[i];
       const prod = sub.productId && typeof sub.productId === "object" ? sub.productId : {};
-      const slide = pptx.addSlide({ masterName: "PRODUCT_SLIDE" });
+      const slide = pptx.addSlide();
+      slide.background = productBgData
+        ? { data: productBgData }
+        : { color: "FFFFFF" }; // Fallback to white
 
-      // Product Image
+      // Image handling
+      const imageWidth = 4; // 4 inches
+      const imageHeight = 3; // 3 inches
+      const imageX = 0.8; // Left margin
+      const imageY = 1.3; // Top margin
       let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
-      if (mainImg && mainImg.startsWith("http://")) {
+      if (mainImg.startsWith("http://")) {
         mainImg = mainImg.replace("http://", "https://");
       }
       let imageData = "";
@@ -217,70 +99,188 @@ export default async function PPTExport({ catalog, templateId = "1" }) {
         try {
           imageData = await getBase64ImageFromUrl(mainImg);
         } catch (err) {
-          console.error("Error fetching product image for PPT:", err);
+          console.error("Error fetching product image:", err);
         }
       }
       if (imageData) {
-        slide.addImage({
-          data: imageData,
-          x: 0.5,
-          y: 1,
-          w: 6,
-          h: 4,
-        });
+        try {
+          slide.addImage({
+            data: imageData,
+            x: imageX,
+            y: imageY,
+            w: imageWidth,
+            h: imageHeight,
+            sizing: { type: "contain" },
+          });
+        } catch (err) {
+          console.error("Error adding image to slide:", err);
+        }
       } else {
-        slide.addShape(pptx.ShapeType.rect, {
-          x: 0.5,
-          y: 1,
-          w: 6,
-          h: 4,
+        slide.addShape(pptx.shapes.RECTANGLE, {
+          x: imageX,
+          y: imageY,
+          w: imageWidth,
+          h: imageHeight,
           line: { color: "CCCCCC", width: 1 },
+          fill: { color: "EFEFEF" },
         });
         slide.addText("No Image", {
-          x: 2.5,
-          y: 2.5,
-          w: 2,
-          h: 0.5,
-          fontSize: 18,
-          color: "808080",
+          x: imageX + 0.5,
+          y: imageY + 1.8,
+          w: imageWidth - 1,
+          h: 0.4,
           align: "center",
+          fontSize: 12, // Reduced from 14
+          color: "808080",
+          fontFace: "Arial",
         });
       }
 
-      // Product Details
+      // Text fields (right side)
+      let textX = 5.5; // Start after image
+      let textY = 0.7; // Align with image top
+      const lineHeight = 0.4; // Reduced from 0.5 inches
+      const textWidth = 4.5; // Remaining slide width
+
+      // Name
       slide.addText(prod.name || sub.productName || "", {
-        placeholder: "{productName}",
+        x: textX,
+        y: textY,
+        w: textWidth,
+        h: 0.6,
+        fontSize: 18, // Reduced from 22
+        bold: true,
+        color: "333333",
+        fontFace: "Arial",
+        wrap: true,
       });
-      slide.addText(`Brand Name: ${prod.ProductBrand || sub.ProductBrand || ""}`, {
-        placeholder: "{productBrand}",
-      });
-      const descriptionText = sanitizeText((prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " "));
-      slide.addText(`Description: ${descriptionText}`, {
-        placeholder: "{productDescription}",
-      });
-      slide.addText(`Qty: ${sub.quantity || ""}`, {
-        placeholder: "{quantity}",
-      });
+      textY += lineHeight * 1.5; // Now 0.6 inches (was 0.75)
+
+      // Brand Name
+      if (prod.ProductBrand || sub.ProductBrand) {
+        slide.addText(
+          [
+            { text: "Brand: ", bold: true, fontSize: 11 }, // Matches description label
+            { text: prod.ProductBrand || sub.ProductBrand || "", fontSize: 10 }, // Matches description value
+          ],
+          {
+            x: textX,
+            y: textY,
+            w: textWidth,
+            fontSize: 11,
+            h: 0.4,
+            color: "333333",
+            fontFace: "Arial",
+            wrap: true,
+          }
+        );
+        textY += lineHeight - 0.1;
+      }
+
+      // Description
+      if (prod.ProductDescription || sub.ProductDescription) {
+        const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
+        const wrapped = wrapText(descriptionText, 300, 10); // Updated fontSize for wrapping
+        slide.addText("Description:", {
+          x: textX,
+          y: textY,
+          w: textWidth,
+          h: 0.4,
+          fontSize: 11, // Reduced from 13
+          bold: true,
+          color: "333333",
+          fontFace: "Arial",
+        });
+        textY += lineHeight - 0.1; // Now 0.3 inches (was 0.4)
+        wrapped.forEach((line) => {
+          slide.addText(line, {
+            x: textX,
+            y: textY,
+            w: textWidth,
+            h: 0.4,
+            fontSize: 10, // Reduced from 12
+            color: "333333",
+            fontFace: "Arial",
+            wrap: true,
+          });
+          textY += lineHeight; // Now 0.4 inches (was 0.5)
+        });
+        textY += lineHeight * 0.5; // Now 0.2 inches (was 0.5)
+      }
+
+      // Quantity
+      if (sub.quantity) {
+        slide.addText(
+          [
+            { text: "Qty: ", bold: true, fontSize: 11 }, // Matches description label
+            { text: String(sub.quantity), fontSize: 10 }, // Matches description value
+          ],
+          {
+            x: textX,
+            y: textY,
+            w: textWidth,
+            fontSize: 11,
+            h: 0.4,
+            color: "333333",
+            fontFace: "Arial",
+            wrap: true,
+          }
+        );
+        textY += lineHeight - 0.1;
+      }
+
+      // Price
       if (sub.productCost !== undefined) {
         const baseCost = sub.productCost;
         const margin = catalog.margin || 0;
         const effPrice = baseCost * (1 + margin / 100);
-        slide.addText(`Rate in INR (per pc): ${effPrice.toFixed(2)}/-`, {
-          placeholder: "{rate}",
-        });
+        slide.addText(
+          [
+            { text: "Rate (INR/pc): ", bold: true, fontSize: 11 }, // Matches description label
+            { text: `${effPrice.toFixed(2)}/-`, fontSize: 10 }, // Matches description value
+          ],
+          {
+            x: textX,
+            y: textY,
+            w: textWidth,
+            fontSize: 11,
+            h: 0.4,
+            color: "333333",
+            fontFace: "Arial",
+            wrap: true,
+          }
+        );
+        textY += lineHeight - 0.1;
       }
-      slide.addText(`GST: ${sub.productGST !== undefined ? sub.productGST : ""}%`, {
-        placeholder: "{gst}",
-      });
+
+      // GST
+      if (sub.productGST !== undefined) {
+        slide.addText(
+          [
+            { text: "GST: ", bold: true, fontSize: 11 }, // Matches description label
+            { text: `${sub.productGST}%`, fontSize: 10 }, // Matches description value
+          ],
+          {
+            x: textX,
+            y: textY,
+            w: textWidth,
+            h: 0.4,
+            fontSize: 11,
+            color: "333333",
+            fontFace: "Arial",
+            wrap: true,
+          }
+        );
+        textY += lineHeight - 0.1;
+      }
     }
 
-    // End Slide
-    const endSlide = pptx.addSlide({ masterName: "END_SLIDE" });
-    endSlide.addText("Thank You", {
-      placeholder: "Thank You",
-    });
+    // Closing Slide (templateSlideLast.jpg)
+    const closingSlide = pptx.addSlide();
+    closingSlide.background = closingBgData
+      ? { data: closingBgData }
+      : { color: "F5F5F5" }; // Fallback to light gray
 
-    // Save the presentation
     await pptx.writeFile({ fileName: `Catalog-${catalog.catalogName}.pptx` });
   } catch (error) {
     console.error("PPT export error:", error);

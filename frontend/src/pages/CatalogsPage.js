@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
@@ -6,7 +7,6 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
-import PptxGenJS from "pptxgenjs";
 
 // Sub-components
 import RemarksModal from "../components/CatalogManagement/RemarksModal";
@@ -18,7 +18,7 @@ import {
   wrapText,
 } from "../components/CatalogManagement/exportUtils";
 import { groupItemsByDate } from "../components/CatalogManagement/dateUtils";
-
+import { exportToPPT } from "../components/CatalogManagement/PPTExport";
 import { fieldMapping, templateConfig } from "../components/CatalogManagement/constants";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -665,187 +665,8 @@ export default function CatalogManagementPage() {
   // -------------- PPT EXPORT --------------
   async function handleExportPPT(catalog) {
     try {
-      const pptx = new PptxGenJS();
-      pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 inches
-
-      // Add title slide
-      const titleSlide = pptx.addSlide();
-      titleSlide.addText(`Catalog: ${catalog.catalogName}`, {
-        x: 0.5,
-        y: 0.5,
-        w: 12.33,
-        h: 1,
-        fontSize: 24,
-        bold: true,
-        color: "000000",
-        align: "center",
-      });
-      titleSlide.addText(`Company: ${catalog.customerCompany || "N/A"}`, {
-        x: 0.5,
-        y: 2,
-        w: 12.33,
-        h: 0.5,
-        fontSize: 18,
-        color: "000000",
-        align: "center",
-      });
-      titleSlide.addText(`Customer: ${catalog.customerName || "N/A"}`, {
-        x: 0.5,
-        y: 2.7,
-        w: 12.33,
-        h: 0.5,
-        fontSize: 18,
-        color: "000000",
-        align: "center",
-      });
-
-      // Add product slides
-      for (const sub of catalog.products || []) {
-        const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
-        const slide = pptx.addSlide();
-
-        // Add product image
-        let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
-        if (mainImg && mainImg.startsWith("http://")) {
-          mainImg = mainImg.replace("http://", "https://");
-        }
-        let imageData = "";
-        if (mainImg) {
-          try {
-            imageData = await getBase64ImageFromUrl(mainImg);
-          } catch (err) {
-            console.error("Error fetching product image for PPT:", err);
-          }
-        }
-        if (imageData) {
-          slide.addImage({
-            data: imageData,
-            x: 0.5,
-            y: 0.5,
-            w: 6,
-            h: 4,
-          });
-        } else {
-          slide.addShape(pptx.shapes.RECTANGLE, {
-            x: 0.5,
-            y: 0.5,
-            w: 6,
-            h: 4,
-            line: { color: "D3D3D3", width: 1 },
-            fill: { color: "F5F5F5" },
-          });
-          slide.addText("No Image", {
-            x: 2.5,
-            y: 2.5,
-            w: 2,
-            h: 0.5,
-            fontSize: 14,
-            color: "808080",
-            align: "center",
-          });
-        }
-
-        // Add product details
-        let yPos = 0.5;
-        const xText = 7;
-        const lineHeight = 0.6;
-
-        slide.addText(prod.name || sub.productName || "N/A", {
-          x: xText,
-          y: yPos,
-          w: 6,
-          h: 0.5,
-          fontSize: 18,
-          bold: true,
-          color: "000000",
-        });
-        yPos += lineHeight * 1.5;
-
-        if (prod.ProductBrand || sub.ProductBrand) {
-          slide.addText(`Brand: ${prod.ProductBrand || sub.ProductBrand || "N/A"}`, {
-            x: xText,
-            y: yPos,
-            w: 6,
-            h: 0.5,
-            fontSize: 14,
-            color: "000000",
-          });
-          yPos += lineHeight;
-        }
-
-        if (prod.ProductDescription || sub.ProductDescription) {
-          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
-          slide.addText("Description:", {
-            x: xText,
-            y: yPos,
-            w: 6,
-            h: 0.5,
-            fontSize: 14,
-            bold: true,
-            color: "000000",
-          });
-          yPos += lineHeight;
-          slide.addText(descriptionText, {
-            x: xText,
-            y: yPos,
-            w: 6,
-            h: 2,
-            fontSize: 12,
-            color: "000000",
-            valign: "top",
-          });
-          yPos += lineHeight * 3;
-        }
-
-        if (sub.quantity) {
-          slide.addText(`Qty: ${sub.quantity}`, {
-            x: xText,
-            y: yPos,
-            w: 6,
-            h: 0.5,
-            fontSize: 14,
-            color: "000000",
-          });
-          yPos += lineHeight;
-        }
-
-        if (sub.productCost !== undefined) {
-          const baseCost = sub.productCost;
-          const margin = catalog.margin || 0;
-          const effPrice = baseCost * (1 + margin / 100);
-          slide.addText(`Rate (INR): ${effPrice.toFixed(2)}/-`, {
-            x: xText,
-            y: yPos,
-            w: 6,
-            h: 0.5,
-            fontSize: 14,
-            color: "000000",
-          });
-          yPos += lineHeight;
-        }
-
-        if (sub.productGST !== undefined) {
-          slide.addText(`GST: ${sub.productGST}%`, {
-            x: xText,
-            y: yPos,
-            w: 6,
-            h: 0.5,
-            fontSize: 14,
-            color: "000000",
-          });
-        }
-      }
-
-      // Save the presentation
-      pptx.write("blob").then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `Catalog-${catalog.catalogName}.pptx`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
+      await exportToPPT(catalog, getBase64ImageFromUrl);
+      alert("PPT exported successfully!");
     } catch (error) {
       console.error("PPT export error:", error);
       alert("PPT export failed");
@@ -978,6 +799,7 @@ export default function CatalogManagementPage() {
   );
 
   const renderFilterWindow = () => {
+    // Get unique opportunity owners and company names
     const uniqueOpportunityOwners = [...new Set(opportunities.map(opp => opp.opportunityOwner))];
     const uniqueCompanyNames = [...new Set(catalogs.map(cat => cat.customerCompany))];
 
@@ -1434,20 +1256,6 @@ export default function CatalogManagementPage() {
                 Excel
               </button>
             )}
-            {(isSuperAdmin || canExportCRM) && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleExportPPT(selectedCatalogForDropdown);
-                  setOpenDropdownForCatalog(null);
-                  setSelectedCatalogForDropdown(null);
-                  dropdownButtonRef.current = null;
-                }}
-                className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-              >
-                PPT
-              </button>
-            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1459,6 +1267,18 @@ export default function CatalogManagementPage() {
               className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
             >
               PDF
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExportPPT(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              PPT
             </button>
             <button
               onClick={(e) => {
