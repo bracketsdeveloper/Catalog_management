@@ -155,17 +155,17 @@ export default function PrintQuotation() {
         <table className="min-w-full border-collapse text-xs">
           <thead>
             <tr>
-              <th className="border px-1 py-1">Sl. No.</th>
-              <th className="border px-1 py-1">Image</th>
-              <th className="border px-1 py-1">Product</th>
+              <th className="border px-2 py-2 text-center">Sl. No.</th>
+              <th className="border px-2 py-2 text-center">Image</th>
+              <th className="border px-2 py-2 text-center">Product</th>
               {quotation.displayHSNCodes && (
-                <th className="border px-1 py-1">HSN</th>
+                <th className="border px-2 py-2 text-center">HSN</th>
               )}
-              <th className="border px-1 py-1">Quantity</th>
-              <th className="border px-1 py-1 text-right">Rate (with margin)</th>
-              <th className="border px-1 py-1 text-right">Amount</th>
-              <th className="border px-1 py-1 text-right">GST (%)</th>
-              <th className="border px-1 py-1 text-right">Total</th>
+              <th className="border px-2 py-2 text-center">Quantity</th>
+              <th className="border px-2 py-2 text-center">Rate</th>
+              <th className="border px-2 py-2 text-center">Amount</th>
+              <th className="border px-2 py-2 text-center">GST (%)</th>
+              <th className="border px-2 py-2 text-center">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -182,32 +182,32 @@ export default function PrintQuotation() {
 
               return (
                 <tr key={idx}>
-                  <td className="border px-1 py-1 text-center">{item.slNo}</td>
-                  <td className="border px-1 py-1 text-center">
+                  <td className="border px-2 py-2 text-center">{item.slNo}</td>
+                  <td className="border px-2 py-2 text-center">
                     {imageUrl !== "https://via.placeholder.com/150" ? (
                       <img
                         src={imageUrl}
                         alt={item.product}
-                        className="h-10 w-auto mx-auto"
+                        className="h-28 w-auto mx-auto"
                         crossOrigin="anonymous"
                       />
                     ) : (
                       <span className="text-xs">No Image</span>
                     )}
                   </td>
-                  <td className="border px-1 py-1">{item.product}</td>
+                  <td className="border px-2 py-2 text-center">{item.product}</td>
                   {quotation.displayHSNCodes && (
-                    <td className="border px-1 py-1 text-center">{hsnCode}</td>
+                    <td className="border px-2 py-2 text-center">{hsnCode}</td>
                   )}
-                  <td className="border px-1 py-1 text-center">{quantity}</td>
-                  <td className="border px-1 py-1 text-right">
+                  <td className="border px-2 py-2 text-center">{quantity}</td>
+                  <td className="border px-2 py-2 text-center">
                     ₹{effRate.toFixed(2)}
                   </td>
-                  <td className="border px-1 py-1 text-right">
+                  <td className="border px-2 py-2 text-center">
                     ₹{amount.toFixed(2)}
                   </td>
-                  <td className="border px-1 py-1 text-right">{gstPercent}%</td>
-                  <td className="border px-1 py-1 text-right">
+                  <td className="border px-2 py-2 text-center">{gstPercent}%</td>
+                  <td className="border px-2 py-2 text-center">
                     ₹{total.toFixed(2)}
                   </td>
                 </tr>
