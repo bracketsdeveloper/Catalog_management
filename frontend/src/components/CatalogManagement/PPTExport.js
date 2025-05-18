@@ -196,14 +196,14 @@ export async function exportToPPT(catalog, getBase64ImageFromUrl) {
           slide.addText(line, {
             x: textX,
             y: textY,
-            w: textWidth,
+            w: textWidth+3,
             h: 0.4,
-            fontSize: 10, // Reduced from 12
+            fontSize: 8.5,
             color: "333333",
             fontFace: "Arial",
             wrap: true,
           });
-          textY += lineHeight; // Now 0.4 inches (was 0.5)
+          textY += lineHeight - 0.2; // Decreased by 0.2 inches
         });
         textY += lineHeight * 0.5; // Now 0.2 inches (was 0.5)
       }
