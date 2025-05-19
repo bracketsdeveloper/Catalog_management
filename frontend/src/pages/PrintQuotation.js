@@ -26,7 +26,6 @@ export default function PrintQuotation() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = res.data;
-      // Sanitize items to ensure valid fields
       const sanitizedItems = (data.items || []).map((item, idx) => ({
         ...item,
         quantity: parseFloat(item.quantity) || 1,
@@ -52,7 +51,7 @@ export default function PrintQuotation() {
 
     const opt = {
       margin: 0.2,
-      filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany} || "").pdf`,
+      filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 7, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
@@ -91,7 +90,16 @@ export default function PrintQuotation() {
               page-break-before: auto;
               margin-top: 1in;
             }
+            table {
+              page-break-inside: auto;
+            }
             tr {
+              page-break-inside: avoid;
+              break-inside: avoid;
+              page-break-after: auto;
+              page-break-before: auto;
+            }
+            td, th {
               page-break-inside: avoid;
               break-inside: avoid;
             }

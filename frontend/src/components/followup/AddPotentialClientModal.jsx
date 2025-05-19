@@ -104,8 +104,8 @@ export default function AddPotentialClientModal({ pc, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl p-6 rounded shadow-lg overflow-auto max-h-full">
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+      <div className="bg-white w-full max-w-2xl p-6 rounded shadow-lg overflow-auto max-h-full z-50">
         <h2 className="text-lg font-bold mb-4">
           {isEdit ? "Edit" : "Add"} Potential Client
         </h2>
