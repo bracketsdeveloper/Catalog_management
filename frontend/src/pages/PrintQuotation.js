@@ -92,11 +92,10 @@ export default function PrintQuotation() {
             .no-print {
               display: none !important;
             }
-            .footer-block {
+            .section-block {
               page-break-inside: avoid;
               break-inside: avoid;
               page-break-before: auto;
-              margin-top: 1in;
             }
             table {
               page-break-inside: auto;
@@ -157,7 +156,7 @@ export default function PrintQuotation() {
         </button>
       </div>
 
-      <div className="flex justify-between items-start">
+      <div className="section-block flex justify-between items-start">
         <div>
           <div className="text-xs text-gray-600">
             {new Date(quotation.createdAt).toLocaleDateString("en-US", {
@@ -184,7 +183,7 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="section-block mt-4">
         {quotation.customerName && (
           <div className="text-base font-bold">
             {quotation.salutation || "Mr."} {quotation.customerName}
@@ -194,7 +193,7 @@ export default function PrintQuotation() {
         <div className="text-xs">{quotation.customerAddress || ""}</div>
       </div>
 
-      <div className="mt-4">
+      <div className="section-block mt-4">
         <div className="text-md font-bold">
           Quotation: {quotation.catalogName || "Goodies"}
         </div>
@@ -202,7 +201,7 @@ export default function PrintQuotation() {
 
       {/* Table Chunks */}
       {itemChunks.map((chunk, chunkIndex) => (
-        <div key={chunkIndex} className={`mt-4 overflow-x-auto table-container table-chunk`}>
+        <div key={chunkIndex} className="section-block mt-4 overflow-x-auto table-container table-chunk">
           <table className="min-w-full border-collapse text-xs">
             <thead>
               <tr>
@@ -270,7 +269,7 @@ export default function PrintQuotation() {
       ))}
 
       {quotation.displayTotals && (
-        <div className="mt-4 text-right table-chunk">
+        <div className="section-block mt-4 text-right table-chunk">
           <div className="text-base font-bold">
             Total Amount: ₹{computedAmount(quotation).toFixed(2)}
           </div>
@@ -280,7 +279,7 @@ export default function PrintQuotation() {
         </div>
       )}
 
-      <div className="mt-4 border-t pt-2 table-chunk">
+      <div className="section-block mt-4 border-t pt-2 table-chunk">
         <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
           Product subject to availability at the time of order confirmation
         </div>
@@ -297,7 +296,7 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      <div className="footer-block mt-8 flex justify-between items-start break-inside-avoid">
+      <div className="section-block footer-block mt-8 flex justify-between items-start">
         <div className="flex flex-col">
           <div className="text-xl font-bold">For Ace Print Pack</div>
           <div className="mt-2">
