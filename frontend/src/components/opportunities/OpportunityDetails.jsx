@@ -57,9 +57,19 @@ export default function OpportunityDetails({
       contact: 'Contact'
     };
 
+    let errorMessage = '';
+    if (!value) {
+      errorMessage = `${requiredFields[fieldName]} is required`;
+    } else if (fieldName === 'opportunityOwner') {
+      const userExists = users.some(user => user.name === value);
+      if (!userExists) {
+        errorMessage = 'User does not exist';
+      }
+    }
+
     setErrors(prev => ({
       ...prev,
-      [fieldName]: !value ? `${requiredFields[fieldName]} is required` : ''
+      [fieldName]: errorMessage
     }));
   };
 

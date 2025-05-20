@@ -53,10 +53,10 @@ export default function PrintQuotation() {
     clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
 
     const opt = {
-      margin: 0.2,
+      margin: [0.75, 0.2, 0.75, 0.2], // Increased top/bottom margins
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, windowWidth: 794 },
+      html2canvas: { scale: 1.5, useCORS: true, windowWidth: 794 },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
     };
 
@@ -74,8 +74,11 @@ export default function PrintQuotation() {
   }
 
   const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
-  const itemsFirstPage = quotation.items.slice(0, 6);
-  const itemsSecondPage = quotation.items.slice(6);
+  // Split items into chunks of 6
+  const itemChunks = [];
+  for (let i = 0; i < quotation.items.length; i += 6) {
+    itemChunks.push(quotation.items.slice(i, i + 6));
+  }
 
   return (
     <div className="max-w-3xl mx-auto p-4 bg-white shadow-md" id="printable">
@@ -98,30 +101,48 @@ export default function PrintQuotation() {
             table {
               page-break-inside: auto;
               width: 100%;
+              table-layout: fixed;
+            }
+            th, td {
+              page-break-inside: avoid;
+              break-inside: avoid;
+              word-wrap: break-word;
+              vertical-align: middle;
             }
             tbody tr {
               page-break-inside: avoid;
               break-inside: avoid;
-            }
-            .first-table tbody tr:nth-child(6) {
-              page-break-after: always !important;
-              break-after: page !important;
-              margin-bottom: 20mm;
-            }
-            .second-table {
-              page-break-before: always !important;
-              break-before: page !important;
-              margin-top: 0;
-            }
-            tbody tr:empty {
-              display: none !important;
-            }
-            td, th {
-              page-break-inside: avoid;
-              break-inside: avoid;
+              height: auto;
+              min-height: 120px;
             }
             .table-container {
               page-break-inside: auto;
+            }
+            .table-chunk {
+              margin-top: 0.5in !important;
+            }
+            .table-chunk:not(:first-child) {
+              page-break-before: always !important;
+              break-before: page !important;
+            }
+            img {
+              max-width: 100px !important;
+              max-height: 100px !important;
+              object-fit: contain !important;
+            }
+            .image-cell {
+              width: 120px !important;
+              max-width: 120px !important;
+              text-align: center;
+            }
+            .product-cell {
+              width: 200px !important;
+            }
+            .amount-cell, .total-cell, .rate-cell {
+              width: 80px !important;
+            }
+            .quantity-cell, .gst-cell, .hsn-cell {
+              width: 60px !important;
             }
           }
         `}
@@ -179,132 +200,65 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      {/* First Table (First 6 Items) */}
-      <div className="mt-4 overflow-x-auto table-container first-table">
-        <table className="min-w-full border-collapse text-xs">
-          <thead>
-            <tr>
-              <th className="border px-2 py-2 text-center">Sl. No.</th>
-              <th className="border px-2 py-2 text-center">Image</th>
-              <th className="border px-2 py-2 text-center">Product</th>
-              {quotation.displayHSNCodes && (
-                <th className="border px-2 py-2 text-center">HSN</th>
-              )}
-              <th className="border px-2 py-2 text-center">Quantity</th>
-              <th className="border px-2 py-2 text-center">Rate</th>
-              <th className="border px-2 py-2 text-center">Amount</th>
-              <th className="border px-2 py-2 text-center">GST (%)</th>
-              <th className="border px-2 py-2 text-center">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itemsFirstPage.map((item, idx) => {
-              const baseRate = parseFloat(item.rate) || 0;
-              const quantity = parseFloat(item.quantity) || 1;
-              const effRate = baseRate * marginFactor;
-              const amount = effRate * quantity;
-              const gstPercent = parseFloat(item.productGST);
-              const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
-              const total = parseFloat((amount + gstAmt).toFixed(2));
-              const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
-              const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
-
-              return (
-                <tr key={idx}>
-                  <td className="border px-2 py-2 text-center">{item.slNo}</td>
-                  <td className="border px-2 py-2 text-center">
-                    {imageUrl !== "https://via.placeholder.com/150" ? (
-                      <img
-                        src={imageUrl}
-                        alt={item.product}
-                        className="h-28 w-auto mx-auto"
-                        crossOrigin="anonymous"
-                      />
-                    ) : (
-                      <span className="text-xs">No Image</span>
-                    )}
-                  </td>
-                  <td className="border px-2 py-2 text-center">{item.product}</td>
-                  {quotation.displayHSNCodes && (
-                    <td className="border px-2 py-2 text-center">{hsnCode}</td>
-                  )}
-                  <td className="border px-2 py-2 text-center">{quantity}</td>
-                  <td className="border px-2 py-2 text-center">
-                    ₹{effRate.toFixed(2)}
-                  </td>
-                  <td className="border px-2 py-2 text-center">
-                    ₹{amount.toFixed(2)}
-                  </td>
-                  <td className="border px-2 py-2 text-center">{gstPercent}%</td>
-                  <td className="border px-2 py-2 text-center">
-                    ₹{total.toFixed(2)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Second Table (Remaining Items) */}
-      {itemsSecondPage.length > 0 && (
-        <div className="mt-4 overflow-x-auto table-container second-table">
+      {/* Table Chunks */}
+      {itemChunks.map((chunk, chunkIndex) => (
+        <div key={chunkIndex} className={`mt-4 overflow-x-auto table-container table-chunk`}>
           <table className="min-w-full border-collapse text-xs">
             <thead>
               <tr>
                 <th className="border px-2 py-2 text-center">Sl. No.</th>
-                <th className="border px-2 py-2 text-center">Image</th>
-                <th className="border px-2 py-2 text-center">Product</th>
+                <th className="border px-2 py-2 text-center image-cell">Image</th>
+                <th className="border px-2 py-2 text-center product-cell">Product</th>
                 {quotation.displayHSNCodes && (
-                  <th className="border px-2 py-2 text-center">HSN</th>
+                  <th className="border px-2 py-2 text-center hsn-cell">HSN</th>
                 )}
-                <th className="border px-2 py-2 text-center">Quantity</th>
-                <th className="border px-2 py-2 text-center">Rate</th>
-                <th className="border px-2 py-2 text-center">Amount</th>
-                <th className="border px-2 py-2 text-center">GST (%)</th>
-                <th className="border px-2 py-2 text-center">Total</th>
+                <th className="border px-2 py-2 text-center quantity-cell">Quantity</th>
+                <th className="border px-2 py-2 text-center rate-cell">Rate</th>
+                <th className="border px-2 py-2 text-center amount-cell">Amount</th>
+                <th className="border px-2 py-2 text-center gst-cell">GST (%)</th>
+                <th className="border px-2 py-2 text-center total-cell">Total</th>
               </tr>
             </thead>
             <tbody>
-              {itemsSecondPage.map((item, idx) => {
+              {chunk.map((item, idx) => {
                 const baseRate = parseFloat(item.rate) || 0;
                 const quantity = parseFloat(item.quantity) || 1;
                 const effRate = baseRate * marginFactor;
                 const amount = effRate * quantity;
-                const gstPercent = parseFloat(item.productGST);
+                const gstPercent = parseFloat(item.productGST) || 0;
                 const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
                 const total = parseFloat((amount + gstAmt).toFixed(2));
                 const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
                 const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
 
                 return (
-                  <tr key={idx + 6}>
+                  <tr key={`${chunkIndex}-${idx}`}>
                     <td className="border px-2 py-2 text-center">{item.slNo}</td>
-                    <td className="border px-2 py-2 text-center">
+                    <td className="border px-2 py-2 text-center image-cell">
                       {imageUrl !== "https://via.placeholder.com/150" ? (
                         <img
                           src={imageUrl}
                           alt={item.product}
-                          className="h-28 w-auto mx-auto"
+                          className="mx-auto"
                           crossOrigin="anonymous"
                         />
                       ) : (
                         <span className="text-xs">No Image</span>
                       )}
                     </td>
-                    <td className="border px-2 py-2 text-center">{item.product}</td>
+                    <td className="border px-2 py-2 text-center product-cell">{item.product}</td>
                     {quotation.displayHSNCodes && (
-                      <td className="border px-2 py-2 text-center">{hsnCode}</td>
+                      <td className="border px-2 py-2 text-center hsn-cell">{hsnCode}</td>
                     )}
-                    <td className="border px-2 py-2 text-center">{quantity}</td>
-                    <td className="border px-2 py-2 text-center">
+                    <td className="border px-2 py-2 text-center quantity-cell">{quantity}</td>
+                    <td className="border px-2 py-2 text-center rate-cell">
                       ₹{effRate.toFixed(2)}
                     </td>
-                    <td className="border px-2 py-2 text-center">
+                    <td className="border px-2 py-2 text-center amount-cell">
                       ₹{amount.toFixed(2)}
                     </td>
-                    <td className="border px-2 py-2 text-center">{gstPercent}%</td>
-                    <td className="border px-2 py-2 text-center">
+                    <td className="border px-2 py-2 text-center gst-cell">{gstPercent}%</td>
+                    <td className="border px-2 py-2 text-center total-cell">
                       ₹{total.toFixed(2)}
                     </td>
                   </tr>
@@ -313,10 +267,10 @@ export default function PrintQuotation() {
             </tbody>
           </table>
         </div>
-      )}
+      ))}
 
       {quotation.displayTotals && (
-        <div className="mt-4 text-right">
+        <div className="mt-4 text-right table-chunk">
           <div className="text-base font-bold">
             Total Amount: ₹{computedAmount(quotation).toFixed(2)}
           </div>
@@ -326,7 +280,7 @@ export default function PrintQuotation() {
         </div>
       )}
 
-      <div className="mt-4 border-t pt-2">
+      <div className="mt-4 border-t pt-2 table-chunk">
         <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
           Product subject to availability at the time of order confirmation
         </div>
