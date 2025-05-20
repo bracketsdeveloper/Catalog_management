@@ -124,6 +124,10 @@ export default function PrintQuotation() {
               page-break-before: always !important;
               break-before: page !important;
             }
+            .total-section {
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
             img {
               max-width: 100px !important;
               max-height: 100px !important;
@@ -269,7 +273,7 @@ export default function PrintQuotation() {
       ))}
 
       {quotation.displayTotals && (
-        <div className="section-block mt-4 text-right table-chunk">
+        <div className="section-block mt-4 text-right table-chunk total-section">
           <div className="text-base font-bold">
             Total Amount: ₹{computedAmount(quotation).toFixed(2)}
           </div>
