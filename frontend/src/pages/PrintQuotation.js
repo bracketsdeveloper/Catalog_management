@@ -26,14 +26,17 @@ export default function PrintQuotation() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = res.data;
-      const sanitizedItems = (data.items || []).map((item, idx) => ({
-        ...item,
-        quantity: parseFloat(item.quantity) || 1,
-        slNo: item.slNo || idx + 1,
-        rate: parseFloat(item.rate) || 0,
-        productGST: parseFloat(item.productGST),
-        product: item.product || "Unknown Product",
-      }));
+      const sanitizedItems = (data.items || [])
+        .filter((item) => item.product && parseFloat(item.quantity) > 0 && parseFloat(item.rate) > 0)
+        .map((item, idx) => ({
+          ...item,
+          quantity: parseFloat(item.quantity) || 1,
+          slNo: item.slNo || idx + 1,
+          rate: parseFloat(item.rate) || 0,
+          productGST: parseFloat(item.productGST) || 0,
+          product: item.product || "Unknown Product",
+        }));
+      console.log("Sanitized items:", sanitizedItems);
       setQuotation({ ...data, items: sanitizedItems });
       setError(null);
     } catch (err) {
@@ -53,7 +56,7 @@ export default function PrintQuotation() {
       margin: 0.2,
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 7, useCORS: true },
+      html2canvas: { scale: 2, useCORS: true, windowWidth: 794 },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
     };
 
@@ -71,6 +74,8 @@ export default function PrintQuotation() {
   }
 
   const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
+  const itemsFirstPage = quotation.items.slice(0, 6);
+  const itemsSecondPage = quotation.items.slice(6);
 
   return (
     <div className="max-w-3xl mx-auto p-4 bg-white shadow-md" id="printable">
@@ -92,16 +97,31 @@ export default function PrintQuotation() {
             }
             table {
               page-break-inside: auto;
+              width: 100%;
             }
-            tr {
+            tbody tr {
               page-break-inside: avoid;
               break-inside: avoid;
-              page-break-after: auto;
-              page-break-before: auto;
+            }
+            .first-table tbody tr:nth-child(6) {
+              page-break-after: always !important;
+              break-after: page !important;
+              margin-bottom: 20mm;
+            }
+            .second-table {
+              page-break-before: always !important;
+              break-before: page !important;
+              margin-top: 0;
+            }
+            tbody tr:empty {
+              display: none !important;
             }
             td, th {
               page-break-inside: avoid;
               break-inside: avoid;
+            }
+            .table-container {
+              page-break-inside: auto;
             }
           }
         `}
@@ -159,7 +179,8 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto">
+      {/* First Table (First 6 Items) */}
+      <div className="mt-4 overflow-x-auto table-container first-table">
         <table className="min-w-full border-collapse text-xs">
           <thead>
             <tr>
@@ -177,7 +198,7 @@ export default function PrintQuotation() {
             </tr>
           </thead>
           <tbody>
-            {quotation.items.map((item, idx) => {
+            {itemsFirstPage.map((item, idx) => {
               const baseRate = parseFloat(item.rate) || 0;
               const quantity = parseFloat(item.quantity) || 1;
               const effRate = baseRate * marginFactor;
@@ -224,6 +245,75 @@ export default function PrintQuotation() {
           </tbody>
         </table>
       </div>
+
+      {/* Second Table (Remaining Items) */}
+      {itemsSecondPage.length > 0 && (
+        <div className="mt-4 overflow-x-auto table-container second-table">
+          <table className="min-w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className="border px-2 py-2 text-center">Sl. No.</th>
+                <th className="border px-2 py-2 text-center">Image</th>
+                <th className="border px-2 py-2 text-center">Product</th>
+                {quotation.displayHSNCodes && (
+                  <th className="border px-2 py-2 text-center">HSN</th>
+                )}
+                <th className="border px-2 py-2 text-center">Quantity</th>
+                <th className="border px-2 py-2 text-center">Rate</th>
+                <th className="border px-2 py-2 text-center">Amount</th>
+                <th className="border px-2 py-2 text-center">GST (%)</th>
+                <th className="border px-2 py-2 text-center">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemsSecondPage.map((item, idx) => {
+                const baseRate = parseFloat(item.rate) || 0;
+                const quantity = parseFloat(item.quantity) || 1;
+                const effRate = baseRate * marginFactor;
+                const amount = effRate * quantity;
+                const gstPercent = parseFloat(item.productGST);
+                const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
+                const total = parseFloat((amount + gstAmt).toFixed(2));
+                const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
+                const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
+
+                return (
+                  <tr key={idx + 6}>
+                    <td className="border px-2 py-2 text-center">{item.slNo}</td>
+                    <td className="border px-2 py-2 text-center">
+                      {imageUrl !== "https://via.placeholder.com/150" ? (
+                        <img
+                          src={imageUrl}
+                          alt={item.product}
+                          className="h-28 w-auto mx-auto"
+                          crossOrigin="anonymous"
+                        />
+                      ) : (
+                        <span className="text-xs">No Image</span>
+                      )}
+                    </td>
+                    <td className="border px-2 py-2 text-center">{item.product}</td>
+                    {quotation.displayHSNCodes && (
+                      <td className="border px-2 py-2 text-center">{hsnCode}</td>
+                    )}
+                    <td className="border px-2 py-2 text-center">{quantity}</td>
+                    <td className="border px-2 py-2 text-center">
+                      ₹{effRate.toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-2 text-center">
+                      ₹{amount.toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-2 text-center">{gstPercent}%</td>
+                    <td className="border px-2 py-2 text-center">
+                      ₹{total.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {quotation.displayTotals && (
         <div className="mt-4 text-right">
@@ -299,7 +389,7 @@ function computedTotal(quotation) {
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gst = parseFloat(item.productGST);
+    const gst = parseFloat(item.productGST) || 0;
     const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });
