@@ -60,7 +60,7 @@ export default function PrintQuotation() {
     });
 
     const opt = {
-      margin: [10, 5, 10, 5], // margins in mm (top, right, bottom, left)
+      margin: [5, 5, 5, 5], // Reduced margins
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { 
@@ -111,8 +111,11 @@ export default function PrintQuotation() {
               break-inside: avoid;
             }
             .header-section {
+              margin-bottom: 0.1in !important;
               page-break-after: avoid;
-              margin-bottom: 0.2in !important;
+            }
+            .quotation-title {
+              margin-bottom: 0.05in !important;
             }
             .customer-info {
               margin-bottom: 0.1in !important;
@@ -125,7 +128,7 @@ export default function PrintQuotation() {
               width: 100%;
               table-layout: fixed;
               border-collapse: collapse;
-              margin-top: 0.1in !important;
+              margin-top: 0.05in !important;
               page-break-inside: auto;
             }
             thead {
@@ -134,16 +137,18 @@ export default function PrintQuotation() {
             tbody tr {
               page-break-inside: avoid;
               page-break-after: auto;
-              height: 0.3in !important;
+              height: 0.25in !important;
             }
             td, th {
-              padding: 2px !important;
-              font-size: 9pt !important;
+              padding: 1px !important;
+              font-size: 8pt !important;
             }
             img {
-              max-height: 0.7in !important;
-              max-width: 1.4in !important;
-              object-fit: contain !important;
+              max-height: 0.6in !important;
+              max-width: 1.2in !important;
+            }
+            .compact-row {
+              height: 0.2in !important;
             }
           }
         `}
@@ -158,7 +163,7 @@ export default function PrintQuotation() {
         </button>
       </div>
 
-      <div className="print-section header-section">
+      <div className="print-section header-section" style={{ paddingBottom: '0.05in' }}>
         <div className="flex justify-between items-start" style={{ marginBottom: '0.1in' }}>
           <div>
             <div className="text-xs text-gray-600" style={{ fontSize: '9pt' }}>
@@ -231,40 +236,34 @@ export default function PrintQuotation() {
               const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
 
               return (
-                <tr key={idx} className="print-section">
-                  <td className="border px-2 py-2 text-center">{item.slNo}</td>
-                  <td className="border px-2 py-2 text-center image-cell">
+                <tr key={idx} className="compact-row">
+                  <td className="border px-1 py-1 text-center">{item.slNo}</td>
+                  <td className="border px-1 py-1 text-center image-cell">
                     {imageUrl !== "https://via.placeholder.com/150" ? (
                       <img
                         src={imageUrl}
                         alt={item.product}
                         className="mx-auto"
                         crossOrigin="anonymous"
-                        style={{ 
-                          maxWidth: '3.136in', 
-                          maxHeight: '1.8in',
-                          width: 'auto',
-                          height: 'auto',
-                          objectFit: 'contain'
-                        }}
+                        style={{ maxWidth: '1.2in', maxHeight: '0.6in' }}
                       />
                     ) : (
                       <span className="text-xs">No Image</span>
                     )}
                   </td>
-                  <td className="border px-2 py-2 text-center product-cell">{item.product}</td>
+                  <td className="border px-1 py-1 text-center product-cell">{item.product}</td>
                   {quotation.displayHSNCodes && (
-                    <td className="border px-2 py-2 text-center hsn-cell">{hsnCode}</td>
+                    <td className="border px-1 py-1 text-center hsn-cell">{hsnCode}</td>
                   )}
-                  <td className="border px-2 py-2 text-center quantity-cell">{quantity}</td>
-                  <td className="border px-2 py-2 text-center rate-cell">
+                  <td className="border px-1 py-1 text-center quantity-cell">{quantity}</td>
+                  <td className="border px-1 py-1 text-center rate-cell">
                     ₹{effRate.toFixed(2)}
                   </td>
-                  <td className="border px-2 py-2 text-center amount-cell">
+                  <td className="border px-1 py-1 text-center amount-cell">
                     ₹{amount.toFixed(2)}
                   </td>
-                  <td className="border px-2 py-2 text-center gst-cell">{gstPercent}%</td>
-                  <td className="border px-2 py-2 text-center total-cell">
+                  <td className="border px-1 py-1 text-center gst-cell">{gstPercent}%</td>
+                  <td className="border px-1 py-1 text-center total-cell">
                     ₹{total.toFixed(2)}
                   </td>
                 </tr>

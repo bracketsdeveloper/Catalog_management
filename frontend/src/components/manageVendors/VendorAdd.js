@@ -171,7 +171,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-              Brand Dealing
+            Specialises In
             </label>
             <input
               className="w-full p-2 border rounded"

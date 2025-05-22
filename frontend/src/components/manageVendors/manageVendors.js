@@ -246,7 +246,7 @@ export const ManageVendors = () => {
                 onClick={() => handleSort("brandDealing")}
                 className="p-2 cursor-pointer border border-gray-200"
               >
-                Brand
+                Specialises In
                 <SortIndicator field="brandDealing" />
               </th>
               <th
