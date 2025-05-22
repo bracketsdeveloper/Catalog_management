@@ -32,6 +32,7 @@
     "lodash.debounce": "^4.0.8",
     "npm": "^11.0.0",
     "pdf-lib": "^1.17.1",
+    "pdfmake": "^0.2.20",
     "pizzip": "^3.1.8",
     "postcss": "^8.4.49",
     "pptxgenjs": "^3.12.0",
