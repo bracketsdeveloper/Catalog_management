@@ -1,4 +1,3 @@
-// models/InvoicesSummary.js
 const mongoose = require("mongoose");
 
 const invoicesSummarySchema = new mongoose.Schema(
@@ -7,29 +6,26 @@ const invoicesSummarySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "DispatchSchedule",
       required: true,
-      unique: true, // 1-to-1 with DispatchSchedule
     },
-
-    /* Reference data copied from InvoiceFollowUp */
-    jobSheetNumber: String, // From InvoiceFollowUp
-    clientCompanyName: String, // From InvoiceFollowUp
-    eventName: String, // From InvoiceFollowUp
-    invoiceNumber: String, // From InvoiceFollowUp
-
-    /* Editable fields */
-    invoiceDate: Date, // Manually entered
-    invoiceAmount: Number, // Manually entered
+    jobSheetNumber: String,
+    clientCompanyName: String,
+    eventName: String,
+    invoiceNumber: { type: String, required: true },
+    invoiceDate: Date,
+    invoiceAmount: Number,
     invoiceMailed: {
       type: String,
       enum: ["Yes", "No"],
       default: "No",
     },
-    invoiceUploadedOnPortal: String, // Manually entered
-
+    invoiceUploadedOnPortal: String,
     createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    indexes: [{ key: { dispatchId: 1, invoiceNumber: 1 }, unique: true }],
+  }
 );
 
 module.exports = mongoose.model("InvoicesSummary", invoicesSummarySchema);

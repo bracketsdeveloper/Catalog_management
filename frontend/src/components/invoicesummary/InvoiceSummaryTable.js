@@ -92,6 +92,11 @@ export default function InvoiceSummaryTable({
         <thead>
           <tr>
             <HeadCell
+              label="Invoice #"
+              field="invoiceNumber"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
               label="Job Sheet #"
               field="jobSheetNumber"
               {...{ sortField, sortOrder, toggle: toggleSort }}
@@ -104,11 +109,6 @@ export default function InvoiceSummaryTable({
             <HeadCell
               label="Event"
               field="eventName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
-            />
-            <HeadCell
-              label="Invoice #"
-              field="invoiceNumber"
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
@@ -136,25 +136,101 @@ export default function InvoiceSummaryTable({
             </th>
           </tr>
           <tr>
-            {Object.keys(headerFilters).map((field) => (
-              <td key={field} className="px-2 py-1 border border-gray-300">
-                <input
-                  type="text"
-                  value={headerFilters[field]}
-                  onChange={(e) =>
-                    handleFilterChange(field, e.target.value)
-                  }
-                  placeholder="Search…"
-                  className="w-full p-1 text-xs border rounded"
-                />
-              </td>
-            ))}
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.invoiceNumber}
+                onChange={(e) =>
+                  handleFilterChange("invoiceNumber", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.jobSheetNumber}
+                onChange={(e) =>
+                  handleFilterChange("jobSheetNumber", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.clientCompanyName}
+                onChange={(e) =>
+                  handleFilterChange("clientCompanyName", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.eventName}
+                onChange={(e) =>
+                  handleFilterChange("eventName", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.invoiceDate}
+                onChange={(e) =>
+                  handleFilterChange("invoiceDate", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.invoiceAmount}
+                onChange={(e) =>
+                  handleFilterChange("invoiceAmount", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.invoiceMailed}
+                onChange={(e) =>
+                  handleFilterChange("invoiceMailed", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.invoiceUploadedOnPortal}
+                onChange={(e) =>
+                  handleFilterChange("invoiceUploadedOnPortal", e.target.value)
+                }
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
             <td className="px-2 py-1 border border-gray-300"></td>
           </tr>
         </thead>
         <tbody>
           {filtered.map((r) => (
             <tr key={`${r._id}-${r.invoiceNumber}`} className="hover:bg-gray-100">
+              <Cell val={r.invoiceNumber} />
               <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
                 <button
                   className="border-b text-blue-500 hover:text-blue-700"
@@ -168,7 +244,6 @@ export default function InvoiceSummaryTable({
               </td>
               <Cell val={r.clientCompanyName} />
               <Cell val={r.eventName} />
-              <Cell val={r.invoiceNumber} />
               <Cell val={r.invoiceDate} />
               <Cell val={r.invoiceAmount} />
               <Cell val={r.invoiceMailed} />
