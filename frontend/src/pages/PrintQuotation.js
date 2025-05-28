@@ -139,8 +139,8 @@ export default function PrintQuotation() {
             }
             
             .image-cell { width: auto !important; min-width: 1.5in !important; }
-            .product-cell { width: 23% !important; }
-            .hsn-cell { width: 8% !important; }
+            .product-cell { width: 20% !important; }
+            .hsn-cell { width: 10% !important; }
             .quantity-cell { width: 7% !important; }
             .rate-cell { width: 10% !important; }
             .amount-cell { width: 10% !important; }
@@ -215,10 +215,8 @@ export default function PrintQuotation() {
             <tr>
               <th className="border px-2 py-1 text-center">Sl. No.</th>
               <th className="border px-2 py-1 text-center image-cell">Image</th>
+              <th className="border px-2 py-1 text-center hsn-cell">HSN</th>
               <th className="border px-2 py-1 text-center product-cell">Product</th>
-              {quotation.displayHSNCodes && (
-                <th className="border px-2 py-1 text-center hsn-cell">HSN</th>
-              )}
               <th className="border px-2 py-1 text-center quantity-cell">Qty</th>
               <th className="border px-2 py-1 text-center rate-cell">Rate</th>
               <th className="border px-2 py-1 text-center amount-cell">Amount</th>
@@ -258,10 +256,8 @@ export default function PrintQuotation() {
                       />
                     )}
                   </td>
+                  <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
                   <td className="border px-2 py-1 text-center product-cell">{item.product}</td>
-                  {quotation.displayHSNCodes && (
-                    <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
-                  )}
                   <td className="border px-2 py-1 text-center quantity-cell">{quantity}</td>
                   <td className="border px-2 py-1 text-center rate-cell">₹{effRate.toFixed(2)}</td>
                   <td className="border px-2 py-1 text-center amount-cell">₹{amount.toFixed(2)}</td>
@@ -296,9 +292,6 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-          <div className="text-xs italic text-center py-1 border">
-          Rates may vary in case there is a change in specifications /quantity/timelines
-        </div>
       </div>
 
       <div className="print-section footer-block mt-8">
