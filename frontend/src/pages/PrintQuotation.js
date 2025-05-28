@@ -35,7 +35,6 @@ export default function PrintQuotation() {
           productGST: parseFloat(item.productGST) || 0,
           product: item.product || "Unknown Product",
         }));
-      console.log("Sanitized items:", sanitizedItems);
       setQuotation({ ...data, items: sanitizedItems });
       setError(null);
     } catch (err) {
@@ -51,20 +50,38 @@ export default function PrintQuotation() {
     const clonedElement = element.cloneNode(true);
     clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
 
-    // Scale down images by 30%
-    clonedElement.querySelectorAll("img").forEach((img) => {
-      const originalWidth = img.width;
-      const originalHeight = img.height;
-      img.style.width = `${originalWidth * 0.7}px`;
-      img.style.height = `${originalHeight * 0.7}px`;
+    // Image scaling logic for PDF
+    clonedElement.querySelectorAll(".product-image").forEach((img) => {
+      const naturalWidth = img.naturalWidth;
+      const naturalHeight = img.naturalHeight;
+      const aspectRatio = naturalWidth / naturalHeight;
+      
+      // Maximum dimensions in pixels (200px ~ 2.6in, 150px ~ 2in)
+      const maxWidth = 200;
+      const maxHeight = 150;
+
+      let width = naturalWidth;
+      let height = naturalHeight;
+
+      if (width > maxWidth) {
+        width = maxWidth;
+        height = width / aspectRatio;
+      }
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * aspectRatio;
+      }
+
+      img.style.width = `${width}px`;
+      img.style.height = `${height}px`;
     });
 
     const opt = {
-      margin: [5, 5, 5, 5], // Maintain tight margins
+      margin: [5, 5, 5, 5],
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { 
-        scale: 3, // Increased scale for better image quality
+        scale: 3,
         useCORS: true,
         scrollX: 0,
         scrollY: 0,
@@ -82,15 +99,9 @@ export default function PrintQuotation() {
     html2pdf().set(opt).from(clonedElement).save();
   };
 
-  if (loading) {
-    return <div className="p-6 text-gray-400">Loading quotation...</div>;
-  }
-  if (error) {
-    return <div className="p-6 text-red-500">{error}</div>;
-  }
-  if (!quotation) {
-    return <div className="p-6 text-gray-400">Quotation not found.</div>;
-  }
+  if (loading) return <div className="p-6 text-gray-400">Loading quotation...</div>;
+  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (!quotation) return <div className="p-6 text-gray-400">Quotation not found.</div>;
 
   const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
 
@@ -99,50 +110,49 @@ export default function PrintQuotation() {
       <style>
         {`
           @media print {
-            body {
-              margin: 0;
-              padding: 0;
+            body { 
+              margin: 0 !important;
+              padding: 0 !important;
+              -webkit-print-color-adjust: exact;
             }
-            .no-print {
-              display: none !important;
+            .no-print { display: none !important; }
+            .print-section { page-break-inside: avoid; }
+            table { border-color: #666 !important; }
+            
+            .company-header {
+              border-bottom: 1px solid #ccc;
+              padding-bottom: 0.1in;
+              margin-bottom: 0.15in;
             }
-            .print-section {
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            .header-section {
-              margin-bottom: 0.1in !important;
-              page-break-after: avoid;
-            }
-            .customer-info {
-              margin-bottom: 0.1in !important;
-            }
-            .table-container {
-              width: 100%;
-              overflow: visible !important;
-            }
-            table {
-              width: 100%;
-              table-layout: fixed;
-              border-collapse: collapse;
-              margin-top: 0.05in !important;
-              page-break-inside: auto;
-            }
-            thead {
-              display: table-header-group;
-            }
-            tbody tr {
-              height: 0.5in !important;
-              page-break-inside: avoid;
-              page-break-after: auto;
-            }
-            td, th {
-              padding: 3px !important;
+            
+            .table-container td, .table-container th {
+              padding: 2px 3px !important;
               font-size: 9pt !important;
             }
-            img {
-              max-height: 1.2in !important;
-              max-width: 2in !important;
+            
+            .product-image {
+              max-width: 2.5in !important;
+              max-height: 2in !important;
+              width: auto !important;
+              height: auto !important;
+              object-fit: contain !important;
+              display: block !important;
+              margin: 0 auto !important;
+            }
+            
+            .image-cell { width: auto !important; min-width: 1.5in !important; }
+            .product-cell { width: 23% !important; }
+            .hsn-cell { width: 8% !important; }
+            .quantity-cell { width: 7% !important; }
+            .rate-cell { width: 10% !important; }
+            .amount-cell { width: 10% !important; }
+            .gst-cell { width: 8% !important; }
+            .total-cell { width: 12% !important; }
+            
+            .footer-block {
+              position: absolute;
+              bottom: 0.2in;
+              width: 100%;
             }
           }
         `}
@@ -157,64 +167,65 @@ export default function PrintQuotation() {
         </button>
       </div>
 
-      <div className="print-section header-section" style={{ marginBottom: '0.05in' }}>
-        <div className="flex justify-between items-start" style={{ marginBottom: '0.1in' }}>
+      {/* Company Header */}
+      <div className="print-section header-section">
+        <div className="company-header">
+          <div className="text-lg font-bold" style={{ fontSize: '14pt' }}>
+            Ace Print Pack • Ace Gifting Solutions
+          </div>
+          <div className="text-xs mt-1" style={{ lineHeight: '1.2', color: '#555' }}>
+            #61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore - 560018<br />
+            Phone: +91 96200 12727 | Email: info@aceprintpack.com
+          </div>
+        </div>
+
+        {/* Quotation Meta */}
+        <div className="flex justify-between items-start mt-2">
           <div>
-            <div className="text-xs text-gray-600" style={{ fontSize: '9pt' }}>
-              {new Date(quotation.createdAt).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+            <div className="text-xs" style={{ fontSize: '9pt' }}>
+              Date: {new Date(quotation.createdAt).toLocaleDateString("en-IN")}
             </div>
-            <div className="mt-1" style={{ marginTop: '0.05in' }}>
-              <div className="text-lg font-bold" style={{ fontSize: '12pt' }}>
-                Quotation No.: {quotation.quotationNumber || "N/A"}
+            <div className="mt-1">
+              <div className="text-sm font-bold" style={{ fontSize: '12pt' }}>
+                Quotation No: {quotation.quotationNumber}
               </div>
-              <div className="text-xs" style={{ fontSize: '9pt' }}>GSTIN: 29ABCFA9924A1ZL</div>
+              <div className="text-xs">GSTIN: 29ABCFA9924A1ZL</div>
             </div>
           </div>
-          <div>
-            <img
-              src="/logo.png"
-              alt="Logo"
-              style={{ height: '0.5in', width: 'auto' }}
-              crossOrigin="anonymous"
-            />
+          <img
+            src="/logo.png"
+            alt="Logo"
+            style={{ height: '0.6in', width: 'auto' }}
+            crossOrigin="anonymous"
+          />
+        </div>
+
+        {/* Customer Info */}
+        <div className="customer-info mt-3">
+          <div className="text-sm font-bold" style={{ fontSize: '12pt' }}>
+            {quotation.salutation || "Mr."} {quotation.customerName}
           </div>
-        </div>
-
-        <div className="customer-info" style={{ marginBottom: '0.1in' }}>
-          {quotation.customerName && (
-            <div className="text-base font-bold" style={{ fontSize: '11pt' }}>
-              {quotation.salutation || "Mr."} {quotation.customerName}
-            </div>
-          )}
-          <div className="text-xs" style={{ fontSize: '9pt' }}>{quotation.customerCompany || ""}</div>
-          <div className="text-xs" style={{ fontSize: '9pt' }}>{quotation.customerAddress || ""}</div>
-        </div>
-
-        <div className="text-md font-bold" style={{ fontSize: '11pt', marginBottom: '0.05in' }}>
-          Quotation: {quotation.catalogName || "Goodies"}
+          <div className="text-xs">{quotation.customerCompany}</div>
+          <div className="text-xs">{quotation.customerAddress}</div>
         </div>
       </div>
 
+      {/* Items Table */}
       <div className="print-section table-container mt-4">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="border px-2 py-2 text-center">Sl. No.</th>
-              <th className="border px-2 py-2 text-center image-cell">Image</th>
-              <th className="border px-2 py-2 text-center product-cell">Product</th>
+              <th className="border px-2 py-1 text-center">Sl. No.</th>
+              <th className="border px-2 py-1 text-center image-cell">Image</th>
+              <th className="border px-2 py-1 text-center product-cell">Product</th>
               {quotation.displayHSNCodes && (
-                <th className="border px-2 py-2 text-center hsn-cell">HSN</th>
+                <th className="border px-2 py-1 text-center hsn-cell">HSN</th>
               )}
-              <th className="border px-2 py-2 text-center quantity-cell">Quantity</th>
-              <th className="border px-2 py-2 text-center rate-cell">Rate</th>
-              <th className="border px-2 py-2 text-center amount-cell">Amount</th>
-              <th className="border px-2 py-2 text-center gst-cell">GST (%)</th>
-              <th className="border px-2 py-2 text-center total-cell">Total</th>
+              <th className="border px-2 py-1 text-center quantity-cell">Qty</th>
+              <th className="border px-2 py-1 text-center rate-cell">Rate</th>
+              <th className="border px-2 py-1 text-center amount-cell">Amount</th>
+              <th className="border px-2 py-1 text-center gst-cell">GST (%)</th>
+              <th className="border px-2 py-1 text-center total-cell">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -231,39 +242,34 @@ export default function PrintQuotation() {
 
               return (
                 <tr key={idx}>
-                  <td className="border px-2 py-2 text-center">{item.slNo}</td>
-                  <td className="border px-2 py-2 text-center image-cell">
-                    {imageUrl !== "https://via.placeholder.com/150" ? (
-                      <img
-                        src={imageUrl}
-                        alt={item.product}
-                        className="mx-auto"
-                        crossOrigin="anonymous"
-                        style={{ 
-                          maxWidth: '2in', 
-                          maxHeight: '1.2in',
-                          objectFit: 'contain' 
-                        }}
-                      />
-                    ) : (
-                      <span className="text-xs">No Image</span>
-                    )}
+                  <td className="border px-2 py-1 text-center">{item.slNo}</td>
+                  <td className="border px-2 py-1 text-center image-cell">
+                    <img
+                      src={imageUrl}
+                      alt={item.product}
+                      className="product-image"
+                      style={{ 
+                        maxWidth: '200px',
+                        maxHeight: '150px',
+                        width: 'auto',
+                        height: 'auto',
+                        objectFit: 'contain'
+                      }}
+                      crossOrigin="anonymous"
+                      onLoad={(e) => {
+                        e.target.style.transform = 'translateZ(0)';
+                      }}
+                    />
                   </td>
-                  <td className="border px-2 py-2 text-center product-cell">{item.product}</td>
+                  <td className="border px-2 py-1 text-center product-cell">{item.product}</td>
                   {quotation.displayHSNCodes && (
-                    <td className="border px-2 py-2 text-center hsn-cell">{hsnCode}</td>
+                    <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
                   )}
-                  <td className="border px-2 py-2 text-center quantity-cell">{quantity}</td>
-                  <td className="border px-2 py-2 text-center rate-cell">
-                    ₹{effRate.toFixed(2)}
-                  </td>
-                  <td className="border px-2 py-2 text-center amount-cell">
-                    ₹{amount.toFixed(2)}
-                  </td>
-                  <td className="border px-2 py-2 text-center gst-cell">{gstPercent}%</td>
-                  <td className="border px-2 py-2 text-center total-cell">
-                    ₹{total.toFixed(2)}
-                  </td>
+                  <td className="border px-2 py-1 text-center quantity-cell">{quantity}</td>
+                  <td className="border px-2 py-1 text-center rate-cell">₹{effRate.toFixed(2)}</td>
+                  <td className="border px-2 py-1 text-center amount-cell">₹{amount.toFixed(2)}</td>
+                  <td className="border px-2 py-1 text-center gst-cell">{gstPercent}%</td>
+                  <td className="border px-2 py-1 text-center total-cell">₹{total.toFixed(2)}</td>
                 </tr>
               );
             })}
@@ -271,19 +277,21 @@ export default function PrintQuotation() {
         </table>
       </div>
 
+      {/* Totals Section */}
       {quotation.displayTotals && (
         <div className="print-section mt-4 text-right">
-          <div className="text-base font-bold">
+          <div className="text-sm font-bold">
             Total Amount: ₹{computedAmount(quotation).toFixed(2)}
           </div>
-          <div className="text-base font-bold">
+          <div className="text-sm font-bold">
             Grand Total (with GST): ₹{computedTotal(quotation).toFixed(2)}
           </div>
         </div>
       )}
 
+      {/* Terms Section */}
       <div className="print-section mt-4 border-t pt-2">
-        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mt-2">
+        <div className="text-xs italic text-center py-1 border">
           Product subject to availability at the time of order confirmation
         </div>
         {quotation.terms?.length > 0 &&
@@ -293,32 +301,29 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-
-        <div className="p-1 italic font-bold text-xs text-blue-600 border text-center mb-2">
-          Rates may vary in case there is a change in specifications / quantity / timelines
-        </div>
       </div>
 
-      <div className="print-section footer-block mt-8 flex justify-between items-start">
-        <div className="flex flex-col">
-          <div className="text-xl font-bold">For Ace Print Pack</div>
-          <div className="mt-2">
+      {/* Footer */}
+      <div className="print-section footer-block mt-8">
+        <div className="flex justify-between items-start">
+          <div className="flex flex-col">
+            <div className="text-sm font-bold">For Ace Print Pack</div>
             <img
               src="/signature.png"
               alt="Signature"
-              style={{ height: '0.8in', width: 'auto' }}
+              style={{ height: '0.8in', width: 'auto', margin: '0.1in 0' }}
               crossOrigin="anonymous"
             />
+            <div className="text-xs">Authorized Signatory</div>
           </div>
-          <h2>Neeraj Dinodia</h2>
-        </div>
-        <div>
-          <img
-            src="/address.png"
-            alt="Address"
-            style={{ height: '1.2in', width: 'auto' }}
-            crossOrigin="anonymous"
-          />
+          
+          <div className="text-xs text-right" style={{ color: '#555' }}>
+            <div className="font-bold">Office Address:</div>
+            #61, 1st Floor, 5th Main Road<br />
+            Chamrajpet, Bangalore - 560018<br />
+            Phone: +91 96200 12727<br />
+            Email: info@aceprintpack.com
+          </div>
         </div>
       </div>
     </div>
@@ -330,8 +335,7 @@ function computedAmount(quotation) {
   (quotation.items || []).forEach((item) => {
     const quantity = parseFloat(item.quantity) || 1;
     const baseRate = parseFloat(item.rate) || 0;
-    const margin = parseFloat(quotation.margin) || 0;
-    const marginFactor = 1 + margin / 100;
+    const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
     sum += baseRate * marginFactor * quantity;
   });
   return sum;
@@ -342,8 +346,7 @@ function computedTotal(quotation) {
   (quotation.items || []).forEach((item) => {
     const quantity = parseFloat(item.quantity) || 1;
     const baseRate = parseFloat(item.rate) || 0;
-    const margin = parseFloat(quotation.margin) || 0;
-    const marginFactor = 1 + margin / 100;
+    const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
     const amount = baseRate * marginFactor * quantity;
     const gst = parseFloat(item.productGST) || 0;
     const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
