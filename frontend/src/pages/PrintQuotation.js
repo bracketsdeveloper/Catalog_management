@@ -215,8 +215,8 @@ export default function PrintQuotation() {
             <tr>
               <th className="border px-2 py-1 text-center">Sl. No.</th>
               <th className="border px-2 py-1 text-center image-cell">Image</th>
-              <th className="border px-2 py-1 text-center hsn-cell">HSN</th>
               <th className="border px-2 py-1 text-center product-cell">Product</th>
+              <th className="border px-2 py-1 text-center hsn-cell">HSN</th>
               <th className="border px-2 py-1 text-center quantity-cell">Qty</th>
               <th className="border px-2 py-1 text-center rate-cell">Rate</th>
               <th className="border px-2 py-1 text-center amount-cell">Amount</th>
@@ -256,8 +256,8 @@ export default function PrintQuotation() {
                       />
                     )}
                   </td>
-                  <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
                   <td className="border px-2 py-1 text-center product-cell">{item.product}</td>
+                  <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
                   <td className="border px-2 py-1 text-center quantity-cell">{quantity}</td>
                   <td className="border px-2 py-1 text-center rate-cell">₹{effRate.toFixed(2)}</td>
                   <td className="border px-2 py-1 text-center amount-cell">₹{amount.toFixed(2)}</td>
