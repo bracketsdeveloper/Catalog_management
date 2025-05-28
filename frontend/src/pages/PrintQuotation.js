@@ -33,7 +33,7 @@ export default function PrintQuotation() {
           slNo: item.slNo || idx + 1,
           rate: parseFloat(item.rate) || 0,
           productGST: parseFloat(item.productGST) || 0,
-          product: item.product || "Unknown Product",
+          product: item.product || "",
         }));
       setQuotation({ ...data, items: sanitizedItems });
       setError(null);
@@ -50,13 +50,11 @@ export default function PrintQuotation() {
     const clonedElement = element.cloneNode(true);
     clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
 
-    // Image scaling logic for PDF
     clonedElement.querySelectorAll(".product-image").forEach((img) => {
       const naturalWidth = img.naturalWidth;
       const naturalHeight = img.naturalHeight;
       const aspectRatio = naturalWidth / naturalHeight;
       
-      // Maximum dimensions in pixels (200px ~ 2.6in, 150px ~ 2in)
       const maxWidth = 200;
       const maxHeight = 150;
 
@@ -127,7 +125,7 @@ export default function PrintQuotation() {
             
             .table-container td, .table-container th {
               padding: 2px 3px !important;
-              font-size: 9pt !important;
+              font-size: 6pt !important;
             }
             
             .product-image {
@@ -155,6 +153,10 @@ export default function PrintQuotation() {
               width: 100%;
             }
           }
+
+          .table-container table {
+            font-size: 0.7rem !important;
+          }
         `}
       </style>
 
@@ -167,7 +169,6 @@ export default function PrintQuotation() {
         </button>
       </div>
 
-      {/* Company Header */}
       <div className="print-section header-section">
         <div className="company-header">
           <div className="text-lg font-bold" style={{ fontSize: '14pt' }}>
@@ -179,7 +180,6 @@ export default function PrintQuotation() {
           </div>
         </div>
 
-        {/* Quotation Meta */}
         <div className="flex justify-between items-start mt-2">
           <div>
             <div className="text-xs" style={{ fontSize: '9pt' }}>
@@ -200,17 +200,15 @@ export default function PrintQuotation() {
           />
         </div>
 
-        {/* Customer Info */}
         <div className="customer-info mt-3">
           <div className="text-sm font-bold" style={{ fontSize: '12pt' }}>
-            {quotation.salutation || "Mr."} {quotation.customerName}
+            {quotation.salutation || ""} {quotation.customerName}
           </div>
           <div className="text-xs">{quotation.customerCompany}</div>
           <div className="text-xs">{quotation.customerAddress}</div>
         </div>
       </div>
 
-      {/* Items Table */}
       <div className="print-section table-container mt-4">
         <table className="w-full border-collapse">
           <thead>
@@ -237,29 +235,28 @@ export default function PrintQuotation() {
               const gstPercent = parseFloat(item.productGST) || 0;
               const gstAmt = parseFloat((amount * (gstPercent / 100)).toFixed(2));
               const total = parseFloat((amount + gstAmt).toFixed(2));
-              const imageUrl = item.productId?.images?.[item.imageIndex] || "https://via.placeholder.com/150";
-              const hsnCode = item.hsnCode || item.productId?.hsnCode || "N/A";
+              const imageUrl = item.productId?.images?.[item.imageIndex] || "";
+              const hsnCode = item.hsnCode || item.productId?.hsnCode || "";
 
               return (
                 <tr key={idx}>
                   <td className="border px-2 py-1 text-center">{item.slNo}</td>
                   <td className="border px-2 py-1 text-center image-cell">
-                    <img
-                      src={imageUrl}
-                      alt={item.product}
-                      className="product-image"
-                      style={{ 
-                        maxWidth: '200px',
-                        maxHeight: '150px',
-                        width: 'auto',
-                        height: 'auto',
-                        objectFit: 'contain'
-                      }}
-                      crossOrigin="anonymous"
-                      onLoad={(e) => {
-                        e.target.style.transform = 'translateZ(0)';
-                      }}
-                    />
+                    {imageUrl && (
+                      <img
+                        src={imageUrl}
+                        alt={item.product}
+                        className="product-image"
+                        style={{ 
+                          maxWidth: '200px',
+                          maxHeight: '150px',
+                          width: 'auto',
+                          height: 'auto',
+                          objectFit: 'contain'
+                        }}
+                        crossOrigin="anonymous"
+                      />
+                    )}
                   </td>
                   <td className="border px-2 py-1 text-center product-cell">{item.product}</td>
                   {quotation.displayHSNCodes && (
@@ -277,7 +274,6 @@ export default function PrintQuotation() {
         </table>
       </div>
 
-      {/* Totals Section */}
       {quotation.displayTotals && (
         <div className="print-section mt-4 text-right">
           <div className="text-sm font-bold">
@@ -289,7 +285,6 @@ export default function PrintQuotation() {
         </div>
       )}
 
-      {/* Terms Section */}
       <div className="print-section mt-4 border-t pt-2">
         <div className="text-xs italic text-center py-1 border">
           Product subject to availability at the time of order confirmation
@@ -303,7 +298,6 @@ export default function PrintQuotation() {
           ))}
       </div>
 
-      {/* Footer */}
       <div className="print-section footer-block mt-8">
         <div className="flex justify-between items-start">
           <div className="flex flex-col">
