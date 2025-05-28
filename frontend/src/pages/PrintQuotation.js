@@ -296,6 +296,9 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
+          <div className="text-xs italic text-center py-1 border">
+          Rates may vary in case there is a change in specifications /quantity/timelines
+        </div>
       </div>
 
       <div className="print-section footer-block mt-8">
