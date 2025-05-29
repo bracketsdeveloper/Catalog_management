@@ -170,15 +170,7 @@ export default function PrintQuotation() {
       </div>
 
       <div className="print-section header-section">
-        <div className="company-header">
-          <div className="text-lg font-bold" style={{ fontSize: '14pt' }}>
-            Ace Print Pack • Ace Gifting Solutions
-          </div>
-          <div className="text-xs mt-1" style={{ lineHeight: '1.2', color: '#555' }}>
-            #61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore - 560018<br />
-            Phone: +91 96200 12727 | Email: info@aceprintpack.com
-          </div>
-        </div>
+
 
         <div className="flex justify-between items-start mt-2">
           <div>
@@ -202,7 +194,7 @@ export default function PrintQuotation() {
 
         <div className="customer-info mt-3">
           <div className="text-sm font-bold" style={{ fontSize: '12pt' }}>
-            {quotation.salutation || ""} {quotation.customerName}
+            {quotation.salutation && quotation.customerName ? `${quotation.salutation} ${quotation.customerName}` : quotation.customerName}
           </div>
           <div className="text-xs">{quotation.customerCompany}</div>
           <div className="text-xs">{quotation.customerAddress}</div>
