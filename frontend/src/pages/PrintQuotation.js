@@ -398,10 +398,11 @@ export default function PrintQuotation() {
               <tr className="table-totals">
                 <td 
                   colSpan={quotation.displayHSNCodes ? 5 : 4} 
-                  className="border px-2 py-1 text-right"
+                  className="border px-2 py-1 text-center"
                 >
                   Total
                 </td>
+                <td className="border px-2 py-1"></td>
                 <td className="border px-2 py-1 text-center">₹{formatCurrency(computedAmount(quotation))}</td>
                 <td className="border px-2 py-1"></td>
                 <td className="border px-2 py-1 text-center">₹{formatCurrency(computedTotal(quotation))}</td>
