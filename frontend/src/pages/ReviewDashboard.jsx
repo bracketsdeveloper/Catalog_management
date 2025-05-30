@@ -712,7 +712,7 @@ export default function ReviewDashboard() {
           yText -= lineHeight;
         }
         if (p.gst) {
-          page.drawText("GST: ", {
+          page.drawText("GST (Additional): ", {
             x: xText,
             y: yText,
             size: 30,

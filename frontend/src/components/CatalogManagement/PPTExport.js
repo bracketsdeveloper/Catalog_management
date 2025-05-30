@@ -7,7 +7,7 @@ const pptFieldMapping = {
   ProductDescription: "Description",
   quantity: "Qty",
   productCost: "Rate in INR (per pc)",
-  productGST: "GST",
+  productGST: "GST (Additional)",
 };
 
 // Utility to wrap text for PPT slides

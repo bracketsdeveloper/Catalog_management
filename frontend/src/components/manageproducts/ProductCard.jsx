@@ -49,7 +49,9 @@ export default function ProductCard({
         </div>
 
         {/* Show MRP + Product Cost */}
+        <h2 className="font-semibold text-lg mb-1 truncate">{product.productId}</h2>
         <h2 className="font-semibold text-lg mb-1 truncate">{product.name}</h2>
+        <h2 className="font-semibold text-lg mb-1 truncate">{product.brandName}</h2>
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-medium text-md text-gray-500 line-through">
             ₹{product.MRP}/{product.MRP_Unit}

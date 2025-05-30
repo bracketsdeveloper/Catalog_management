@@ -54,7 +54,7 @@ export default function PrintQuotation() {
       const naturalWidth = img.naturalWidth;
       const naturalHeight = img.naturalHeight;
       const aspectRatio = naturalWidth / naturalHeight;
-      
+
       const maxWidth = 200;
       const maxHeight = 150;
 
@@ -75,7 +75,7 @@ export default function PrintQuotation() {
     });
 
     const opt = {
-      margin: [5, 5, 5, 5],
+      margin: [30, 5, 30, 5],
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { 
@@ -94,7 +94,29 @@ export default function PrintQuotation() {
       }
     };
 
-    html2pdf().set(opt).from(clonedElement).save();
+    html2pdf()
+      .set(opt)
+      .from(clonedElement)
+      .toPdf()
+      .get('pdf')
+      .then((pdf) => {
+        const totalPages = pdf.internal.getNumberOfPages();
+        const backgroundImage = "/templates/quotetemplate.png"; // Path to the background image
+
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i);
+          pdf.addImage(
+            backgroundImage,
+            'JPEG',
+            0, 0, // Position at top-left
+            210, 297, // A4 dimensions in mm (width, height)
+            undefined, undefined,
+            0, // Rotation
+            0.2 // Opacity (semi-transparent)
+          );
+        }
+      })
+      .save();
   };
 
   if (loading) return <div className="p-6 text-gray-400">Loading quotation...</div>;
@@ -102,6 +124,22 @@ export default function PrintQuotation() {
   if (!quotation) return <div className="p-6 text-gray-400">Quotation not found.</div>;
 
   const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
+  
+  // Format date as "Saturday, March 29, 2025"
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  // Format currency with commas
+  const formatCurrency = (amount) => {
+    return amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-4 bg-white shadow-md" id="printable">
@@ -115,7 +153,7 @@ export default function PrintQuotation() {
             }
             .no-print { display: none !important; }
             .print-section { page-break-inside: avoid; }
-            table { border-color: #666 !important; }
+            table { border-color: #333 !important; border-width: 1.5px !important; }
             
             .company-header {
               border-bottom: 1px solid #ccc;
@@ -123,9 +161,22 @@ export default function PrintQuotation() {
               margin-bottom: 0.15in;
             }
             
-            .table-container td, .table-container th {
-              padding: 2px 3px !important;
-              font-size: 6pt !important;
+            .table-container th {
+              padding: 4px 3px !important;
+              font-size: 8pt !important;
+              font-family: Arial, Helvetica, sans-serif !important;
+              color: #0C2D5E !important;
+              white-space: nowrap !important;
+              background-color: #E6F0FA !important;
+              border: 1.5px solid #333 !important;
+            }
+
+            .table-container td {
+              padding: 4px 3px !important;
+              font-size: 8pt !important;
+              font-family: Arial, Helvetica, sans-serif !important;
+              color: #1A4A7B !important;
+              border: 1.5px solid #333 !important;
             }
             
             .product-image {
@@ -138,24 +189,110 @@ export default function PrintQuotation() {
               margin: 0 auto !important;
             }
             
-            .image-cell { width: auto !important; min-width: 1.5in !important; }
-            .product-cell { width: 23% !important; }
-            .hsn-cell { width: 8% !important; }
+            .image-cell { 
+              width: auto !important; 
+              min-width: 0.6in !important;
+            }
+            .sl-no-cell { 
+              width: 10% !important;
+            }
+            .product-cell { width: 25% !important;
+            }
+            .hsn-cell { width: 10% !important; }
             .quantity-cell { width: 7% !important; }
             .rate-cell { width: 10% !important; }
             .amount-cell { width: 10% !important; }
-            .gst-cell { width: 8% !important; }
+            .gst-cell { width: 10% !important; }
             .total-cell { width: 12% !important; }
             
             .footer-block {
-              position: absolute;
-              bottom: 0.2in;
+              position: relative;
+              margin-top: 0.5in;
               width: 100%;
+            }
+
+            .bordered-text {
+              font-family: Arial, Helvetica, sans-serif !important;
+              font-size: 9pt !important;
+              font-style: italic !important;
+              color: #0C2D5E !important;
+              text-align: center !important;
+              border: 1.5px solid #333 !important;
+              padding: 8px !important;
+              margin: 8px auto !important;
+              background-color: #E6F0FA !important;
+              max-width: 90%;
+              display: block;
+            }
+            
+            .table-totals {
+              font-weight: bold !important;
+              background-color: #F0F7FF !important;
             }
           }
 
           .table-container table {
-            font-size: 0.7rem !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 8pt !important;
+            border-collapse: collapse;
+          }
+
+          .table-container th {
+            background-color: #E6F0FA;
+            border: 1.5px solid #333;
+            color: #0C2D5E;
+          }
+          
+          .table-container td {
+            border: 1.5px solid #333;
+            color: #1A4A7B;
+          }
+
+          .header-section, .customer-info, .totals-section, .terms-section, .footer-block {
+            font-family: Arial, Helvetica, sans-serif !important;
+            color: #1A4A7B !important;
+          }
+
+          .header-section .date-text {
+            font-size: 10pt !important;
+          }
+
+          .header-section .quotation-number, .customer-info .customer-name {
+            font-size: 14pt !important;
+            font-weight: bold !important;
+            color: #0C2D5E !important;
+          }
+
+          .header-section .gstin-text, .customer-info .company-address {
+            font-size: 10pt !important;
+          }
+
+          .footer-block .company-name {
+            font-size: 11pt !important;
+            font-weight: bold !important;
+          }
+
+          .footer-block .signatory-text {
+            font-size: 10pt !important;
+          }
+          
+          .bordered-text {
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 9pt !important;
+            font-style: italic !important;
+            color: #0C2D5E !important;
+            text-align: center !important;
+            border: 1.5px solid #333;
+            padding: 8px;
+            margin: 8px auto;
+            background-color: #E6F0FA;
+            max-width: 90%;
+            display: block;
+          }
+          
+          .table-totals {
+            font-weight: bold;
+            background-color: #F0F7FF;
           }
         `}
       </style>
@@ -170,34 +307,26 @@ export default function PrintQuotation() {
       </div>
 
       <div className="print-section header-section">
-
-
-        <div className="flex justify-between items-start mt-2">
+        <div className="flex justify-between items-start mt-10">
           <div>
-            <div className="text-xs" style={{ fontSize: '9pt' }}>
-              Date: {new Date(quotation.createdAt).toLocaleDateString("en-IN")}
+            <div className="date-text">
+              Date: {formatDate(quotation.createdAt)}
             </div>
             <div className="mt-1">
-              <div className="text-sm font-bold" style={{ fontSize: '12pt' }}>
+              <div className="quotation-number">
                 Quotation No: {quotation.quotationNumber}
               </div>
-              <div className="text-xs">GSTIN: 29ABCFA9924A1ZL</div>
+              <div className="gstin-text">GSTIN: 29ABCFA9924A1ZL</div>
             </div>
           </div>
-          <img
-            src="/logo.png"
-            alt="Logo"
-            style={{ height: '0.6in', width: 'auto' }}
-            crossOrigin="anonymous"
-          />
         </div>
 
         <div className="customer-info mt-3">
-          <div className="text-sm font-bold" style={{ fontSize: '12pt' }}>
+          <div className="customer-name">
             {quotation.salutation && quotation.customerName ? `${quotation.salutation} ${quotation.customerName}` : quotation.customerName}
           </div>
-          <div className="text-xs">{quotation.customerCompany}</div>
-          <div className="text-xs">{quotation.customerAddress}</div>
+          <div className="company-address">{quotation.customerCompany}</div>
+          <div className="company-address">{quotation.customerAddress}</div>
         </div>
       </div>
 
@@ -205,7 +334,7 @@ export default function PrintQuotation() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="border px-2 py-1 text-center">Sl. No.</th>
+              <th className="border px-2 py-1 text-center sl-no-cell">Sl. No.</th>
               <th className="border px-2 py-1 text-center image-cell">Image</th>
               <th className="border px-2 py-1 text-center product-cell">Product</th>
               {quotation.displayHSNCodes && (
@@ -232,7 +361,7 @@ export default function PrintQuotation() {
 
               return (
                 <tr key={idx}>
-                  <td className="border px-2 py-1 text-center">{item.slNo}</td>
+                  <td className="border px-2 py-1 text-center sl-no-cell">{item.slNo}</td>
                   <td className="border px-2 py-1 text-center image-cell">
                     {imageUrl && (
                       <img
@@ -255,30 +384,35 @@ export default function PrintQuotation() {
                     <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
                   )}
                   <td className="border px-2 py-1 text-center quantity-cell">{quantity}</td>
-                  <td className="border px-2 py-1 text-center rate-cell">₹{effRate.toFixed(2)}</td>
-                  <td className="border px-2 py-1 text-center amount-cell">₹{amount.toFixed(2)}</td>
+                  <td className="border px-2 py-1 text-center rate-cell">₹{formatCurrency(effRate)}</td>
+                  <td className="border px-2 py-1 text-center amount-cell">₹{formatCurrency(amount)}</td>
                   <td className="border px-2 py-1 text-center gst-cell">{gstPercent}%</td>
-                  <td className="border px-2 py-1 text-center total-cell">₹{total.toFixed(2)}</td>
+                  <td className="border px-2 py-1 text-center total-cell">₹{formatCurrency(total)}</td>
                 </tr>
               );
             })}
           </tbody>
+          
+          {quotation.displayTotals && (
+            <tfoot>
+              <tr className="table-totals">
+                <td 
+                  colSpan={quotation.displayHSNCodes ? 5 : 4} 
+                  className="border px-2 py-1 text-right"
+                >
+                  Total
+                </td>
+                <td className="border px-2 py-1 text-center">₹{formatCurrency(computedAmount(quotation))}</td>
+                <td className="border px-2 py-1"></td>
+                <td className="border px-2 py-1 text-center">₹{formatCurrency(computedTotal(quotation))}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
-      {quotation.displayTotals && (
-        <div className="print-section mt-4 text-right">
-          <div className="text-sm font-bold">
-            Total Amount: ₹{computedAmount(quotation).toFixed(2)}
-          </div>
-          <div className="text-sm font-bold">
-            Grand Total (with GST): ₹{computedTotal(quotation).toFixed(2)}
-          </div>
-        </div>
-      )}
-
-      <div className="print-section mt-4 border-t pt-2">
-        <div className="text-xs italic text-center py-1 border">
+      <div className="print-section terms-section mt-4 border-t pt-2">
+        <div className="bordered-text">
           Product subject to availability at the time of order confirmation
         </div>
         {quotation.terms?.length > 0 &&
@@ -288,30 +422,28 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-          <div className="text-xs italic text-center py-1 border">
-          Rates may vary in case there is a change in specifications /quantity/timelines
+        <div className="bordered-text">
+          Rates may vary in case there is a change in specifications / quantity / timelines
         </div>
       </div>
 
       <div className="print-section footer-block mt-8">
         <div className="flex justify-between items-start">
           <div className="flex flex-col">
-            <div className="text-sm font-bold">For Ace Print Pack</div>
+            <div className="company-name">For Ace Print Pack</div>
             <img
               src="/signature.png"
               alt="Signature"
               style={{ height: '0.8in', width: 'auto', margin: '0.1in 0' }}
               crossOrigin="anonymous"
             />
-            <div className="text-xs">Authorized Signatory</div>
+            <div className="signatory-text">Authorized Signatory</div>
           </div>
-          
-          <div className="text-xs text-right" style={{ color: '#555' }}>
-            <div className="font-bold">Office Address:</div>
-            #61, 1st Floor, 5th Main Road<br />
-            Chamrajpet, Bangalore - 560018<br />
-            Phone: +91 96200 12727<br />
-            Email: info@aceprintpack.com
+          <div className="text-xs text-right" style={{ color: '#1A4A7B' }}>
+            Ace Print Pack • Ace Gifting Solutions<br />
+            # 61, 1st Floor, 5th Main Road<br />
+            Chamrajpet, Bangalore 560018<br />
+            +919620012727
           </div>
         </div>
       </div>

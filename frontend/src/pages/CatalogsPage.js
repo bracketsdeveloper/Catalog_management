@@ -622,7 +622,7 @@ export default function CatalogManagementPage() {
         }
 
         if (sub.productGST !== undefined) {
-          page.drawText("GST: ", {
+          page.drawText("GST (Additional): ", {
             x: xText,
             y: yText,
             size: 25,

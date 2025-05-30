@@ -109,9 +109,14 @@ export default function ProductCard({
           <span className="text-gray-400 text-sm">No Image Available</span>
         )}
       </div>
-
+      <h2 className="font-medium text-lg mb-1 text-red-900">
+        {product?.productId || "Unknown Brand"}
+      </h2>
       <h2 className="font-medium text-lg mb-1 text-gray-900">
         {product?.productName || product?.name || "Unknown Product"}
+      </h2>
+      <h2 className="font-medium text-lg mb-1 text-purple-900">
+        {product?.brandName || "Unknown Brand"}
       </h2>
       <h3 className="font-bold text-md text-gray-800 mb-1">
         ₹{(product?.productCost || 0).toFixed(2)}
