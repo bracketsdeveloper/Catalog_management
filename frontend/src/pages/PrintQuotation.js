@@ -413,7 +413,7 @@ export default function PrintQuotation() {
       </div>
 
       <div className="print-section terms-section mt-4 border-t pt-2">
-        <div className="bordered-text">
+        <div className="bordered-text font-bold ">
           Product subject to availability at the time of order confirmation
         </div>
         {quotation.terms?.length > 0 &&
@@ -423,7 +423,7 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-        <div className="bordered-text">
+        <div className="bordered-text font-bold">
           Rates may vary in case there is a change in specifications / quantity / timelines
         </div>
       </div>
@@ -440,12 +440,7 @@ export default function PrintQuotation() {
             />
             <div className="signatory-text">Authorized Signatory</div>
           </div>
-          <div className="text-xs text-right" style={{ color: '#1A4A7B' }}>
-            Ace Print Pack • Ace Gifting Solutions<br />
-            # 61, 1st Floor, 5th Main Road<br />
-            Chamrajpet, Bangalore 560018<br />
-            +919620012727
-          </div>
+          
         </div>
       </div>
     </div>
