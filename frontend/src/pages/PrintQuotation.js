@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -55,8 +56,8 @@ export default function PrintQuotation() {
       const naturalHeight = img.naturalHeight;
       const aspectRatio = naturalWidth / naturalHeight;
 
-      const maxWidth = 200;
-      const maxHeight = 150;
+      const maxWidth = 150;
+      const maxHeight = 100;
 
       let width = naturalWidth;
       let height = naturalHeight;
@@ -75,7 +76,7 @@ export default function PrintQuotation() {
     });
 
     const opt = {
-      margin: [30, 5, 30, 5],
+      margin: [30, 5, 40, 5], // Restored original margins
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { 
@@ -88,9 +89,10 @@ export default function PrintQuotation() {
       },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: { 
-        mode: ['avoid-all', 'css', 'legacy'],
+        mode: ['css'],
+        avoid: ['.terms-section', '.footer-block'],
         before: '.page-break-before',
-        after: '.page-break-after'
+        after: ['.page-break-after', '.table-container tr:nth-child(4)'] // Break after 4th row
       }
     };
 
@@ -101,18 +103,18 @@ export default function PrintQuotation() {
       .get('pdf')
       .then((pdf) => {
         const totalPages = pdf.internal.getNumberOfPages();
-        const backgroundImage = "/templates/quotetemplate.png"; // Path to the background image
+        const backgroundImage = "/templates/quotetemplate.png";
 
         for (let i = 1; i <= totalPages; i++) {
           pdf.setPage(i);
           pdf.addImage(
             backgroundImage,
             'JPEG',
-            0, 0, // Position at top-left
-            210, 297, // A4 dimensions in mm (width, height)
+            0, 0,
+            210, 297,
             undefined, undefined,
-            0, // Rotation
-            0.2 // Opacity (semi-transparent)
+            0,
+            0.2
           );
         }
       })
@@ -125,7 +127,6 @@ export default function PrintQuotation() {
 
   const marginFactor = 1 + (parseFloat(quotation.margin) || 0) / 100;
   
-  // Format date as "Saturday, March 29, 2025"
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
@@ -136,7 +137,6 @@ export default function PrintQuotation() {
     });
   };
 
-  // Format currency with commas
   const formatCurrency = (amount) => {
     return amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
@@ -152,13 +152,28 @@ export default function PrintQuotation() {
               -webkit-print-color-adjust: exact;
             }
             .no-print { display: none !important; }
-            .print-section { page-break-inside: avoid; }
+            .print-section { page-break-inside: auto; }
+            .header-section { margin-bottom: 8px !important; }
+            .customer-info { 
+              page-break-after: auto !important;
+              margin-bottom: 8px !important;
+            }
+            .table-container { 
+              page-break-before: auto !important;
+              margin-top: 0 !important;
+            }
+            .table-container tr:nth-child(4) { 
+              page-break-after: always !important; /* Break after 4th row */
+            }
+            .table-container thead { 
+              display: table-header-group; /* Headers only on first page */
+            }
             table { border-color: #333 !important; border-width: 1.5px !important; }
             
             .company-header {
               border-bottom: 1px solid #ccc;
               padding-bottom: 0.1in;
-              margin-bottom: 0.15in;
+              margin-bottom: 0.1in;
             }
             
             .table-container th {
@@ -180,8 +195,8 @@ export default function PrintQuotation() {
             }
             
             .product-image {
-              max-width: 2.5in !important;
-              max-height: 2in !important;
+              max-width: 1.5in !important;
+              max-height: 1in !important;
               width: auto !important;
               height: auto !important;
               object-fit: contain !important;
@@ -193,11 +208,8 @@ export default function PrintQuotation() {
               width: auto !important; 
               min-width: 0.6in !important;
             }
-            .sl-no-cell { 
-              width: 10% !important;
-            }
-            .product-cell { width: 25% !important;
-            }
+            .sl-no-cell { width: 10% !important; }
+            .product-cell { width: 25% !important; }
             .hsn-cell { width: 10% !important; }
             .quantity-cell { width: 7% !important; }
             .rate-cell { width: 10% !important; }
@@ -209,6 +221,7 @@ export default function PrintQuotation() {
               position: relative;
               margin-top: 0.5in;
               width: 100%;
+              page-break-before: always !important; /* Footer on new page */
             }
 
             .bordered-text {
@@ -307,7 +320,7 @@ export default function PrintQuotation() {
       </div>
 
       <div className="print-section header-section">
-        <div className="flex justify-between items-start mt-10">
+        <div className="flex justify-between items-start mt-6">
           <div>
             <div className="date-text">
               Date: {formatDate(quotation.createdAt)}
@@ -321,7 +334,7 @@ export default function PrintQuotation() {
           </div>
         </div>
 
-        <div className="customer-info mt-3">
+        <div className="customer-info mt-2">
           <div className="customer-name">
             {quotation.salutation && quotation.customerName ? `${quotation.salutation} ${quotation.customerName}` : quotation.customerName}
           </div>
@@ -330,7 +343,7 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      <div className="print-section table-container mt-4">
+      <div className="print-section table-container mt-2">
         <table className="w-full border-collapse">
           <thead>
             <tr>
@@ -413,7 +426,7 @@ export default function PrintQuotation() {
       </div>
 
       <div className="print-section terms-section mt-4 border-t pt-2">
-        <div className="bordered-text font-bold ">
+        <div className="bordered-text font-bold">
           Product subject to availability at the time of order confirmation
         </div>
         {quotation.terms?.length > 0 &&
@@ -440,7 +453,6 @@ export default function PrintQuotation() {
             />
             <div className="signatory-text">Authorized Signatory</div>
           </div>
-          
         </div>
       </div>
     </div>
