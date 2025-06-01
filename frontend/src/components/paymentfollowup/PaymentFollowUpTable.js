@@ -1,10 +1,10 @@
-// components/paymentfollowup/PaymentFollowUpTable.js
 import React, { useState, useMemo } from "react";
 import {
   ArrowUpIcon,
   ArrowDownIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
+import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -27,73 +27,94 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
 }
 
 export default function PaymentFollowUpTable({
-  rows,
+  rows = [],
   sortField,
   sortOrder,
   toggleSort,
   onEdit,
 }) {
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
+  const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // header-level filters
   const [headerFilters, setHeaderFilters] = useState({
+    jobSheetNumber: "",
+    clientCompanyName: "",
+    clientName: "",
     invoiceNumber: "",
     invoiceDate: "",
     invoiceAmount: "",
     invoiceMailed: "",
+    invoiceMailedOn: "",
     dueDate: "",
     overDueSince: "",
     latestFollowUp: "",
     paymentReceived: "",
+    discountAllowed: "",
+    TDS: "",
+    remarks: "",
   });
 
   const handleFilterChange = (field, value) =>
     setHeaderFilters((h) => ({ ...h, [field]: value }));
 
-  // Flatten comma-separated invoiceNumber into individual rows
-  const flattenedRows = useMemo(() => {
-    return rows.flatMap((r) => {
-      const invNums = typeof r.invoiceNumber === "string"
-        ? r.invoiceNumber.split(",").map((s) => s.trim()).filter(Boolean)
-        : Array.isArray(r.invoiceNumber)
-        ? r.invoiceNumber
-        : [r.invoiceNumber];
-      return invNums.map((num) => ({ ...r, invoiceNumber: num }));
-    });
-  }, [rows]);
-
-  // helper to get latest follow-up
-  const getLatestFollowUp = (followUps = []) => {
-    if (!followUps.length) return null;
-    return followUps.reduce((latest, current) =>
-      new Date(current.updatedOn) > new Date(latest.updatedOn)
-        ? current
-        : latest
-    );
-  };
-
   // apply header filters
   const filteredRows = useMemo(() => {
-    return flattenedRows.filter((r) =>
+    return rows.filter((r) =>
       Object.entries(headerFilters).every(([field, value]) => {
         if (!value) return true;
         let cell = "";
         if (field === "latestFollowUp") {
           const fu = getLatestFollowUp(r.followUps);
           cell = fu ? fu.date : "";
+        } else if (field === "paymentReceived") {
+          cell = r.paymentReceived.reduce((sum, p) => sum + (p.amount || 0), 0);
         } else {
           cell = r[field] ?? "";
         }
         return cell.toString().toLowerCase().includes(value.toLowerCase());
       })
     );
-  }, [flattenedRows, headerFilters]);
+  }, [rows, headerFilters]);
+
+  const getLatestFollowUp = (followUps = []) => {
+    if (!followUps.length) return null;
+    return followUps.reduce((latest, current) =>
+      new Date(current.updatedOn) > new Date(latest.updatedOn) ? current : latest
+    );
+  };
+
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-x-auto">
       <table className="w-full table-auto text-xs">
         <thead>
           <tr>
+            <HeadCell
+              label="Job Sheet #"
+              field="jobSheetNumber"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
+              label="Client Company"
+              field="clientCompanyName"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
+              label="Client Name"
+              field="clientName"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
             <HeadCell
               label="Invoice #"
               field="invoiceNumber"
@@ -112,6 +133,11 @@ export default function PaymentFollowUpTable({
             <HeadCell
               label="Invoice Mailed"
               field="invoiceMailed"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
+              label="Invoice Mailed On"
+              field="invoiceMailedOn"
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
@@ -134,28 +160,46 @@ export default function PaymentFollowUpTable({
               field="paymentReceived"
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
-            <th className="px-2 py-1 border border-gray-300 bg-gray-50">
-              Actions
-            </th>
+            <HeadCell
+              label="Discount Allowed"
+              field="discountAllowed"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
+              label="TDS"
+              field="TDS"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
+              label="Remarks"
+              field="remarks"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <th className="px-2 py-1 border border-gray-300 bg-gray-50">Actions</th>
           </tr>
           <tr>
             {[
+              "jobSheetNumber",
+              "clientCompanyName",
+              "clientName",
               "invoiceNumber",
               "invoiceDate",
               "invoiceAmount",
               "invoiceMailed",
+              "invoiceMailedOn",
               "dueDate",
               "overDueSince",
               "latestFollowUp",
               "paymentReceived",
+              "discountAllowed",
+              "TDS",
+              "remarks",
             ].map((field) => (
               <td key={field} className="px-2 py-1 border border-gray-300">
                 <input
                   type="text"
                   value={headerFilters[field]}
-                  onChange={(e) =>
-                    handleFilterChange(field, e.target.value)
-                  }
+                  onChange={(e) => handleFilterChange(field, e.target.value)}
                   placeholder="Search…"
                   className="w-full p-1 text-xs border rounded"
                 />
@@ -164,41 +208,58 @@ export default function PaymentFollowUpTable({
             <td className="px-2 py-1 border border-gray-300"></td>
           </tr>
         </thead>
-
         <tbody>
-          {filteredRows.map((r) => {
-            const latestFU = getLatestFollowUp(r.followUps);
-            const key = `${r._id}-${r.invoiceNumber}`;
-            return (
-              <tr key={key} className="hover:bg-gray-100">
-                <Cell val={r.invoiceNumber} />
-                <Cell val={r.invoiceDate} />
-                <Cell val={r.invoiceAmount} />
-                <Cell val={r.invoiceMailed} />
-                <Cell val={r.dueDate} />
-                <Cell val={r.overDueSince} />
-                <td
-                  className="px-2 py-1 border border-gray-300 whitespace-normal break-words cursor-pointer text-blue-600 hover:underline"
-                  onClick={() =>
-                    latestFU ? setSelectedFollowUp(latestFU) : null
-                  }
-                >
-                  {latestFU ? fmt(latestFU.date) : "-"}
-                </td>
-                <Cell val={r.paymentReceived} />
-                <td className="px-2 py-1 border border-gray-300">
-                  <button onClick={() => onEdit(r)}>
-                    <EllipsisVerticalIcon className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-
-          {filteredRows.length === 0 && (
+          {filteredRows.length > 0 ? (
+            filteredRows.map((r) => {
+              const latestFU = getLatestFollowUp(r.followUps);
+              const totalPayment = r.paymentReceived.reduce(
+                (sum, p) => sum + (p.amount || 0),
+                0
+              );
+              return (
+                <tr key={`${r._id}-${r.invoiceNumber}`} className="hover:bg-gray-100">
+                  <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
+                    <button
+                      className="border-b text-blue-500 hover:text-blue-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenModal(r.jobSheetNumber);
+                      }}
+                    >
+                      {r.jobSheetNumber || "No Number"}
+                    </button>
+                  </td>
+                  <Cell val={r.clientCompanyName} />
+                  <Cell val={r.clientName} />
+                  <Cell val={r.invoiceNumber} />
+                  <Cell val={r.invoiceDate} />
+                  <Cell val={r.invoiceAmount} />
+                  <Cell val={r.invoiceMailed} />
+                  <Cell val={r.invoiceMailedOn} />
+                  <Cell val={r.dueDate} />
+                  <Cell val={r.overDueSince} />
+                  <td
+                    className="px-2 py-1 border border-gray-300 whitespace-normal break-words cursor-pointer text-blue-600 hover:underline"
+                    onClick={() => (latestFU ? setSelectedFollowUp(latestFU) : null)}
+                  >
+                    {latestFU ? fmt(latestFU.date) : "-"}
+                  </td>
+                  <Cell val={totalPayment} />
+                  <Cell val={r.discountAllowed} />
+                  <Cell val={r.TDS} />
+                  <Cell val={r.remarks} />
+                  <td className="px-2 py-1 border border-gray-300">
+                    <button onClick={() => onEdit(r)}>
+                      <EllipsisVerticalIcon className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          ) : (
             <tr>
               <td
-                colSpan={9}
+                colSpan={16} // Updated for new columns
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records
@@ -246,6 +307,13 @@ export default function PaymentFollowUpTable({
           </div>
         </div>
       )}
+
+      {/* JobSheet Modal */}
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }

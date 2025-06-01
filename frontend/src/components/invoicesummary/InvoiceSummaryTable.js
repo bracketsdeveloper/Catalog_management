@@ -1,4 +1,3 @@
-// components/invoicesummary/InvoiceSummaryTable.js
 import React, { useState, useMemo } from "react";
 import {
   ArrowUpIcon,
@@ -28,7 +27,7 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
 }
 
 export default function InvoiceSummaryTable({
-  rows,
+  rows = [],
   sortField,
   sortOrder,
   toggleSort,
@@ -41,40 +40,31 @@ export default function InvoiceSummaryTable({
   const [headerFilters, setHeaderFilters] = useState({
     jobSheetNumber: "",
     clientCompanyName: "",
+    clientName: "",
     eventName: "",
     invoiceNumber: "",
     invoiceDate: "",
     invoiceAmount: "",
     invoiceMailed: "",
+    invoiceMailedOn: "", // New field
     invoiceUploadedOnPortal: "",
+    crmName: "",
   });
 
   const handleFilterChange = (field, value) => {
     setHeaderFilters((h) => ({ ...h, [field]: value }));
   };
 
-  // flatten comma-separated invoiceNumber
-  const flattenedRows = useMemo(() => {
-    return rows.flatMap((r) => {
-      const invNums = typeof r.invoiceNumber === "string"
-        ? r.invoiceNumber.split(",").map((s) => s.trim()).filter(Boolean)
-        : Array.isArray(r.invoiceNumber)
-        ? r.invoiceNumber
-        : [r.invoiceNumber];
-      return invNums.map((num) => ({ ...r, invoiceNumber: num }));
-    });
-  }, [rows]);
-
   // apply header filters
   const filtered = useMemo(() => {
-    return flattenedRows.filter((r) =>
+    return rows.filter((r) =>
       Object.entries(headerFilters).every(([field, value]) => {
         if (!value) return true;
         const cell = r[field] ?? "";
         return cell.toString().toLowerCase().includes(value.toLowerCase());
       })
     );
-  }, [flattenedRows, headerFilters]);
+  }, [rows, headerFilters]);
 
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
@@ -107,6 +97,11 @@ export default function InvoiceSummaryTable({
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
+              label="Client Name"
+              field="clientName"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
               label="Event"
               field="eventName"
               {...{ sortField, sortOrder, toggle: toggleSort }}
@@ -127,8 +122,18 @@ export default function InvoiceSummaryTable({
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <HeadCell
+              label="Invoice Mailed On"
+              field="invoiceMailedOn"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
               label="Uploaded on Portal"
               field="invoiceUploadedOnPortal"
+              {...{ sortField, sortOrder, toggle: toggleSort }}
+            />
+            <HeadCell
+              label="CRM Name"
+              field="crmName"
               {...{ sortField, sortOrder, toggle: toggleSort }}
             />
             <th className="px-2 py-1 border border-gray-300 bg-gray-50">
@@ -136,129 +141,71 @@ export default function InvoiceSummaryTable({
             </th>
           </tr>
           <tr>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.invoiceNumber}
-                onChange={(e) =>
-                  handleFilterChange("invoiceNumber", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.jobSheetNumber}
-                onChange={(e) =>
-                  handleFilterChange("jobSheetNumber", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.clientCompanyName}
-                onChange={(e) =>
-                  handleFilterChange("clientCompanyName", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.eventName}
-                onChange={(e) =>
-                  handleFilterChange("eventName", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.invoiceDate}
-                onChange={(e) =>
-                  handleFilterChange("invoiceDate", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.invoiceAmount}
-                onChange={(e) =>
-                  handleFilterChange("invoiceAmount", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.invoiceMailed}
-                onChange={(e) =>
-                  handleFilterChange("invoiceMailed", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
-            <td className="px-2 py-1 border border-gray-300">
-              <input
-                type="text"
-                value={headerFilters.invoiceUploadedOnPortal}
-                onChange={(e) =>
-                  handleFilterChange("invoiceUploadedOnPortal", e.target.value)
-                }
-                placeholder="Search…"
-                className="w-full p-1 text-xs border rounded"
-              />
-            </td>
+            {[
+              "invoiceNumber",
+              "jobSheetNumber",
+              "clientCompanyName",
+              "clientName",
+              "eventName",
+              "invoiceDate",
+              "invoiceAmount",
+              "invoiceMailed",
+              "invoiceMailedOn", // New field
+              "invoiceUploadedOnPortal",
+              "crmName",
+            ].map((field) => (
+              <td key={field} className="px-2 py-1 border border-gray-300">
+                <input
+                  type="text"
+                  value={headerFilters[field]}
+                  onChange={(e) => handleFilterChange(field, e.target.value)}
+                  placeholder="Search…"
+                  className="w-full p-1 text-xs border rounded"
+                />
+              </td>
+            ))}
             <td className="px-2 py-1 border border-gray-300"></td>
           </tr>
         </thead>
         <tbody>
-          {filtered.map((r) => (
-            <tr key={`${r._id}-${r.invoiceNumber}`} className="hover:bg-gray-100">
-              <Cell val={r.invoiceNumber} />
-              <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
-                <button
-                  className="border-b text-blue-500 hover:text-blue-700"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleOpenModal(r.jobSheetNumber);
-                  }}
-                >
-                  {r.jobSheetNumber || "No Number"}
-                </button>
-              </td>
-              <Cell val={r.clientCompanyName} />
-              <Cell val={r.eventName} />
-              <Cell val={r.invoiceDate} />
-              <Cell val={r.invoiceAmount} />
-              <Cell val={r.invoiceMailed} />
-              <Cell val={r.invoiceUploadedOnPortal} />
-              <td className="px-2 py-1 border border-gray-300">
-                <button onClick={() => onEdit(r)}>
-                  <EllipsisVerticalIcon className="h-4 w-4" />
-                </button>
-              </td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
+          {filtered.length > 0 ? (
+            filtered.map((r) => (
+              <tr
+                key={`${r._id}-${r.invoiceNumber}`}
+                className="hover:bg-gray-100"
+              >
+                <Cell val={r.invoiceNumber} />
+                <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
+                  <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(r.jobSheetNumber);
+                    }}
+                  >
+                    {r.jobSheetNumber || "No Number"}
+                  </button>
+                </td>
+                <Cell val={r.clientCompanyName} />
+                <Cell val={r.clientName} />
+                <Cell val={r.eventName} />
+                <Cell val={r.invoiceDate} />
+                <Cell val={r.invoiceAmount} />
+                <Cell val={r.invoiceMailed} />
+                <Cell val={r.invoiceMailedOn} />
+                <Cell val={r.invoiceUploadedOnPortal} />
+                <Cell val={r.crmName} />
+                <td className="px-2 py-1 border border-gray-300">
+                  <button onClick={() => onEdit(r)}>
+                    <EllipsisVerticalIcon className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))
+          ) : (
             <tr>
               <td
-                colSpan={9}
+                colSpan={12} // Updated for new column
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records

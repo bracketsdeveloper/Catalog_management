@@ -1,4 +1,3 @@
-// pages/ManageInvoicesSummary.js
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -12,10 +11,13 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export default function ManageInvoicesSummary() {
   const token = localStorage.getItem("token");
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
-  const hasExportPermission = localStorage.getItem("permissions")?.includes("invoice-followup-export");
+  const hasExportPermission = localStorage.getItem("permissions")?.includes(
+    "invoice-followup-export"
+  );
 
   /* Raw data */
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   /* UI state */
   const [search, setSearch] = useState("");
@@ -35,6 +37,7 @@ export default function ManageInvoicesSummary() {
   }, []);
 
   async function fetchRows() {
+    setLoading(true);
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/invoices-summary`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -43,6 +46,9 @@ export default function ManageInvoicesSummary() {
     } catch (err) {
       console.error(err);
       alert("Failed to fetch Invoices Summary");
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -115,12 +121,15 @@ export default function ManageInvoicesSummary() {
       sorted.map((r) => ({
         "Job Sheet #": r.jobSheetNumber,
         Client: r.clientCompanyName,
+        "Client Name": r.clientName,
         Event: r.eventName,
         "Invoice #": r.invoiceNumber,
         "Invoice Date": fmt(r.invoiceDate),
         "Invoice Amount": r.invoiceAmount,
         "Invoice Mailed": r.invoiceMailed,
+        "Invoice Mailed On": fmt(r.invoiceMailedOn), // New field
         "Uploaded on Portal": r.invoiceUploadedOnPortal,
+        "CRM Name": r.crmName,
       }))
     );
     XLSX.utils.book_append_sheet(wb, ws, "InvoicesSummary");
@@ -161,7 +170,6 @@ export default function ManageInvoicesSummary() {
       {showFilters && (
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Job Sheet # */}
             <div>
               <label className="block mb-1 font-semibold">
                 Job Sheet # From
@@ -194,8 +202,6 @@ export default function ManageInvoicesSummary() {
                 className="border w-full p-1 rounded"
               />
             </div>
-
-            {/* Invoice Date */}
             <div>
               <label className="block mb-1 font-semibold">
                 Invoice Date From
@@ -220,8 +226,6 @@ export default function ManageInvoicesSummary() {
                 className="border w-full p-1 rounded"
               />
             </div>
-
-            {/* Invoice Mailed */}
             <div>
               <label className="block mb-1 font-semibold">Invoice Mailed</label>
               <select
@@ -237,7 +241,6 @@ export default function ManageInvoicesSummary() {
               </select>
             </div>
           </div>
-
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setShowFilters(false)}
@@ -256,13 +259,17 @@ export default function ManageInvoicesSummary() {
       )}
 
       {/* Table */}
-      <InvoicesSummaryTable
-        rows={sorted}
-        sortField={sort.field}
-        sortOrder={sort.dir}
-        toggleSort={toggleSort}
-        onEdit={(r) => setEditRow(r)}
-      />
+      {loading ? (
+        <div className="text-center py-4">Loading...</div>
+      ) : (
+        <InvoicesSummaryTable
+          rows={sorted}
+          sortField={sort.field}
+          sortOrder={sort.dir}
+          toggleSort={toggleSort}
+          onEdit={(r) => setEditRow(r)}
+        />
+      )}
 
       {/* Edit modal */}
       {editRow && (

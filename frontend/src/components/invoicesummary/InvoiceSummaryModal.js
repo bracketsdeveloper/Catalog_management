@@ -1,4 +1,3 @@
-// components/invoicesummary/InvoicesSummaryModal.js
 "use client";
 
 import React, { useState } from "react";
@@ -16,17 +15,32 @@ export default function InvoicesSummaryModal({ row, onClose, onSaved }) {
     invoiceDate: row.invoiceDate
       ? new Date(row.invoiceDate).toISOString().slice(0, 10)
       : "",
+    invoiceMailedOn: row.invoiceMailedOn
+      ? new Date(row.invoiceMailedOn).toISOString().slice(0, 10)
+      : "", // New field
+    invoiceNumber: row.invoiceNumber || "",
   });
+  const [error, setError] = useState("");
 
-  const set = (k, v) => setForm({ ...form, [k]: v });
+  const set = (k, v) => {
+    setForm({ ...form, [k]: v });
+    setError("");
+  };
 
   /* Save */
   async function handleSave() {
+    if (form.invoiceNumber.includes(",")) {
+      setError("Invoice number cannot contain commas");
+      return;
+    }
+
     const body = {
       ...form,
       invoiceDate: form.invoiceDate ? new Date(form.invoiceDate) : null,
+      invoiceMailedOn: form.invoiceMailedOn ? new Date(form.invoiceMailedOn) : null, // New field
       invoiceAmount: parseFloat(form.invoiceAmount) || 0,
     };
+
     try {
       if (isSaved) {
         await axios.put(
@@ -45,7 +59,9 @@ export default function InvoicesSummaryModal({ row, onClose, onSaved }) {
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Save failed");
+      const message =
+        err.response?.data?.message || "Save failed. Please try again.";
+      setError(message);
     }
   }
 
@@ -62,12 +78,16 @@ export default function InvoicesSummaryModal({ row, onClose, onSaved }) {
           {isSaved ? "Edit Invoice Summary" : "Add Invoice Summary"}
         </h2>
 
+        {error && <div className="text-red-500 mb-4">{error}</div>}
+
         {/* Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <Field label="Job Sheet #" value={form.jobSheetNumber} />
           <Field label="Client" value={form.clientCompanyName} />
+          <Field label="Client Name" value={form.clientName} />
           <Field label="Event" value={form.eventName} />
           <Field label="Invoice #" value={form.invoiceNumber} />
+          <Field label="CRM Name" value={form.crmName} />
         </div>
 
         {/* Editable */}
@@ -89,6 +109,12 @@ export default function InvoicesSummaryModal({ row, onClose, onSaved }) {
             value={form.invoiceMailed}
             onChange={(v) => set("invoiceMailed", v)}
             options={["No", "Yes"]}
+          />
+          <Input
+            label="Invoice Mailed On"
+            type="date"
+            value={form.invoiceMailedOn}
+            onChange={(v) => set("invoiceMailedOn", v)}
           />
           <Input
             label="Uploaded on Portal"

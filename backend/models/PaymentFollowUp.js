@@ -1,5 +1,12 @@
-// models/PaymentFollowUp.js
 const mongoose = require("mongoose");
+
+const paymentSchema = new mongoose.Schema({
+  paymentDate: { type: Date, required: true },
+  referenceNumber: { type: String, required: true },
+  bankName: { type: String, required: true },
+  amount: { type: Number, required: true },
+  updatedOn: { type: Date, default: Date.now },
+});
 
 const followUpSchema = new mongoose.Schema({
   date: Date,
@@ -14,25 +21,21 @@ const paymentFollowUpSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "DispatchSchedule",
       required: true,
-      unique: true, // 1-to-1 with DispatchSchedule
     },
-
-    /* Reference data copied from InvoiceFollowUp and InvoicesSummary */
+    jobSheetNumber: String, // New field
+    clientCompanyName: String, // New field
+    clientName: String, // New field
     invoiceNumber: String, // From InvoiceFollowUp
     invoiceDate: Date, // Manually entered
     invoiceAmount: Number, // Manually entered
     invoiceMailed: String, // From InvoicesSummary (Yes/No)
-    dueDate: Date, // Manually entered
-
-    /* Calculated field (not stored, computed on fetch) */
-    // overDueSince: computed as (today - dueDate)
-
-    /* Follow-up history */
+    invoiceMailedOn: Date, // From InvoicesSummary
+    dueDate: Date, // Calculated or manually entered
     followUps: [followUpSchema], // Array of follow-up entries
-
-    /* Editable field */
-    paymentReceived: Number, // Manually entered
-
+    paymentReceived: [paymentSchema], // New sub-schema for payments
+    discountAllowed: Number, // New field
+    TDS: Number, // New field
+    remarks: String, // New field
     createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },

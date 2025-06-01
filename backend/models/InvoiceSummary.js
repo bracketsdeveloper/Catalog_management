@@ -9,8 +9,9 @@ const invoicesSummarySchema = new mongoose.Schema(
     },
     jobSheetNumber: String,
     clientCompanyName: String,
+    clientName: String,
     eventName: String,
-    invoiceNumber: { type: String, required: true },
+    invoiceNumber: { type: String, required: true, unique: true },
     invoiceDate: Date,
     invoiceAmount: Number,
     invoiceMailed: {
@@ -18,13 +19,15 @@ const invoicesSummarySchema = new mongoose.Schema(
       enum: ["Yes", "No"],
       default: "No",
     },
+    invoiceMailedOn: Date, // New field
     invoiceUploadedOnPortal: String,
+    crmName: String,
     createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },
   {
     timestamps: true,
-    indexes: [{ key: { dispatchId: 1, invoiceNumber: 1 }, unique: true }],
+    indexes: [{ key: { invoiceNumber: 1 }, unique: true }],
   }
 );
 

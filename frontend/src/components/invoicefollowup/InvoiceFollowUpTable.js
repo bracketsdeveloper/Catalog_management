@@ -1,4 +1,3 @@
-// components/invoicefollowup/InvoiceFollowUpTable.js
 import React, { useState } from "react";
 import {
   ArrowUpIcon,
@@ -31,7 +30,7 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
 }
 
 export default function InvoiceFollowUpTable({
-  rows,
+  rows = [], // Default to empty array
   sortField,
   sortOrder,
   toggleSort,
@@ -98,6 +97,13 @@ export default function InvoiceFollowUpTable({
             <HeadCell
               label="Quotation #"
               field="quotationNumber"
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
+            />
+            <HeadCell
+              label="Quotation Total"
+              field="quotationTotal"
               sortField={sortField}
               sortOrder={sortOrder}
               toggle={toggleSort}
@@ -177,6 +183,7 @@ export default function InvoiceFollowUpTable({
               "clientName",
               "eventName",
               "quotationNumber",
+              "quotationTotal",
               "crmName",
               "product",
               "partialQty",
@@ -201,55 +208,57 @@ export default function InvoiceFollowUpTable({
           </tr>
         </thead>
         <tbody>
-          {rows
-            .filter((row) => {
-              return Object.entries(searchValues).every(([field, value]) => {
-                if (!value) return true;
-                const rowValue = row[field]?.toString().toLowerCase() || "";
-                return rowValue.includes(value.toLowerCase());
-              });
-            })
-            .map((r) => (
-              <tr
-                key={r.dispatchId || r._id}
-                className={`hover:bg-gray-100 ${
-                  r.invoiceGenerated === "Yes" ? "bg-green-100" : ""
-                }`}
-              >
-                <Cell val={r.orderDate} />
-                <button
-                  className="border-b text-blue-500 hover:text-blue-700"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleOpenModal(r.jobSheetNumber);
-                  }}
+          {rows.length > 0 ? (
+            rows
+              .filter((row) => {
+                return Object.entries(searchValues).every(([field, value]) => {
+                  if (!value) return true;
+                  const rowValue = row[field]?.toString().toLowerCase() || "";
+                  return rowValue.includes(value.toLowerCase());
+                });
+              })
+              .map((r) => (
+                <tr
+                  key={r.dispatchId || r._id}
+                  className={`hover:bg-gray-100 ${
+                    r.invoiceGenerated === "Yes" ? "bg-green-100" : ""
+                  }`}
                 >
-                  <Cell val={(r.jobSheetNumber) || "No Number"} />
-                </button>
-                <Cell val={r.clientCompanyName} />
-                <Cell val={r.clientName} />
-                <Cell val={r.eventName} />
-                <Cell val={r.quotationNumber} />
-                <Cell val={r.crmName} />
-                <Cell val={r.product} />
-                <Cell val={r.partialQty} />
-                <Cell val={r.dispatchedOn} />
-                <Cell val={r.deliveredThrough} />
-                <Cell val={r.poStatus} />
-                <Cell val={r.invoiceGenerated} />
-                <Cell val={r.invoiceNumber} />
-                <Cell val={r.pendingFromDays} />
-                <td className="px-2 py-1 border border-gray-300">
-                  <button onClick={() => onEdit(r)}>
-                    <EllipsisVerticalIcon className="h-4 w-4" />
+                  <Cell val={r.orderDate} />
+                  <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(r.jobSheetNumber);
+                    }}
+                  >
+                    <Cell val={r.jobSheetNumber || "No Number"} />
                   </button>
-                </td>
-              </tr>
-            ))}
-          {rows.length === 0 && (
+                  <Cell val={r.clientCompanyName} />
+                  <Cell val={r.clientName} />
+                  <Cell val={r.eventName} />
+                  <Cell val={r.quotationNumber} />
+                  <Cell val={r.quotationTotal} />
+                  <Cell val={r.crmName} />
+                  <Cell val={r.product} />
+                  <Cell val={r.partialQty} />
+                  <Cell val={r.dispatchedOn} />
+                  <Cell val={r.deliveredThrough} />
+                  <Cell val={r.poStatus} />
+                  <Cell val={r.invoiceGenerated} />
+                  <Cell val={r.invoiceNumber} />
+                  <Cell val={r.pendingFromDays} />
+                  <td className="px-2 py-1 border border-gray-300">
+                    <button onClick={() => onEdit(r)}>
+                      <EllipsisVerticalIcon className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))
+          ) : (
             <tr>
               <td
-                colSpan={16}
+                colSpan={17}
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records
@@ -273,7 +282,9 @@ function Cell({ val }) {
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
       {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
         ? fmt(val)
-        : val ?? "-"}
+        : typeof val === 'number' && !isNaN(val)
+          ? val.toFixed(2)
+          : val ?? "-"}
     </td>
   );
 }

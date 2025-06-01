@@ -1,4 +1,3 @@
-// models/InvoiceFollowUp.js
 const mongoose = require("mongoose");
 
 const invoiceFollowUpSchema = new mongoose.Schema(
@@ -7,34 +6,31 @@ const invoiceFollowUpSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "DispatchSchedule",
       unique: true,
-      sparse: true, // Required to allow multiple manual entries without dispatchId
+      sparse: true,
     },
-
-
     /* Reference data copied from DispatchSchedule and related JobSheet */
-    orderDate: Date, // From JobSheet
-    jobSheetNumber: String, // From DispatchSchedule
-    clientCompanyName: String, // From DispatchSchedule
-    eventName: String, // From DispatchSchedule
-    quotationNumber: String, // From JobSheet's referenceQuotation
-    crmName: String, // From JobSheet's crmIncharge
-    product: String, // From DispatchSchedule
-    dispatchedOn: Date, // From DispatchSchedule's sentOn
-    deliveredThrough: String, // From DeliveryReport's deliveredSentThrough
-    poStatus: String, // From JobSheet
-
+    orderDate: Date,
+    jobSheetNumber: String,
+    clientCompanyName: String,
+    eventName: String,
+    quotationNumber: String,
+    crmName: String,
+    product: String,
+    dispatchedOn: Date,
+    deliveredThrough: String,
+    poStatus: String,
     /* Editable fields */
-    partialQty: Number, // Manually entered
+    partialQty: Number,
     invoiceGenerated: {
       type: String,
       enum: ["Yes", "No"],
       default: "No",
     },
-    invoiceNumber: String, // Manually entered
-
+    invoiceNumber: String,
+    /* New field for Quotation total */
+    quotationTotal: Number, // From Quotation.grandTotal
     /* Calculated field (not stored, computed on fetch) */
     // pendingFromDays: computed as (today - dispatchedOn)
-
     createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },

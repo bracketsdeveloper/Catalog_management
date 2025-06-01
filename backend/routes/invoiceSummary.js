@@ -3,6 +3,7 @@ const router = express.Router();
 const InvoicesSummary = require("../models/InvoiceSummary");
 const DispatchSchedule = require("../models/DispatchSchedule");
 const InvoiceFollowUp = require("../models/InvoiceFollowUp");
+const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
@@ -16,12 +17,14 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       .map((f) => f.dispatchId)
       .filter((id) => id);
 
-    const dispatchRows = await DispatchSchedule.find({
-      status: "sent",
-      _id: { $in: dispatchIds },
-    }).lean();
-
-    const savedSummaries = await InvoicesSummary.find({}).lean();
+    const [dispatchRows, jobSheets, savedSummaries] = await Promise.all([
+      DispatchSchedule.find({
+        status: "sent",
+        _id: { $in: dispatchIds },
+      }).lean(),
+      JobSheet.find({}).lean(),
+      InvoicesSummary.find({}).lean(),
+    ]);
 
     const followUpMap = {};
     invoiceFollowUps.forEach((f) => {
@@ -32,8 +35,15 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
     const summaryMap = {};
     savedSummaries.forEach((s) => {
-      const key = `${s.dispatchId.toString()}-${s.invoiceNumber}`;
-      summaryMap[key] = s;
+      summaryMap[s.invoiceNumber] = s;
+    });
+
+    const jobSheetMap = {};
+    jobSheets.forEach((j) => {
+      jobSheetMap[j.jobSheetNumber] = {
+        clientName: j.clientName || "",
+        crmName: j.crmIncharge || "",
+      };
     });
 
     const dispatchMap = {};
@@ -64,20 +74,23 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         : [];
 
       return invoiceNumbers.map((invoiceNumber) => {
-        const key = `${d._id.toString()}-${invoiceNumber}`;
-        const existing = summaryMap[key] || {};
+        const existing = summaryMap[invoiceNumber] || {};
+        const jobSheet = jobSheetMap[followUp.jobSheetNumber] || {};
 
         return {
           _id: existing._id || undefined,
           dispatchId: d._id,
           jobSheetNumber: followUp.jobSheetNumber || "",
           clientCompanyName: followUp.clientCompanyName || "",
+          clientName: jobSheet.clientName || "",
           eventName: followUp.eventName || "",
           invoiceNumber,
           invoiceDate: existing.invoiceDate || null,
           invoiceAmount: existing.invoiceAmount || 0,
           invoiceMailed: existing.invoiceMailed || "No",
+          invoiceMailedOn: existing.invoiceMailedOn || null, // Include new field
           invoiceUploadedOnPortal: existing.invoiceUploadedOnPortal || "",
+          crmName: jobSheet.crmName || "",
         };
       });
     });
@@ -91,36 +104,100 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const exists = await InvoicesSummary.findOne({
-      dispatchId: req.body.dispatchId,
-      invoiceNumber: req.body.invoiceNumber,
-    });
-    if (exists) {
-      return res.status(400).json({ message: "Row already exists – use PUT" });
+    const { dispatchId, invoiceNumber, jobSheetNumber, invoiceMailedOn } = req.body;
+
+    // Split invoiceNumber if comma-separated
+    const invoiceNumbers = invoiceNumber
+      ? invoiceNumber.split(",").map((n) => n.trim()).filter(Boolean)
+      : [];
+
+    if (!invoiceNumbers.length) {
+      return res.status(400).json({ message: "Invoice number is required" });
     }
-    const doc = new InvoicesSummary({
-      ...req.body,
-      createdBy: req.user.email,
-    });
-    await doc.save();
-    res.status(201).json(doc);
+
+    const results = [];
+    for (const invNum of invoiceNumbers) {
+      // Check for existing invoiceNumber
+      const exists = await InvoicesSummary.findOne({
+        invoiceNumber: invNum,
+      });
+      if (exists) {
+        return res
+          .status(400)
+          .json({ message: `Invoice number ${invNum} already exists` });
+      }
+
+      // Fetch jobSheet for clientName and crmName
+      const jobSheet = jobSheetNumber
+        ? await JobSheet.findOne({ jobSheetNumber }).lean()
+        : null;
+
+      const doc = new InvoicesSummary({
+        ...req.body,
+        invoiceNumber: invNum,
+        invoiceMailedOn: invoiceMailedOn ? new Date(invoiceMailedOn) : null, // Handle new field
+        clientName: jobSheet?.clientName || "",
+        crmName: jobSheet?.crmIncharge || "",
+        createdBy: req.user.email,
+      });
+      await doc.save();
+      results.push(doc);
+    }
+
+    res.status(201).json(results);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Create failed" });
+    if (err.code === 11000) {
+      return res
+        .status(400)
+        .json({ message: `Invoice number already exists` });
+    }
+    res.status(500).json({ message: "Create failed", error: err.message });
   }
 });
 
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const { invoiceNumber, jobSheetNumber, invoiceMailedOn } = req.body;
+
+    // If invoiceNumber is being updated, check for conflicts
+    if (invoiceNumber) {
+      const existing = await InvoicesSummary.findOne({
+        invoiceNumber,
+        _id: { $ne: req.params.id },
+      });
+      if (existing) {
+        return res
+          .status(400)
+          .json({ message: `Invoice number ${invoiceNumber} already exists` });
+      }
+    }
+
+    // Fetch jobSheet for clientName and crmName
+    const jobSheet = jobSheetNumber
+      ? await JobSheet.findOne({ jobSheetNumber }).lean()
+      : null;
+
     const updated = await InvoicesSummary.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedAt: Date.now() },
+      {
+        ...req.body,
+        invoiceMailedOn: invoiceMailedOn ? new Date(invoiceMailedOn) : null, // Handle new field
+        clientName: jobSheet?.clientName || "",
+        crmName: jobSheet?.crmIncharge || "",
+        updatedAt: Date.now(),
+      },
       { new: true }
     );
     if (!updated) return res.status(404).json({ message: "Not found" });
     res.json(updated);
   } catch (err) {
     console.error(err);
+    if (err.code === 11000) {
+      return res
+        .status(400)
+        .json({ message: `Invoice number already exists` });
+    }
     res.status(500).json({ message: "Update failed" });
   }
 });

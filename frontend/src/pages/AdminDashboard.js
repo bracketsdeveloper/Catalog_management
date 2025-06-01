@@ -243,7 +243,7 @@ const adminPages = [
     ),
     subItems: [
       {
-        name: "Invoices Follow Up",
+        name: "PO Follow Up",
         path: "/admin-dashboard/invoice-followup",
         permission: "invoices-followup",
       },

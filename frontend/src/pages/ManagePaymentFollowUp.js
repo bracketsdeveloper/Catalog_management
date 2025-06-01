@@ -1,4 +1,3 @@
-// pages/ManagePaymentFollowUp.js
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -12,10 +11,14 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export default function ManagePaymentFollowUp() {
   const token = localStorage.getItem("token");
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
-  const hasExportPermission = localStorage.getItem("permissions")?.includes("invoice-followup-export");
+  const hasExportPermission = localStorage.getItem("permissions")?.includes(
+    "invoice-followup-export"
+  );
 
   /* Raw data */
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   /* UI state */
   const [search, setSearch] = useState("");
@@ -26,7 +29,6 @@ export default function ManagePaymentFollowUp() {
     invoiceDate: { from: "", to: "" },
     dueDate: { from: "", to: "" },
     invoiceMailed: "",
-    paymentReceived: "",
   });
 
   /* Fetch data */
@@ -36,72 +38,112 @@ export default function ManagePaymentFollowUp() {
   }, []);
 
   async function fetchRows() {
+    setLoading(true);
+    setError("");
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/payment-followup`, {
         headers: { Authorization: `Bearer ${token}` },
+        params: { search }, // Include search param for filtering
       });
-      setRows(res.data || []);
+      console.log("API Response:", res.data);
+      if (!res.data || res.data.length === 0) {
+        setError("No Payment Follow-Up records found.");
+        setRows([]);
+      } else {
+        setRows(res.data);
+      }
     } catch (err) {
-      console.error(err);
-      alert("Failed to fetch Payment Follow-Up");
+      console.error("Fetch error:", err);
+      setError(err.response?.data?.message || "Failed to fetch Payment Follow-Up");
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   /* Search + filter */
   const filtered = useMemo(() => {
+    console.log("Applying filters with search:", search, "filters:", filters);
     return rows.filter((r) => {
-      const matchesSearch = JSON.stringify(r)
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      const searchLower = search.toLowerCase();
+      const matchesSearch =
+        (r.jobSheetNumber?.toLowerCase().includes(searchLower) || false) ||
+        (r.clientCompanyName?.toLowerCase().includes(searchLower) || false) ||
+        (r.clientName?.toLowerCase().includes(searchLower) || false) ||
+        (r.invoiceNumber?.toLowerCase().includes(searchLower) || false) ||
+        (r.remarks?.toLowerCase().includes(searchLower) || false);
 
       const matchesInvoiceDate =
         (!filters.invoiceDate.from ||
-          new Date(r.invoiceDate) >= new Date(filters.invoiceDate.from)) &&
+          (r.invoiceDate &&
+            new Date(r.invoiceDate) >= new Date(filters.invoiceDate.from))) &&
         (!filters.invoiceDate.to ||
-          new Date(r.invoiceDate) <= new Date(filters.invoiceDate.to));
+          (r.invoiceDate &&
+            new Date(r.invoiceDate) <= new Date(filters.invoiceDate.to)));
 
       const matchesDueDate =
         (!filters.dueDate.from ||
-          new Date(r.dueDate) >= new Date(filters.dueDate.from)) &&
+          (r.dueDate && new Date(r.dueDate) >= new Date(filters.dueDate.from))) &&
         (!filters.dueDate.to ||
-          new Date(r.dueDate) <= new Date(filters.dueDate.to));
+          (r.dueDate && new Date(r.dueDate) <= new Date(filters.dueDate.to)));
 
       const matchesInvoiceMailed =
         !filters.invoiceMailed ||
-        r.invoiceMailed?.toLowerCase() === filters.invoiceMailed.toLowerCase();
-
-      const matchesPaymentReceived =
-        !filters.paymentReceived ||
-        r.paymentReceived?.toLowerCase() ===
-          filters.paymentReceived.toLowerCase();
+        (r.invoiceMailed?.toLowerCase() === filters.invoiceMailed.toLowerCase());
 
       return (
-        matchesSearch &&
-        matchesInvoiceDate &&
-        matchesDueDate &&
-        matchesInvoiceMailed &&
-        matchesPaymentReceived
+        matchesSearch && matchesInvoiceDate && matchesDueDate && matchesInvoiceMailed
       );
     });
   }, [rows, search, filters]);
 
   const sorted = useMemo(() => {
+    console.log("Sorting by:", sort);
     if (!sort.field) return filtered;
     return [...filtered].sort((a, b) => {
-      const av = a[sort.field] ?? "";
-      const bv = b[sort.field] ?? "";
-      return sort.dir === "asc" ? (av > bv ? 1 : -1) : av < bv ? 1 : -1;
+      let av = a[sort.field] ?? "";
+      let bv = b[sort.field] ?? "";
+
+      // Handle dates
+      if (
+        sort.field === "invoiceDate" ||
+        sort.field === "dueDate" ||
+        sort.field === "invoiceMailedOn"
+      ) {
+        av = av ? new Date(av) : new Date(0);
+        bv = bv ? new Date(bv) : new Date(0);
+      }
+      // Handle numbers
+      else if (
+        sort.field === "invoiceAmount" ||
+        sort.field === "totalPaymentReceived" ||
+        sort.field === "discountAllowed" ||
+        sort.field === "TDS"
+      ) {
+        av = parseFloat(av) || 0;
+        bv = parseFloat(bv) || 0;
+      }
+      // Handle strings
+      else {
+        av = av.toString().toLowerCase();
+        bv = bv.toString().toLowerCase();
+      }
+
+      return sort.dir === "asc" ? (av > bv ? 1 : av < bv ? -1 : 0) : (av < bv ? 1 : av > bv ? -1 : 0);
     });
   }, [filtered, sort]);
 
-  const toggleSort = (field) =>
+  const toggleSort = (field) => {
+    console.log("Toggling sort for:", field);
     setSort(
       sort.field === field
         ? { field, dir: sort.dir === "asc" ? "desc" : "asc" }
         : { field, dir: "asc" }
     );
+  };
 
   const handleFilterChange = (field, subField, value) => {
+    console.log(`Filter change: ${field}${subField ? `.${subField}` : ''} = ${value}`);
     if (subField) {
       setFilters((p) => ({ ...p, [field]: { ...p[field], [subField]: value } }));
     } else {
@@ -109,34 +151,40 @@ export default function ManagePaymentFollowUp() {
     }
   };
 
-  const clearFilters = () =>
+  const clearFilters = () => {
+    console.log("Clearing filters");
     setFilters({
       invoiceDate: { from: "", to: "" },
       dueDate: { from: "", to: "" },
       invoiceMailed: "",
-      paymentReceived: "",
     });
+  };
 
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(
       sorted.map((r) => ({
+        "Job Sheet #": r.jobSheetNumber,
+        "Client Company": r.clientCompanyName,
+        "Client Name": r.clientName,
         "Invoice #": r.invoiceNumber,
         "Invoice Date": fmt(r.invoiceDate),
         "Invoice Amount": r.invoiceAmount,
         "Invoice Mailed": r.invoiceMailed,
+        "Invoice Mailed On": fmt(r.invoiceMailedOn),
         "Due Date": fmt(r.dueDate),
         "Over Due Since": r.overDueSince,
         "Latest Follow-Up": r.followUps?.length
           ? fmt(
               r.followUps.reduce((latest, cur) =>
-                new Date(cur.updatedOn) > new Date(latest.updatedOn)
-                  ? cur
-                  : latest
+                new Date(cur.updatedOn) > new Date(latest.updatedOn) ? cur : latest
               ).date
             )
           : "-",
-        "Payment Received": r.paymentReceived,
+        "Payment Received": r.totalPaymentReceived || 0,
+        "Discount Allowed": r.discountAllowed,
+        TDS: r.TDS,
+        Remarks: r.remarks,
       }))
     );
     XLSX.utils.book_append_sheet(wb, ws, "PaymentFollowUp");
@@ -149,11 +197,18 @@ export default function ManagePaymentFollowUp() {
         Payment Follow-Up
       </h1>
 
+      {/* Error Message */}
+      {error && <div className="text-red-500 mb-4">{error}</div>}
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            console.log("Search term:", e.target.value);
+            setSearch(e.target.value);
+            fetchRows(); // Refetch on search change
+          }}
           placeholder="Search…"
           className="border border-purple-300 rounded p-2 text-xs flex-grow md:flex-none md:w-1/3"
         />
@@ -177,11 +232,8 @@ export default function ManagePaymentFollowUp() {
       {showFilters && (
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Invoice Date */}
             <div>
-              <label className="block mb-1 font-semibold">
-                Invoice Date From
-              </label>
+              <label className="block mb-1 font-semibold">Invoice Date From</label>
               <input
                 type="date"
                 value={filters.invoiceDate.from}
@@ -202,8 +254,6 @@ export default function ManagePaymentFollowUp() {
                 className="border w-full p-1 rounded"
               />
             </div>
-
-            {/* Due Date */}
             <div>
               <label className="block mb-1 font-semibold">Due Date From</label>
               <input
@@ -226,8 +276,6 @@ export default function ManagePaymentFollowUp() {
                 className="border w-full p-1 rounded"
               />
             </div>
-
-            {/* Invoice Mailed */}
             <div>
               <label className="block mb-1 font-semibold">Invoice Mailed</label>
               <select
@@ -242,26 +290,7 @@ export default function ManagePaymentFollowUp() {
                 <option value="No">No</option>
               </select>
             </div>
-
-            {/* Payment Received */}
-            <div>
-              <label className="block mb-1 font-semibold">
-                Payment Received
-              </label>
-              <select
-                value={filters.paymentReceived}
-                onChange={(e) =>
-                  handleFilterChange("paymentReceived", null, e.target.value)
-                }
-                className="border w-full p-1 rounded"
-              >
-                <option value="">Any</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-            </div>
           </div>
-
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setShowFilters(false)}
@@ -280,13 +309,17 @@ export default function ManagePaymentFollowUp() {
       )}
 
       {/* Table */}
-      <PaymentFollowUpTable
-        rows={sorted}
-        sortField={sort.field}
-        sortOrder={sort.dir}
-        toggleSort={toggleSort}
-        onEdit={(r) => setEditRow(r)}
-      />
+      {loading ? (
+        <div className="text-center py-4">Loading...</div>
+      ) : (
+        <PaymentFollowUpTable
+          rows={sorted}
+          sortField={sort.field}
+          sortOrder={sort.dir}
+          toggleSort={toggleSort}
+          onEdit={(r) => setEditRow(r)}
+        />
+      )}
 
       {/* Edit modal */}
       {editRow && (
@@ -304,3 +337,4 @@ function fmt(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
 }
+
