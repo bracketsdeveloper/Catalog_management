@@ -76,7 +76,7 @@ export default function PrintQuotation() {
     });
 
     const opt = {
-      margin: [30, 5, 40, 5], // Restored original margins
+      margin: [30, 5, 45, 5], // Restored original margins
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { 
@@ -347,7 +347,7 @@ export default function PrintQuotation() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="border px-2 py-1 text-center sl-no-cell">Sl. No.</th>
+              <th className="border px-2 py-1 text-center sl-no-cell">Sl_No.</th>
               <th className="border px-2 py-1 text-center image-cell">Image</th>
               <th className="border px-2 py-1 text-center product-cell">Product</th>
               {quotation.displayHSNCodes && (
@@ -356,7 +356,7 @@ export default function PrintQuotation() {
               <th className="border px-2 py-1 text-center quantity-cell">Qty</th>
               <th className="border px-2 py-1 text-center rate-cell">Rate</th>
               <th className="border px-2 py-1 text-center amount-cell">Amount</th>
-              <th className="border px-2 py-1 text-center gst-cell">GST (%)</th>
+              <th className="border px-2 py-1 text-center gst-cell">GST(%)</th>
               <th className="border px-2 py-1 text-center total-cell">Total</th>
             </tr>
           </thead>
