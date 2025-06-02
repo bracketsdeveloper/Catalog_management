@@ -451,7 +451,7 @@ export default function PrintQuotation() {
               style={{ height: '0.8in', width: 'auto', margin: '0.1in 0' }}
               crossOrigin="anonymous"
             />
-            <div className="signatory-text">Authorized Signatory</div>
+            <div className="signatory-text">Neeraj Dinodia</div>
           </div>
         </div>
       </div>
