@@ -241,13 +241,13 @@ export default function InvoiceFollowUpTable({
                   <Cell val={r.quotationTotal} />
                   <Cell val={r.crmName} />
                   <Cell val={r.product} />
-                  <Cell val={r.partialQty} />
+                  <Cell val={r.partialQty} field="partialQty" />
                   <Cell val={r.dispatchedOn} />
                   <Cell val={r.deliveredThrough} />
                   <Cell val={r.poStatus} />
                   <Cell val={r.invoiceGenerated} />
                   <Cell val={r.invoiceNumber} />
-                  <Cell val={r.pendingFromDays} />
+                  <Cell val={r.pendingFromDays} field="pendingFromDays" />
                   <td className="px-2 py-1 border border-gray-300">
                     <button onClick={() => onEdit(r)}>
                       <EllipsisVerticalIcon className="h-4 w-4" />
@@ -277,13 +277,13 @@ export default function InvoiceFollowUpTable({
   );
 }
 
-function Cell({ val }) {
+function Cell({ val, field }) {
   return (
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
       {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
         ? fmt(val)
         : typeof val === 'number' && !isNaN(val)
-          ? val.toFixed(2)
+          ? field === 'partialQty' || field === 'pendingFromDays' ? Math.floor(val) : val.toFixed(2)
           : val ?? "-"}
     </td>
   );

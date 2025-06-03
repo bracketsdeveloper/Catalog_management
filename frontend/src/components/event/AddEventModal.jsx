@@ -1,29 +1,13 @@
-// client/src/components/event/AddEventModal.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const ACTIONS = ["Call", "Msg", "Mail", "Meet", "Assign to CRM"];
+const ACTIONS = ["Call", "Msg", "Meet", "Assign to"];
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
-const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+const MINUTES = Array.from({ length: 6 }, (_, i) => String(i * 10).padStart(2, "0"));
 const AMPM = ["AM", "PM"];
 
-function splitTo12h(dtString) {
-  const dt = new Date(dtString);
-  const monthDay = dt.toISOString().slice(0, 10);
-  let hr = dt.getHours();
-  const mm = String(dt.getMinutes()).padStart(2, "0");
-  const ampm = hr >= 12 ? "PM" : "AM";
-  hr = hr % 12 || 12;
-  return {
-    date: monthDay,
-    hour: String(hr).padStart(2, "0"),
-    minute: mm,
-    ampm
-  };
-}
-
 export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
-  const isEdit = Boolean(ev);
+  const isEdit = Boolean(ev?._id);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [allPCs, setAllPCs] = useState([]);
@@ -33,50 +17,102 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
   const [potentialClient, setPC] = useState("");
   const [potentialClientName, setName] = useState("");
   const [clientName, setClientName] = useState("");
+  const [clientNameSuggestions, setClientNameSuggestions] = useState([]); // New state for client name suggestions
   const [schedules, setSchedules] = useState([]);
 
   // Load PCs & users
   useEffect(() => {
     const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
-    // Add ?all=true for superadmins to bypass isolation
     const pcEndpoint = `${process.env.REACT_APP_BACKEND_URL}/api/admin/potential-clients${isSuperAdmin ? "?all=true" : ""}`;
     
     axios.get(pcEndpoint, { headers }).then(r => setAllPCs(r.data));
-
     axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users?all=true`, { headers }).then(r => setUsers(r.data));
   }, [isSuperAdmin]);
 
-  // Init when editing
+  // Initialize schedules
   useEffect(() => {
     if (isEdit && allPCs.length) {
       const pcObj = allPCs.find(pc => pc._id === ev.potentialClient);
-      setPC(ev.potentialClient);
-      setName(ev.potentialClientName);
+      setPC(ev.potentialClient || "");
+      setName(ev.potentialClientName || "");
       setClientName(pcObj?.contacts?.[0]?.clientName || "");
-
-      setSchedules(ev.schedules.map(s => {
-        const so = s.scheduledOn ? splitTo12h(s.scheduledOn) : {};
-        const rs = s.reschedule ? splitTo12h(s.reschedule) : {};
-        return {
-          scheduledDate: so.date || "",
-          scheduledHour: so.hour || "",
-          scheduledMinute: so.minute || "",
-          scheduledAmpm: so.ampm || "AM",
-          action: s.action || "",
-          assignedTo: s.assignedTo?._id || "",
-          assignedToName: s.assignedTo?.name || "",
-          discussion: s.discussion || "",
-          status: s.status || "",
-          rescheduleDate: rs.date || "",
-          rescheduleHour: rs.hour || "",
-          rescheduleMinute: rs.minute || "",
-          rescheduleAmpm: rs.ampm || "AM",
-          remarks: s.remarks || ""
-        };
-      }));
+      setClientNameSuggestions(pcObj?.contacts || []);
+      setSchedules(
+        ev.schedules.map(s => {
+          const so = s.scheduledOn ? new Date(s.scheduledOn) : {};
+          const rs = s.reschedule ? new Date(s.reschedule) : {};
+          const formatDate = dt => dt instanceof Date && !isNaN(dt) 
+            ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`
+            : "";
+          const formatHour = dt => dt instanceof Date && !isNaN(dt) 
+            ? String(dt.getHours() % 12 || 12).padStart(2, "0")
+            : "";
+          const formatMinute = dt => dt instanceof Date && !isNaN(dt) 
+            ? String(dt.getMinutes()).padStart(2, "0")
+            : "";
+          const formatAmpm = dt => dt instanceof Date && !isNaN(dt) 
+            ? dt.getHours() >= 12 ? "PM" : "AM"
+            : "AM";
+          return {
+            scheduledDate: formatDate(so),
+            scheduledHour: formatHour(so),
+            scheduledMinute: formatMinute(so),
+            scheduledAmpm: formatAmpm(so),
+            action: s.action || "",
+            assignedTo: s.assignedTo?._id || "",
+            assignedToName: s.assignedTo?.name || "",
+            discussion: s.discussion || "",
+            status: s.status || "",
+            rescheduleDate: formatDate(rs),
+            rescheduleHour: formatHour(rs),
+            rescheduleMinute: formatMinute(rs),
+            rescheduleAmpm: formatAmpm(rs),
+            remarks: s.remarks || ""
+          };
+        })
+      );
     } else {
-      setName(""); setPC(""); setClientName(""); setSchedules([]);
-      // For superadmins, show all potential clients initially
+      setName(ev?.potentialClientName || "");
+      setPC(ev?.potentialClient || "");
+      setClientName("");
+      setClientNameSuggestions([]);
+      setSchedules(
+        ev?.schedules?.length
+          ? ev.schedules.map(s => ({
+              scheduledDate: s.scheduledDate || "",
+              scheduledHour: s.scheduledHour || "09",
+              scheduledMinute: s.scheduledMinute || "00",
+              scheduledAmpm: s.scheduledAmpm || "AM",
+              action: s.action || "",
+              assignedTo: s.assignedTo || "",
+              assignedToName: s.assignedToName || "",
+              discussion: s.discussion || "",
+              status: s.status || "",
+              rescheduleDate: s.rescheduleDate || "",
+              rescheduleHour: s.rescheduleHour || "",
+              rescheduleMinute: s.rescheduleMinute || "",
+              rescheduleAmpm: s.rescheduleAmpm || "AM",
+              remarks: s.remarks || ""
+            }))
+          : [
+              {
+                scheduledDate: "",
+                scheduledHour: "09",
+                scheduledMinute: "00",
+                scheduledAmpm: "AM",
+                action: "",
+                assignedTo: "",
+                assignedToName: "",
+                discussion: "",
+                status: "",
+                rescheduleDate: "",
+                rescheduleHour: "",
+                rescheduleMinute: "",
+                rescheduleAmpm: "AM",
+                remarks: ""
+              }
+            ]
+      );
       if (isSuperAdmin) {
         setPCSugs(allPCs);
       }
@@ -85,15 +121,13 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
 
   // Add a blank row
   const addRow = () => {
-    const now = new Date();
-    const { date, hour, minute, ampm } = splitTo12h(now.toISOString());
     setSchedules(prev => [
       ...prev,
       {
-        scheduledDate: date,
-        scheduledHour: hour,
-        scheduledMinute: minute,
-        scheduledAmpm: ampm,
+        scheduledDate: "",
+        scheduledHour: "09",
+        scheduledMinute: "00",
+        scheduledAmpm: "AM",
         action: "",
         assignedTo: "",
         assignedToName: "",
@@ -112,10 +146,13 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     setSchedules(prev => {
       const arr = [...prev];
       arr[i] = { ...arr[i], [field]: val };
-      // auto-mark Not done if discussion in past
       if (
         field === "discussion" &&
         !arr[i].status &&
+        arr[i].scheduledDate &&
+        arr[i].scheduledHour &&
+        arr[i].scheduledMinute &&
+        arr[i].scheduledAmpm &&
         new Date(arr[i].scheduledDate + "T" + convertTo24hr(arr[i]) + ":00") < new Date(val)
       ) {
         arr[i].status = "Not done";
@@ -127,8 +164,10 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     setSchedules(prev => prev.filter((_, j) => j !== i));
 
   const onPCChange = txt => {
-    setName(txt); setClientName(""); setPC("");
-    // For superadmins, show all PCs if input is empty, else filter
+    setName(txt);
+    setClientName("");
+    setClientNameSuggestions([]); // Clear client suggestions when company changes
+    setPC("");
     if (isSuperAdmin && txt === "") {
       setPCSugs(allPCs);
     } else {
@@ -143,15 +182,36 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
   const pickPC = pc => {
     setPC(pc._id);
     setName(pc.companyName);
-    setClientName(pc.contacts?.[0]?.clientName || "");
+    setClientName(""); // Clear client name
+    setClientNameSuggestions(pc.contacts || []); // Set client name suggestions
     setPCSugs([]);
+  };
+
+  const onClientNameChange = txt => {
+    setClientName(txt);
+    // Filter suggestions based on input
+    const pc = allPCs.find(p => p._id === potentialClient);
+    if (pc && pc.contacts) {
+      setClientNameSuggestions(
+        pc.contacts.filter(contact =>
+          contact.clientName.toLowerCase().includes(txt.toLowerCase())
+        )
+      );
+    }
+  };
+
+  const pickClientName = contact => {
+    setClientName(contact.clientName);
+    setClientNameSuggestions([]); // Clear suggestions after selection
   };
 
   const onUserType = (i, txt) => {
     updateRow(i, "assignedToName", txt);
-    setUserSugs(users.filter(u =>
-      u.name.toLowerCase().includes(txt.toLowerCase())
-    ));
+    setUserSugs(
+      users.filter(u =>
+        u.name.toLowerCase().includes(txt.toLowerCase())
+      )
+    );
   };
 
   const pickUser = (i, u) => {
@@ -180,19 +240,19 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     setIsSubmitting(true);
     const cleaned = schedules.map(s => {
       const sch = {};
-      if (s.scheduledDate) {
+      if (s.scheduledDate && s.scheduledHour && s.scheduledMinute && s.scheduledAmpm) {
         sch.scheduledOn = new Date(
           `${s.scheduledDate}T${convertTo24hr(s)}:00`
-        );
+        ).toISOString();
       }
       if (s.action) sch.action = s.action;
       if (s.assignedTo) sch.assignedTo = s.assignedTo;
       if (s.discussion) sch.discussion = s.discussion;
       if (s.status) sch.status = s.status;
-      if (s.rescheduleDate) {
+      if (s.rescheduleDate && s.rescheduleHour && s.rescheduleMinute && s.rescheduleAmpm) {
         sch.reschedule = new Date(
           `${s.rescheduleDate}T${convertReschedule(s)}:00`
-        );
+        ).toISOString();
       }
       if (s.remarks) sch.remarks = s.remarks;
       return sch;
@@ -241,10 +301,10 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
           <input
             value={potentialClientName}
             onChange={e => onPCChange(e.target.value)}
-            className="border rounded w-full p-2 text-sm"
+            className="border rounded w-full p-2 text-sm bg-white"
           />
           {pcSugs.length > 0 && (
-            <ul className="absolute bg-white border mt-1 max-h-32 overflow-auto w-full text-sm z-10">
+            <ul className="absolute bg-white border mt-1 max-h-32 overflow-auto w-full text-sm z-50">
               {pcSugs.map(pc => (
                 <li
                   key={pc._id}
@@ -259,14 +319,28 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
         </div>
 
         {/* Client Name */}
-        {clientName && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Client Name</label>
-            <div className="p-2 border rounded bg-gray-50 text-sm">
-              {clientName}
-            </div>
-          </div>
-        )}
+        <div className="mb-4 relative">
+          <label className="block text-sm font-medium mb-1">Client Name</label>
+          <input
+            value={clientName}
+            onChange={e => onClientNameChange(e.target.value)}
+            className="border rounded w-full p-2 text-sm bg-white"
+            placeholder="Type or select a client name"
+          />
+          {clientNameSuggestions.length > 0 && (
+            <ul className="absolute bg-white border mt-1 max-h-32 overflow-auto w-full text-sm z-50">
+              {clientNameSuggestions.map((contact, index) => (
+                <li
+                  key={index}
+                  onClick={() => pickClientName(contact)}
+                  className="p-2 hover:bg-gray-100 cursor-pointer"
+                >
+                  {contact.clientName}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {/* Add Schedule */}
         <div className="mb-2">
@@ -295,14 +369,14 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                     type="date"
                     value={s.scheduledDate}
                     onChange={e => updateRow(i, "scheduledDate", e.target.value)}
-                    className="border rounded p-2 w-full"
+                    className="border rounded p-2 w-full bg-white"
                   />
                 </div>
                 <div className="flex space-x-1">
                   <select
                     value={s.scheduledHour}
                     onChange={e => updateRow(i, "scheduledHour", e.target.value)}
-                    className="border rounded p-2 flex-1"
+                    className="border rounded p-2 flex-1 bg-white"
                   >
                     <option value="">HH</option>
                     {HOURS.map(h => (
@@ -312,7 +386,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                   <select
                     value={s.scheduledMinute}
                     onChange={e => updateRow(i, "scheduledMinute", e.target.value)}
-                    className="border rounded p-2 flex-1"
+                    className="border rounded p-2 flex-1 bg-white"
                   >
                     <option value="">MM</option>
                     {MINUTES.map(m => (
@@ -322,7 +396,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                   <select
                     value={s.scheduledAmpm}
                     onChange={e => updateRow(i, "scheduledAmpm", e.target.value)}
-                    className="border rounded p-2 w-16"
+                    className="border rounded p-2 w-16 bg-white"
                   >
                     {AMPM.map(ap => (
                       <option key={ap} value={ap}>{ap}</option>
@@ -338,7 +412,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
               <select
                 value={s.action}
                 onChange={e => updateRow(i, "action", e.target.value)}
-                className="border rounded p-2 w-full"
+                className="border rounded p-2 w-full bg-white"
               >
                 <option value="">Select Action</option>
                 {ACTIONS.map(a => (
@@ -347,14 +421,14 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
               </select>
             </div>
 
-            {/* Assign to CRM */}
-            {s.action === "Assign to CRM" && (
+            {/* Assign to */}
+            {s.action === "Assign to" && (
               <div className="relative md:col-span-3">
-                <label className="block text-sm font-medium mb-1">Assign to CRM</label>
+                <label className="block text-sm font-medium mb-1">Assign to</label>
                 <input
                   value={s.assignedToName}
                   onChange={e => onUserType(i, e.target.value)}
-                  className="border rounded w-full p-2 text-sm"
+                  className="border rounded w-full p-2 text-sm bg-white"
                 />
                 {userSugs.length > 0 && (
                   <ul className="absolute bg-white border mt-1 max-h-32 overflow-auto w-full z-10 text-sm">
@@ -379,7 +453,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                 type="text"
                 value={s.discussion}
                 onChange={e => updateRow(i, "discussion", e.target.value)}
-                className="border rounded p-2 w-full"
+                className="border rounded p-2 w-full bg-white"
               />
             </div>
 
@@ -389,7 +463,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
               <select
                 value={s.status}
                 onChange={e => updateRow(i, "status", e.target.value)}
-                className="border rounded p-2 w-full"
+                className="border rounded p-2 w-full bg-white"
               >
                 <option value="">Select Status</option>
                 <option value="Done">Done</option>
@@ -407,14 +481,14 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                       type="date"
                       value={s.rescheduleDate}
                       onChange={e => updateRow(i, "rescheduleDate", e.target.value)}
-                      className="border rounded p-2 w-full"
+                      className="border rounded p-2 w-full bg-white"
                     />
                   </div>
                   <div className="flex space-x-1">
                     <select
                       value={s.rescheduleHour}
                       onChange={e => updateRow(i, "rescheduleHour", e.target.value)}
-                      className="border rounded p-2 flex-1"
+                      className="border rounded p-2 flex-1 bg-white"
                     >
                       <option value="">HH</option>
                       {HOURS.map(h => (
@@ -424,7 +498,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                     <select
                       value={s.rescheduleMinute}
                       onChange={e => updateRow(i, "rescheduleMinute", e.target.value)}
-                      className="border rounded p-2 flex-1"
+                      className="border rounded p-2 flex-1 bg-white"
                     >
                       <option value="">MM</option>
                       {MINUTES.map(m => (
@@ -434,7 +508,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                     <select
                       value={s.rescheduleAmpm}
                       onChange={e => updateRow(i, "rescheduleAmpm", e.target.value)}
-                      className="border rounded p-2 w-16"
+                      className="border rounded p-2 w-16 bg-white"
                     >
                       {AMPM.map(ap => (
                         <option key={ap} value={ap}>{ap}</option>
@@ -452,7 +526,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
                 placeholder="Remarks"
                 value={s.remarks}
                 onChange={e => updateRow(i, "remarks", e.target.value)}
-                className="border rounded p-2 w-full"
+                className="border rounded p-2 w-full bg-white"
               />
             </div>
 

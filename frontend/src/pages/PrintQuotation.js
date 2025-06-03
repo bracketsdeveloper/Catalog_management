@@ -329,7 +329,7 @@ export default function PrintQuotation() {
               <div className="quotation-number">
                 Quotation No: {quotation.quotationNumber}
               </div>
-              <div className="gstin-text">GSTIN: 29ABCFA9924A1ZL</div>
+              <div className="gstin-text ">GSTIN: 29ABCFA9924A1ZL</div>
             </div>
           </div>
         </div>

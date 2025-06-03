@@ -71,10 +71,13 @@ export default function ManageInvoiceFollowUp() {
           inv.map(r => {
             const partialQty = dispMap[r.jobSheetNumber] ?? r.partialQty;
             const invoiced = r.invoiceGenerated === "Yes";
+            const orderDate = new Date(r.orderDate);
+            const today = new Date();
+            const pendingFromDays = invoiced ? 0 : Math.floor((today - orderDate) / (1000 * 60 * 60 * 24));
             return {
               ...r,
-              partialQty,
-              pendingFromDays: invoiced ? 0 : r.pendingFromDays,
+              partialQty: Math.floor(partialQty),
+              pendingFromDays,
               clientName: jsMap[r.jobSheetNumber] || r.clientName || "-",
             };
           })
@@ -199,7 +202,7 @@ export default function ManageInvoiceFollowUp() {
     <div className="p-6">
       <div className="flex justify-between items-center">
         <h1 className="text-xl md:text-2xl font-bold mb-4 text-[#Ff8045]">
-          Invoices Follow-Up
+          PO Follow-Up
         </h1>
         <button
           onClick={() => setShowPopup(true)}

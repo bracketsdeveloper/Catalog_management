@@ -1,10 +1,9 @@
-// client/src/components/potentialclientsList/PotentialClientTable.jsx
 "use client";
 
 import React, { useState, useMemo } from "react";
 
 export default function PotentialClientTable({ data, onEdit, onDelete }) {
-  // define columns
+  // Define columns
   const columns = [
     { label: "Company", field: "companyName" },
     { label: "Client(s)", field: "clientName" },
@@ -20,7 +19,7 @@ export default function PotentialClientTable({ data, onEdit, onDelete }) {
     { label: "Delete", field: null }
   ];
 
-  // header filters
+  // Header filters
   const [filters, setFilters] = useState(
     columns.reduce((acc, col) => {
       if (col.field) acc[col.field] = "";
@@ -30,7 +29,7 @@ export default function PotentialClientTable({ data, onEdit, onDelete }) {
   const handleFilter = (field, val) =>
     setFilters(f => ({ ...f, [field]: val }));
 
-  // sorting
+  // Sorting
   const [sortField, setSortField] = useState("");
   const [sortOrder, setSortOrder] = useState("asc");
   const toggleSort = field => {
@@ -45,7 +44,7 @@ export default function PotentialClientTable({ data, onEdit, onDelete }) {
     });
   };
 
-  // prepare rows: flatten contacts
+  // Prepare rows: flatten contacts
   const rows = useMemo(() => {
     return data.map(pc => {
       const clients = pc.contacts.map(c => c.clientName).join(", ");
@@ -77,7 +76,7 @@ export default function PotentialClientTable({ data, onEdit, onDelete }) {
     });
   }, [data]);
 
-  // apply header filters
+  // Apply header filters
   const filtered = useMemo(() => {
     return rows.filter(r =>
       Object.entries(filters).every(([field, fVal]) => {
@@ -88,7 +87,7 @@ export default function PotentialClientTable({ data, onEdit, onDelete }) {
     );
   }, [rows, filters]);
 
-  // apply sorting
+  // Apply sorting
   const sorted = useMemo(() => {
     if (!sortField) return filtered;
     return [...filtered].sort((a, b) => {
@@ -149,7 +148,7 @@ export default function PotentialClientTable({ data, onEdit, onDelete }) {
                   return (
                     <td key="edit" className="px-2 py-1 border text-center" style={{ minWidth: "80px", maxWidth: "120px" }}>
                       <button
-                        onClick={() => onEdit(r)}
+                        onClick={() => onEdit(data.find(item => item._id === r._id))} // Pass original pc object
                         className="text-blue-600 hover:underline text-xs"
                       >
                         Edit

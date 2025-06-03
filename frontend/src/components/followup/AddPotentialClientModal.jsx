@@ -1,4 +1,3 @@
-// client/src/components/followup/AddPotentialClientModal.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -8,8 +7,11 @@ export default function AddPotentialClientModal({ pc, onClose }) {
   // Company + contacts
   const [companyName, setCompanyName] = useState(pc?.companyName || "");
   const [contacts, setContacts] = useState(
-    pc?.contacts.length
-      ? pc.contacts.map(c => ({ ...c, assignedToName: c.assignedToName || "" }))
+    pc?.contacts?.length
+      ? pc.contacts.map(c => ({
+          ...c,
+          assignedToName: c.assignedTo?.name || "" // Safely handle assignedTo
+        }))
       : [
           {
             clientName: "",
@@ -186,7 +188,7 @@ export default function AddPotentialClientModal({ pc, onClose }) {
                 className="text-red-600 text-xl self-center"
                 onClick={() => removeContact(i)}
               >
-                &times;
+                ×
               </button>
             )}
           </div>

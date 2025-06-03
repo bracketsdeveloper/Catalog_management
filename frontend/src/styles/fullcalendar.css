@@ -75,3 +75,26 @@
     background: #4338ca;
   }
   
+  .fc-add-schedule-btn {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 2px 6px;
+    background-color: #16a34a; /* Tailwind bg-green-600 */
+    color: white;
+    border: none;
+    border-radius: 3px;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1.5;
+  }
+  
+  .fc-add-schedule-btn:hover {
+    background-color: #15803d; /* Tailwind bg-green-700 for hover */
+  }
+  
+  .fc-daygrid-day-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px;
+  }
