@@ -29,7 +29,6 @@ export default function OpportunityDetails({
   const [ownerSuggestions, setOwnerSuggestions] = useState([]);
   const [isOpportunityName, setIsOpportunityName] = useState(false);
  
-    
   // Add error state
   const [errors, setErrors] = useState({});
 
@@ -54,12 +53,19 @@ export default function OpportunityDetails({
       currency: 'Currency',
       closureDate: 'Closure Date',
       opportunityOwner: 'Opportunity Owner',
-      contact: 'Contact'
+      contact: 'Contact',
+      freeTextField: 'Reason for Won / Lost / Discontinued'
     };
 
     let errorMessage = '';
     if (!value) {
-      errorMessage = `${requiredFields[fieldName]} is required`;
+      // Make freeTextField mandatory only when opportunityStatus is Lost or Discontinued
+      if (fieldName === 'freeTextField' && 
+          (data.opportunityStatus === 'Lost' || data.opportunityStatus === 'Discontinued')) {
+        errorMessage = `${requiredFields[fieldName]} is required`;
+      } else if (fieldName !== 'freeTextField') {
+        errorMessage = `${requiredFields[fieldName]} is required`;
+      }
     } else if (fieldName === 'opportunityOwner') {
       const userExists = users.some(user => user.name === value);
       if (!userExists) {
@@ -72,8 +78,6 @@ export default function OpportunityDetails({
       [fieldName]: errorMessage
     }));
   };
-
- 
 
   // When user picks a stage from the funnel
   const handleStageSelect = (stage) => {
@@ -159,38 +163,38 @@ export default function OpportunityDetails({
     setOwnerSuggestions([]);
   };
 
-const opportunityName = [
-  "Annual Gifts",
-  "Awards & Trophies",
-  "Bags / Suitcases",
-  "C-Level Gifts",
-  "Campus Giveaways",
-  "Client Gifts",
-  "Conference Gifts",
-  "Cultural Gifts",
-  "Dealers Meet Gifts",
-  "Doctors Gifts",
-  "Evolve",
-  "Exhibition Giveaways",
-  "Farewell Gifts",
-  "Festive Gifts",
-  "Get Well Soon Gifts",
-  "Gifts Under 500",
-  "Gifts under 1000",
-  "Gifts under 2000",
-  "Hoodies",
-  "Joining Kit",
-  "Luxury Gifts",
-  "New Parents Gifts",
-  "Offsite Gifts",
-  "Pre Joininers Kit",
-  "Team Giveaways",
-  "T-shirts",
-  "Training Giveaways",
-  "Travel Gifts",
-  "Work Anniversary Gifts",
-  "Others"
-];
+  const opportunityName = [
+    "Annual Gifts",
+    "Awards & Trophies",
+    "Bags / Suitcases",
+    "C-Level Gifts",
+    "Campus Giveaways",
+    "Client Gifts",
+    "Conference Gifts",
+    "Cultural Gifts",
+    "Dealers Meet Gifts",
+    "Doctors Gifts",
+    "Evolve",
+    "Exhibition Giveaways",
+    "Farewell Gifts",
+    "Festive Gifts",
+    "Get Well Soon Gifts",
+    "Gifts Under 500",
+    "Gifts under 1000",
+    "Gifts under 2000",
+    "Hoodies",
+    "Joining Kit",
+    "Luxury Gifts",
+    "New Parents Gifts",
+    "Offsite Gifts",
+    "Pre Joininers Kit",
+    "Team Giveaways",
+    "T-shirts",
+    "Training Giveaways",
+    "Travel Gifts",
+    "Work Anniversary Gifts",
+    "Others"
+  ];
 
   // Handle opportunity name input change with suggestions
   const handleOpportunityNameChange = (e) => {
@@ -207,6 +211,9 @@ const opportunityName = [
     setData((prev) => ({ ...prev, opportunityName: name }));
     setOpportunityNameSuggestions([]);
   };
+
+  // Determine if freeTextField is mandatory
+  const isFreeTextMandatory = data.opportunityStatus === 'Lost' || data.opportunityStatus === 'Discontinued';
 
   return (
     <div className="flex flex-col md:flex-row gap-6">
@@ -401,11 +408,11 @@ const opportunityName = [
               value={data.opportunityValue}
               onChange={handleChange}
               onBlur={(e) => validateField('opportunityValue', e.target.value)}
-              className={`border rounded w-full px-2 py-1 text-sm required  ${
+              className={`border rounded w-full px-2 py-1 text-sm ${
                 errors.opportunityValue ? 'border-red-500' : ''
               }`}
               placeholder="e.g., 10000"
-            srequired 
+              required
             />
             {errors.opportunityValue && (
               <div className="text-red-500 text-xs mt-1">{errors.opportunityValue}</div>
@@ -484,21 +491,6 @@ const opportunityName = [
               </span>
             </div>
           </div>
-
-          {/* Gross Profit */}
-          {/* <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Gross Profit
-            </label>
-            <input
-              type="text"
-              name="grossProfit"
-              value={data.grossProfit}
-              onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
-              placeholder="Optional"
-            />
-          </div> */}
         </div>
 
         {/* Row: Opportunity Priority, isRecurring, Deal Registration # */}
@@ -554,16 +546,23 @@ const opportunityName = [
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Free Text Field
+              {isFreeTextMandatory ? "Reason for Won / Lost / Discontinued" : "Free Text Field"}
+              {isFreeTextMandatory && <span className="text-red-500">*</span>}
             </label>
             <input
               type="text"
               name="freeTextField"
               value={data.freeTextField}
               onChange={handleChange}
-              className="border rounded w-full px-2 py-1 text-sm"
-              placeholder="Type here..."
+              onBlur={(e) => validateField('freeTextField', e.target.value)}
+              className={`border rounded w-full px-2 py-1 text-sm ${
+                errors.freeTextField ? 'border-red-500' : ''
+              }`}
+              placeholder={isFreeTextMandatory ? "Enter reason..." : "Type here..."}
             />
+            {errors.freeTextField && (
+              <div className="text-red-500 text-xs mt-1">{errors.freeTextField}</div>
+            )}
           </div>
         </div>
 
