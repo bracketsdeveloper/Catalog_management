@@ -154,7 +154,7 @@ export default function CalendarPage() {
           onClick={() => handleDateClick({ date })}
           title="Add Schedule"
         >
-          + Schedule
+          +
         </button>
       </div>
     );
