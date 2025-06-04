@@ -8,7 +8,8 @@ function SortIndicator({ sortConfig, field }) {
   return null;
 }
 
-function OpportunityTableRow({ oppty, formatClosureDate, formatCreatedDate }) {
+function OpportunityTableRow({ oppty, formatClosureDate, formatCreatedDate, latestActions }) {
+  const latestAction = latestActions[oppty._id] || {};
   return (
     <tr className="border-b hover:bg-blue-50">
       <td className="py-2 px-3 text-blue-600 font-medium">{oppty.opportunityCode}</td>
@@ -21,6 +22,17 @@ function OpportunityTableRow({ oppty, formatClosureDate, formatCreatedDate }) {
       <td className="py-2 px-3">{formatClosureDate(oppty.closureDate)}</td>
       <td className="py-2 px-3">{oppty.opportunityStage}</td>
       <td className="py-2 px-3">{oppty.opportunityStatus || "-"}</td>
+      <td className="py-2 px-3">
+        {latestAction.action
+          ? `${latestAction.action}${latestAction.field ? ` (${latestAction.field})` : ""} by ${
+              latestAction.performedBy?.name || "N/A"
+            } at ${
+              latestAction.performedAt
+                ? new Date(latestAction.performedAt).toLocaleString()
+                : "Unknown date"
+            }`
+          : "No action recorded"}
+      </td>
       <td className="py-2 px-3">
         <Link
           to={`/admin-dashboard/create-opportunity/${oppty._id}`}
@@ -39,6 +51,7 @@ export default function OpportunityTable({
   formatCreatedDate,
   handleSort,
   sortConfig,
+  latestActions,
 }) {
   if (!data?.length) {
     return (
@@ -105,6 +118,7 @@ export default function OpportunityTable({
             >
               Status<SortIndicator sortConfig={sortConfig} field="opportunityStatus" />
             </th>
+            <th className="py-2 px-3 text-left">Latest Action</th>
             <th className="py-2 px-3 text-left">Action</th>
           </tr>
         </thead>
@@ -115,6 +129,7 @@ export default function OpportunityTable({
               oppty={oppty}
               formatClosureDate={formatClosureDate}
               formatCreatedDate={formatCreatedDate}
+              latestActions={latestActions}
             />
           ))}
         </tbody>

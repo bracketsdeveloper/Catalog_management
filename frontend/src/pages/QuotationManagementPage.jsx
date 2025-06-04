@@ -5,11 +5,7 @@ import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { utils, write } from "xlsx";
-
-// Sub-components
 import RemarksModal from "../components/CatalogManagement/RemarksModal";
-
-// Utility modules
 import { groupItemsByDate } from "../components/CatalogManagement/dateUtils";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -18,52 +14,33 @@ export default function QuotationManagementPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // States for quotations and opportunities
   const [quotations, setQuotations] = useState([]);
   const [originalQuotations, setOriginalQuotations] = useState([]);
   const [quotation, setQuotation] = useState(null);
   const [opportunities, setOpportunities] = useState([]);
-
-  // UI states
+  const [latestActions, setLatestActions] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Filter & approval states
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [fromDateFilter, setFromDateFilter] = useState("");
   const [toDateFilter, setToDateFilter] = useState("");
   const [companyFilter, setCompanyFilter] = useState([]);
   const [opportunityOwnerFilter, setOpportunityOwnerFilter] = useState([]);
   const [showFilterWindow, setShowFilterWindow] = useState(false);
-
-  // Sorting states
-  const [sortConfig, setSortConfig] = useState({
-    key: "quotationNumber",
-    direction: "desc",
-  });
-
-  // Track which quotation's three-dots dropdown is open
+  const [sortConfig, setSortConfig] = useState({ key: "quotationNumber", direction: "desc" });
   const [openDropdownForQuotation, setOpenDropdownForQuotation] = useState(null);
   const [selectedQuotationForDropdown, setSelectedQuotationForDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownButtonRef = useRef(null);
-
-  // Remarks modal states
   const [remarksModalOpen, setRemarksModalOpen] = useState(false);
   const [selectedItemForRemarks, setSelectedItemForRemarks] = useState(null);
-
-  // Current user email
   const [userEmail, setUserEmail] = useState("");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-
-  // Search input
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Add permissions check near the top with other state variables
+  const [searchValues, setSearchValues] = useState({}); // New state for header search
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("export-crm");
 
-  // Close the dropdown if clicking anywhere outside
   useEffect(() => {
     function handleDocumentClick() {
       setOpenDropdownForQuotation(null);
@@ -74,22 +51,15 @@ export default function QuotationManagementPage() {
     return () => document.removeEventListener("click", handleDocumentClick);
   }, []);
 
-  // Update dropdown position on scroll/resize
   useLayoutEffect(() => {
     function updatePosition() {
       if (!dropdownButtonRef.current) return;
       const rect = dropdownButtonRef.current.getBoundingClientRect();
       const dropdownHeight = 200;
-      let top;
-      if (window.innerHeight - rect.bottom < dropdownHeight) {
-        top = rect.top + window.pageYOffset - dropdownHeight;
-      } else {
-        top = rect.bottom + window.pageYOffset;
-      }
-      setDropdownPosition({
-        top,
-        left: rect.left + window.pageXOffset,
-      });
+      let top = window.innerHeight - rect.bottom < dropdownHeight
+        ? rect.top + window.pageYOffset - dropdownHeight
+        : rect.bottom + window.pageYOffset;
+      setDropdownPosition({ top, left: rect.left + window.pageXOffset });
     }
     updatePosition();
     window.addEventListener("scroll", updatePosition);
@@ -100,17 +70,13 @@ export default function QuotationManagementPage() {
     };
   }, []);
 
-  // LIFECYCLE
   useEffect(() => {
     fetchData();
     fetchUserEmail();
     fetchOpportunities();
-    if (id) {
-      fetchQuotation();
-    }
+    if (id) fetchQuotation();
   }, [id, approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter]);
 
-  // -------------- API / Data --------------
   async function fetchUserEmail() {
     try {
       const token = localStorage.getItem("token");
@@ -155,6 +121,21 @@ export default function QuotationManagementPage() {
     }
   }
 
+  async function fetchLatestActions(quotationIds) {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/logs/latest`,
+        { quotationIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setLatestActions(res.data);
+    } catch (err) {
+      console.error("Error fetching latest actions:", err);
+      setLatestActions({});
+    }
+  }
+
   async function fetchData() {
     setLoading(true);
     try {
@@ -162,34 +143,33 @@ export default function QuotationManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/quotations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      let data =
-        approvalFilter === "all"
-          ? res.data
-          : res.data.filter((q) =>
-              approvalFilter === "approved" ? q.approveStatus : !q.approveStatus
-            );
+      let data = approvalFilter === "all"
+        ? res.data
+        : res.data.filter(q => approvalFilter === "approved" ? q.approveStatus : !q.approveStatus);
       if (fromDateFilter) {
         const from = new Date(fromDateFilter);
-        data = data.filter((item) => new Date(item.createdAt) >= from);
+        data = data.filter(item => new Date(item.createdAt) >= from);
       }
       if (toDateFilter) {
         const to = new Date(toDateFilter);
-        data = data.filter((item) => new Date(item.createdAt) <= to);
+        data = data.filter(item => new Date(item.createdAt) <= to);
       }
       if (companyFilter.length > 0) {
-        data = data.filter((item) =>
-          companyFilter.includes(item.customerCompany)
-        );
+        data = data.filter(item => companyFilter.includes(item.customerCompany));
       }
       if (opportunityOwnerFilter.length > 0) {
-        const filteredOpportunities = opportunities.filter((opp) =>
+        const filteredOpportunities = opportunities.filter(opp =>
           opportunityOwnerFilter.includes(opp.opportunityOwner)
         );
-        const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
-        data = data.filter((q) => opportunityCodes.includes(q.opportunityNumber));
+        const opportunityCodes = filteredOpportunities.map(opp => opp.opportunityCode);
+        data = data.filter(q => opportunityCodes.includes(q.opportunityNumber));
       }
       setQuotations(data);
       setOriginalQuotations(data);
+      const quotationIds = data.map(q => q._id);
+      if (quotationIds.length > 0) {
+        await fetchLatestActions(quotationIds);
+      }
       setError(null);
     } catch (err) {
       console.error("Error fetching quotations:", err);
@@ -199,12 +179,8 @@ export default function QuotationManagementPage() {
     }
   }
 
-  // -------------- Sorting --------------
   const handleSort = (key, isDate = false) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
+    let direction = sortConfig.key === key && sortConfig.direction === "asc" ? "desc" : "asc";
     setSortConfig({ key, direction });
 
     const sortedQuotations = [...quotations].sort((a, b) => {
@@ -212,8 +188,8 @@ export default function QuotationManagementPage() {
       let valB = b[key];
 
       if (key === "opportunityOwner") {
-        const oppA = opportunities.find((o) => o.opportunityCode === a.opportunityNumber);
-        const oppB = opportunities.find((o) => o.opportunityCode === b.opportunityNumber);
+        const oppA = opportunities.find(o => o.opportunityCode === a.opportunityNumber);
+        const oppB = opportunities.find(o => o.opportunityCode === b.opportunityNumber);
         valA = oppA?.opportunityOwner || "";
         valB = oppB?.opportunityOwner || "";
       } else if (key === "items.length") {
@@ -229,15 +205,16 @@ export default function QuotationManagementPage() {
         valB = (valB || "").toString().toLowerCase();
       }
 
-      if (valA < valB) return direction === "asc" ? -1 : 1;
-      if (valA > valB) return direction === "asc" ? 1 : -1;
-      return 0;
+      return (valA < valB ? -1 : 1) * (direction === "asc" ? 1 : -1);
     });
 
     setQuotations(sortedQuotations);
   };
 
-  // -------------- DELETES --------------
+  const handleSearchChange = (field, value) => {
+    setSearchValues((prev) => ({ ...prev, [field]: value }));
+  };
+
   async function handleDeleteQuotation(quotation) {
     if (!window.confirm(`Are you sure you want to delete Quotation ${quotation.quotationNumber}?`)) return;
     try {
@@ -261,7 +238,6 @@ export default function QuotationManagementPage() {
     navigate(`/admin-dashboard/oldquotation/manual/${quotation._id}`);
   }
 
-  // -------------- REMARKS MODAL --------------
   const openRemarksModal = (item) => {
     setSelectedItemForRemarks(item);
     setRemarksModalOpen(true);
@@ -284,53 +260,72 @@ export default function QuotationManagementPage() {
     }
   };
 
-  // -------------- SEARCH --------------
   const handleSearch = () => {
-    if (!searchTerm) {
+    if (!searchTerm && Object.keys(searchValues).length === 0) {
       setQuotations(originalQuotations);
       return;
     }
 
-    const filtered = originalQuotations.filter((q) => {
-      const opp = opportunities.find((o) => o.opportunityCode === q.opportunityNumber);
-      return (
-        (q.quotationNumber?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    const filtered = originalQuotations.filter(q => {
+      const opp = opportunities.find(o => o.opportunityCode === q.opportunityNumber);
+      const matchesGlobalSearch = searchTerm
+        ? (q.quotationNumber?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (q.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (q.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (q.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (q.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+        : true;
+
+      const matchesHeaderSearch = Object.entries(searchValues).every(([field, value]) => {
+        if (!value) return true;
+        let rowValue;
+        if (field === "opportunityOwner") {
+          const opp = opportunities.find(o => o.opportunityCode === q.opportunityNumber);
+          rowValue = opp?.opportunityOwner || "";
+        } else if (field === "items.length") {
+          rowValue = (q.items || []).length.toString();
+        } else if (field === "createdAt") {
+          rowValue = new Date(q[field]).toLocaleDateString();
+        } else if (field === "latestAction") {
+          const latestAction = latestActions[q._id] || {};
+          rowValue = latestAction.action
+            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+            : "No action recorded";
+        } else {
+          rowValue = q[field] || "";
+        }
+        return rowValue.toString().toLowerCase().includes(value.toLowerCase());
+      });
+
+      return matchesGlobalSearch && matchesHeaderSearch;
     });
 
     setQuotations(filtered);
   };
 
-  // -------------- RENDER HELPERS --------------
+  useEffect(() => {
+    handleSearch();
+  }, [searchValues, searchTerm]);
+
   const renderFilterButtons = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
       <div className="flex space-x-2">
         <button
           onClick={() => setApprovalFilter("all")}
-          className={`px-3 py-1 rounded ${
-            approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"
-          }`}
+          className={`px-3 py-1 rounded ${approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"}`}
         >
           All
         </button>
         <button
           onClick={() => setApprovalFilter("approved")}
-          className={`px-3 py-1 rounded ${
-            approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-[#44b977] text-white"
-          }`}
+          className={`px-3 py-1 rounded ${approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-[#44b977] text-white"}`}
         >
           Approved
         </button>
         <button
           onClick={() => setApprovalFilter("notApproved")}
-          className={`px-3 py-1 rounded ${
-            approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-[#e73d3e] text-white"
-          }`}
+          className={`px-3 py-1 rounded ${approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-[#e73d3e] text-white"}`}
         >
           Not Approved
         </button>
@@ -351,7 +346,6 @@ export default function QuotationManagementPage() {
   );
 
   const renderFilterWindow = () => {
-    // Get unique opportunity owners and company names
     const uniqueOpportunityOwners = [...new Set(opportunities.map(opp => opp.opportunityOwner))];
     const uniqueCompanyNames = [...new Set(quotations.map(q => q.customerCompany))];
 
@@ -380,14 +374,12 @@ export default function QuotationManagementPage() {
                         onChange={(e) => {
                           const selected = e.target.checked
                             ? [...opportunityOwnerFilter, owner]
-                            : opportunityOwnerFilter.filter((item) => item !== owner);
+                            : opportunityOwnerFilter.filter(item => item !== owner);
                           setOpportunityOwnerFilter(selected);
                         }}
                         className="mr-2"
                       />
-                      <label htmlFor={`owner-${index}`} className="text-sm text-gray-700">
-                        {owner}
-                      </label>
+                      <label htmlFor={`owner-${index}`} className="text-sm text-gray-700">{owner}</label>
                     </div>
                   ))}
                 </div>
@@ -405,14 +397,12 @@ export default function QuotationManagementPage() {
                         onChange={(e) => {
                           const selected = e.target.checked
                             ? [...companyFilter, company]
-                            : companyFilter.filter((item) => item !== company);
+                            : companyFilter.filter(item => item !== company);
                           setCompanyFilter(selected);
                         }}
                         className="mr-2"
                       />
-                      <label htmlFor={`company-${index}`} className="text-sm text-gray-700">
-                        {company}
-                      </label>
+                      <label htmlFor={`company-${index}`} className="text-sm text-gray-700">{company}</label>
                     </div>
                   ))}
                 </div>
@@ -422,7 +412,7 @@ export default function QuotationManagementPage() {
                 <input
                   type="date"
                   value={fromDateFilter}
-                  onChange={(e) => setFromDateFilter(e.target.value)}
+                  onChange={e => setFromDateFilter(e.target.value)}
                   className="border border-gray-300 rounded p-2 w-full"
                 />
               </div>
@@ -431,7 +421,7 @@ export default function QuotationManagementPage() {
                 <input
                   type="date"
                   value={toDateFilter}
-                  onChange={(e) => setToDateFilter(e.target.value)}
+                  onChange={e => setToDateFilter(e.target.value)}
                   className="border border-gray-300 rounded p-2 w-full"
                 />
               </div>
@@ -474,7 +464,7 @@ export default function QuotationManagementPage() {
             id="search"
             type="text"
             value={searchTerm}
-            onChange={(e) => {
+            onChange={e => {
               setSearchTerm(e.target.value);
               handleSearch();
             }}
@@ -494,169 +484,200 @@ export default function QuotationManagementPage() {
     const grouped = groupItemsByDate(filteredQuotations);
     return (
       <div>
-        {Object.entries(grouped).map(([groupName, items]) =>
-          items.length > 0 ? (
-            <div key={groupName} className="mb-6">
-              <h3 className="text-lg font-bold mb-2">{groupName}</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border">
-                  <thead className="bg-orange-200 text-black">
-                    <tr>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("quotationNumber")}
-                      >
-                        Quotation Number {sortConfig.key === "quotationNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("opportunityNumber")}
-                      >
-                        Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("opportunityOwner")}
-                      >
-                        Opportunity Owner {sortConfig.key === "opportunityOwner" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("customerCompany")}
-                      >
-                        Company Name {sortConfig.key === "customerCompany" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("customerName")}
-                      >
-                        Customer Name {sortConfig.key === "customerName" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("catalogName")}
-                      >
-                        Event Name {sortConfig.key === "catalogName" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("items.length")}
-                      >
-                        Items {sortConfig.key === "items.length" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th
-                        className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
-                        onClick={() => handleSort("createdAt", true)}
-                      >
-                        Created At {sortConfig.key === "createdAt" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {[...items]
-                      .sort((a, b) => {
-                        let valA = a[sortConfig.key];
-                        let valB = b[sortConfig.key];
+        {Object.entries(grouped).map(([groupName, items]) => items.length > 0 ? (
+          <div key={groupName} className="mb-6">
+            <h3 className="text-lg font-bold mb-2">{groupName}</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 border">
+                <thead className="bg-orange-200 text-black">
+                  <tr>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("quotationNumber")}
+                    >
+                      Quotation Number {sortConfig.key === "quotationNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("opportunityNumber")}
+                    >
+                      Opportunity Number {sortConfig.key === "opportunityNumber" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("opportunityOwner")}
+                    >
+                      Opportunity Owner {sortConfig.key === "opportunityOwner" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("customerCompany")}
+                    >
+                      Company Name {sortConfig.key === "customerCompany" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("customerName")}
+                    >
+                      Customer Name {sortConfig.key === "customerName" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("catalogName")}
+                    >
+                      Event Name {sortConfig.key === "catalogName" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("items.length")}
+                    >
+                      Items {sortConfig.key === "items.length" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("createdAt", true)}
+                    >
+                      Created At {sortConfig.key === "createdAt" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-xs font-medium uppercase cursor-pointer"
+                      onClick={() => handleSort("latestAction")}
+                    >
+                      Latest Action {sortConfig.key === "latestAction" ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase">
+                      Actions
+                    </th>
+                  </tr>
+                  <tr>
+                    {[
+                      "quotationNumber",
+                      "opportunityNumber",
+                      "opportunityOwner",
+                      "customerCompany",
+                      "customerName",
+                      "catalogName",
+                      "items.length",
+                      "createdAt",
+                      "latestAction",
+                    ].map((field) => (
+                      <td key={field} className="px-4 py-1 border border-gray-300">
+                        <input
+                          type="text"
+                          placeholder={`Search ${field}`}
+                          className="w-full p-1 border border-gray-300 rounded text-xs"
+                          value={searchValues[field] || ""}
+                          onChange={(e) => handleSearchChange(field, e.target.value)}
+                        />
+                      </td>
+                    ))}
+                    <td className="px-4 py-1 border border-gray-300"></td>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {[...items].sort((a, b) => {
+                    let valA = a[sortConfig.key];
+                    let valB = b[sortConfig.key];
 
-                        if (sortConfig.key === "opportunityOwner") {
-                          const oppA = opportunities.find((o) => o.opportunityCode === a.opportunityNumber);
-                          const oppB = opportunities.find((o) => o.opportunityCode === b.opportunityNumber);
-                          valA = oppA?.opportunityOwner || "";
-                          valB = oppB?.opportunityOwner || "";
-                        } else if (sortConfig.key === "items.length") {
-                          valA = (a.items || []).length;
-                          valB = (b.items || []).length;
-                        }
+                    if (sortConfig.key === "opportunityOwner") {
+                      const oppA = opportunities.find(o => o.opportunityCode === a.opportunityNumber);
+                      const oppB = opportunities.find(o => o.opportunityCode === b.opportunityNumber);
+                      valA = oppA?.opportunityOwner || "";
+                      valB = oppB?.opportunityOwner || "";
+                    } else if (sortConfig.key === "items.length") {
+                      valA = (a.items || []).length;
+                      valB = (b.items || []).length;
+                    } else if (sortConfig.key === "latestAction") {
+                      const actionA = latestActions[a._id] || {};
+                      const actionB = latestActions[b._id] || {};
+                      valA = actionA.action
+                        ? `${actionA.action} by ${actionA.performedBy?.email || "N/A"} at ${actionA.performedAt ? new Date(actionA.performedAt).toLocaleString() : "Unknown date"}`
+                        : "No action recorded";
+                      valB = actionB.action
+                        ? `${actionB.action} by ${actionB.performedBy?.email || "N/A"} at ${actionB.performedAt ? new Date(actionB.performedAt).toLocaleString() : "Unknown date"}`
+                        : "No action recorded";
+                    }
 
-                        if (sortConfig.key === "createdAt") {
-                          valA = new Date(valA || 0);
-                          valB = new Date(valB || 0);
-                        } else {
-                          valA = (valA || "").toString().toLowerCase();
-                          valB = (valB || "").toString().toLowerCase();
-                        }
+                    if (sortConfig.key === "createdAt") {
+                      valA = new Date(valA || 0);
+                      valB = new Date(valB || 0);
+                    } else {
+                      valA = (valA || "").toString().toLowerCase();
+                      valB = (valB || "").toString().toLowerCase();
+                    }
 
-                        if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
-                        if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
-                        return 0;
-                      })
-                      .map((quotation) => {
-                        const opp = opportunities.find((o) => o.opportunityCode === quotation.opportunityNumber);
-                        return (
-                          <tr key={quotation._id}>
-                            <td className="px-4 py-2">{quotation.quotationNumber}</td>
-                            <td className="px-4 py-2">{quotation.opportunityNumber || "N/A"}</td>
-                            <td className="px-4 py-2">{opp?.opportunityOwner || "N/A"}</td>
-                            <td className="px-4 py-2">
-                              {quotation.customerCompany || "N/A"}
-                              {quotation.quotationNumber < 10496 && <>(old quotation)</>}
-                            </td>
-                            <td className="px-4 py-2">{quotation.customerName}</td>
-                            <td className="px-4 py-2">{quotation.catalogName || "N/A"}</td>
-                            <td className="px-4 py-2">{quotation.items?.length || 0}</td>
-                            <td className="px-4 py-2">{new Date(quotation.createdAt).toLocaleDateString()}</td>
-                            <td className="px-4 py-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedQuotationForDropdown(quotation);
-                                  toggleQuotationDropdown(quotation._id, e);
-                                }}
-                                className="px-2 py-1 hover:bg-gray-200 rounded"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-6 w-6"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 6v.01M12 12v.01M12 18v.01"
-                                  />
-                                </svg>
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
+                    return (valA < valB ? -1 : 1) * (sortConfig.direction === "asc" ? 1 : -1);
+                  }).map(quotation => {
+                    const opp = opportunities.find(o => o.opportunityCode === quotation.opportunityNumber);
+                    const latestAction = latestActions[quotation._id] || {};
+                    return (
+                      <tr key={quotation._id}>
+                        <td className="px-4 py-2">{quotation.quotationNumber}</td>
+                        <td className="px-4 py-2">{quotation.opportunityNumber || "N/A"}</td>
+                        <td className="px-4 py-2">{opp?.opportunityOwner || "N/A"}</td>
+                        <td className="px-4 py-2">
+                          {quotation.customerCompany || "N/A"}
+                          {quotation.quotationNumber < 10496 && <>(old quotation)</>}
+                        </td>
+                        <td className="px-4 py-2">{quotation.customerName}</td>
+                        <td className="px-4 py-2">{quotation.catalogName || "N/A"}</td>
+                        <td className="px-4 py-2">{quotation.items?.length || 0}</td>
+                        <td className="px-4 py-2">{new Date(quotation.createdAt).toLocaleDateString()}</td>
+                        <td className="px-4 py-2">
+                          {latestAction.action
+                            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+                            : "No action recorded"}
+                        </td>
+                        <td className="px-4 py-2">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedQuotationForDropdown(quotation);
+                              toggleQuotationDropdown(quotation._id, e);
+                            }}
+                            className="px-2 py-1 hover:bg-gray-200 rounded"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-6 w-6"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 6v.01M12 12v.01M12 18v.01"
+                              />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ) : null
-        )}
+          </div>
+        ) : null)}
       </div>
     );
   };
 
-  // -------------- Three Dots Dropdown for Quotation --------------
   function toggleQuotationDropdown(id, e) {
     e.stopPropagation();
     dropdownButtonRef.current = e.currentTarget;
     const rect = e.currentTarget.getBoundingClientRect();
     const dropdownHeight = 200;
-    let top;
-    if (window.innerHeight - rect.bottom < dropdownHeight) {
-      top = rect.top + window.pageYOffset - dropdownHeight;
-    } else {
-      top = rect.bottom + window.pageYOffset;
-    }
-    setDropdownPosition({
-      top,
-      left: rect.left + window.pageXOffset,
-    });
-    setSelectedQuotationForDropdown(quotations.find((q) => q._id === id));
+    let top = window.innerHeight - rect.bottom < dropdownHeight
+      ? rect.top + window.pageYOffset - dropdownHeight
+      : rect.bottom + window.pageYOffset;
+    setDropdownPosition({ top, left: rect.left + window.pageXOffset });
+    setSelectedQuotationForDropdown(quotations.find(q => q._id === id));
     setOpenDropdownForQuotation(id === openDropdownForQuotation ? null : id);
   }
 
-  // -------------- EXCEL EXPORT --------------
   async function handleExportAllToExcel() {
     try {
       const wb = utils.book_new();
@@ -671,10 +692,12 @@ export default function QuotationManagementPage() {
         "Created At",
         "Remarks",
         "Approve Status",
+        "Latest Action",
       ];
       const data = [header];
-      quotations.forEach((q) => {
-        const opp = opportunities.find((o) => o.opportunityCode === q.opportunityNumber);
+      quotations.forEach(q => {
+        const opp = opportunities.find(o => o.opportunityCode === q.opportunityNumber);
+        const latestAction = latestActions[q._id] || {};
         const row = [
           q.quotationNumber,
           q.opportunityNumber || "N/A",
@@ -686,6 +709,9 @@ export default function QuotationManagementPage() {
           new Date(q.createdAt).toLocaleDateString(),
           q.remarks || "",
           q.approveStatus ? "Approved" : "Not Approved",
+          latestAction.action
+            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+            : "No action recorded",
         ];
         data.push(row);
       });
@@ -706,19 +732,14 @@ export default function QuotationManagementPage() {
     }
   }
 
-  if (loading) {
-    return <div className="p-6 text-gray-500">Loading...</div>;
-  }
-  if (error) {
-    return <div className="p-6 text-red-400">{error}</div>;
-  }
+  if (loading) return <div className="p-6 text-gray-500">Loading...</div>;
+  if (error) return <div className="p-6 text-red-400">{error}</div>;
 
   return (
     <div className="min-h-screen bg-white text-gray-900 p-6">
       {renderFilterButtons()}
       {renderFilterControls()}
       {showFilterWindow && renderFilterWindow()}
-
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Manage Quotations</h1>
         <div className="flex space-x-2">
@@ -732,9 +753,7 @@ export default function QuotationManagementPage() {
           )}
         </div>
       </div>
-
       {renderQuotationList()}
-
       {remarksModalOpen && selectedItemForRemarks && (
         <RemarksModal
           item={selectedItemForRemarks}
@@ -744,74 +763,67 @@ export default function QuotationManagementPage() {
           userEmail={userEmail}
         />
       )}
-
-      {openDropdownForQuotation && selectedQuotationForDropdown &&
-        createPortal(
-          <div
-            style={{
-              top: dropdownPosition.top,
-              left: dropdownPosition.left,
-              position: "absolute",
-              zIndex: 9999,
+      {openDropdownForQuotation && selectedQuotationForDropdown && createPortal(
+        <div
+          style={{ top: dropdownPosition.top, left: dropdownPosition.left, position: "absolute", zIndex: 9999 }}
+          className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              navigate(`/admin-dashboard/quotations/${selectedQuotationForDropdown._id}`);
+              setOpenDropdownForQuotation(null);
+              setSelectedQuotationForDropdown(null);
+              dropdownButtonRef.current = null;
             }}
-            className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
-            onClick={(e) => e.stopPropagation()}
+            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
           >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/admin-dashboard/quotations/${selectedQuotationForDropdown._id}`);
-                setOpenDropdownForQuotation(null);
-                setSelectedQuotationForDropdown(null);
-                dropdownButtonRef.current = null;
-              }}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-            >
-              View
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (selectedQuotationForDropdown.quotationNumber >= 10496) {
-                  handleEditQuotation(selectedQuotationForDropdown);
-                } else {
-                  handleEditQuotationOld(selectedQuotationForDropdown);
-                }
-                setOpenDropdownForQuotation(null);
-                setSelectedQuotationForDropdown(null);
-                dropdownButtonRef.current = null;
-              }}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-            >
-              Edit
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openRemarksModal(selectedQuotationForDropdown);
-                setOpenDropdownForQuotation(null);
-                setSelectedQuotationForDropdown(null);
-                dropdownButtonRef.current = null;
-              }}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-            >
-              Remarks
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteQuotation(selectedQuotationForDropdown);
-                setOpenDropdownForQuotation(null);
-                setSelectedQuotationForDropdown(null);
-                dropdownButtonRef.current = null;
-              }}
-              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-            >
-              Delete
-            </button>
-          </div>,
-          document.body
-        )}
+            View
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              if (selectedQuotationForDropdown.quotationNumber >= 10496) {
+                handleEditQuotation(selectedQuotationForDropdown);
+              } else {
+                handleEditQuotationOld(selectedQuotationForDropdown);
+              }
+              setOpenDropdownForQuotation(null);
+              setSelectedQuotationForDropdown(null);
+              dropdownButtonRef.current = null;
+            }}
+            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+          >
+            Edit
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              openRemarksModal(selectedQuotationForDropdown);
+              setOpenDropdownForQuotation(null);
+              setSelectedQuotationForDropdown(null);
+              dropdownButtonRef.current = null;
+            }}
+            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+          >
+            Remarks
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              handleDeleteQuotation(selectedQuotationForDropdown);
+              setOpenDropdownForQuotation(null);
+              setSelectedQuotationForDropdown(null);
+              dropdownButtonRef.current = null;
+            }}
+            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+          >
+            Delete
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

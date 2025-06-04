@@ -138,6 +138,10 @@ app.use("/api/admin/branding-charges", brandingChargeRoutes);
 const logisticsRoutes = require("./routes/logisticsRoutes");
 app.use("/api/logistics", logisticsRoutes);
 
+const logRoutes = require("./routes/logRoutes");
+app.use("/api/admin", logRoutes);
+
+
 app.get("/health", (req, res) => res.send("OK"));
 
 // Start server

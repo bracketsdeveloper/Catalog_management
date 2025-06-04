@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import {
   ArrowUpIcon,
@@ -30,7 +32,7 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
 }
 
 export default function InvoiceFollowUpTable({
-  rows = [], // Default to empty array
+  rows = [],
   sortField,
   sortOrder,
   toggleSort,
@@ -171,6 +173,13 @@ export default function InvoiceFollowUpTable({
               sortOrder={sortOrder}
               toggle={toggleSort}
             />
+            <HeadCell
+              label="Remarks"
+              field="remarks"
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
+            />
             <th className="px-2 py-1 border border-gray-300 bg-gray-50">
               Actions
             </th>
@@ -193,6 +202,7 @@ export default function InvoiceFollowUpTable({
               "invoiceGenerated",
               "invoiceNumber",
               "pendingFromDays",
+              "remarks",
             ].map((field) => (
               <td key={field} className="px-2 py-1 border border-gray-300">
                 <input
@@ -248,6 +258,7 @@ export default function InvoiceFollowUpTable({
                   <Cell val={r.invoiceGenerated} />
                   <Cell val={r.invoiceNumber} />
                   <Cell val={r.pendingFromDays} field="pendingFromDays" />
+                  <Cell val={r.remarks} />
                   <td className="px-2 py-1 border border-gray-300">
                     <button onClick={() => onEdit(r)}>
                       <EllipsisVerticalIcon className="h-4 w-4" />
@@ -258,7 +269,7 @@ export default function InvoiceFollowUpTable({
           ) : (
             <tr>
               <td
-                colSpan={17}
+                colSpan={18}
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records

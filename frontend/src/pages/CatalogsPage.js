@@ -1,4 +1,4 @@
-
+// frontend/src/pages/CatalogManagementPage.js
 "use client";
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
@@ -8,11 +8,8 @@ import { useNavigate } from "react-router-dom";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
 
-// Sub-components
 import RemarksModal from "../components/CatalogManagement/RemarksModal";
 import PDFTemplateModal from "../components/CatalogManagement/PDFTemplateModal";
-
-// Utility modules
 import {
   getBase64ImageFromUrl,
   wrapText,
@@ -26,63 +23,38 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export default function CatalogManagementPage() {
   const navigate = useNavigate();
 
-  // States for catalogs and opportunities
   const [catalogs, setCatalogs] = useState([]);
+  const [originalCatalogs, setOriginalCatalogs] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
-
-  // UI states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Filter & approval states
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [fromDateFilter, setFromDateFilter] = useState("");
   const [toDateFilter, setToDateFilter] = useState("");
   const [companyFilter, setCompanyFilter] = useState([]);
   const [opportunityOwnerFilter, setOpportunityOwnerFilter] = useState([]);
   const [showFilterWindow, setShowFilterWindow] = useState(false);
-
-  // Sorting states
   const [sortConfig, setSortConfig] = useState({
     key: "catalogNumber",
     direction: "desc",
   });
-
-  // For "create catalog" dropdown
   const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  // Track which catalog's three-dots dropdown is open
   const [openDropdownForCatalog, setOpenDropdownForCatalog] = useState(null);
   const [selectedCatalogForDropdown, setSelectedCatalogForDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownButtonRef = useRef(null);
-
-  // Remarks modal states
   const [remarksModalOpen, setRemarksModalOpen] = useState(false);
   const [selectedItemForRemarks, setSelectedItemForRemarks] = useState(null);
-
-  // PDF Template modal
   const [pdfTemplateModalOpen, setPdfTemplateModalOpen] = useState(false);
   const [selectedItemForPDF, setSelectedItemForPDF] = useState(null);
-
-  // Current user email
   const [userEmail, setUserEmail] = useState("");
-
-  // Search input
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-
-  // Current user role
-  const [userRole, setUserRole] = useState("");
-
-  // Superadmin status
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-
-  // Permissions check
+  const [searchValues, setSearchValues] = useState({});
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("export-crm");
 
-  // Close the dropdown if clicking anywhere outside
   useEffect(() => {
     function handleDocumentClick() {
       setOpenDropdownForCatalog(null);
@@ -93,18 +65,14 @@ export default function CatalogManagementPage() {
     return () => document.removeEventListener("click", handleDocumentClick);
   }, []);
 
-  // Update dropdown position on scroll/resize
   useLayoutEffect(() => {
     function updatePosition() {
       if (!dropdownButtonRef.current) return;
       const rect = dropdownButtonRef.current.getBoundingClientRect();
       const dropdownHeight = 200;
-      let top;
-      if (window.innerHeight - rect.bottom < dropdownHeight) {
-        top = rect.top + window.pageYOffset - dropdownHeight;
-      } else {
-        top = rect.bottom + window.pageYOffset;
-      }
+      let top = window.innerHeight - rect.bottom < dropdownHeight
+        ? rect.top + window.pageYOffset - dropdownHeight
+        : rect.bottom + window.pageYOffset;
       setDropdownPosition({
         top,
         left: rect.left + window.pageXOffset,
@@ -119,14 +87,12 @@ export default function CatalogManagementPage() {
     };
   }, []);
 
-  // LIFECYCLE
   useEffect(() => {
     fetchData();
     fetchUserEmail();
     fetchOpportunities();
-  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchTerm]);
+  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter]);
 
-  // -------------- API / Data --------------
   async function fetchUserEmail() {
     try {
       const token = localStorage.getItem("token");
@@ -159,12 +125,11 @@ export default function CatalogManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      let data =
-        approvalFilter === "all"
-          ? res.data
-          : res.data.filter((cat) =>
-              approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
-            );
+      let data = approvalFilter === "all"
+        ? res.data
+        : res.data.filter((cat) =>
+            approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
+          );
       if (fromDateFilter) {
         const from = new Date(fromDateFilter);
         data = data.filter((item) => new Date(item.createdAt) >= from);
@@ -185,20 +150,8 @@ export default function CatalogManagementPage() {
         const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
         data = data.filter((cat) => opportunityCodes.includes(cat.opportunityNumber));
       }
-      if (searchTerm) {
-        data = data.filter((cat) => {
-          const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
-          return (
-            cat.catalogNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-      }
       setCatalogs(data);
+      setOriginalCatalogs(data);
       setError(null);
     } catch (err) {
       console.error("Error fetching catalogs:", err);
@@ -208,12 +161,8 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- Sorting --------------
   const handleSort = (key, isDate = false) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
+    let direction = sortConfig.key === key && sortConfig.direction === "asc" ? "desc" : "asc";
     setSortConfig({ key, direction });
 
     const sortedCatalogs = [...catalogs].sort((a, b) => {
@@ -238,15 +187,16 @@ export default function CatalogManagementPage() {
         valB = (valB || "").toString().toLowerCase();
       }
 
-      if (valA < valB) return direction === "asc" ? -1 : 1;
-      if (valA > valB) return direction === "asc" ? 1 : -1;
-      return 0;
+      return (valA < valB ? -1 : 1) * (direction === "asc" ? 1 : -1);
     });
 
     setCatalogs(sortedCatalogs);
   };
 
-  // -------------- CREATE CATALOG DROPDOWN --------------
+  const handleSearchChange = (field, value) => {
+    setSearchValues((prev) => ({ ...prev, [field]: value }));
+  };
+
   function handleToggleDropdown() {
     setDropdownOpen((prev) => !prev);
   }
@@ -261,7 +211,6 @@ export default function CatalogManagementPage() {
     navigate("/admin-dashboard/catalogs/ai");
   }
 
-  // -------------- DELETES --------------
   async function handleDeleteCatalog(catalog) {
     if (!window.confirm(`Are you sure you want to delete "${catalog.catalogName}"?`)) return;
     try {
@@ -281,7 +230,6 @@ export default function CatalogManagementPage() {
     navigate(`/admin-dashboard/catalogs/manual/${catalog._id}`);
   }
 
-  // -------------- CREATE QUOTATION FROM CATALOG --------------
   async function handleCreateQuotationFromCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
@@ -353,7 +301,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- REMARKS MODAL --------------
   const openRemarksModal = (item) => {
     setSelectedItemForRemarks(item);
     setRemarksModalOpen(true);
@@ -376,7 +323,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- EXCEL EXPORT --------------
   async function handleExportExcel(item) {
     try {
       const wb = XLSX.utils.book_new();
@@ -441,7 +387,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- PDF EXPORT --------------
   function openPDFTemplateModal(item) {
     setSelectedItemForPDF(item);
     setPdfTemplateModalOpen(true);
@@ -662,7 +607,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- PPT EXPORT --------------
   async function handleExportPPT(catalog) {
     try {
       await exportToPPT(catalog, getBase64ImageFromUrl);
@@ -673,7 +617,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- VIRTUAL LINK --------------
   function handleVirtualLink(item) {
     const link = `${window.location.origin}/catalog/${item._id}`;
     window.open(link, "_blank");
@@ -690,18 +633,14 @@ export default function CatalogManagementPage() {
       });
   }
 
-  // -------------- Three Dots Dropdown for Catalog --------------
   function toggleCatalogDropdown(id, e) {
     e.stopPropagation();
     dropdownButtonRef.current = e.currentTarget;
     const rect = e.currentTarget.getBoundingClientRect();
     const dropdownHeight = 200;
-    let top;
-    if (window.innerHeight - rect.bottom < dropdownHeight) {
-      top = rect.top + window.pageYOffset - dropdownHeight;
-    } else {
-      top = rect.bottom + window.pageYOffset;
-    }
+    let top = window.innerHeight - rect.bottom < dropdownHeight
+      ? rect.top + window.pageYOffset - dropdownHeight
+      : rect.bottom + window.pageYOffset;
     setDropdownPosition({
       top,
       left: rect.left + window.pageXOffset,
@@ -733,7 +672,6 @@ export default function CatalogManagementPage() {
     }
   }
 
-  // -------------- SEARCH SUGGESTIONS --------------
   const getUniqueCompanyNames = () => {
     const companySet = new Set();
     catalogs.forEach((c) => {
@@ -755,12 +693,48 @@ export default function CatalogManagementPage() {
   };
 
   const handleSearch = () => {
-    setCompanyFilter([]); // Clear company filter to allow global search
-    fetchData();
-    setSuggestions([]);
+    if (!searchTerm && Object.keys(searchValues).length === 0) {
+      setCatalogs(originalCatalogs);
+      return;
+    }
+
+    const filtered = originalCatalogs.filter((cat) => {
+      const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+      const matchesGlobalSearch = searchTerm
+        ? cat.catalogNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+        : true;
+
+      const matchesHeaderSearch = Object.entries(searchValues).every(([field, value]) => {
+        if (!value) return true;
+        let rowValue;
+        if (field === "opportunityOwner") {
+          const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+          rowValue = opp?.opportunityOwner || "";
+        } else if (field === "products.length") {
+          rowValue = (cat.products || []).length.toString();
+        } else if (field === "createdAt") {
+          rowValue = new Date(cat[field]).toLocaleDateString();
+        } else {
+          rowValue = cat[field] || "";
+        }
+        return rowValue.toString().toLowerCase().includes(value.toLowerCase());
+      });
+
+      return matchesGlobalSearch && matchesHeaderSearch;
+    });
+
+    setCatalogs(filtered);
   };
 
-  // -------------- RENDER HELPERS --------------
+  useEffect(() => {
+    handleSearch();
+  }, [searchValues, searchTerm]);
+
   const renderFilterButtons = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
       <div className="flex space-x-2">
@@ -799,7 +773,6 @@ export default function CatalogManagementPage() {
   );
 
   const renderFilterWindow = () => {
-    // Get unique opportunity owners and company names
     const uniqueOpportunityOwners = [...new Set(opportunities.map(opp => opp.opportunityOwner))];
     const uniqueCompanyNames = [...new Set(catalogs.map(cat => cat.customerCompany))];
 
@@ -925,6 +898,7 @@ export default function CatalogManagementPage() {
             onChange={(e) => {
               setSearchTerm(e.target.value);
               filterSuggestions(e.target.value);
+              handleSearch();
             }}
             className="border p-2"
             placeholder="Search all fields"
@@ -1023,6 +997,29 @@ export default function CatalogManagementPage() {
                         Actions
                       </th>
                     </tr>
+                    <tr>
+                      {[
+                        "catalogNumber",
+                        "opportunityNumber",
+                        "opportunityOwner",
+                        "customerCompany",
+                        "customerName",
+                        "catalogName",
+                        "products.length",
+                        "createdAt",
+                      ].map((field) => (
+                        <td key={field} className="px-4 py-1 border border-gray-300">
+                          <input
+                            type="text"
+                            placeholder={`Search ${field}`}
+                            className="w-full p-1 border border-gray-300 rounded text-xs"
+                            value={searchValues[field] || ""}
+                            onChange={(e) => handleSearchChange(field, e.target.value)}
+                          />
+                        </td>
+                      ))}
+                      <td className="px-4 py-1 border border-gray-300"></td>
+                    </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {[...items]
@@ -1048,9 +1045,7 @@ export default function CatalogManagementPage() {
                           valB = (valB || "").toString().toLowerCase();
                         }
 
-                        if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
-                        if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
-                        return 0;
+                        return (valA < valB ? -1 : 1) * (sortConfig.direction === "asc" ? 1 : -1);
                       })
                       .map((cat) => {
                         const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
@@ -1107,7 +1102,6 @@ export default function CatalogManagementPage() {
     );
   };
 
-  // -------------- NEW EXPORT FUNCTION --------------
   async function handleExportAllToExcel() {
     try {
       const wb = XLSX.utils.book_new();
@@ -1242,20 +1236,18 @@ export default function CatalogManagementPage() {
             className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
             onClick={(e) => e.stopPropagation()}
           >
-           
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleExportExcel(selectedCatalogForDropdown);
-                  setOpenDropdownForCatalog(null);
-                  setSelectedCatalogForDropdown(null);
-                  dropdownButtonRef.current = null;
-                }}
-                className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-              >
-                Excel
-              </button>
-            
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExportExcel(selectedCatalogForDropdown);
+                setOpenDropdownForCatalog(null);
+                setSelectedCatalogForDropdown(null);
+                dropdownButtonRef.current = null;
+              }}
+              className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+            >
+              Excel
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();

@@ -9,17 +9,16 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
   const token = localStorage.getItem("token");
   const isSaved = Boolean(row._id);
 
-  /* Local form state */
   const [form, setForm] = useState({
     ...row,
     dispatchedOn: row.dispatchedOn
       ? new Date(row.dispatchedOn).toISOString().slice(0, 10)
       : "",
+    remarks: row.remarks || "", // New field
   });
 
   const set = (k, v) => setForm({ ...form, [k]: v });
 
-  /* Save */
   async function handleSave() {
     const body = {
       ...form,
@@ -61,7 +60,6 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
           {isSaved ? "Edit Invoice Follow-Up" : "Add Invoice Follow-Up"}
         </h2>
 
-        {/* Summary (non-editable) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <Field label="Order Date" value={fmt(form.orderDate)} />
           <Field label="Job Sheet #" value={form.jobSheetNumber} />
@@ -74,7 +72,6 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
           <Field label="Product" value={form.product} />
         </div>
 
-        {/* Editable */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <Input
             label="Dispatched On"
@@ -104,9 +101,13 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
             value={form.pendingFromDays || ""}
             onChange={(v) => set("pendingFromDays", v)}
           />
+          <Input
+            label="Remarks"
+            value={form.remarks || ""}
+            onChange={(v) => set("remarks", v)}
+          />
         </div>
 
-        {/* Already Editable Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <Select
             label="Invoice Generated"
@@ -121,7 +122,6 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
           />
         </div>
 
-        {/* Buttons */}
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
@@ -141,7 +141,6 @@ export default function InvoiceFollowUpModal({ row, onClose, onSaved }) {
   );
 }
 
-/* Helpers */
 function Field({ label, value }) {
   return (
     <div>

@@ -1,15 +1,12 @@
-// routes/opportunityRoutes.js
-
 const express = require("express");
 const router = express.Router();
-const { parse } = require("date-fns"); // Import date-fns parse function
+const { parse } = require("date-fns");
 const Opportunity = require("../models/Opportunity");
-const Counter = require("../models/Counter"); // Import the Counter model
+const Counter = require("../models/Counter");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+const mongoose = require("mongoose");
+const User = require("../models/User");
 
-/**
- * Utility to compare two values deeply
- */
 function isEqual(a, b) {
   if (a === b) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
@@ -22,9 +19,6 @@ function isEqual(a, b) {
   return keys.every((k) => isEqual(a[k], b[k]));
 }
 
-/**
- * Utility to create a log entry
- */
 function createLogEntry(req, action, field, oldValue, newValue) {
   return {
     action,
@@ -37,10 +31,6 @@ function createLogEntry(req, action, field, oldValue, newValue) {
   };
 }
 
-/**
- * Utility to generate the next unique opportunityCode.
- * This uses a dedicated counter collection to ensure uniqueness.
- */
 async function generateOpportunityCode() {
   const counter = await Counter.findOneAndUpdate(
     { id: "opportunityCode" },
@@ -50,20 +40,14 @@ async function generateOpportunityCode() {
   return counter.seq.toString().padStart(4, "0");
 }
 
-/**
- * CREATE an Opportunity
- */
 router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Parse the closureDate from "dd/MM/yyyy" format to a Date object
     if (req.body.closureDate) {
       req.body.closureDate = parse(req.body.closureDate, "dd/MM/yyyy", new Date());
     }
 
-    // Generate code if none provided
     const code = await generateOpportunityCode();
 
-    // Create the new Opportunity
     const newOpportunity = new Opportunity({
       ...req.body,
       opportunityCode: req.body.opportunityCode || code,
@@ -71,7 +55,6 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
       logs: [createLogEntry(req, "create", null, null, null)],
     });
 
-    // Check if the current user is not the opportunity owner, then add them to the team
     if (newOpportunity.createdBy !== newOpportunity.opportunityOwner) {
       newOpportunity.teamMembers.push({
         teamMemberCode: newOpportunity.createdBy,
@@ -89,12 +72,6 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-
-/**
- * GET all Opportunities
- */
-const User = require("../models/User"); // Import the User model
-
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { filter, searchTerm } = req.query;
@@ -106,15 +83,12 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
       case "my":
         andConditions.push({ opportunityOwner: userName });
         break;
-
       case "team":
         andConditions.push(
           { "teamMembers.userName": userName },
           { opportunityOwner: { $ne: userName } }
         );
         break;
-
-      // “all” => no additional conditions
     }
 
     if (searchTerm) {
@@ -149,12 +123,6 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-
-
-
-/**
- * GET single Opportunity
- */
 router.get("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const opportunity = await Opportunity.findById(req.params.id);
@@ -168,10 +136,6 @@ router.get("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
   }
 });
 
-/**
- * UPDATE an Opportunity
- * - Compare fields to log what changed
- */
 router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const opportunity = await Opportunity.findById(req.params.id);
@@ -179,13 +143,11 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
       return res.status(404).json({ message: "Opportunity not found" });
     }
 
-    // Generate a code if missing
     if (!req.body.opportunityCode && !opportunity.opportunityCode) {
       const newCode = await generateOpportunityCode();
       req.body.opportunityCode = newCode;
     }
 
-    // Parse the closureDate from "dd/MM/yyyy" format to a Date object
     if (req.body.closureDate) {
       req.body.closureDate = parse(req.body.closureDate, "dd/MM/yyyy", new Date());
     }
@@ -211,14 +173,13 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
       "opportunityOwner",
       "opportunityCode",
       "isActive",
-      "teamMembers",      // Add nested field here
-      "products",         // And so on for other nested data
+      "teamMembers",
+      "products",
       "contacts",
       "mediaItems",
       "competitors",
-      "notes"
+      "notes",
     ];
-
 
     const logs = [];
     fieldsToCheck.forEach((field) => {
@@ -246,9 +207,6 @@ router.put("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) 
   }
 });
 
-/**
- * DELETE an Opportunity (hard delete)
- */
 router.delete("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const opportunity = await Opportunity.findById(req.params.id);
@@ -268,9 +226,6 @@ router.delete("/opportunities/:id", authenticate, authorizeAdmin, async (req, re
   }
 });
 
-/**
- * COMMON LOGS route (aggregates logs for ALL opportunities)
- */
 router.get("/opportunities/logs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const allOpps = await Opportunity.find().select("opportunityName logs").lean();
@@ -285,6 +240,80 @@ router.get("/opportunities/logs", authenticate, authorizeAdmin, async (req, res)
   } catch (error) {
     console.error("Error fetching logs:", error);
     res.status(500).json({ message: "Failed to fetch logs" });
+  }
+});
+
+router.post("/opportunities/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { opportunityIds } = req.body;
+    if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
+      return res.status(400).json({ message: "Invalid or empty opportunity IDs" });
+    }
+
+    const objectIds = opportunityIds
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
+    if (objectIds.length === 0) {
+      return res.status(400).json({ message: "No valid opportunity IDs provided" });
+    }
+
+    const opportunities = await Opportunity.aggregate([
+      { $match: { _id: { $in: objectIds } } },
+      { $unwind: "$logs" },
+      { $sort: { "logs.performedAt": -1 } },
+      {
+        $group: {
+          _id: "$_id",
+          latestLog: { $first: "$logs" },
+          opportunityName: { $first: "$opportunityName" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "latestLog.performedBy",
+          foreignField: "_id",
+          as: "performedBy",
+        },
+      },
+      { $unwind: { path: "$performedBy", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          opportunityId: "$_id",
+          action: "$latestLog.action",
+          field: "$latestLog.field",
+          performedBy: {
+            $ifNull: [
+              { _id: "$performedBy._id", email: "$performedBy.email", name: "$performedBy.name" },
+              { email: "Unknown", name: "Unknown" },
+            ],
+          },
+          performedAt: "$latestLog.performedAt",
+          opportunityName: 1,
+        },
+      },
+    ]);
+
+    const latestLogs = {};
+    opportunityIds.forEach((id) => {
+      const log = opportunities.find((l) => l.opportunityId.toString() === id);
+      latestLogs[id] = log
+        ? {
+            action: log.action,
+            field: log.field,
+            performedBy: log.performedBy,
+            performedAt: log.performedAt,
+            opportunityName: log.opportunityName,
+          }
+        : {};
+    });
+
+    res.json(latestLogs);
+  } catch (error) {
+    console.error("Error fetching latest logs:", error);
+    res.status(500).json({ message: "Server error fetching latest logs" });
   }
 });
 

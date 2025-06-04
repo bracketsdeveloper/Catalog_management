@@ -323,7 +323,7 @@ export default function PrintQuotation() {
         <div className="flex justify-between items-start mt-6">
           <div>
             <div className="date-text">
-              Date: {formatDate(quotation.createdAt)}
+              {formatDate(quotation.createdAt)}
             </div>
             <div className="mt-1">
               <div className="quotation-number">

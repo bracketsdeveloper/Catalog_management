@@ -8,7 +8,6 @@ const invoiceFollowUpSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
-    /* Reference data copied from DispatchSchedule and related JobSheet */
     orderDate: Date,
     jobSheetNumber: String,
     clientCompanyName: String,
@@ -19,7 +18,6 @@ const invoiceFollowUpSchema = new mongoose.Schema(
     dispatchedOn: Date,
     deliveredThrough: String,
     poStatus: String,
-    /* Editable fields */
     partialQty: Number,
     invoiceGenerated: {
       type: String,
@@ -27,10 +25,8 @@ const invoiceFollowUpSchema = new mongoose.Schema(
       default: "No",
     },
     invoiceNumber: String,
-    /* New field for Quotation total */
-    quotationTotal: Number, // From Quotation.grandTotal
-    /* Calculated field (not stored, computed on fetch) */
-    // pendingFromDays: computed as (today - dispatchedOn)
+    remarks: String, // New field
+    quotationTotal: Number,
     createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },

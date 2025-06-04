@@ -7,20 +7,18 @@ const DeliveryReport = require("../models/DeliveryReport");
 const Quotation = require("../models/Quotation");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-/* GET /api/admin/invoice-followup?view={new|old|closed} */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { view = "old" } = req.query; // Default to "old" view
+    const { view = "old" } = req.query;
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
+    today.setHours(0, 0, 0, 0);
 
     let rows = [];
 
     if (view === "new") {
-      // Fetch from JobSheets created today
       const jobSheets = await JobSheet.find({
         createdAt: { $gte: today },
-        isDraft: { $ne: true }, // Exclude drafts
+        isDraft: { $ne: true },
       }).lean();
 
       const quotationMap = Object.fromEntries(
@@ -41,19 +39,19 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           eventName: j.eventName,
           quotationNumber: j.referenceQuotation || "",
           crmName: j.crmIncharge || "",
-          product: j.items[0]?.product || "", // First item product
+          product: j.items[0]?.product || "",
           dispatchedOn,
           deliveredThrough: "",
           poStatus: j.poStatus || "",
           partialQty: 0,
           invoiceGenerated: "No",
           invoiceNumber: "",
+          remarks: "", // New field
           quotationTotal: quotationMap[j.referenceQuotation] || 0,
           pendingFromDays,
         };
       });
     } else {
-      // Fetch for "old" or "closed" view
       const dispatchRows = await DispatchSchedule.find({ status: "sent" }).lean();
       const savedFollowUps = await InvoiceFollowUp.find({}).lean();
       const jobSheets = await JobSheet.find({}).lean();
@@ -73,7 +71,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         quotations.map(q => [q.quotationNumber, q.grandTotal])
       );
 
-      // Merge records for "old" view
       const merged = dispatchRows.map(d => {
         const existing = followUpMap[d._id.toString()];
         const jobSheet = jobSheetMap[d.jobSheetNumber] || {};
@@ -102,12 +99,12 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           partialQty: existing?.partialQty || 0,
           invoiceGenerated: existing?.invoiceGenerated || "No",
           invoiceNumber: existing?.invoiceNumber || "",
+          remarks: existing?.remarks || "", // New field
           quotationTotal: quotationMap[jobSheet.referenceQuotation] || 0,
           pendingFromDays,
         };
       });
 
-      // Add manually created follow-ups (no dispatchId)
       const manualFollowUps = savedFollowUps
         .filter(f => !f.dispatchId)
         .map(f => {
@@ -125,7 +122,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
       rows = [...merged, ...manualFollowUps];
 
-      // Filter for "closed" view
       if (view === "closed") {
         rows = rows.filter(r => r.invoiceGenerated === "Yes");
       } else if (view === "old") {
@@ -140,12 +136,10 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/* CREATE */
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { dispatchId, quotationNumber } = req.body;
 
-    // Only check for existing record if dispatchId is provided
     if (dispatchId) {
       const exists = await InvoiceFollowUp.findOne({ dispatchId });
       if (exists) {
@@ -153,7 +147,6 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // Fetch quotationTotal if quotationNumber is provided
     let quotationTotal = 0;
     if (quotationNumber) {
       const quotation = await Quotation.findOne({ quotationNumber }).lean();
@@ -174,12 +167,10 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/* UPDATE */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { quotationNumber } = req.body;
 
-    // Fetch quotationTotal if quotationNumber is provided
     let quotationTotal = 0;
     if (quotationNumber) {
       const quotation = await Quotation.findOne({ quotationNumber }).lean();

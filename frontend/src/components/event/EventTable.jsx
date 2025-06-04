@@ -157,13 +157,7 @@ export default function EventTable({
                 {ev.latest.action || "—"}
               </td>
               <td className="px-3 py-2 border">
-                {ev.latest.discussion
-                  ? new Date(ev.latest.discussion).toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true
-                    })
-                  : "—"}
+                {ev.latest.discussion || "—"}
               </td>
               <td className="px-3 py-2 border">
                 {ev.latest.status || "—"}

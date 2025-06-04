@@ -43,6 +43,7 @@ function ManageOpportunity() {
   const [viewMode, setViewMode] = useState("list");
   const [logs, setLogs] = useState({ show: false, data: [], loading: false });
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
+  const [latestActions, setLatestActions] = useState({});
 
   const stages = [
     "Lead",
@@ -53,7 +54,6 @@ function ManageOpportunity() {
     "Won/Lost/Discontinued",
   ];
 
-  // Sorting handler
   const handleSort = (key) => {
     let direction = "asc";
     if (sortConfig.key === key && sortConfig.direction === "asc") {
@@ -70,7 +70,6 @@ function ManageOpportunity() {
     return d.toLocaleDateString("en-GB");
   };
 
-  // Fetch data based on active tab
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -111,7 +110,29 @@ function ManageOpportunity() {
     fetchData();
   }, [activeTab, isSuperAdmin, canViewAllOpp, searchTerm]);
 
-  // Fetch logs when dropdown is shown
+  useEffect(() => {
+    const activeData = getActiveData();
+    if (activeData.length > 0) {
+      fetchLatestActions(activeData.map((op) => op._id));
+    } else {
+      setLatestActions({});
+    }
+  }, [opportunities, activeTab]);
+
+  const fetchLatestActions = async (opportunityIds) => {
+    try {
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/opportunities/logs/latest`,
+        { opportunityIds },
+        { headers: getAuthHeaders() }
+      );
+      setLatestActions(res.data);
+    } catch (err) {
+      console.error("Error fetching latest actions:", err);
+      setLatestActions({});
+    }
+  };
+
   const fetchAllLogs = async () => {
     try {
       setLogs((prev) => ({ ...prev, loading: true }));
@@ -144,7 +165,6 @@ function ManageOpportunity() {
     }
   };
 
-  // Apply filters
   const getFilteredData = () => {
     let data = [...getActiveData()];
     if (filterCriteria.opportunityStage !== "All") {
@@ -213,7 +233,6 @@ function ManageOpportunity() {
     return data;
   };
 
-  // Sorted + filtered data
   const filteredData = getFilteredData();
   const sortedData = useMemo(() => {
     if (!sortConfig.key || !sortConfig.direction) return filteredData;
@@ -234,8 +253,6 @@ function ManageOpportunity() {
     });
     return sortConfig.direction === "desc" ? sorted.reverse() : sorted;
   }, [filteredData, sortConfig]);
-
-  // Drag end handler unchanged...
 
   const handleDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
@@ -270,20 +287,30 @@ function ManageOpportunity() {
     }
   };
 
-  // Excel export
   const exportToExcel = (data, fileName = "OpportunitiesData.xlsx") => {
-    const exportData = data.map((op) => ({
-      opportunityCode: op.opportunityCode,
-      createdDate: formatCreatedDate(op.createdAt),
-      account: op.account,
-      opportunityName: op.opportunityName,
-      opportunityOwner: op.opportunityOwner,
-      opportunityValue: op.opportunityValue,
-      closureDate: formatClosureDate(op.closureDate),
-      opportunityStage: op.opportunityStage,
-      opportunityStatus: op.opportunityStatus,
-      // ...other fields...
-    }));
+    const exportData = data.map((op) => {
+      const latestAction = latestActions[op._id] || {};
+      return {
+        opportunityCode: op.opportunityCode,
+        createdDate: formatCreatedDate(op.createdAt),
+        account: op.account,
+        opportunityName: op.opportunityName,
+        opportunityOwner: op.opportunityOwner,
+        opportunityValue: op.opportunityValue,
+        closureDate: formatClosureDate(op.closureDate),
+        opportunityStage: op.opportunityStage,
+        opportunityStatus: op.opportunityStatus,
+        latestAction: latestAction.action
+          ? `${latestAction.action}${latestAction.field ? ` (${latestAction.field})` : ""} by ${
+              latestAction.performedBy?.name || "N/A"
+            } at ${
+              latestAction.performedAt
+                ? new Date(latestAction.performedAt).toLocaleString()
+                : "Unknown date"
+            }`
+          : "No action recorded",
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
@@ -408,7 +435,7 @@ function ManageOpportunity() {
           stages={stages}
         />
       )}
-      <div className="border-t border-gray-300 mt-4">
+      <div className="border-t border-gray-200 mt-4">
         {viewMode === "list" ? (
           <OpportunityTable
             data={sortedData}
@@ -416,6 +443,7 @@ function ManageOpportunity() {
             formatCreatedDate={formatCreatedDate}
             handleSort={handleSort}
             sortConfig={sortConfig}
+            latestActions={latestActions}
           />
         ) : (
           <KanbanView

@@ -9,6 +9,7 @@ const ImageModule = require("docxtemplater-image-module-free");
 const Quotation = require("../models/Quotation");
 const Log = require("../models/Log");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+const mongoose = require("mongoose");
 
 async function createLog(action, oldValue, newValue, user, ip) {
   try {
@@ -28,7 +29,7 @@ async function createLog(action, oldValue, newValue, user, ip) {
 
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    console.log("Creating quotation with payload:", req.body);
+    // console.log("Creating quotation with payload:", req.body);
     const {
       opportunityNumber,
       catalogName,
@@ -97,7 +98,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       };
     });
 
-    console.log("Built items:", builtItems);
+    // console.log("Built items:", builtItems);
 
     const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
@@ -213,7 +214,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         })
       : existing.items;
 
-    console.log("Built items:", builtItems);
+    // console.log("Built items:", builtItems);
 
     const totalAmount = builtItems.reduce((sum, x) => sum + (x.amount || 0), 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + (x.total || 0), 0);
@@ -395,6 +396,78 @@ router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, 
   } catch (error) {
     console.error("Error updating remarks for quotation:", error);
     res.status(500).json({ message: "Server error updating remarks for quotation" });
+  }
+});
+
+router.post("/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { quotationIds } = req.body;
+    if (!Array.isArray(quotationIds) || quotationIds.length === 0) {
+      return res.status(400).json({ message: "Invalid or empty quotation IDs" });
+    }
+
+    // Convert string IDs to ObjectId
+    const objectIds = quotationIds.map(id => new mongoose.Types.ObjectId(id));
+
+    const logs = await Log.aggregate([
+      { $match: { field: "quotation" } },
+      {
+        $match: {
+          $or: [
+            { "newValue._id": { $in: objectIds } },
+            { "oldValue._id": { $in: objectIds } }
+          ]
+        }
+      },
+      { $sort: { performedAt: -1 } },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $ifNull: ["$newValue._id", null] },
+              "$newValue._id",
+              "$oldValue._id"
+            ]
+          },
+          latestLog: { $first: "$$ROOT" }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "latestLog.performedBy",
+          foreignField: "_id",
+          as: "performedBy"
+        }
+      },
+      { $unwind: { path: "$performedBy", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          quotationId: "$_id",
+          action: "$latestLog.action",
+          performedBy: { $ifNull: ["$performedBy", { email: "Unknown" }] },
+          performedAt: "$latestLog.performedAt"
+        }
+      }
+    ]);
+
+    const latestLogs = {};
+    quotationIds.forEach(id => {
+      const log = logs.find(l => l.quotationId.toString() === id);
+      latestLogs[id] = log ? {
+        action: log.action,
+        performedBy: log.performedBy,
+        performedAt: log.performedAt
+      } : {};
+    });
+
+    // console.log("Latest logs response:", JSON.stringify(latestLogs, null, 2));
+
+    res.json(latestLogs);
+  } catch (err) {
+    console.error("Error fetching latest logs:", err);
+    res.status(500).json({ message: "Server error fetching latest logs" });
   }
 });
 

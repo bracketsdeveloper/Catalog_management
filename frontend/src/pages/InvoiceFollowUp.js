@@ -14,12 +14,9 @@ export default function ManageInvoiceFollowUp() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const hasExportPermission = localStorage.getItem("permissions")?.includes("invoice-followup-export");
 
-  /* Raw data */
   const [rows, setRows] = useState([]);
   const [view, setView] = useState("old");
   const [loading, setLoading] = useState(false);
-
-  /* UI state */
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ field: "", dir: "asc" });
   const [editRow, setEditRow] = useState(null);
@@ -34,7 +31,6 @@ export default function ManageInvoiceFollowUp() {
 
   const handleSubmitInvoice = () => {};
 
-  /* Fetch + enrich */
   useEffect(() => {
     fetchRows();
     // eslint-disable-next-line
@@ -44,7 +40,6 @@ export default function ManageInvoiceFollowUp() {
     setLoading(true);
     try {
       if (view === "old") {
-        // Original logic for "Open Followup (old)"
         const [invRes, dispRes, jobsRes] = await Promise.all([
           axios.get(`${BACKEND_URL}/api/admin/invoice-followup?view=old`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -78,12 +73,12 @@ export default function ManageInvoiceFollowUp() {
               ...r,
               partialQty: Math.floor(partialQty),
               pendingFromDays,
+              remarks: r.remarks || "", // New field
               clientName: jsMap[r.jobSheetNumber] || r.clientName || "-",
             };
           })
         );
       } else {
-        // Logic for "new" and "closed" views
         const [invRes, jobsRes] = await Promise.all([
           axios.get(`${BACKEND_URL}/api/admin/invoice-followup?view=${view}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -101,6 +96,7 @@ export default function ManageInvoiceFollowUp() {
         setRows(
           inv.map(r => ({
             ...r,
+            remarks: r.remarks || "", // New field
             clientName: jsMap[r.jobSheetNumber] || r.clientName || "-",
           }))
         );
@@ -114,7 +110,6 @@ export default function ManageInvoiceFollowUp() {
     }
   }
 
-  /* Filtering */
   const filteredRows = useMemo(() => {
     return rows.filter(r => {
       const jsn = JSON.stringify(r).toLowerCase();
@@ -139,7 +134,6 @@ export default function ManageInvoiceFollowUp() {
     });
   }, [rows, search, filters]);
 
-  /* Sorting */
   const sortedRows = useMemo(() => {
     if (!sort.field) return filteredRows;
     return [...filteredRows].sort((a, b) => {
@@ -171,7 +165,6 @@ export default function ManageInvoiceFollowUp() {
       invoiceGenerated: "",
     });
 
-  /* Export */
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(
@@ -192,6 +185,7 @@ export default function ManageInvoiceFollowUp() {
         "Invoice Generated": r.invoiceGenerated,
         "Invoice #": r.invoiceNumber,
         "Pending From (days)": r.pendingFromDays,
+        Remarks: r.remarks, // New field
       }))
     );
     XLSX.utils.book_append_sheet(wb, ws, "InvoiceFollowUp");
@@ -212,7 +206,6 @@ export default function ManageInvoiceFollowUp() {
         </button>
       </div>
 
-      {/* Toolbar */}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           value={search}
@@ -266,7 +259,6 @@ export default function ManageInvoiceFollowUp() {
         )}
       </div>
 
-      {/* Filters Panel */}
       {showFilters && (
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -356,7 +348,6 @@ export default function ManageInvoiceFollowUp() {
 
       {showPopup && <InvoiceFollowUpManual onClose={() => setShowPopup(false)} />}
 
-      {/* Table */}
       {loading ? (
         <div className="text-center py-4">Loading...</div>
       ) : (
@@ -369,7 +360,6 @@ export default function ManageInvoiceFollowUp() {
         />
       )}
 
-      {/* Edit Modal */}
       {editRow && (
         <InvoiceFollowUpModal
           row={editRow}

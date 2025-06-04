@@ -18,43 +18,31 @@ export default function ManageJobSheets() {
   const [jobSheets, setJobSheets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Add isSuperAdmin state
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-
-  // Single search query state
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Date filter states
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [orderFromDate, setOrderFromDate] = useState(null);
   const [orderToDate, setOrderToDate] = useState(null);
   const [deliveryFromDate, setDeliveryFromDate] = useState(null);
   const [deliveryToDate, setDeliveryToDate] = useState(null);
-
-  // Sorting states
   const [sortConfig, setSortConfig] = useState({
     field: "jobSheetNumber",
-    order: "desc", // Default: descending order for JobSheet No.
+    order: "desc",
   });
-
-  // Modal for create
   const [modalOpen, setModalOpen] = useState(false);
   const [createOption, setCreateOption] = useState(null);
-
-  // Local states for the "Draft Panel"
   const [draftPanelOpen, setDraftPanelOpen] = useState(false);
   const [draftSheets, setDraftSheets] = useState([]);
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftError, setDraftError] = useState(null);
-
-  // Job sheet modal
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [latestActions, setLatestActions] = useState({});
 
-  // Add permissions check near the top with other state variables
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("export-crm");
+
+  const dateFilterRef = useRef(null);
 
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
@@ -66,9 +54,6 @@ export default function ManageJobSheets() {
     setSelectedJobSheetNumber(null);
   };
 
-  const dateFilterRef = useRef(null);
-
-  // Handle outside click to close date filter
   useEffect(() => {
     function handleClickOutside(event) {
       if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
@@ -81,15 +66,28 @@ export default function ManageJobSheets() {
     };
   }, []);
 
-  // Fetch job sheets on mount
   useEffect(() => {
     fetchJobSheets(false);
+    fetchUserEmail();
   }, []);
 
   useEffect(() => {
-    // Set isSuperAdmin based on localStorage
-    setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
-  }, []);
+    if (jobSheets.length > 0) {
+      fetchLatestActions(jobSheets.map(js => js._id));
+    }
+  }, [jobSheets]);
+
+  async function fetchUserEmail() {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    } catch (err) {
+      console.error("Error fetching user email:", err);
+    }
+  }
 
   async function fetchJobSheets(draftOnly = false) {
     try {
@@ -130,6 +128,21 @@ export default function ManageJobSheets() {
     }
   }
 
+  async function fetchLatestActions(jobSheetIds) {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/jobsheets/logs/latest`,
+        { jobSheetIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setLatestActions(res.data);
+    } catch (err) {
+      console.error("Error fetching latest actions:", err);
+      setLatestActions({});
+    }
+  }
+
   async function deleteJobSheet(id, isDraft) {
     try {
       const token = localStorage.getItem("token");
@@ -146,7 +159,6 @@ export default function ManageJobSheets() {
     }
   }
 
-  // Sorting logic
   const handleSort = (field, isDate = false) => {
     let order = "asc";
     if (sortConfig.field === field && sortConfig.order === "asc") {
@@ -174,7 +186,6 @@ export default function ManageJobSheets() {
     setJobSheets(sortedJobSheets);
   };
 
-  // Filtering logic with date range
   const filteredJobSheets = jobSheets
     .filter((js) => {
       if (!searchQuery) return true;
@@ -189,7 +200,6 @@ export default function ManageJobSheets() {
       );
     })
     .filter((js) => {
-      // Order Date filtering
       let orderDatePass = true;
       if (orderFromDate || orderToDate) {
         const orderDate = js.orderDate && isValid(new Date(js.orderDate)) ? new Date(js.orderDate) : null;
@@ -202,7 +212,6 @@ export default function ManageJobSheets() {
         }
       }
 
-      // Delivery Date filtering
       let deliveryDatePass = true;
       if (deliveryFromDate || deliveryToDate) {
         const deliveryDate = js.deliveryDate && isValid(new Date(js.deliveryDate)) ? new Date(js.deliveryDate) : null;
@@ -238,6 +247,8 @@ export default function ManageJobSheets() {
           ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
           : "Invalid date";
 
+      const latestAction = latestActions[js._id] || {};
+
       if (js.items && js.items.length > 0) {
         js.items.forEach((item) => {
           exportData.push({
@@ -260,7 +271,7 @@ export default function ManageJobSheets() {
             "Product Procured By": "",
             "Branding Target Date": "",
             "Branding Vendor": item.brandingVendor || "",
-            "Branding Type": item.brandingType || "",
+            "Branding Type": item.brandingType?.join(", ") || "",
             "Branding Vendor Contact": "",
             "Delivery Status": "",
             "QC Done By": "",
@@ -268,6 +279,9 @@ export default function ManageJobSheets() {
             "Delivered On": "",
             "PO Status": js.poStatus || "",
             "Invoice Submission": "",
+            "Latest Action": latestAction.action
+              ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+              : "No action recorded",
           });
         });
       } else {
@@ -299,6 +313,9 @@ export default function ManageJobSheets() {
           "Delivered On": "",
           "PO Status": js.poStatus || "",
           "Invoice Submission": "",
+          "Latest Action": latestAction.action
+            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+            : "No action recorded",
         });
       }
     });
@@ -313,21 +330,8 @@ export default function ManageJobSheets() {
     return date instanceof Date && !isNaN(date);
   };
 
-  async function fetchUserEmail() {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
-    } catch (err) {
-      console.error("Error fetching user email:", err);
-    }
-  }
-
   return (
     <div className="p-6">
-      {/* Header Actions */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-4 md:space-y-0">
         <h1 className="text-2xl font-bold">Manage Job Sheets</h1>
         <div className="flex space-x-2">
@@ -357,7 +361,6 @@ export default function ManageJobSheets() {
         </div>
       </div>
 
-      {/* Search and Date Filter Section */}
       <div className="mb-4 p-4 border rounded relative">
         <h2 className="font-bold mb-2">Search & Filter</h2>
         <div className="flex flex-col md:flex-row md:items-center md:space-x-4">
@@ -376,7 +379,6 @@ export default function ManageJobSheets() {
           </button>
         </div>
 
-        {/* Date Filter Panel */}
         {showDateFilter && (
           <div
             ref={dateFilterRef}
@@ -392,7 +394,6 @@ export default function ManageJobSheets() {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Order Date Filter */}
               <div>
                 <h4 className="font-medium mb-2">Order Date Range</h4>
                 <div className="flex space-x-2">
@@ -419,7 +420,6 @@ export default function ManageJobSheets() {
                   />
                 </div>
               </div>
-              {/* Delivery Date Filter */}
               <div>
                 <h4 className="font-medium mb-2">Delivery Date Range</h4>
                 <div className="flex space-x-2">
@@ -447,7 +447,6 @@ export default function ManageJobSheets() {
                 </div>
               </div>
             </div>
-            {/* Sorting Options */}
             <div className="mt-4">
               <h4 className="font-medium mb-2">Sort By</h4>
               <div className="flex space-x-4">
@@ -477,7 +476,6 @@ export default function ManageJobSheets() {
         )}
       </div>
 
-      {/* Main Content: Table of Production Sheets */}
       {loading ? (
         <div>Loading job sheets...</div>
       ) : error ? (
@@ -540,63 +538,72 @@ export default function ManageJobSheets() {
                   <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
                 )}
               </th>
+              <th className="p-2 text-left">Latest Action</th>
               <th className="p-2 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredJobSheets.map((js) => (
-              <tr key={js._id} className="border-b">
-                <td className="p-2 border">
-                  <button
-                    className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(js.jobSheetNumber);
-                    }}
-                  >
-                    {js.jobSheetNumber || "(No Number)"}
-                  </button>
-                </td>
-                <td className="p-2">{js.eventName || "N/A"}</td>
-                <td className="p-2">{js.clientName || "N/A"}</td>
-                <td className="p-2">{js.clientCompanyName || "N/A"}</td>
-                <td className="p-2">
-                  {js.orderDate && isValidDate(new Date(js.orderDate))
-                    ? format(new Date(js.orderDate), "dd/MM/yyyy")
-                    : "Invalid date"}
-                </td>
-                <td className="p-2">
-                  {js.deliveryDate && isValidDate(new Date(js.deliveryDate))
-                    ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
-                    : "Invalid date"}
-                </td>
-                <td className="p-2">
-                  <Dropdown autoClose="outside">
-                    <Dropdown.Toggle
-                      variant="link"
-                      id={`dropdown-actions-${js._id}`}
-                      className="text-gray-500 hover:text-gray-800"
+            {filteredJobSheets.map((js) => {
+              const latestAction = latestActions[js._id] || {};
+              return (
+                <tr key={js._id} className="border-b">
+                  <td className="p-2 border">
+                    <button
+                      className="border-b text-blue-500 hover:text-blue-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenModal(js.jobSheetNumber);
+                      }}
                     >
-                      <FaEllipsisV />
-                    </Dropdown.Toggle>
-                    <Dropdown.Menu className="bg-white shadow-lg rounded border border-gray-200">
-                      <Dropdown.Item
-                        onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
-                        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      {js.jobSheetNumber || "(No Number)"}
+                    </button>
+                  </td>
+                  <td className="p-2">{js.eventName || "N/A"}</td>
+                  <td className="p-2">{js.clientName || "N/A"}</td>
+                  <td className="p-2">{js.clientCompanyName || "N/A"}</td>
+                  <td className="p-2">
+                    {js.orderDate && isValidDate(new Date(js.orderDate))
+                      ? format(new Date(js.orderDate), "dd/MM/yyyy")
+                      : "Invalid date"}
+                  </td>
+                  <td className="p-2">
+                    {js.deliveryDate && isValidDate(new Date(js.deliveryDate))
+                      ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
+                      : "Invalid date"}
+                  </td>
+                  <td className="p-2">
+                    {latestAction.action
+                      ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+                      : "No action recorded"}
+                  </td>
+                  <td className="p-2">
+                    <Dropdown autoClose="outside">
+                      <Dropdown.Toggle
+                        variant="link"
+                        id={`dropdown-actions-${js._id}`}
+                        className="text-gray-500 hover:text-gray-800"
                       >
-                        View
-                      </Dropdown.Item>
-                      <Dropdown.Item
-                        onClick={() => navigate(`/admin-dashboard/create-jobsheet/${js._id}`)}
-                        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                      >
-                        Edit
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown>
-                </td>
-              </tr>
-            ))}
+                        <FaEllipsisV />
+                      </Dropdown.Toggle>
+                      <Dropdown.Menu className="bg-white shadow-lg rounded border border-gray-200">
+                        <Dropdown.Item
+                          onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                        >
+                          View
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          onClick={() => navigate(`/admin-dashboard/create-jobsheet/${js._id}`)}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                        >
+                          Edit
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -607,7 +614,6 @@ export default function ManageJobSheets() {
         onClose={handleCloseModal}
       />
 
-      {/* The Modal for "Create Jobsheet" */}
       {modalOpen && (
         <CreateJobsheetModal
           onClose={() => {
@@ -624,7 +630,6 @@ export default function ManageJobSheets() {
         />
       )}
 
-      {/* Draft Panel at bottom */}
       {draftPanelOpen && (
         <div
           className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50"
@@ -715,9 +720,6 @@ export default function ManageJobSheets() {
   );
 }
 
-/**
- * CreateJobsheetModal
- */
 function CreateJobsheetModal({
   onClose,
   onSelectOption,

@@ -2,13 +2,14 @@
 "use strict";
 
 const express = require("express");
-const router  = express.Router();
+const router = express.Router();
 const Catalog = require("../models/Catalog");
 const Product = require("../models/Product");
 const Opportunity = require("../models/Opportunity");
 const Log = require("../models/Log");
 const BrandingCharge = require("../models/BrandingCharge");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+const mongoose = require("mongoose");
 
 // Helper to create logs
 async function createLog(action, oldValue, newValue, user, ip) {
@@ -30,21 +31,21 @@ async function createLog(action, oldValue, newValue, user, ip) {
 // Builds the product sub-document, now including images & imageIndex
 function buildSubDoc(p, doc = {}) {
   return {
-    productId:        p.productId,
-    images:           p.images ?? doc.images ?? [],
-    imageIndex:       p.imageIndex ?? doc.imageIndex ?? 0,
-    productName:      p.productName ?? doc.productName ?? doc.name ?? "",
+    productId: p.productId,
+    images: p.images ?? doc.images ?? [],
+    imageIndex: p.imageIndex ?? doc.imageIndex ?? 0,
+    productName: p.productName ?? doc.productName ?? doc.name ?? "",
     ProductDescription: p.ProductDescription ?? doc.productDetails ?? "",
-    ProductBrand:     p.ProductBrand ?? doc.brandName ?? "",
-    color:            p.color ?? "",
-    size:             p.size ?? "",
-    quantity:         p.quantity ?? 1,
-    productCost:      p.productCost ?? doc.productCost ?? 0,
-    baseCost:         p.baseCost ?? doc.baseCost ?? doc.productCost ?? 0,
-    productGST:       p.productGST ?? doc.productGST ?? 0,
-    material:         p.material ?? doc.material ?? "",
-    weight:           p.weight ?? doc.weight ?? "",
-    brandingTypes:    Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
+    ProductBrand: p.ProductBrand ?? doc.brandName ?? "",
+    color: p.color ?? "",
+    size: p.size ?? "",
+    quantity: p.quantity ?? 1,
+    productCost: p.productCost ?? doc.productCost ?? 0,
+    baseCost: p.baseCost ?? doc.baseCost ?? doc.productCost ?? 0,
+    productGST: p.productGST ?? doc.productGST ?? 0,
+    material: p.material ?? doc.material ?? "",
+    weight: p.weight ?? doc.weight ?? "",
+    brandingTypes: Array.isArray(p.brandingTypes) ? p.brandingTypes : [],
     suggestedBreakdown: p.suggestedBreakdown ?? doc.suggestedBreakdown ?? {},
   };
 }
@@ -75,6 +76,7 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     const catalogs = await Catalog.find()
       .populate("products.productId")
       .populate("products.brandingTypes")
+      .sort({ createdAt: -1 })
       .exec();
     res.json(catalogs);
   } catch (err) {
@@ -110,7 +112,7 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     // fetch master product docs
     const ids = products.map(p => p.productId);
     const docs = await Product.find({ _id: { $in: ids } }).lean();
-    const map  = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
+    const map = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
 
     // build sub-docs
     const subs = products
@@ -120,17 +122,17 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
     const catalog = await Catalog.create({
       opportunityNumber: opportunityNumber ?? "",
       catalogName,
-      salutation:        salutation ?? "Mr.",
+      salutation: salutation ?? "Mr.",
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
-      products:          subs,
+      products: subs,
       fieldsToDisplay,
       priceRange,
-      margin:            margin ?? 0,
-      gst:               gst ?? 18,
-      createdBy:         req.user?.email || "",
+      margin: margin ?? 0,
+      gst: gst ?? 18,
+      createdBy: req.user?.email || "",
     });
 
     await createLog("create", null, catalog, req.user, req.ip);
@@ -185,9 +187,9 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     const old = catalog.toObject();
 
     // rebuild products
-    const ids  = products.map(p => p.productId);
+    const ids = products.map(p => p.productId);
     const docs = await Product.find({ _id: { $in: ids } }).lean();
-    const map  = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
+    const map = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
     catalog.products = products
       .filter(p => map[p.productId])
       .map(p => buildSubDoc(p, map[p.productId]));
@@ -196,15 +198,15 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     catalog.set({
       opportunityNumber: opportunityNumber ?? "",
       catalogName,
-      salutation:        salutation ?? catalog.salutation,
+      salutation: salutation ?? catalog.salutation,
       customerName,
       customerEmail,
       customerCompany,
       customerAddress,
       fieldsToDisplay,
       priceRange,
-      margin:            margin ?? catalog.margin,
-      gst:               gst ?? catalog.gst,
+      margin: margin ?? catalog.margin,
+      gst: gst ?? catalog.gst,
     });
 
     const updated = await catalog.save();
@@ -263,6 +265,76 @@ router.put("/catalogs/:id/remarks", authenticate, authorizeAdmin, async (req, re
   } catch (err) {
     console.error("Error updating remarks:", err);
     res.status(500).json({ message: "Server error updating remarks" });
+  }
+});
+
+/** GET latest logs for catalogs */
+router.post("/catalogs/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { catalogIds } = req.body;
+    if (!Array.isArray(catalogIds) || catalogIds.length === 0) {
+      return res.status(400).json({ message: "Invalid or empty catalog IDs" });
+    }
+
+    const objectIds = catalogIds.map(id => new mongoose.Types.ObjectId(id));
+
+    const logs = await Log.aggregate([
+      { $match: { field: "catalog" } },
+      {
+        $match: {
+          $or: [
+            { "newValue._id": { $in: objectIds } },
+            { "oldValue._id": { $in: objectIds } }
+          ]
+        }
+      },
+      { $sort: { performedAt: -1 } },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $ifNull: ["$newValue._id", null] },
+              "$newValue._id",
+              "$oldValue._id"
+            ]
+          },
+          latestLog: { $first: "$$ROOT" }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "latestLog.performedBy",
+          foreignField: "_id",
+          as: "performedBy"
+        }
+      },
+      { $unwind: { path: "$performedBy", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          catalogId: "$_id",
+          action: "$latestLog.action",
+          performedBy: { $ifNull: ["$performedBy", { email: "Unknown" }] },
+          performedAt: "$latestLog.performedAt"
+        }
+      }
+    ]);
+
+    const latestLogs = {};
+    catalogIds.forEach(id => {
+      const log = logs.find(l => l.catalogId.toString() === id);
+      latestLogs[id] = log ? {
+        action: log.action,
+        performedBy: log.performedBy,
+        performedAt: log.performedAt
+      } : {};
+    });
+
+    res.json(latestLogs);
+  } catch (err) {
+    console.error("Error fetching latest logs:", err);
+    res.status(500).json({ message: "Server error fetching latest logs" });
   }
 });
 
