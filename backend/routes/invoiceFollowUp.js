@@ -25,32 +25,35 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         (await Quotation.find({}).lean()).map(q => [q.quotationNumber, q.grandTotal])
       );
 
-      rows = jobSheets.map(j => {
-        const dispatchedOn = j.deliveryDate || today;
-        const pendingFromDays = Math.floor(
-          (today - new Date(dispatchedOn)) / (1000 * 60 * 60 * 24)
-        );
+      rows = jobSheets.flatMap(j => {
+        // Create a row for each product in the items array
+        return (j.items || []).map(item => {
+          const dispatchedOn = j.deliveryDate || today;
+          const pendingFromDays = Math.floor(
+            (today - new Date(dispatchedOn)) / (1000 * 60 * 60 * 24)
+          );
 
-        return {
-          orderDate: j.orderDate,
-          jobSheetNumber: j.jobSheetNumber,
-          clientCompanyName: j.clientCompanyName,
-          clientName: j.clientName,
-          eventName: j.eventName,
-          quotationNumber: j.referenceQuotation || "",
-          crmName: j.crmIncharge || "",
-          product: j.items[0]?.product || "",
-          dispatchedOn,
-          deliveredThrough: "",
-          poStatus: j.poStatus || "",
-          partialQty: 0,
-          invoiceGenerated: "No",
-          invoiceNumber: "",
-          remarks: "", // New field
-          quotationTotal: quotationMap[j.referenceQuotation] || 0,
-          pendingFromDays,
-        };
-      });
+          return {
+            orderDate: j.orderDate,
+            jobSheetNumber: j.jobSheetNumber,
+            clientCompanyName: j.clientCompanyName,
+            clientName: j.clientName,
+            eventName: j.eventName,
+            quotationNumber: j.referenceQuotation || "",
+            crmName: j.crmIncharge || "",
+            product: item.product || "", // Individual product
+            dispatchedOn,
+            deliveredThrough: "",
+            poStatus: j.poStatus || "",
+            partialQty: 0,
+            invoiceGenerated: "No",
+            invoiceNumber: "",
+            remarks: "", // New field
+            quotationTotal: quotationMap[j.referenceQuotation] || 0,
+            pendingFromDays,
+          };
+        });
+      }).filter(row => row.product); // Filter out rows with empty products
     } else {
       const dispatchRows = await DispatchSchedule.find({ status: "sent" }).lean();
       const savedFollowUps = await InvoiceFollowUp.find({}).lean();
