@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -35,7 +33,7 @@ export default function ManagePaymentFollowUp() {
   useEffect(() => {
     fetchRows();
     // eslint-disable-next-line
-  }, []);
+  }, [search]);
 
   async function fetchRows() {
     setLoading(true);
@@ -43,7 +41,7 @@ export default function ManagePaymentFollowUp() {
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/payment-followup`, {
         headers: { Authorization: `Bearer ${token}` },
-        params: { search }, // Include search param for filtering
+        params: { search },
       });
       console.log("API Response:", res.data);
       if (!res.data || res.data.length === 0) {
@@ -104,8 +102,21 @@ export default function ManagePaymentFollowUp() {
       let av = a[sort.field] ?? "";
       let bv = b[sort.field] ?? "";
 
+      // Handle latestFollowUp
+      if (sort.field === "latestFollowUp") {
+        const aFU = a.followUps?.reduce((latest, current) =>
+          new Date(current.updatedOn) > new Date(latest.updatedOn) ? current : latest,
+          a.followUps[0]
+        );
+        const bFU = b.followUps?.reduce((latest, current) =>
+          new Date(current.updatedOn) > new Date(latest.updatedOn) ? current : latest,
+          b.followUps[0]
+        );
+        av = aFU ? new Date(aFU.date) : new Date(0);
+        bv = bFU ? new Date(bFU.date) : new Date(0);
+      }
       // Handle dates
-      if (
+      else if (
         sort.field === "invoiceDate" ||
         sort.field === "dueDate" ||
         sort.field === "invoiceMailedOn"
@@ -118,7 +129,8 @@ export default function ManagePaymentFollowUp() {
         sort.field === "invoiceAmount" ||
         sort.field === "totalPaymentReceived" ||
         sort.field === "discountAllowed" ||
-        sort.field === "TDS"
+        sort.field === "TDS" ||
+        sort.field === "overDueSince"
       ) {
         av = parseFloat(av) || 0;
         bv = parseFloat(bv) || 0;
@@ -143,7 +155,7 @@ export default function ManagePaymentFollowUp() {
   };
 
   const handleFilterChange = (field, subField, value) => {
-    console.log(`Filter change: ${field}${subField ? `.${subField}` : ''} = ${value}`);
+    console.log(`Filter change: ${field}${subField ? `.${subField}` : ""} = ${value}`);
     if (subField) {
       setFilters((p) => ({ ...p, [field]: { ...p[field], [subField]: value } }));
     } else {
@@ -207,7 +219,6 @@ export default function ManagePaymentFollowUp() {
           onChange={(e) => {
             console.log("Search term:", e.target.value);
             setSearch(e.target.value);
-            fetchRows(); // Refetch on search change
           }}
           placeholder="Search…"
           className="border border-purple-300 rounded p-2 text-xs flex-grow md:flex-none md:w-1/3"
@@ -337,4 +348,3 @@ function fmt(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
 }
-

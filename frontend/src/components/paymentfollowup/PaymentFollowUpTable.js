@@ -37,7 +37,7 @@ export default function PaymentFollowUpTable({
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // header-level filters
+  // Header-level filters
   const [headerFilters, setHeaderFilters] = useState({
     jobSheetNumber: "",
     clientCompanyName: "",
@@ -59,23 +59,31 @@ export default function PaymentFollowUpTable({
   const handleFilterChange = (field, value) =>
     setHeaderFilters((h) => ({ ...h, [field]: value }));
 
-  // apply header filters
+  // Apply header filters
   const filteredRows = useMemo(() => {
-    return rows.filter((r) =>
-      Object.entries(headerFilters).every(([field, value]) => {
+    return rows.filter((r) => {
+      return Object.entries(headerFilters).every(([field, value]) => {
         if (!value) return true;
         let cell = "";
         if (field === "latestFollowUp") {
           const fu = getLatestFollowUp(r.followUps);
-          cell = fu ? fu.date : "";
+          cell = fu ? fmt(fu.date) : "";
         } else if (field === "paymentReceived") {
-          cell = r.paymentReceived.reduce((sum, p) => sum + (p.amount || 0), 0);
+          cell = r.totalPaymentReceived?.toString() || "0";
+        } else if (field === "invoiceAmount" || field === "discountAllowed" || field === "TDS") {
+          cell = r[field]?.toString() || "0";
+        } else if (
+          field === "invoiceDate" ||
+          field === "dueDate" ||
+          field === "invoiceMailedOn"
+        ) {
+          cell = r[field] ? fmt(r[field]) : "";
         } else {
-          cell = r[field] ?? "";
+          cell = r[field]?.toString() || "";
         }
-        return cell.toString().toLowerCase().includes(value.toLowerCase());
-      })
-    );
+        return cell.toLowerCase().includes(value.toLowerCase());
+      });
+    });
   }, [rows, headerFilters]);
 
   const getLatestFollowUp = (followUps = []) => {
@@ -103,77 +111,107 @@ export default function PaymentFollowUpTable({
             <HeadCell
               label="Job Sheet #"
               field="jobSheetNumber"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Client Company"
               field="clientCompanyName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Client Name"
               field="clientName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice #"
               field="invoiceNumber"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Date"
               field="invoiceDate"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Amount"
               field="invoiceAmount"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Mailed"
               field="invoiceMailed"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Mailed On"
               field="invoiceMailedOn"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Due Date"
               field="dueDate"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Over Due Since"
               field="overDueSince"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Latest Follow-Up"
               field="latestFollowUp"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Payment Received"
-              field="paymentReceived"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              field="totalPaymentReceived"
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Discount Allowed"
               field="discountAllowed"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="TDS"
               field="TDS"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Remarks"
               field="remarks"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <th className="px-2 py-1 border border-gray-300 bg-gray-50">Actions</th>
           </tr>
@@ -190,7 +228,7 @@ export default function PaymentFollowUpTable({
               "dueDate",
               "overDueSince",
               "latestFollowUp",
-              "paymentReceived",
+              "totalPaymentReceived",
               "discountAllowed",
               "TDS",
               "remarks",
@@ -212,12 +250,8 @@ export default function PaymentFollowUpTable({
           {filteredRows.length > 0 ? (
             filteredRows.map((r) => {
               const latestFU = getLatestFollowUp(r.followUps);
-              const totalPayment = r.paymentReceived.reduce(
-                (sum, p) => sum + (p.amount || 0),
-                0
-              );
               return (
-                <tr key={`${r._id}-${r.invoiceNumber}`} className="hover:bg-gray-100">
+                <tr key={r._id || r.jobSheetNumber} className="hover:bg-gray-100">
                   <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
                     <button
                       className="border-b text-blue-500 hover:text-blue-700"
@@ -244,7 +278,7 @@ export default function PaymentFollowUpTable({
                   >
                     {latestFU ? fmt(latestFU.date) : "-"}
                   </td>
-                  <Cell val={totalPayment} />
+                  <Cell val={r.totalPaymentReceived} />
                   <Cell val={r.discountAllowed} />
                   <Cell val={r.TDS} />
                   <Cell val={r.remarks} />
@@ -259,7 +293,7 @@ export default function PaymentFollowUpTable({
           ) : (
             <tr>
               <td
-                colSpan={16} // Updated for new columns
+                colSpan={16}
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records
@@ -321,7 +355,7 @@ export default function PaymentFollowUpTable({
 function Cell({ val }) {
   return (
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
-      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
+      {val instanceof Date || (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val))
         ? fmt(val)
         : val ?? "-"}
     </td>
