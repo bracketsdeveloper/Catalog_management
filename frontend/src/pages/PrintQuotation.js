@@ -151,7 +151,23 @@ export default function PrintQuotation() {
   };
 
   const formatCurrency = (amount) => {
-    return amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    // Convert to string and split into parts (integer and decimal)
+    const parts = amount.toFixed(2).split('.');
+    let integerPart = parts[0];
+    const decimalPart = parts[1];
+
+    // Handle negative numbers (if any)
+    const isNegative = integerPart.startsWith('-');
+    if (isNegative) integerPart = integerPart.slice(1);
+
+    // Format the integer part with Indian-style commas
+    const lastThree = integerPart.slice(-3);
+    const otherDigits = integerPart.slice(0, -3);
+    const formattedOtherDigits = otherDigits.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+    integerPart = formattedOtherDigits ? `${formattedOtherDigits},${lastThree}` : lastThree;
+
+    // Reattach negative sign and decimal part
+    return `${isNegative ? '-' : ''}${integerPart}.${decimalPart}`;
   };
 
   return (
