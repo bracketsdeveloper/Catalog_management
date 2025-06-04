@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -36,7 +35,19 @@ export default function PrintQuotation() {
           productGST: parseFloat(item.productGST) || 0,
           product: item.product || "",
         }));
-      setQuotation({ ...data, items: sanitizedItems });
+      // Format terms to add two spaces between words
+      const formattedTerms = (data.terms || []).map(term => ({
+        ...term,
+        content: term.content
+          .replace(/([a-z])([A-Z0-9])/g, '$1  $2') // Add two spaces between lowercase and uppercase/number
+          .replace(/([0-9])([A-Za-z])/g, '$1  $2') // Add two spaces between number and letter
+          .replace(/\s+/g, '  ') // Replace all single spaces with two spaces
+          .replace(/([a-z])([A-Z0-9])/g, '$1  $2') // Add space between lowercase and uppercase/number
+          .replace(/([0-9])([A-Za-z])/g, '$1  $2') // Add space between number and letter
+          .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+          .trim()
+      }));
+      setQuotation({ ...data, items: sanitizedItems, terms: formattedTerms });
       setError(null);
     } catch (err) {
       console.error("Error fetching quotation:", err);
@@ -76,7 +87,7 @@ export default function PrintQuotation() {
     });
 
     const opt = {
-      margin: [30, 5, 45, 5], // Restored original margins
+      margin: [30, 5, 45, 5],
       filename: `Quotation-${quotation?.quotationNumber || ""} (${quotation?.customerCompany || ""}).pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { 
@@ -92,7 +103,9 @@ export default function PrintQuotation() {
         mode: ['css'],
         avoid: ['.terms-section', '.footer-block'],
         before: '.page-break-before',
-        after: ['.page-break-after', '.table-container tr:nth-child(4)'] // Break after 4th row
+        after: quotation?.items?.length > 5 
+          ? ['.page-break-after', '.table-container tr:nth-child(5)', '.table-container tr:nth-child(12)', '.table-container tr:nth-child(19)', '.table-container tr:nth-child(26)']
+          : ['.page-break-after']
       }
     };
 
@@ -162,13 +175,20 @@ export default function PrintQuotation() {
               page-break-before: auto !important;
               margin-top: 0 !important;
             }
-            .table-container tr:nth-child(4) { 
-              page-break-after: always !important; /* Break after 4th row */
+            .table-container.many-rows tr:nth-child(5) { 
+              page-break-after: always !important; /* First page: 5 rows */
+            }
+            .table-container.many-rows tr:nth-child(12),
+            .table-container.many-rows tr:nth-child(19),
+            .table-container.many-rows tr:nth-child(26) { 
+              page-break-after: always !important; /* Subsequent pages: 7 rows */
             }
             .table-container thead { 
-              display: table-header-group; /* Headers only on first page */
+              display: table-header-group;
             }
-            table { border-color: #333 !important; border-width: 1.5px !important; }
+            table { 
+              border: none !important;
+            }
             
             .company-header {
               border-bottom: 1px solid #ccc;
@@ -179,19 +199,20 @@ export default function PrintQuotation() {
             .table-container th {
               padding: 4px 3px !important;
               font-size: 8pt !important;
-              font-family: Arial, Helvetica, sans-serif !important;
+              font-family: Calibri, sans-serif !important;
               color: #0C2D5E !important;
               white-space: nowrap !important;
               background-color: #E6F0FA !important;
-              border: 1.5px solid #333 !important;
+              border: 0.25px solid #333 !important;
+              text-align: center !important;
             }
 
             .table-container td {
               padding: 4px 3px !important;
               font-size: 8pt !important;
-              font-family: Arial, Helvetica, sans-serif !important;
+              font-family: Calibri, sans-serif !important;
               color: #1A4A7B !important;
-              border: 1.5px solid #333 !important;
+              border: 0.25px solid #333 !important;
             }
             
             .product-image {
@@ -221,48 +242,57 @@ export default function PrintQuotation() {
               position: relative;
               margin-top: 0.5in;
               width: 100%;
-              page-break-before: always !important; /* Footer on new page */
+              page-break-before: always !important;
             }
 
             .bordered-text {
-              font-family: Arial, Helvetica, sans-serif !important;
+              font-family: Calibri, sans-serif !important;
               font-size: 9pt !important;
               font-style: italic !important;
               color: #0C2D5E !important;
               text-align: center !important;
-              border: 1.5px solid #333 !important;
-              padding: 8px !important;
-              margin: 8px auto !important;
+              border: 0.5px solid #333 !important;
+              align-items: center !important;
               background-color: #E6F0FA !important;
-              max-width: 90%;
+              width: 100% !important;
+              box-sizing: border-box !important;
               display: block;
             }
             
             .table-totals {
               font-weight: bold !important;
               background-color: #F0F7FF !important;
+              border: none !important;
+            }
+
+            .table-totals td {
+              text-align: center !important;
+              border: 0.25px solid #333 !important;
             }
           }
 
           .table-container table {
-            font-family: Arial, Helvetica, sans-serif !important;
+            font-family: Calibri, sans-serif !important;
             font-size: 8pt !important;
             border-collapse: collapse;
+            width: 100%;
+            border: none !important;
           }
 
           .table-container th {
             background-color: #E6F0FA;
-            border: 1.5px solid #333;
+            border: 0.25px solid #333 !important;
             color: #0C2D5E;
+            text-align: center;
           }
           
           .table-container td {
-            border: 1.5px solid #333;
+            border: 0.25px solid #333 !important;
             color: #1A4A7B;
           }
 
           .header-section, .customer-info, .totals-section, .terms-section, .footer-block {
-            font-family: Arial, Helvetica, sans-serif !important;
+            font-family: Calibri, sans-serif !important;
             color: #1A4A7B !important;
           }
 
@@ -290,22 +320,29 @@ export default function PrintQuotation() {
           }
           
           .bordered-text {
-            font-family: Arial, Helvetica, sans-serif !important;
+            font-family: Calibri, sans-serif !important;
             font-size: 9pt !important;
             font-style: italic !important;
             color: #0C2D5E !important;
             text-align: center !important;
-            border: 1.5px solid #333;
+            border: 0.5px solid #333;
             padding: 8px;
             margin: 8px auto;
             background-color: #E6F0FA;
-            max-width: 90%;
+            width: 100%;
+            box-sizing: border-box;
             display: block;
           }
           
           .table-totals {
             font-weight: bold;
             background-color: #F0F7FF;
+          }
+
+          .terms-section .text-xs {
+            font-family: Calibri, sans-serif !important;
+            font-size: 10pt !important;
+            line-height: 1.4 !important;
           }
         `}
       </style>
@@ -329,8 +366,10 @@ export default function PrintQuotation() {
               <div className="quotation-number">
                 Quotation No: {quotation.quotationNumber}
               </div>
-              <div className="gstin-text ">GSTIN: 29ABCFA9924A1ZL</div>
             </div>
+          </div>
+          <div className="text-right">
+            <div className="gstin-text font-bold">GSTIN: 29ABCFA9924A1ZL</div>
           </div>
         </div>
 
@@ -340,24 +379,27 @@ export default function PrintQuotation() {
           </div>
           <div className="company-address">{quotation.customerCompany}</div>
           <div className="company-address">{quotation.customerAddress}</div>
+          <div className="company-address">&nbsp;</div>
+          <div className="company-address font-bold">Quotation: {quotation.catalogName}</div>
+          <div className="company-address">&nbsp;</div>
         </div>
       </div>
 
-      <div className="print-section table-container mt-2">
+      <div className={`print-section table-container mt-2 ${quotation.items.length > 5 ? 'many-rows' : ''}`}>
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="border px-2 py-1 text-center sl-no-cell">Sl_No.</th>
-              <th className="border px-2 py-1 text-center image-cell">Image</th>
-              <th className="border px-2 py-1 text-center product-cell">Product</th>
+              <th className="border px-2 py-2 text-center sl-no-cell">Sl_No.</th>
+              <th className="border px-2 py-2 text-center image-cell">Image</th>
+              <th className="border px-2 py-2 text-center product-cell">Product</th>
               {quotation.displayHSNCodes && (
-                <th className="border px-2 py-1 text-center hsn-cell">HSN</th>
+                <th className="border px-2 py-2 text-center hsn-cell">HSN</th>
               )}
-              <th className="border px-2 py-1 text-center quantity-cell">Qty</th>
-              <th className="border px-2 py-1 text-center rate-cell">Rate</th>
-              <th className="border px-2 py-1 text-center amount-cell">Amount</th>
-              <th className="border px-2 py-1 text-center gst-cell">GST(%)</th>
-              <th className="border px-2 py-1 text-center total-cell">Total</th>
+              <th className="border px-2 py-2 text-center quantity-cell">Qty</th>
+              <th className="border px-2 py-2 text-center rate-cell">Rate</th>
+              <th className="border px-2 py-2 text-center amount-cell">Amount</th>
+              <th className="border px-2 py-2 text-center gst-cell">GST(%)</th>
+              <th className="border px-2 py-2 text-center total-cell">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -411,14 +453,14 @@ export default function PrintQuotation() {
               <tr className="table-totals">
                 <td 
                   colSpan={quotation.displayHSNCodes ? 5 : 4} 
-                  className="border px-2 py-1 text-center"
+                  className="border px-2 py-2 text-center"
                 >
                   Total
                 </td>
-                <td className="border px-2 py-1"></td>
-                <td className="border px-2 py-1 text-center">₹{formatCurrency(computedAmount(quotation))}</td>
-                <td className="border px-2 py-1"></td>
-                <td className="border px-2 py-1 text-center">₹{formatCurrency(computedTotal(quotation))}</td>
+                <td className="border px-2 py-2"></td>
+                <td className="border px-2 py-2 text-center">₹{formatCurrency(computedAmount(quotation))}</td>
+                <td className="border px-2 py-2"></td>
+                <td className="border px-2 py-2 text-center">₹{formatCurrency(computedTotal(quotation))}</td>
               </tr>
             </tfoot>
           )}
@@ -426,7 +468,7 @@ export default function PrintQuotation() {
       </div>
 
       <div className="print-section terms-section mt-4 border-t pt-2">
-        <div className="bordered-text font-bold">
+        <div className="bordered-text flex justify-center text-center  font-bold">
           Product subject to availability at the time of order confirmation
         </div>
         {quotation.terms?.length > 0 &&
@@ -436,7 +478,7 @@ export default function PrintQuotation() {
               <div className="text-xs">{term.content}</div>
             </div>
           ))}
-        <div className="bordered-text font-bold">
+        <div className="bordered-text flex justify-center text-center  font-bold">
           Rates may vary in case there is a change in specifications / quantity / timelines
         </div>
       </div>
