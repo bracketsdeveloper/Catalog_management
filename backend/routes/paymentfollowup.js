@@ -11,9 +11,9 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   const { search = "" } = req.query;
   try {
-    // console.log("Fetching Payment Follow-Up data with params:", { search });
+    console.log("Fetching Payment Follow-Up data with params:", { search });
 
-    // Step 1: Fetch all required data without pagination
+    // Step 1: Fetch all required data
     const [invoiceFollowUps, dispatchRows, invoiceSummaries, savedFollowUps, jobSheets, companies] =
       await Promise.all([
         InvoiceFollowUp.find({
@@ -30,29 +30,27 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         Company.find({}).lean(),
       ]);
 
-    // console.log({
-    //   invoiceFollowUps: invoiceFollowUps.length,
-    //   dispatchRows: dispatchRows.length,
-    //   invoiceSummaries: invoiceSummaries.length,
-    //   savedFollowUps: savedFollowUps.length,
-    //   jobSheets: jobSheets.length,
-    //   companies: companies.length,
-    // });
+    console.log({
+      invoiceFollowUps: invoiceFollowUps.length,
+      dispatchRows: dispatchRows.length,
+      invoiceSummaries: invoiceSummaries.length,
+      savedFollowUps: savedFollowUps.length,
+      jobSheets: jobSheets.length,
+      companies: companies.length,
+    });
 
-    if (!invoiceFollowUps.length || !dispatchRows.length) {
-      // console.log("No InvoiceFollowUp or DispatchSchedule records found.");
+    if (!invoiceFollowUps.length) {
+      console.log("No InvoiceFollowUp records found.");
       return res.json([]);
     }
 
     // Step 2: Create lookup maps
-    const followUpMap = {};
-    for (const f of invoiceFollowUps) {
-      if (f.jobSheetNumber) followUpMap[f.jobSheetNumber] = f;
-    }
-
     const dispatchMap = {};
     for (const d of dispatchRows) {
-      dispatchMap[d._id.toString()] = d;
+      if (d.jobSheetNumber) {
+        // Store only the first dispatchId per jobSheetNumber to avoid product duplication
+        dispatchMap[d.jobSheetNumber] = dispatchMap[d.jobSheetNumber] || d._id.toString();
+      }
     }
 
     const summaryMap = {};
@@ -62,8 +60,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
     const paymentMap = {};
     for (const p of savedFollowUps) {
-      if (p.jobSheetNumber) {
-        paymentMap[p.jobSheetNumber] = p;
+      if (p.jobSheetNumber && p.invoiceNumber) {
+        paymentMap[`${p.jobSheetNumber}-${p.invoiceNumber}`] = p;
       }
     }
 
@@ -79,111 +77,99 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       companyMap[c.name] = c.paymentTerms;
     }
 
-    // Step 3: Aggregate by jobSheetNumber
-    const jobSheetNumbers = [...new Set(invoiceFollowUps.map(f => f.jobSheetNumber))];
-    // console.log(`Unique jobSheetNumbers: ${jobSheetNumbers.length}`);
-
+    // Step 3: Aggregate by jobSheetNumber and invoiceNumber
     const formatDate = (date) => (date ? new Date(date).toISOString().split("T")[0] : null);
 
-    const merged = jobSheetNumbers.map(jobSheetNumber => {
-      const followUp = followUpMap[jobSheetNumber];
-      if (!followUp || !followUp.dispatchId || !dispatchMap[followUp.dispatchId.toString()]) {
-        // console.log(`No valid followUp or dispatch for jobSheetNumber: ${jobSheetNumber}`);
-        return null;
+    const merged = invoiceFollowUps.flatMap(followUp => {
+      if (!followUp.jobSheetNumber || !followUp.dispatchId) {
+        console.log(`Skipping followUp with missing jobSheetNumber or dispatchId: ${followUp._id}`);
+        return [];
       }
 
-      const dispatchId = followUp.dispatchId.toString();
       const invoiceNumbers = followUp.invoiceNumber
         ? followUp.invoiceNumber.split(",").map(n => n.trim()).filter(Boolean)
         : [];
 
-      // Aggregate invoice data
-      let invoiceAmount = 0;
-      let invoiceDate = null;
-      let invoiceMailed = "No";
-      let invoiceMailedOn = null;
-      let dueDate = null;
+      if (!invoiceNumbers.length) {
+        console.log(`No invoiceNumbers for followUp: ${followUp._id}`);
+        return [];
+      }
 
-      invoiceNumbers.forEach(invoiceNumber => {
+      const dispatchId = dispatchMap[followUp.jobSheetNumber];
+      if (!dispatchId) {
+        console.log(`No dispatchId found for jobSheetNumber: ${followUp.jobSheetNumber}`);
+        return [];
+      }
+
+      return invoiceNumbers.map(invoiceNumber => {
         const summary = summaryMap[invoiceNumber] || {};
-        invoiceAmount += parseFloat(summary.invoiceAmount) || 0;
-        if (summary.invoiceDate) {
-          const currentInvoiceDate = new Date(summary.invoiceDate);
-          if (!invoiceDate || currentInvoiceDate < invoiceDate) {
-            invoiceDate = currentInvoiceDate;
+        const paymentKey = `${followUp.jobSheetNumber}-${invoiceNumber}`;
+        const existing = paymentMap[paymentKey] || {};
+
+        // Calculate dueDate
+        const invoiceDate = summary.invoiceDate ? new Date(summary.invoiceDate) : null;
+        let dueDate = existing.dueDate ? new Date(existing.dueDate) : invoiceDate;
+        if (invoiceDate && followUp.clientCompanyName && companyMap[followUp.clientCompanyName]) {
+          const terms = companyMap[followUp.clientCompanyName];
+          const days = parseInt(terms, 10);
+          if (!isNaN(days)) {
+            dueDate = new Date(invoiceDate);
+            dueDate.setDate(invoiceDate.getDate() + days);
           }
         }
-        if (summary.invoiceMailed === true) invoiceMailed = "Yes";
-        if (summary.invoiceMailedOn) {
-          const currentMailedOn = new Date(summary.invoiceMailedOn);
-          if (!invoiceMailedOn || currentMailedOn < invoiceMailedOn) {
-            invoiceMailedOn = currentMailedOn;
-          }
+
+        // Calculate overDueSince
+        const today = new Date();
+        const overDueSince = dueDate
+          ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
+          : null;
+
+        // Handle paymentReceived
+        let totalPaymentReceived = 0;
+        let paymentReceivedArray = [];
+        if (Array.isArray(existing.paymentReceived)) {
+          paymentReceivedArray = existing.paymentReceived;
+          totalPaymentReceived = paymentReceivedArray.reduce(
+            (sum, p) => sum + (p.amount || 0),
+            0
+          );
+        } else if (typeof existing.paymentReceived === "number" && existing.paymentReceived > 0) {
+          paymentReceivedArray = [
+            {
+              paymentDate: existing.updatedAt || new Date(),
+              referenceNumber: `LEGACY-${existing._id || invoiceNumber}`,
+              bankName: "Unknown",
+              amount: existing.paymentReceived,
+              updatedOn: existing.updatedAt || new Date(),
+            },
+          ];
+          totalPaymentReceived = existing.paymentReceived;
         }
+
+        return {
+          _id: existing._id || undefined,
+          dispatchId,
+          jobSheetNumber: followUp.jobSheetNumber,
+          clientCompanyName: followUp.clientCompanyName || "",
+          clientName: jobSheetMap[followUp.jobSheetNumber]?.clientName || "",
+          invoiceNumber,
+          invoiceDate: formatDate(summary.invoiceDate),
+          invoiceAmount: parseFloat(summary.invoiceAmount) || 0,
+          invoiceMailed: summary.invoiceMailed === true ? "Yes" : "No",
+          invoiceMailedOn: formatDate(summary.invoiceMailedOn),
+          dueDate: formatDate(dueDate),
+          overDueSince,
+          followUps: existing.followUps || [],
+          paymentReceived: paymentReceivedArray,
+          totalPaymentReceived,
+          discountAllowed: parseFloat(existing.discountAllowed) || 0,
+          TDS: parseFloat(existing.TDS) || 0,
+          remarks: existing.remarks || "",
+        };
       });
-
-      // Calculate dueDate
-      if (invoiceDate && followUp.clientCompanyName && companyMap[followUp.clientCompanyName]) {
-        const terms = companyMap[followUp.clientCompanyName];
-        const days = parseInt(terms, 10);
-        if (!isNaN(days)) {
-          dueDate = new Date(invoiceDate);
-          dueDate.setDate(invoiceDate.getDate() + days);
-        }
-      }
-
-      // Calculate overDueSince
-      const today = new Date();
-      const overDueSince = dueDate
-        ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
-        : null;
-
-      // Handle paymentReceived
-      const existing = paymentMap[jobSheetNumber] || {};
-      let totalPaymentReceived = 0;
-      let paymentReceivedArray = [];
-      if (Array.isArray(existing.paymentReceived)) {
-        paymentReceivedArray = existing.paymentReceived;
-        totalPaymentReceived = paymentReceivedArray.reduce(
-          (sum, p) => sum + (p.amount || 0),
-          0
-        );
-      } else if (typeof existing.paymentReceived === "number" && existing.paymentReceived > 0) {
-        paymentReceivedArray = [
-          {
-            paymentDate: existing.updatedAt || new Date(),
-            referenceNumber: `LEGACY-${existing._id || jobSheetNumber}`,
-            bankName: "Unknown",
-            amount: existing.paymentReceived,
-            updatedOn: existing.updatedAt || new Date(),
-          },
-        ];
-        totalPaymentReceived = existing.paymentReceived;
-      }
-
-      return {
-        _id: existing._id || undefined,
-        dispatchId,
-        jobSheetNumber,
-        clientCompanyName: followUp.clientCompanyName || "",
-        clientName: jobSheetMap[jobSheetNumber]?.clientName || "",
-        invoiceNumber: invoiceNumbers.join(", "), // Combine invoices
-        invoiceDate: formatDate(invoiceDate),
-        invoiceAmount,
-        invoiceMailed,
-        invoiceMailedOn: formatDate(invoiceMailedOn),
-        dueDate: formatDate(dueDate),
-        overDueSince,
-        followUps: existing.followUps || [],
-        paymentReceived: paymentReceivedArray,
-        totalPaymentReceived,
-        discountAllowed: existing.discountAllowed || 0,
-        TDS: existing.TDS || 0,
-        remarks: existing.remarks || "",
-      };
     }).filter(row => row !== null);
 
-    // console.log(`Merged records: ${merged.length}`);
+    console.log(`Merged records: ${merged.length}`);
     res.json(merged);
   } catch (err) {
     console.error("Payment Follow-Up Error:", err);
@@ -194,14 +180,19 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 /* CREATE */
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Validate that jobSheetNumber is unique in PaymentFollowUp
-    const existing = await PaymentFollowUp.findOne({ jobSheetNumber: req.body.jobSheetNumber });
+    const { jobSheetNumber, invoiceNumber, dispatchId } = req.body;
+
+    // Validate that jobSheetNumber-invoiceNumber pair is unique
+    const existing = await PaymentFollowUp.findOne({ jobSheetNumber, invoiceNumber });
     if (existing) {
-      return res.status(400).json({ message: "Payment Follow-Up for this Job Sheet already exists" });
+      return res.status(400).json({ message: "Payment Follow-Up for this Job Sheet and Invoice already exists" });
     }
 
     const doc = new PaymentFollowUp({
       ...req.body,
+      dispatchId,
+      jobSheetNumber,
+      invoiceNumber,
       invoiceDate: req.body.invoiceDate ? new Date(req.body.invoiceDate) : null,
       dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
       invoiceMailedOn: req.body.invoiceMailedOn ? new Date(req.body.invoiceMailedOn) : null,
@@ -223,10 +214,25 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 /* UPDATE */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const { jobSheetNumber, invoiceNumber, dispatchId } = req.body;
+
+    // Validate that jobSheetNumber-invoiceNumber pair is unique (excluding current record)
+    const existing = await PaymentFollowUp.findOne({
+      jobSheetNumber,
+      invoiceNumber,
+      _id: { $ne: req.params.id },
+    });
+    if (existing) {
+      return res.status(400).json({ message: "Payment Follow-Up for this Job Sheet and Invoice already exists" });
+    }
+
     const updated = await PaymentFollowUp.findByIdAndUpdate(
       req.params.id,
       {
         ...req.body,
+        dispatchId,
+        jobSheetNumber,
+        invoiceNumber,
         invoiceDate: req.body.invoiceDate ? new Date(req.body.invoiceDate) : null,
         dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
         invoiceMailedOn: req.body.invoiceMailedOn ? new Date(req.body.invoiceMailedOn) : null,

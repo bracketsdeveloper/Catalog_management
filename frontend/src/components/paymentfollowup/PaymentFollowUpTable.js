@@ -1,9 +1,5 @@
 import React, { useState, useMemo } from "react";
-import {
-  ArrowUpIcon,
-  ArrowDownIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowUpIcon, ArrowDownIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
@@ -37,7 +33,6 @@ export default function PaymentFollowUpTable({
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Header-level filters
   const [headerFilters, setHeaderFilters] = useState({
     jobSheetNumber: "",
     clientCompanyName: "",
@@ -50,38 +45,63 @@ export default function PaymentFollowUpTable({
     dueDate: "",
     overDueSince: "",
     latestFollowUp: "",
-    paymentReceived: "",
+    totalPaymentReceived: "",
     discountAllowed: "",
     TDS: "",
     remarks: "",
   });
 
   const handleFilterChange = (field, value) =>
-    setHeaderFilters((h) => ({ ...h, [field]: value }));
+    setHeaderFilters((prev) => ({ ...prev, [field]: value }));
 
-  // Apply header filters
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
       return Object.entries(headerFilters).every(([field, value]) => {
         if (!value) return true;
-        let cell = "";
+
+        let cellValue;
         if (field === "latestFollowUp") {
           const fu = getLatestFollowUp(r.followUps);
-          cell = fu ? fmt(fu.date) : "";
-        } else if (field === "paymentReceived") {
-          cell = r.totalPaymentReceived?.toString() || "0";
-        } else if (field === "invoiceAmount" || field === "discountAllowed" || field === "TDS") {
-          cell = r[field]?.toString() || "0";
+          cellValue = fu ? new Date(fu.date).toISOString().split("T")[0] : "";
+        } else if (
+          field === "invoiceAmount" ||
+          field === "totalPaymentReceived" ||
+          field === "discountAllowed" ||
+          field === "TDS" ||
+          field === "overDueSince"
+        ) {
+          cellValue = parseFloat(r[field]) || 0;
         } else if (
           field === "invoiceDate" ||
           field === "dueDate" ||
           field === "invoiceMailedOn"
         ) {
-          cell = r[field] ? fmt(r[field]) : "";
+          cellValue = r[field] ? new Date(r[field]).toISOString().split("T")[0] : "";
         } else {
-          cell = r[field]?.toString() || "";
+          cellValue = r[field]?.toString().toLowerCase() || "";
         }
-        return cell.toLowerCase().includes(value.toLowerCase());
+
+        if (
+          field === "invoiceAmount" ||
+          field === "totalPaymentReceived" ||
+          field === "discountAllowed" ||
+          field === "TDS" ||
+          field === "overDueSince"
+        ) {
+          const filterNum = parseFloat(value);
+          if (isNaN(filterNum)) return true;
+          return cellValue === filterNum;
+        } else if (
+          field === "invoiceDate" ||
+          field === "dueDate" ||
+          field === "invoiceMailedOn" ||
+          field === "latestFollowUp"
+        ) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
+          return cellValue === value;
+        } else {
+          return cellValue.includes(value.toLowerCase());
+        }
       });
     });
   }, [rows, headerFilters]);
@@ -221,17 +241,6 @@ export default function PaymentFollowUpTable({
               "clientCompanyName",
               "clientName",
               "invoiceNumber",
-              "invoiceDate",
-              "invoiceAmount",
-              "invoiceMailed",
-              "invoiceMailedOn",
-              "dueDate",
-              "overDueSince",
-              "latestFollowUp",
-              "totalPaymentReceived",
-              "discountAllowed",
-              "TDS",
-              "remarks",
             ].map((field) => (
               <td key={field} className="px-2 py-1 border border-gray-300">
                 <input
@@ -243,6 +252,103 @@ export default function PaymentFollowUpTable({
                 />
               </td>
             ))}
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="date"
+                value={headerFilters.invoiceDate}
+                onChange={(e) => handleFilterChange("invoiceDate", e.target.value)}
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="number"
+                value={headerFilters.invoiceAmount}
+                onChange={(e) => handleFilterChange("invoiceAmount", e.target.value)}
+                placeholder="Amount"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <select
+                value={headerFilters.invoiceMailed}
+                onChange={(e) => handleFilterChange("invoiceMailed", e.target.value)}
+                className="w-full p-1 text-xs border rounded"
+              >
+                <option value="">Any</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="date"
+                value={headerFilters.invoiceMailedOn}
+                onChange={(e) => handleFilterChange("invoiceMailedOn", e.target.value)}
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="date"
+                value={headerFilters.dueDate}
+                onChange={(e) => handleFilterChange("dueDate", e.target.value)}
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="number"
+                value={headerFilters.overDueSince}
+                onChange={(e) => handleFilterChange("overDueSince", e.target.value)}
+                placeholder="Days"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="date"
+                value={headerFilters.latestFollowUp}
+                onChange={(e) => handleFilterChange("latestFollowUp", e.target.value)}
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="number"
+                value={headerFilters.totalPaymentReceived}
+                onChange={(e) => handleFilterChange("totalPaymentReceived", e.target.value)}
+                placeholder="Amount"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="number"
+                value={headerFilters.discountAllowed}
+                onChange={(e) => handleFilterChange("discountAllowed", e.target.value)}
+                placeholder="Amount"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="number"
+                value={headerFilters.TDS}
+                onChange={(e) => handleFilterChange("TDS", e.target.value)}
+                placeholder="Amount"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
+            <td className="px-2 py-1 border border-gray-300">
+              <input
+                type="text"
+                value={headerFilters.remarks}
+                onChange={(e) => handleFilterChange("remarks", e.target.value)}
+                placeholder="Search…"
+                className="w-full p-1 text-xs border rounded"
+              />
+            </td>
             <td className="px-2 py-1 border border-gray-300"></td>
           </tr>
         </thead>
@@ -250,8 +356,9 @@ export default function PaymentFollowUpTable({
           {filteredRows.length > 0 ? (
             filteredRows.map((r) => {
               const latestFU = getLatestFollowUp(r.followUps);
+              const rowKey = r._id || `${r.jobSheetNumber}-${r.invoiceNumber}`; // Unique key
               return (
-                <tr key={r._id || r.jobSheetNumber} className="hover:bg-gray-100">
+                <tr key={rowKey} className="hover:bg-gray-100">
                   <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
                     <button
                       className="border-b text-blue-500 hover:text-blue-700"
@@ -303,7 +410,6 @@ export default function PaymentFollowUpTable({
         </tbody>
       </table>
 
-      {/* Follow-Up Note Modal */}
       {selectedFollowUp && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white p-4 rounded w-full max-w-md relative text-xs">
@@ -342,7 +448,6 @@ export default function PaymentFollowUpTable({
         </div>
       )}
 
-      {/* JobSheet Modal */}
       <JobSheetGlobal
         jobSheetNumber={selectedJobSheetNumber}
         isOpen={isModalOpen}
@@ -365,4 +470,4 @@ function Cell({ val }) {
 function fmt(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
-}
+} 
