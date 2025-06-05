@@ -171,12 +171,18 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     setClientNameSuggestions([]);
     if (txt === "") {
       setCompanySugs(companies);
-    } else {
+    } else if (txt.length >= 2) {
       axios
         .get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/search-companies?query=${encodeURIComponent(txt)}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         })
-        .then((res) => setCompanySugs(res.data));
+        .then((res) => setCompanySugs(res.data))
+        .catch((err) => {
+          console.error("Error fetching company suggestions:", err);
+          setCompanySugs([]);
+        });
+    } else {
+      setCompanySugs([]);
     }
   };
 
