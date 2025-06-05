@@ -214,6 +214,7 @@ const JobSheetForm = ({
             onSelect={handleOpportunitySelect}
             placeholder="Enter Opportunity Number"
             suggestions={opportunitySuggestions}
+            required = 'true'
           />
         </div>
         <div className="w-1/2">

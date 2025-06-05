@@ -47,6 +47,10 @@ export default function CalendarPage() {
       .then(res => {
         const flat = res.data.flatMap(ev =>
           ev.schedules.map(sch => {
+            if (!sch.scheduledOn) {
+              console.warn('Schedule missing scheduledOn:', sch);
+              return null;
+            }
             const dateOnly = sch.scheduledOn.slice(0, 10);
             const isOverdue = new Date(sch.scheduledOn) < new Date() && !sch.status;
             return {
@@ -61,7 +65,7 @@ export default function CalendarPage() {
                 extendedProps: { ev, sch }
               }
             };
-          })
+          }).filter(Boolean)
         );
         setEntries(flat);
       })
@@ -123,6 +127,10 @@ export default function CalendarPage() {
       .then(res => {
         const flat = res.data.flatMap(ev =>
           ev.schedules.map(sch => {
+            if (!sch.scheduledOn) {
+              console.warn('Schedule missing scheduledOn:', sch);
+              return null;
+            }
             const dateOnly = sch.scheduledOn.slice(0, 10);
             const isOverdue = new Date(sch.scheduledOn) < new Date() && !sch.status;
             return {
@@ -137,7 +145,7 @@ export default function CalendarPage() {
                 extendedProps: { ev, sch }
               }
             };
-          })
+          }).filter(Boolean)
         );
         setEntries(flat);
       })

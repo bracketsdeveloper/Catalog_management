@@ -29,13 +29,13 @@ function buildSchedules(raw = []) {
     if (s.discussion)     sch.discussion  = s.discussion;
     if (s.status)         sch.status      = s.status;
     if (s.reschedule)     sch.reschedule  = new Date(s.reschedule);
-    if (s.remarks)        sch.remarks     = s.remarks; 
+    if (s.remarks)        sch.remarks     = s.remarks;
     return sch;
   });
 }
 
 /** CREATE Event **/
-router.post(  
+router.post(
   "/events",
   authenticate,
   authorizeAdmin,

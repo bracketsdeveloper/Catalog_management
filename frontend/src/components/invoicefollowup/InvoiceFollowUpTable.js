@@ -5,8 +5,10 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   EllipsisVerticalIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
+import PrintQuotation from "../../pages/PrintQuotation";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -41,6 +43,8 @@ export default function InvoiceFollowUpTable({
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchValues, setSearchValues] = useState({});
+  const [selectedQuotationId, setSelectedQuotationId] = useState(null);
+  const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
 
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
@@ -50,6 +54,16 @@ export default function InvoiceFollowUpTable({
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedJobSheetNumber(null);
+  };
+
+  const handleOpenQuotationModal = (quotationId) => {
+    setSelectedQuotationId(quotationId);
+    setIsQuotationModalOpen(true);
+  };
+
+  const handleCloseQuotationModal = () => {
+    setIsQuotationModalOpen(false);
+    setSelectedQuotationId(null);
   };
 
   const handleSearchChange = (field, value) => {
@@ -235,19 +249,31 @@ export default function InvoiceFollowUpTable({
                   }`}
                 >
                   <Cell val={r.orderDate} />
-                  <button
-                    className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(r.jobSheetNumber);
-                    }}
-                  >
-                    <Cell val={r.jobSheetNumber || "No Number"} />
-                  </button>
+                  <td className="px-2 py-1 border border-gray-300">
+                    <button
+                      className="text-blue-500 hover:text-blue-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenModal(r.jobSheetNumber);
+                      }}
+                    >
+                      {r.jobSheetNumber || "No Number"}
+                    </button>
+                  </td>
                   <Cell val={r.clientCompanyName} />
                   <Cell val={r.clientName} />
                   <Cell val={r.eventName} />
-                  <Cell val={r.quotationNumber} />
+                  <td className="px-2 py-1 border border-gray-300">
+                    <button
+                      className="text-blue-500 hover:text-blue-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenQuotationModal(r.quotationId);
+                      }}
+                    >
+                      {r.quotationNumber}
+                    </button>
+                  </td>
                   <Cell val={r.quotationTotal} />
                   <Cell val={r.crmName} />
                   <Cell val={r.product} />
@@ -284,6 +310,24 @@ export default function InvoiceFollowUpTable({
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
+
+      {isQuotationModalOpen && selectedQuotationId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 w-[90vw] h-[90vh] overflow-hidden relative">
+            <button
+              onClick={handleCloseQuotationModal}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 z-10"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+            <iframe
+              src={`/admin-dashboard/print-quotation/${selectedQuotationId}`}
+              className="w-full h-full border-0"
+              title="Quotation Preview"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
