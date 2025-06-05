@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import JobSheetForm from "../components/jobsheet/JobSheetForm";
-import ProductGrid from "../components/jobsheet/ProductGrid"; // Ensure this path is correct
+import ProductGrid from "../components/jobsheet/ProductGrid";
 import JobSheetCart from "../components/jobsheet/JobSheetCart";
 import JobSheetItemEditModal from "../components/jobsheet/JobSheetItemEditModal";
 import VariationModal from "../components/jobsheet/VariationModal";
@@ -19,6 +19,8 @@ export default function CreateJobSheet() {
   const isEditMode = Boolean(id);
   const [existingIsDraft, setExistingIsDraft] = useState(false);
   const [eventName, setEventName] = useState("");
+  const [opportunityNumber, setOpportunityNumber] = useState(""); // New state
+  const [opportunitySuggestions, setOpportunitySuggestions] = useState([]); // New state
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -103,6 +105,29 @@ export default function CreateJobSheet() {
     }
   }, [referenceQuotation]);
 
+  useEffect(() => {
+    if (opportunityNumber.trim().length > 0) {
+      const delayDebounceFn = setTimeout(() => {
+        fetchOpportunitySuggestions(opportunityNumber.trim());
+      }, 300);
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setOpportunitySuggestions([]);
+    }
+  }, [opportunityNumber]);
+
+  async function fetchOpportunitySuggestions(query) {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities/suggestions?search=${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOpportunitySuggestions(res.data || []);
+    } catch (error) {
+      console.error("Error fetching opportunity suggestions:", error);
+    }
+  }
+
   async function fetchQuotationSuggestions(query) {
     try {
       const token = localStorage.getItem("token");
@@ -121,7 +146,6 @@ export default function CreateJobSheet() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("Filter options fetched:", res.data); // Debug log
       setFullCategories(res.data.categories || []);
       setFullSubCategories(res.data.subCategories || []);
       setFullBrands(res.data.brands || []);
@@ -191,6 +215,7 @@ export default function CreateJobSheet() {
       const data = res.data;
       setExistingIsDraft(data.isDraft === true);
       setEventName(data.eventName || "");
+      setOpportunityNumber(data.opportunityNumber || ""); // Added
       setOrderDate(data.orderDate ? data.orderDate.slice(0, 10) : "");
       setClientCompanyName(data.clientCompanyName || "");
       setClientName(data.clientName || "");
@@ -397,11 +422,17 @@ export default function CreateJobSheet() {
     }
   };
 
+  const handleOpportunitySelect = (opportunity) => {
+    setOpportunityNumber(opportunity.opportunityCode);
+    setOpportunitySuggestions([]);
+  };
+
   const handleSaveJobSheet = async (isDraft = false) => {
     const today = new Date().toISOString().split("T")[0];
 
     const body = {
       eventName: eventName || ".",
+      opportunityNumber, // Added
       orderDate: orderDate || today,
       clientCompanyName: clientCompanyName || ".",
       clientName: clientName || ".",
@@ -542,6 +573,10 @@ export default function CreateJobSheet() {
       <JobSheetForm
         eventName={eventName}
         setEventName={setEventName}
+        opportunityNumber={opportunityNumber} // Added
+        setOpportunityNumber={setOpportunityNumber} // Added
+        opportunitySuggestions={opportunitySuggestions} // Added
+        handleOpportunitySelect={handleOpportunitySelect} // Added
         orderDate={orderDate}
         setOrderDate={setOrderDate}
         clientCompanyName={clientCompanyName}

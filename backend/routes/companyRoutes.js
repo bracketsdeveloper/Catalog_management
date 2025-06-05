@@ -1,9 +1,10 @@
-// backend/routes/companyRoutes.js
 const express = require("express");
 const router = express.Router();
 const XLSX = require("xlsx");
 const multer = require("multer");
 const Company = require("../models/Company");
+const PotentialClient = require("../models/PotentialClient");
+const Vendor = require("../models/Vendor");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 /* ===== Multer ===== */
@@ -61,6 +62,52 @@ const sanitiseClients = (raw = []) =>
           contactNumber: c.contactNumber.toString(),
         }))
     : [];
+
+/* ===== Search Companies Across Collections ===== */
+router.get("/search-companies", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { query } = req.query;
+    const regex = new RegExp(query, "i");
+
+    const [companies, potentialClients, vendors] = await Promise.all([
+      Company.find({ companyName: regex, deleted: { $ne: true } })
+        .select("companyName clients")
+        .lean(),
+      PotentialClient.find({ companyName: regex })
+        .select("companyName contacts")
+        .lean(),
+      Vendor.find({ vendorName: regex, deleted: { $ne: true } })
+        .select("vendorName clients")
+        .lean(),
+    ]);
+
+    const results = [
+      ...companies.map(c => ({
+        _id: c._id,
+        name: c.companyName,
+        type: "Client",
+        clients: c.clients,
+      })),
+      ...potentialClients.map(pc => ({
+        _id: pc._id,
+        name: pc.companyName,
+        type: "Potential Client",
+        clients: pc.contacts,
+      })),
+      ...vendors.map(v => ({
+        _id: v._id,
+        name: v.vendorName,
+        type: "Vendor",
+        clients: v.clients,
+      })),
+    ];
+
+    res.json(results);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Search failed" });
+  }
+});
 
 /* ===== Create ===== */
 router.post("/companies", authenticate, authorizeAdmin, async (req, res) => {
@@ -141,7 +188,6 @@ router.get("/companies/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.json(c);
   } catch (e) {
     console.error(e);
-    
     res.status(500).json({ message: "Fetch failed" });
   }
 });

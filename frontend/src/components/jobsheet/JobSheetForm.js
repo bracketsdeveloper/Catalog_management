@@ -1,4 +1,3 @@
-// JobSheetForm.jsx
 import React, { useState, forwardRef, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import { format, parse } from "date-fns";
@@ -6,6 +5,45 @@ import UserSuggestionInput from "./UserSuggestionInput";
 import QuotationSuggestionInput from "./QuotationSuggestionInput";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from "axios";
+
+const OpportunitySuggestionInput = ({ value, onChange, onSelect, placeholder, suggestions }) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const handleInputChange = (e) => {
+    onChange(e.target.value);
+    setDropdownOpen(true);
+  };
+
+  const handleSelect = (opportunity) => {
+    onSelect(opportunity);
+    setDropdownOpen(false);
+  };
+
+  return (
+    <div className="relative w-full">
+      <input
+        type="text"
+        className="border border-purple-300 rounded w-full p-2"
+        value={value}
+        onChange={handleInputChange}
+        placeholder={placeholder}
+      />
+      {dropdownOpen && suggestions.length > 0 && (
+        <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-60 overflow-y-auto">
+          {suggestions.map((opportunity, index) => (
+            <div
+              key={index}
+              className="p-2 cursor-pointer hover:bg-gray-100"
+              onClick={() => handleSelect(opportunity)}
+            >
+              {opportunity.opportunityCode} - {opportunity.opportunityName}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const JobSheetForm = ({
   orderDate,
@@ -50,6 +88,10 @@ const JobSheetForm = ({
   fetchQuotation,
   eventName,
   setEventName,
+  opportunityNumber, // Added
+  setOpportunityNumber, // Added
+  opportunitySuggestions, // Added
+  handleOpportunitySelect, // Added
   companies,
   dropdownOpen,
   setDropdownOpen,
@@ -162,8 +204,18 @@ const JobSheetForm = ({
 
   return (
     <div className="space-y-4 mb-6">
-      {/* Row: Reference Quotation with Fetch button */}
+      {/* Row: Opportunity Number and Reference Quotation */}
       <div className="flex w-full justify-between space-x-4">
+        <div className="w-1/2">
+          <label className="block mb-1 font-medium text-purple-700">Opportunity Number</label>
+          <OpportunitySuggestionInput
+            value={opportunityNumber}
+            onChange={setOpportunityNumber}
+            onSelect={handleOpportunitySelect}
+            placeholder="Enter Opportunity Number"
+            suggestions={opportunitySuggestions}
+          />
+        </div>
         <div className="w-1/2">
           <label className="block mb-1 font-medium text-purple-700">Reference Quotation</label>
           <div className="flex space-x-3">
@@ -171,7 +223,6 @@ const JobSheetForm = ({
               value={referenceQuotation}
               onChange={setReferenceQuotation}
               placeholder="Enter Reference Quotation"
-              label=""
               onSelect={handleQuotationSelect}
             />
             <button
@@ -183,6 +234,10 @@ const JobSheetForm = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Row: PO Number and PO Status */}
+      <div className="flex w-full justify-between space-x-4">
         <div className="w-1/2 space-y-2">
           <div>
             <label className="block mb-1 font-medium text-purple-700">PO Number</label>
@@ -194,6 +249,8 @@ const JobSheetForm = ({
               onChange={(e) => setPoNumber(e.target.value)}
             />
           </div>
+        </div>
+        <div className="w-1/2 space-y-2">
           <div>
             <label className="block mb-1 font-medium text-purple-700">PO Status</label>
             <div className="flex items-center space-x-2">
@@ -261,7 +318,7 @@ const JobSheetForm = ({
         )}
       </div>
 
-      {/* Row: Client Name and Contact Number with Client Dropdown */}
+      {/* Row: Client Name and Contact Number */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="relative">
           <label className="block mb-1 font-medium text-purple-700">Client Name *</label>

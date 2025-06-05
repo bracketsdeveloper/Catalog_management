@@ -711,7 +711,7 @@ export default function AdminDashboard() {
           />
         </div>
       ) : (
-        <Outlet />
+        <Outlet key={location.pathname} />
       )}
       </main>
     </div>

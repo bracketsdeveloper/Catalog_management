@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const JobSheet = require("../models/JobSheet");
 const Log = require("../models/Log");
+const Opportunity = require("../models/Opportunity"); // Import Opportunity model
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const mongoose = require("mongoose");
 
@@ -26,6 +27,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       eventName,
+      opportunityNumber, // Added
       orderDate,
       clientCompanyName,
       clientName,
@@ -69,6 +71,7 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
 
     const newJobSheet = new JobSheet({
       eventName,
+      opportunityNumber, // Added
       orderDate,
       clientCompanyName,
       clientName,
@@ -301,6 +304,32 @@ router.post("/jobsheets/logs/latest", authenticate, authorizeAdmin, async (req, 
   } catch (err) {
     console.error("Error fetching latest logs:", err);
     res.status(500).json({ message: "Server error fetching latest logs" });
+  }
+});
+
+// New route for opportunity suggestions
+router.get("/opportunities/suggestions", authenticate, async (req, res) => {
+  try {
+    const { search } = req.query;
+    if (!search) {
+      return res.json([]);
+    }
+
+    const regex = new RegExp(search, "i");
+    const opportunities = await Opportunity.find({
+      $or: [
+        { opportunityCode: regex },
+        { opportunityName: regex },
+      ],
+    })
+      .select("opportunityCode opportunityName")
+      .limit(10)
+      .lean();
+
+    res.json(opportunities);
+  } catch (error) {
+    console.error("Error fetching opportunity suggestions:", error);
+    res.status(500).json({ message: "Server error fetching opportunity suggestions" });
   }
 });
 
