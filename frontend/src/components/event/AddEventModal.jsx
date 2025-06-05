@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const ACTIONS = ["Call","Mail","Meet","Msg","Assign to CRM"];
+const ACTIONS = ["Call","Mail","Meet","Msg","Assign to"];
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
 const MINUTES = Array.from({ length: 6 }, (_, i) => String(i * 10).padStart(2, "0"));
 const AMPM = ["AM", "PM"];

@@ -7,7 +7,6 @@ import ToggleButtons from "../components/potentialclientsList/ToggleButtons.jsx"
 import EventTable from "../components/event/EventTable.jsx";
 import AddEventModal from "../components/event/AddEventModal.jsx";
 import FullScheduleModal from "../components/event/FullScheduleModal.jsx";
-
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 export default function EventManager() {
