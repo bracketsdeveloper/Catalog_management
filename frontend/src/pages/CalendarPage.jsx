@@ -21,7 +21,7 @@ export default function CalendarPage() {
     const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
     axios
       .get(`${BACKEND}/api/admin/users`, cfg)
-      .then(res => {
+      .then((res) => {
         const me = res.data._id;
         setCurrentUser(me);
         setFilterUserId(isSuperAdmin ? "all" : me);
@@ -35,7 +35,7 @@ export default function CalendarPage() {
     const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
     axios
       .get(`${BACKEND}/api/admin/users?all=true`, cfg)
-      .then(res => setUsersList(res.data))
+      .then((res) => setUsersList(res.data))
       .catch(console.error);
   }, [isSuperAdmin]);
 
@@ -44,26 +44,26 @@ export default function CalendarPage() {
     const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
     axios
       .get(`${BACKEND}/api/admin/eventscal`, cfg)
-      .then(res => {
-        const flat = res.data.flatMap(ev =>
-          ev.schedules.map(sch => {
+      .then((res) => {
+        const flat = res.data.flatMap((ev) =>
+          ev.schedules.map((sch) => {
             if (!sch.scheduledOn) {
-              console.warn('Schedule missing scheduledOn:', sch);
+              console.warn("Schedule missing scheduledOn:", sch);
               return null;
             }
-            const dateOnly = sch.scheduledOn.slice(0, 10);
+            const dateOnly = new Date(sch.scheduledOn).toISOString().slice(0, 10);
             const isOverdue = new Date(sch.scheduledOn) < new Date() && !sch.status;
             return {
               ev,
               sch,
               dateKey: new Date(sch.scheduledOn).toDateString(),
               eventObj: {
-                title: `${sch.action}: ${ev.potentialClientName}`,
+                title: `${sch.action}: ${ev.companyName} (${ev.companyType})`,
                 date: dateOnly,
                 backgroundColor: isOverdue ? "red" : undefined,
                 borderColor: isOverdue ? "red" : undefined,
-                extendedProps: { ev, sch }
-              }
+                extendedProps: { ev, sch },
+              },
             };
           }).filter(Boolean)
         );
@@ -90,8 +90,9 @@ export default function CalendarPage() {
     // Format date locally in YYYY-MM-DD
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     setEditing({
-      potentialClient: "",
-      potentialClientName: "",
+      company: "",
+      companyType: "",
+      companyName: "",
       schedules: [
         {
           scheduledDate: dateStr,
@@ -107,9 +108,9 @@ export default function CalendarPage() {
           rescheduleHour: "",
           rescheduleMinute: "",
           rescheduleAmpm: "AM",
-          remarks: ""
-        }
-      ]
+          remarks: "",
+        },
+      ],
     });
   };
 
@@ -124,26 +125,26 @@ export default function CalendarPage() {
     const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
     axios
       .get(`${BACKEND}/api/admin/eventscal`, cfg)
-      .then(res => {
-        const flat = res.data.flatMap(ev =>
-          ev.schedules.map(sch => {
+      .then((res) => {
+        const flat = res.data.flatMap((ev) =>
+          ev.schedules.map((sch) => {
             if (!sch.scheduledOn) {
-              console.warn('Schedule missing scheduledOn:', sch);
+              console.warn("Schedule missing scheduledOn:", sch);
               return null;
             }
-            const dateOnly = sch.scheduledOn.slice(0, 10);
+            const dateOnly = new Date(sch.scheduledOn).toISOString().slice(0, 10);
             const isOverdue = new Date(sch.scheduledOn) < new Date() && !sch.status;
             return {
               ev,
               sch,
               dateKey: new Date(sch.scheduledOn).toDateString(),
               eventObj: {
-                title: `${sch.action}: ${ev.potentialClientName}`,
+                title: `${sch.action}: ${ev.companyName} (${ev.companyType})`,
                 date: dateOnly,
                 backgroundColor: isOverdue ? "red" : undefined,
                 borderColor: isOverdue ? "red" : undefined,
-                extendedProps: { ev, sch }
-              }
+                extendedProps: { ev, sch },
+              },
             };
           }).filter(Boolean)
         );
@@ -176,11 +177,13 @@ export default function CalendarPage() {
           <select
             className="border p-2 rounded"
             value={filterUserId}
-            onChange={e => setFilterUserId(e.target.value)}
+            onChange={(e) => setFilterUserId(e.target.value)}
           >
             <option value="all">All users</option>
-            {usersList.map(u => (
-              <option key={u._id} value={u._id}>{u.name}</option>
+            {usersList.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.name}
+              </option>
             ))}
           </select>
         </div>
@@ -191,7 +194,7 @@ export default function CalendarPage() {
         initialView="dayGridMonth"
         headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
         height="100vh"
-        events={filtered.map(s => s.eventObj)}
+        events={filtered.map((s) => s.eventObj)}
         dateClick={handleDateClick}
         eventClick={handleEventClick}
         dayCellContent={dayCellContent}
