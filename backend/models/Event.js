@@ -15,7 +15,7 @@ const logSchema = new mongoose.Schema({
 // One schedule entry; note the "" in the enum for status
 const scheduleSchema = new mongoose.Schema({
   scheduledOn: { type: Date },
-  action:      { type: String, enum: ["Call","Msg","Mail","Meet","Assign to CRM"] },
+  action:      { type: String, enum: ["Call","Msg","Mail","Meet","Assign to CRM", "Mail"] },
   assignedTo:  { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   discussion:  { type: String },
   status:      { type: String, enum: ["","Done","Not done"], default: "" },

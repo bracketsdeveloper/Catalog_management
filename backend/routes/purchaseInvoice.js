@@ -6,7 +6,15 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 // GET all invoices sorted by createdAt descending
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const invoices = await PurchaseInvoice.find({}).sort({ createdAt: -1 });
+    const { jobSheetNumber } = req.query;
+    let filter = {};
+    if (jobSheetNumber) {
+      filter.jobSheetNumber = { $regex: `^${jobSheetNumber}$`, $options: "i" }; // Case-insensitive match
+    }
+    const invoices = await PurchaseInvoice.find(filter).sort({ createdAt: -1 });
+    if (!invoices.length) {
+      return res.status(200).json([]); // Return empty array if no matches
+    }
     res.json(invoices);
   } catch (error) {
     console.error("Error fetching purchase invoices:", error);
@@ -18,7 +26,14 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 router.get("/find", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { jobSheetNumber, product } = req.query;
-    const invoice = await PurchaseInvoice.findOne({ jobSheetNumber, product });
+    const filter = {};
+    if (jobSheetNumber) {
+      filter.jobSheetNumber = { $regex: `^${jobSheetNumber}$`, $options: "i" };
+    }
+    if (product) {
+      filter.product = product;
+    }
+    const invoice = await PurchaseInvoice.findOne(filter);
     res.json(invoice || {});
   } catch (error) {
     console.error("Error finding purchase invoice:", error);

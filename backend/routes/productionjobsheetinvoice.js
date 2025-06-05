@@ -1,10 +1,34 @@
-// routes/productionjobsheetinvoice.js
 const express = require("express");
 const router = express.Router();
 const ProductionJobSheetInvoice = require("../models/ProductionJobSheetInvoice");
 const ProductionJobSheet = require("../models/ProductionJobsheet");
 const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
+
+// GET invoices by jobSheetNumber
+router.get("/", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { jobSheet } = req.query;
+    console.log("Query parameters received:", { jobSheet }); // Debug log
+
+    let filter = {};
+    if (jobSheet) {
+      filter.jobSheetNumber = { $regex: jobSheet, $options: "i" };
+      console.log("MongoDB filter applied:", filter); // Debug log
+    }
+
+    const invoices = await ProductionJobSheetInvoice.find(filter).sort({ createdAt: -1 });
+    console.log("ProductionJobSheetInvoices found:", invoices); // Debug log
+
+    if (!invoices.length) {
+      return res.status(200).json([]);
+    }
+    res.json(invoices);
+  } catch (error) {
+    console.error("Error fetching production job sheet invoices:", error);
+    res.status(500).json({ message: "Server error fetching production job sheet invoices" });
+  }
+});
 
 // GET aggregated invoices
 router.get("/aggregated", authenticate, authorizeAdmin, async (req, res) => {

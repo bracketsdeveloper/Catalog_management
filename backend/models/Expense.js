@@ -1,4 +1,3 @@
-// models/Expense.js
 const mongoose = require("mongoose");
 
 const expenseItemSchema = new mongoose.Schema({
@@ -14,12 +13,11 @@ const expenseSchema = new mongoose.Schema({
   clientName: { type: String, required: true },
   eventName: { type: String },
   crmName: { type: String },
-
   expenses: [expenseItemSchema],
-
   orderConfirmed: { type: Boolean, default: false },
   jobSheetNumber: { type: String },
-  orderExpenses: [expenseItemSchema]
+  orderExpenses: [expenseItemSchema],
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true } // New field
 }, { timestamps: true });
 
 module.exports = mongoose.model("Expense", expenseSchema);
