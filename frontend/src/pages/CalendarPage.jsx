@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction"; // Added for dateClick
 import axios from "axios";
 import AddEventModal from "../components/event/AddEventModal.jsx";
 import "../styles/fullcalendar.css";
@@ -24,9 +25,9 @@ export default function CalendarPage() {
       .then((res) => {
         const me = res.data._id;
         setCurrentUser(me);
-        setFilterUserId(isSuperAdmin ? "all" : me);
+        setFilterUserId(isSuperAdmin ? "all" : me); // Non-super-admins filter to their own ID
       })
-      .catch(console.error);
+      .catch((err) => console.error("Error fetching current user:", err));
   }, [isSuperAdmin]);
 
   // 2) Fetch all users for super-admin
@@ -36,7 +37,7 @@ export default function CalendarPage() {
     axios
       .get(`${BACKEND}/api/admin/users?all=true`, cfg)
       .then((res) => setUsersList(res.data))
-      .catch(console.error);
+      .catch((err) => console.error("Error fetching users:", err));
   }, [isSuperAdmin]);
 
   // 3) Fetch & flatten events
@@ -48,7 +49,7 @@ export default function CalendarPage() {
         const flat = res.data.flatMap((ev) =>
           ev.schedules.map((sch) => {
             if (!sch.scheduledOn) {
-              console.warn("Schedule missing scheduledOn:", sch);
+              console.warn("Schedule missing scheduledOn:", { eventId: ev._id, schedule: sch });
               return null;
             }
             const dateOnly = new Date(sch.scheduledOn).toISOString().slice(0, 10);
@@ -68,26 +69,24 @@ export default function CalendarPage() {
           }).filter(Boolean)
         );
         setEntries(flat);
+        setFiltered(flat); // Initialize filtered with all fetched events
       })
-      .catch(console.error);
+      .catch((err) => console.error("Error fetching events:", err));
   }, []);
 
   // 4) Apply user filter
   useEffect(() => {
-    if (!filterUserId) return;
+    if (!filterUserId || !entries.length) return;
     setFiltered(
       entries.filter(({ ev, sch }) => {
         if (isSuperAdmin && filterUserId === "all") return true;
-        if (ev.createdBy?._id === filterUserId) return true;
-        if (sch.assignedTo?._id === filterUserId) return true;
-        return false;
+        return ev.createdBy?._id === filterUserId || sch.assignedTo?._id === filterUserId;
       })
     );
   }, [entries, filterUserId, isSuperAdmin]);
 
   // 5) Date click → open AddEventModal with pre-filled date
   const handleDateClick = ({ date }) => {
-    // Format date locally in YYYY-MM-DD
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     setEditing({
       company: "",
@@ -129,7 +128,7 @@ export default function CalendarPage() {
         const flat = res.data.flatMap((ev) =>
           ev.schedules.map((sch) => {
             if (!sch.scheduledOn) {
-              console.warn("Schedule missing scheduledOn:", sch);
+              console.warn("Schedule missing scheduledOn:", { eventId: ev._id, schedule: sch });
               return null;
             }
             const dateOnly = new Date(sch.scheduledOn).toISOString().slice(0, 10);
@@ -149,22 +148,24 @@ export default function CalendarPage() {
           }).filter(Boolean)
         );
         setEntries(flat);
+        setFiltered(flat);
       })
-      .catch(console.error);
+      .catch((err) => console.error("Error refreshing events:", err));
   };
 
   // 8) Render "+ Schedule" button in each day cell
-  const dayCellContent = ({ date, view }) => {
+  const dayCellContent = ({ date }) => {
     return (
       <div className="fc-daygrid-day-top">
         <span className="fc-daygrid-day-number">{date.getDate()}</span>
-        <button
-          className="fc-add-schedule-btn"
-          onClick={() => handleDateClick({ date })}
-          title="Add Schedule"
-        >
-          +
-        </button>
+          <button
+            className="fc-add-schedule-btn"
+            onClick={() => handleDateClick({ date })}
+            title="Add Schedule"
+          >
+            +
+          </button>
+        
       </div>
     );
   };
@@ -176,7 +177,7 @@ export default function CalendarPage() {
           <label className="mr-2 font-medium">Filter by user:</label>
           <select
             className="border p-2 rounded"
-            value={filterUserId}
+            value={filterUserId || ""}
             onChange={(e) => setFilterUserId(e.target.value)}
           >
             <option value="all">All users</option>
@@ -190,7 +191,7 @@ export default function CalendarPage() {
       )}
 
       <FullCalendar
-        plugins={[dayGridPlugin]}
+        plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
         headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
         height="100vh"
@@ -198,6 +199,8 @@ export default function CalendarPage() {
         dateClick={handleDateClick}
         eventClick={handleEventClick}
         dayCellContent={dayCellContent}
+        editable={isSuperAdmin} // Only super-admins can drag-and-drop
+        selectable={isSuperAdmin} // Only super-admins can select dates
       />
 
       {editingEvent && (

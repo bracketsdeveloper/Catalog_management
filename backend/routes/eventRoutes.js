@@ -16,23 +16,29 @@ function makeLog(req, action, field = null, oldValue = null, newValue = null) {
     newValue,
     performedBy: req.user._id,
     performedAt: new Date(),
-    ipAddress: req.user._id,
+    ipAddress: req.ip,
   };
 }
 
 // Build & sanitize schedules array from raw input
 function buildSchedules(raw = []) {
-  return raw.map((s) => {
-    const sch = {};
-    if (s.scheduledOn) sch.scheduledOn = new Date(s.scheduledOn);
-    if (s.action) sch.action = s.action;
-    if (s.assignedTo) sch.assignedTo = s.assignedTo;
-    if (s.discussion) sch.discussion = s.discussion;
-    if (s.status) sch.status = s.status;
-    if (s.reschedule) sch.reschedule = new Date(s.reschedule);
-    if (s.remarks) sch.remarks = s.remarks;
-    return sch;
-  });
+  return raw
+    .map((s) => {
+      const sch = {};
+      if (!s.scheduledOn) {
+        console.warn("Skipping schedule with missing scheduledOn:", s);
+        return null;
+      }
+      if (s.scheduledOn) sch.scheduledOn = new Date(s.scheduledOn);
+      if (s.action) sch.action = s.action;
+      if (s.assignedTo) sch.assignedTo = s.assignedTo;
+      if (s.discussion) sch.discussion = s.discussion;
+      if (s.status) sch.status = s.status;
+      if (s.reschedule) sch.reschedule = new Date(s.reschedule);
+      if (s.remarks) sch.remarks = s.remarks;
+      return sch;
+    })
+    .filter(Boolean);
 }
 
 // Helper to populate company details
@@ -124,10 +130,23 @@ router.get("/events", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/** READ ALL Events **/
-router.get("/eventscal", authenticate, authorizeAdmin, async (req, res) => {
+/** READ ALL Events for Calendar **/
+router.get("/eventscal", authenticate, async (req, res) => {
   try {
-    const events = await Event.find()
+    const isSuperAdmin = req.user.isSuperAdmin;
+    let query = {};
+
+    if (!isSuperAdmin) {
+      // Non-super-admins see events they created or are assigned to
+      query = {
+        $or: [
+          { createdBy: req.user._id },
+          { "schedules.assignedTo": req.user._id },
+        ],
+      };
+    }
+
+    const events = await Event.find(query)
       .sort({ createdAt: -1 })
       .populate("schedules.assignedTo", "name")
       .populate("createdBy", "name")
@@ -136,7 +155,7 @@ router.get("/eventscal", authenticate, authorizeAdmin, async (req, res) => {
     const populatedEvents = await Promise.all(events.map(populateCompany));
     res.json(populatedEvents);
   } catch (err) {
-    console.error("Error fetching events:", err);
+    console.error("Error fetching calendar events:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
