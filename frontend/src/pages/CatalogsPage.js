@@ -166,6 +166,7 @@ export default function CatalogManagementPage() {
     setSortConfig({ key, direction });
 
     const sortedCatalogs = [...catalogs].sort((a, b) => {
+      // Add null checks and default values
       let valA = a?.[key] ?? "";
       let valB = b?.[key] ?? "";
 
@@ -486,7 +487,7 @@ export default function CatalogManagementPage() {
             maxWidth: 800,
           });
           page.drawText(prod.ProductBrand || sub.ProductBrand || "", {
-            x: xText + 210,
+            x: xText + 310,
             y: yText,
             size: 25,
             font: normalFont,
@@ -533,7 +534,7 @@ export default function CatalogManagementPage() {
             maxWidth: 800,
           });
           page.drawText(String(sub.quantity), {
-            x: xText + 110,
+            x: xText + 310,
             y: yText,
             size: 25,
             font: normalFont,
@@ -576,7 +577,7 @@ export default function CatalogManagementPage() {
             maxWidth: 800,
           });
           page.drawText(String(sub.productGST) + "%", {
-            x: xText + 110,
+            x: xText + 310,
             y: yText,
             size: 25,
             font: normalFont,
