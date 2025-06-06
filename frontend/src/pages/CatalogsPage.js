@@ -166,25 +166,25 @@ export default function CatalogManagementPage() {
     setSortConfig({ key, direction });
 
     const sortedCatalogs = [...catalogs].sort((a, b) => {
-      let valA = a[key];
-      let valB = b[key];
+      let valA = a?.[key] ?? "";
+      let valB = b?.[key] ?? "";
 
       if (key === "opportunityOwner") {
-        const oppA = opportunities.find((o) => o.opportunityCode === a.opportunityNumber);
-        const oppB = opportunities.find((o) => o.opportunityCode === b.opportunityNumber);
-        valA = oppA?.opportunityOwner || "";
-        valB = oppB?.opportunityOwner || "";
+        const oppA = opportunities.find((o) => o.opportunityCode === a?.opportunityNumber);
+        const oppB = opportunities.find((o) => o.opportunityCode === b?.opportunityNumber);
+        valA = oppA?.opportunityOwner ?? "";
+        valB = oppB?.opportunityOwner ?? "";
       } else if (key === "products.length") {
-        valA = (a.products || []).length;
-        valB = (b.products || []).length;
+        valA = (a?.products || []).length;
+        valB = (b?.products || []).length;
       }
 
       if (isDate) {
         valA = new Date(valA || 0);
         valB = new Date(valB || 0);
       } else {
-        valA = (valA || "").toString().toLowerCase();
-        valB = (valB || "").toString().toLowerCase();
+        valA = String(valA || "").toLowerCase();
+        valB = String(valB || "").toLowerCase();
       }
 
       return (valA < valB ? -1 : 1) * (direction === "asc" ? 1 : -1);
@@ -699,30 +699,30 @@ export default function CatalogManagementPage() {
     }
 
     const filtered = originalCatalogs.filter((cat) => {
-      const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
+      const opp = opportunities.find((o) => o.opportunityCode === cat?.opportunityNumber);
       const matchesGlobalSearch = searchTerm
-        ? cat.catalogNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (cat.customerCompany || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (cat.customerName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (cat.catalogName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (cat.opportunityNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (opp?.opportunityOwner || "").toLowerCase().includes(searchTerm.toLowerCase())
+        ? String(cat?.catalogNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(cat?.customerCompany ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(cat?.customerName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(cat?.catalogName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(cat?.opportunityNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(opp?.opportunityOwner ?? "").toLowerCase().includes(searchTerm.toLowerCase())
         : true;
 
       const matchesHeaderSearch = Object.entries(searchValues).every(([field, value]) => {
         if (!value) return true;
         let rowValue;
         if (field === "opportunityOwner") {
-          const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
-          rowValue = opp?.opportunityOwner || "";
+          const opp = opportunities.find((o) => o.opportunityCode === cat?.opportunityNumber);
+          rowValue = opp?.opportunityOwner ?? "";
         } else if (field === "products.length") {
-          rowValue = (cat.products || []).length.toString();
+          rowValue = String((cat?.products || []).length);
         } else if (field === "createdAt") {
-          rowValue = new Date(cat[field]).toLocaleDateString();
+          rowValue = new Date(cat?.[field] || 0).toLocaleDateString();
         } else {
-          rowValue = cat[field] || "";
+          rowValue = String(cat?.[field] ?? "");
         }
-        return rowValue.toString().toLowerCase().includes(value.toLowerCase());
+        return String(rowValue).toLowerCase().includes(value.toLowerCase());
       });
 
       return matchesGlobalSearch && matchesHeaderSearch;
