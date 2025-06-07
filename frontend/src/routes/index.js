@@ -62,6 +62,7 @@ import CalendarPage from "../pages/CalendarPage";
 import ManageSegments from "../pages/ManageSegments";
 import ManageBrandingCharges from "../pages/ManageBrandingCharges";
 import QuotationManagementPage from "../pages/QuotationManagementPage";
+import LogsTable from "../pages/LogsTable";
 
 
 const router = createBrowserRouter([
@@ -340,6 +341,10 @@ const router = createBrowserRouter([
                     {
                         path: "manage-quotations",
                         element : <QuotationManagementPage/>
+                    },
+                    {
+                        path: "logs",
+                        element : <LogsTable/>
                     }
 
                 ]

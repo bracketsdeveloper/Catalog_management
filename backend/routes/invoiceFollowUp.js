@@ -16,10 +16,13 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     let rows = [];
 
     if (view === "new") {
-      const jobSheets = await JobSheet.find({
-        createdAt: { $gte: today },
-        isDraft: { $ne: true },
-      }).lean();
+      const startDate = new Date("2025-06-01");
+  startDate.setHours(0, 0, 0, 0);
+
+  const jobSheets = await JobSheet.find({
+    createdAt: { $gte: startDate },
+    isDraft: { $ne: true },
+  }).lean();
 
       const quotationMap = Object.fromEntries(
         (await Quotation.find({}).lean()).map(q => [q.quotationNumber, q.grandTotal])

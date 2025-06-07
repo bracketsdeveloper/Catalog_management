@@ -840,6 +840,28 @@ useEffect(() => {
     setVariationModalProduct(null);
   };
 
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup function
+      setProducts([]);
+      setSelectedProducts([]);
+      setLoading(true);
+      setCurrentPage(1);
+      setTotalPages(1);
+      setSearchTerm("");
+      setSelectedCategories([]);
+      setSelectedSubCategories([]);
+      setSelectedBrands([]);
+      setSelectedPriceRanges([]);
+      setSelectedVariationHinges([]);
+      setCartOpen(false);
+      setDetailsModalOpen(false);
+      setVariationModalOpen(false);
+      setEditModalOpen(false);
+    };
+  }, []);
+
   // ─── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">

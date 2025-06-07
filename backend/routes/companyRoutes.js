@@ -444,4 +444,22 @@ router.post(
   }
 );
 
+router.put("/companies/:companyName/add-contact", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { companyName, contact } = req.body;
+    if (!contact.name || !contact.contactNumber) {
+      return res.status(400).json({ message: "Contact name and number are required" });
+    }
+    const doc = await Company.findOne({ companyName: new RegExp(`^${companyName}$`, "i") });
+    if (!doc) return res.status(404).json({ message: "Company not found" });
+    doc.clients.push(contact);
+    doc.logs.push(createLogEntry(req, "add-contact", "clients", null, contact));
+    await doc.save();
+    res.json({ message: "Contact added", contact });
+  } catch (e) {
+    console.error("Error adding contact:", e);
+    res.status(500).json({ message: "Add contact failed" });
+  }
+});
+
 module.exports = router;

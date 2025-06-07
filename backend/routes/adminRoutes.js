@@ -236,85 +236,97 @@ router.get(
       const match = {};
       if (categories) {
         match.category = {
-          $in: categories.split(",").map(v => new RegExp(`^${v.trim()}$`, "i"))
+          $in: categories.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
         };
       }
       if (subCategories) {
         match.subCategory = {
-          $in: subCategories.split(",").map(v => new RegExp(`^${v.trim()}$`, "i"))
+          $in: subCategories.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
         };
       }
       if (brands) {
         match.brandName = {
-          $in: brands.split(",").map(v => new RegExp(`^${v.trim()}$`, "i"))
+          $in: brands.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
         };
       }
       if (priceRanges) {
         match.priceRange = {
-          $in: priceRanges.split(",").map(v => new RegExp(`^${v.trim()}$`, "i"))
+          $in: priceRanges.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
         };
       }
       if (variationHinges) {
         match.variationHinge = {
-          $in: variationHinges.split(",").map(v => new RegExp(`^${v.trim()}$`, "i"))
+          $in: variationHinges.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
         };
       }
 
-      // Helper for simple string fields
-      const buildSimple = field => [
-        ...(Object.keys(match).length ? [{ $match: match }] : []),
-        { $match: { [field]: { $nin: [null, ""] } } },
-        { $project: { name: { $toLower: { $trim: { input: `$${field}` } } } } },
-        { $group: { _id: "$name", count: { $sum: 1 } } },
-        { $project: { name: "$_id", count: 1, _id: 0 } },
-        { $sort: { name: 1 } }
-      ];
+      // Helper to build aggregation pipeline for a field, excluding its own filter
+      const buildAggregation = (field, excludeField) => {
+        const filteredMatch = { ...match };
+        if (excludeField) {
+          delete filteredMatch[excludeField];
+        }
+        return [
+          ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
+          { $match: { [field]: { $nin: [null, ""] } } },
+          { $project: { name: { $toLower: { $trim: { input: `$${field}` } } } } },
+          { $group: { _id: "$name", count: { $sum: 1 } } },
+          { $project: { name: "$_id", count: 1, _id: 0 } },
+          { $sort: { name: 1 } },
+        ];
+      };
 
-      // Run aggregations in parallel
-      const [
-        categoriesAgg,
-        subCategoriesAgg,
-        brandsAgg,
-        priceRangesAgg,
-        variationHingesAgg
-      ] = await Promise.all([
-        Product.aggregate(buildSimple("category")),
-        Product.aggregate(buildSimple("subCategory")),
-        Product.aggregate(buildSimple("brandName")),
-
-        // priceRange with safe numeric conversion
-        Product.aggregate([
-          ...(Object.keys(match).length ? [{ $match: match }] : []),
+      // Helper for priceRange with safe numeric conversion
+      const buildPriceRangeAggregation = () => {
+        const filteredMatch = { ...match };
+        delete filteredMatch.priceRange; // Exclude priceRange filter for its own options
+        return [
+          ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
           { $match: { priceRange: { $nin: [null, ""] } } },
           {
             $project: {
               name: { $trim: { input: "$priceRange" } },
               start: {
                 $convert: {
-                  input: { $arrayElemAt: [
-                    { $split: [{ $trim: { input: "$priceRange" } }, "-"] },
-                    0
-                  ] },
+                  input: {
+                    $arrayElemAt: [
+                      { $split: [{ $trim: { input: "$priceRange" } }, "-"] },
+                      0,
+                    ],
+                  },
                   to: "int",
                   onError: Number.MAX_SAFE_INTEGER,
-                  onNull: Number.MAX_SAFE_INTEGER
-                }
-              }
-            }
+                  onNull: Number.MAX_SAFE_INTEGER,
+                },
+              },
+            },
           },
           { $group: { _id: "$name", count: { $sum: 1 }, start: { $first: "$start" } } },
           { $project: { name: "$_id", count: 1, _id: 0 } },
-          { $sort: { start: 1 } }
-        ]),
+          { $sort: { start: 1 } },
+        ];
+      };
 
-        Product.aggregate(buildSimple("variationHinge"))
+      // Run aggregations in parallel, excluding the field being aggregated from the match
+      const [
+        categoriesAgg,
+        subCategoriesAgg,
+        brandsAgg,
+        priceRangesAgg,
+        variationHingesAgg,
+      ] = await Promise.all([
+        Product.aggregate(buildAggregation("category", "category")),
+        Product.aggregate(buildAggregation("subCategory", "subCategory")),
+        Product.aggregate(buildAggregation("brandName", "brandName")),
+        Product.aggregate(buildPriceRangeAggregation()),
+        Product.aggregate(buildAggregation("variationHinge", "variationHinge")),
       ]);
 
       res.status(200).json({
-        categories:      categoriesAgg,
-        subCategories:   subCategoriesAgg,
-        brands:          brandsAgg,
-        priceRanges:     priceRangesAgg,
+        categories: categoriesAgg,
+        subCategories: subCategoriesAgg,
+        brands: brandsAgg,
+        priceRanges: priceRangesAgg,
         variationHinges: variationHingesAgg,
       });
     } catch (err) {

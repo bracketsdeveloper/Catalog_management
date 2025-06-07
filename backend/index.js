@@ -138,8 +138,8 @@ app.use("/api/admin/branding-charges", brandingChargeRoutes);
 const logisticsRoutes = require("./routes/logisticsRoutes");
 app.use("/api/logistics", logisticsRoutes);
 
-const logRoutes = require("./routes/logRoutes");
-app.use("/api/admin", logRoutes);
+const logRoutes = require("./routes/logs");
+app.use("/api/admin/logs", logRoutes);
 
 
 app.get("/health", (req, res) => res.send("OK"));
