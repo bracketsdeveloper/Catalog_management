@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 
 const SAMPLE_SECTIONS = [
@@ -28,13 +28,15 @@ export default function AddExpenseModal({ expense, onClose }) {
   // Determine permissions
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
-  const ORDER_SECTIONS = isSuperAdmin
-    ? FULL_ORDER_SECTIONS
-    : permissions.includes("manage-expenses")
-    ? FULL_ORDER_SECTIONS.filter(
-        (s) => s !== "Product Cost" && s !== "Branding Cost" && s !== "Success Fee"
-      )
-    : FULL_ORDER_SECTIONS;
+  const ORDER_SECTIONS = useMemo(() => {
+    return isSuperAdmin
+      ? FULL_ORDER_SECTIONS
+      : permissions.includes("manage-expenses")
+      ? FULL_ORDER_SECTIONS.filter(
+          (s) => s !== "Product Cost" && s !== "Branding Cost" && s !== "Success Fee"
+        )
+      : FULL_ORDER_SECTIONS;
+  }, [isSuperAdmin, permissions]);
 
   // Auto-fill fields
   const [opptyCode, setOpptyCode] = useState("");
@@ -57,50 +59,58 @@ export default function AddExpenseModal({ expense, onClose }) {
   // Fetch invoice data when jobSheetNumber changes (for super admins)
   useEffect(() => {
     if (!isSuperAdmin || !jobSheetNumber || !orderConfirmed) {
-      setInvoiceData(null);
+      setInvoiceData((prev) => {
+        if (prev !== null) {
+          console.log("Reset invoiceData to null");
+          return null;
+        }
+        return prev;
+      });
       return;
     }
 
     const fetchInvoices = async () => {
       try {
-        // Fetch PurchaseInvoices
         const purchaseRes = await axios.get(`${BACKEND}/api/admin/purchaseInvoice`, {
           params: { jobSheetNumber },
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
-        console.log(`PurchaseInvoices for ${jobSheetNumber}:`, purchaseRes.data); // Debug log
-
-        // Fetch ProductionJobSheetInvoices
         const productionRes = await axios.get(`${BACKEND}/api/admin/productionjobsheetinvoice`, {
           params: { jobSheet: jobSheetNumber },
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
-        console.log(`ProductionJobSheetInvoices request params:`, { jobSheet: jobSheetNumber }); // Debug log
-        console.log(`ProductionJobSheetInvoices for ${jobSheetNumber}:`, productionRes.data); // Debug log
-
         const newInvoiceData = {
           purchaseInvoices: purchaseRes.data || [],
           productionInvoices: productionRes.data || [],
         };
-        setInvoiceData(newInvoiceData);
-        console.log("Updated invoiceData:", newInvoiceData); // Debug log
+        setInvoiceData((prev) => {
+          if (JSON.stringify(prev) !== JSON.stringify(newInvoiceData)) {
+            console.log("Updated invoiceData:", newInvoiceData);
+            return newInvoiceData;
+          }
+          console.log("No change in invoiceData, skipping update");
+          return prev;
+        });
       } catch (error) {
         console.error(`Error fetching invoices for jobSheetNumber ${jobSheetNumber}:`, error);
-        setInvoiceData({ purchaseInvoices: [], productionInvoices: [] });
+        setInvoiceData((prev) => {
+          const emptyData = { purchaseInvoices: [], productionInvoices: [] };
+          if (JSON.stringify(prev) !== JSON.stringify(emptyData)) {
+            console.log("Set invoiceData to empty due to error");
+            return emptyData;
+          }
+          return prev;
+        });
       }
     };
 
     fetchInvoices();
   }, [jobSheetNumber, isSuperAdmin, orderConfirmed]);
 
-  // Auto-fill Product Cost and Branding Cost for super admins
-  useEffect(() => {
+  // Memoize productCost and brandingCost
+  const { productCost, brandingCost } = useMemo(() => {
     if (!isSuperAdmin || !invoiceData || !orderConfirmed) {
-      // Remove Product Cost and Branding Cost if conditions aren't met
-      setOrderExpenses((prev) =>
-        prev.filter((item) => item.section !== "Product Cost" && item.section !== "Branding Cost")
-      );
-      return;
+      return { productCost: 0, brandingCost: 0 };
     }
 
     const productCost = invoiceData.purchaseInvoices.reduce((total, inv) => {
@@ -108,47 +118,57 @@ export default function AddExpenseModal({ expense, onClose }) {
       const cost = Number(inv.negotiatedCost) || 0;
       return total + qty * cost;
     }, 0);
-    console.log(`Product Cost for ${jobSheetNumber}:`, productCost); // Debug log
 
     const brandingCost = invoiceData.productionInvoices.reduce((total, inv) => {
       const qty = Number(inv.qtyRequired) || 0;
       const cost = Number(inv.negotiatedCost) || 0;
-      const itemCost = qty * cost;
-      console.log(
-        `Branding Cost for product ${inv.product} (Qty: ${qty}, Cost: ${cost}):`,
-        itemCost
-      ); // Debug log
-      return total + itemCost;
+      return total + qty * cost;
     }, 0);
-    console.log(`Total Branding Cost for ${jobSheetNumber}:`, brandingCost); // Debug log
 
-    // Update orderExpenses to include or update Product Cost and Branding Cost
-    setOrderExpenses((prev) => {
-      let updated = prev.filter(
-        (item) => item.section !== "Product Cost" && item.section !== "Branding Cost"
-      );
-
-      if (productCost > 0) {
-        updated.push({
-          section: "Product Cost",
-          amount: productCost,
-          expenseDate: new Date().toISOString().slice(0, 10),
-          remarks: "Auto-filled from Purchase Invoices",
-        });
-      }
-
-      if (brandingCost > 0) {
-        updated.push({
-          section: "Branding Cost",
-          amount: brandingCost,
-          expenseDate: new Date().toISOString().slice(0, 10),
-          remarks: "Auto-filled from Production Job Sheet Invoices",
-        });
-      }
-
-      return updated;
-    });
+    console.log(`Calculated Product Cost: ${productCost}, Branding Cost: ${brandingCost}`);
+    return { productCost, brandingCost };
   }, [invoiceData, isSuperAdmin, orderConfirmed]);
+
+  // Memoize the filtered expenses
+  const filteredOrderExpenses = useMemo(() => {
+    return orderExpenses.filter(
+      item => item.section !== "Product Cost" && item.section !== "Branding Cost"
+    );
+  }, [orderExpenses]);
+
+  // Memoize the auto-filled expenses
+  const autoFilledExpenses = useMemo(() => {
+    if (!isSuperAdmin || !orderConfirmed) return [];
+    
+    const expenses = [];
+    if (productCost > 0) {
+      expenses.push({
+        section: "Product Cost",
+        amount: productCost,
+        expenseDate: new Date().toISOString().slice(0, 10),
+        remarks: "Auto-filled from Purchase Invoices",
+      });
+    }
+    if (brandingCost > 0) {
+      expenses.push({
+        section: "Branding Cost",
+        amount: brandingCost,
+        expenseDate: new Date().toISOString().slice(0, 10),
+        remarks: "Auto-filled from Production Job Sheet Invoices",
+      });
+    }
+    return expenses;
+  }, [productCost, brandingCost, isSuperAdmin, orderConfirmed]);
+
+  // Single effect to handle order expenses
+  useEffect(() => {
+    if (!isSuperAdmin || !orderConfirmed) {
+      setOrderExpenses(filteredOrderExpenses);
+      return;
+    }
+    
+    setOrderExpenses([...filteredOrderExpenses, ...autoFilledExpenses]);
+  }, [filteredOrderExpenses, autoFilledExpenses, isSuperAdmin, orderConfirmed]);
 
   // On mount or when editing, populate and convert dates
   useEffect(() => {
@@ -172,7 +192,6 @@ export default function AddExpenseModal({ expense, onClose }) {
     setOrderConfirmed(expense.orderConfirmed);
     setJobSheetNumber(expense.jobSheetNumber || "");
 
-    // Filter order expenses to only include allowed sections
     setOrderExpenses(
       expense.orderExpenses
         .filter((item) => ORDER_SECTIONS.includes(item.section))
@@ -222,27 +241,22 @@ export default function AddExpenseModal({ expense, onClose }) {
   };
 
   // Row helpers
-  const addRow = (list, setList) => {
+  const addRow = useCallback((list, setList) => {
     const newRow = { section: "", amount: "", expenseDate: "", remarks: "" };
-    setList((prev) => {
-      const updatedList = [...prev, newRow];
-      console.log("Added row to list:", updatedList); // Debug log
-      return updatedList;
+    setList(prev => [...prev, newRow]);
+  }, []);
+
+  const updateRow = useCallback((list, setList, idx, field, val) => {
+    setList(prev => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: val };
+      return updated;
     });
-  };
+  }, []);
 
-  const updateRow = (list, setList, idx, field, val) => {
-    const updatedList = [...list];
-    updatedList[idx][field] = val;
-    setList(updatedList);
-    console.log(`Updated row ${idx} in list:`, updatedList); // Debug log
-  };
-
-  const removeRow = (list, setList, idx) => {
-    const updatedList = list.filter((_, i) => i !== idx);
-    setList(updatedList);
-    console.log(`Removed row ${idx} from list:`, updatedList); // Debug log
-  };
+  const removeRow = useCallback((list, setList, idx) => {
+    setList(prev => prev.filter((_, i) => i !== idx));
+  }, []);
 
   // Submit handler
   const handleSubmit = async () => {
@@ -255,12 +269,18 @@ export default function AddExpenseModal({ expense, onClose }) {
       orderExpenses,
     };
     const config = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
-    if (isEdit) {
-      await axios.put(`${BACKEND}/api/admin/expenses/${expense._id}`, payload, config);
-    } else {
-      await axios.post(`${BACKEND}/api/admin/expenses`, payload, config);
+    try {
+      if (isEdit) {
+        await axios.put(`${BACKEND}/api/admin/expenses/${expense._id}`, payload, config);
+        console.log("Expense updated:", payload);
+      } else {
+        await axios.post(`${BACKEND}/api/admin/expenses`, payload, config);
+        console.log("Expense created:", payload);
+      }
+      onClose();
+    } catch (error) {
+      console.error("Error submitting expense:", error);
     }
-    onClose();
   };
 
   return (
@@ -384,7 +404,11 @@ export default function AddExpenseModal({ expense, onClose }) {
           <label className="font-medium">Order Confirmed</label>
           <select
             value={orderConfirmed ? "yes" : "no"}
-            onChange={(e) => setOrderConfirmed(e.target.value === "yes")}
+            onChange={(e) => {
+              const newValue = e.target.value === "yes";
+              setOrderConfirmed(newValue);
+              console.log("Order Confirmed changed to:", newValue);
+            }}
             className="border p-1 rounded ml-2 text-xs"
           >
             <option value="no">No</option>
@@ -478,10 +502,16 @@ export default function AddExpenseModal({ expense, onClose }) {
 
         {/* Actions */}
         <div className="flex justify-end mt-6 space-x-2">
-          <button onClick={onClose} className="px-4 py-2 border rounded text-xs">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 border rounded text-xs"
+          >
             Cancel
           </button>
-          <button onClick={handleSubmit} className="px-4 py-2 bg-green-600 text-white rounded text-xs">
+          <button 
+            onClick={handleSubmit} 
+            className="px-4 py-2 bg-green-600 text-white rounded text-xs"
+          >
             {isEdit ? "Update" : "Save"}
           </button>
         </div>

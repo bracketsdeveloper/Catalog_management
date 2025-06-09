@@ -148,21 +148,20 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
               deliveryDateTime: p.deliveryDateTime,
+              qtyOrdered: p.qtyOrdered,
+              qtyRequired: p.qtyRequired,
             };
-            // Check if ClosedPurchase exists
             const existingClosed = await ClosedPurchase.findOne({
               jobSheetId: p.jobSheetId,
               product: p.product,
               size: p.size || "",
             });
             if (existingClosed) {
-              // Update existing record
               await ClosedPurchase.updateOne(
                 { _id: existingClosed._id },
                 { $set: closedData }
               );
             } else {
-              // Insert new record
               const newClosed = new ClosedPurchase(closedData);
               await newClosed.save();
             }
@@ -235,26 +234,26 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
               deliveryDateTime: p.deliveryDateTime,
+              qtyOrdered: p.qtyOrdered,
+              qtyRequired: p.qtyRequired,
             };
-            // Check if ClosedPurchase exists
             const existingClosed = await ClosedPurchase.findOne({
               jobSheetId: p.jobSheetId,
               product: p.product,
               size: p.size || "",
             });
             if (existingClosed) {
-              // Update existing record
               await ClosedPurchase.updateOne(
                 { _id: existingClosed._id },
                 { $set: closedData }
               );
             } else {
-              // Insert new record
-              const newClosed = new ClosedPurchase(closedData);
-              await newClosed.save();
+              const newClosed = new ClosedPurchase(closedData
+            );
+            await newClosed.save();
             }
           }
-        }
+        };
       }
     }
 
@@ -273,7 +272,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         "jobSheetId",
         "deliveryDateTime",
       ];
-      fields.forEach((field) => {
+      fields.forEach((f) => {
         let value = purchaseObj[field];
         if (value && (field.includes("Date") || field === "deliveryDateTime")) {
           value = new Date(value).toLocaleString();
@@ -296,6 +295,72 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   } catch (error) {
     console.error("Error updating open purchase:", error);
     res.status(500).json({ message: "Server error updating open purchase" });
+  }
+});
+
+router.post("/split/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const originalPurchase = await OpenPurchase.findById(id);
+    if (!originalPurchase) {
+      return res.status(404).json({ message: "Open purchase not found" });
+    }
+
+    if (originalPurchase.qtyOrdered >= originalPurchase.qtyRequired) {
+      return res.status(400).json({ message: "Cannot split; qtyOrdered is not less than qtyRequired" });
+    }
+
+    // Create ClosedPurchase for qtyOrdered
+    const closedData = {
+      jobSheetCreatedDate: originalPurchase.jobSheetCreatedDate,
+      jobSheetNumber: originalPurchase.jobSheetNumber,
+      clientCompanyName: originalPurchase.clientCompanyName,
+      eventName: originalPurchase.eventName,
+      product: originalPurchase.product,
+      size: originalPurchase.size || "",
+      sourcedBy: originalPurchase.sourcedBy,
+      sourcingFrom: originalPurchase.sourcingFrom,
+      vendorContactNumber: originalPurchase.vendorContactNumber,
+      orderConfirmedDate: originalPurchase.orderConfirmedDate,
+      expectedReceiveDate: originalPurchase.expectedReceiveDate,
+      schedulePickUp: originalPurchase.schedulePickUp,
+      followUp: originalPurchase.followUp,
+      remarks: originalPurchase.remarks,
+      status: "received",
+      jobSheetId: originalPurchase.jobSheetId,
+      createdAt: originalPurchase.createdAt,
+      deliveryDateTime: originalPurchase.deliveryDateTime,
+      qtyOrdered: originalPurchase.qtyOrdered,
+      qtyRequired: originalPurchase.qtyOrdered, // Match qtyOrdered for closed record
+    };
+    const existingClosed = await ClosedPurchase.findOne({
+      jobSheetId: originalPurchase.jobSheetId,
+      product: originalPurchase.product,
+      size: originalPurchase.size || "",
+    });
+    if (existingClosed) {
+      await ClosedPurchase.updateOne(
+        { _id: existingClosed._id },
+        { $set: closedData }
+      );
+    } else {
+      const newClosed = new ClosedPurchase(closedData);
+      await newClosed.save();
+    }
+
+    // Update original OpenPurchase for remaining qty
+    const remainingQty = originalPurchase.qtyRequired - originalPurchase.qtyOrdered;
+    await OpenPurchase.findByIdAndUpdate(id, {
+      qtyRequired: remainingQty,
+      qtyOrdered: 0,
+      status: "pending",
+      remarks: `Split: ${originalPurchase.qtyOrdered} closed, ${remainingQty} pending`,
+    });
+
+    res.json({ message: "Purchase split successfully" });
+  } catch (error) {
+    console.error("Error splitting purchase:", error);
+    res.status(500).json({ message: "Server error splitting purchase" });
   }
 });
 

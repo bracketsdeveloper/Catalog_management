@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { TrashIcon } from "@heroicons/react/24/solid";
 import * as XLSX from "xlsx";
 import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
@@ -81,7 +80,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-1 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40">
       <div className="bg-white p-6 rounded w-full max-w-lg text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
@@ -144,7 +143,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 }
 
 const statusOptions = ["", "pending", "received", "alert"];
-function EditPurchaseModal({ purchase, onClose, onSave }) {
+function EditPurchaseModal({ purchase, onClose, onSave, onSplit }) {
   const [data, setData] = useState({ ...purchase });
   const [fuModal, setFuModal] = useState(false);
 
@@ -159,9 +158,19 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
     onSave(payload);
   };
 
+  const split = () => {
+    if (data.qtyOrdered >= data.qtyRequired) {
+      alert("Cannot split; qtyOrdered must be less than qtyRequired");
+      return;
+    }
+    if (window.confirm(`Split: Close ${data.qtyOrdered}, keep ${data.qtyRequired - data.qtyOrdered} pending?`)) {
+      onSplit(data);
+    }
+  };
+
   return (
     <>
-      <div className="fixed inset-0 z-1 flex items-center justify-center bg-black/40">
+      <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40">
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
@@ -271,7 +280,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 </select>
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setFuModal(true)}
@@ -279,6 +288,15 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               >
                 View Follow-Ups
               </button>
+              {data.qtyOrdered < data.qtyRequired && (
+                <button
+                  type="button"
+                  onClick={split}
+                  className="bg-purple-600 text-white px-2 py-1 rounded"
+                >
+                  Split Purchase
+                </button>
+              )}
             </div>
           </form>
           <div className="flex justify-end gap-4 mt-6">
@@ -319,6 +337,7 @@ export default function OpenPurchaseList() {
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
+  const [viewMode, setViewMode] = useState("open"); // "open" or "partial"
 
   const [perms, setPerms] = useState([]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
@@ -373,6 +392,10 @@ export default function OpenPurchaseList() {
   }, [sortConfig]);
 
   const filteredPurchases = useMemo(() => {
+    if (viewMode === "partial") {
+      return purchases.filter((rec) => rec.qtyOrdered < rec.qtyRequired);
+    }
+    // Open Purchase view: exclude job sheets where all items are received
     const jobSheetStatus = {};
     purchases.forEach((rec) => {
       if (!jobSheetStatus[rec.jobSheetNumber]) {
@@ -383,11 +406,8 @@ export default function OpenPurchaseList() {
         jobSheetStatus[rec.jobSheetNumber].allReceived = false;
       }
     });
-
-    return purchases.filter(
-      (rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived
-    );
-  }, [purchases]);
+    return purchases.filter((rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived);
+  }, [purchases, viewMode]);
 
   const globalFiltered = useMemo(() => {
     const s = search.toLowerCase();
@@ -509,7 +529,7 @@ export default function OpenPurchaseList() {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold text-purple-700 mb-4">
-          Open Purchases
+          {viewMode === "open" ? "Open Purchases" : "Partial Purchases"}
         </h1>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-300 rounded"></div>
@@ -526,9 +546,25 @@ export default function OpenPurchaseList() {
         </div>
       )}
       <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
-        Open Purchases
+        {viewMode === "open" ? "Open Purchases" : "Partial Purchases"}
       </h1>
       <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={() => setViewMode("open")}
+          className={`px-4 py-2 rounded text-xs ${
+            viewMode === "open" ? "bg-[#Ff8045] text-white" : "bg-gray-200"
+          }`}
+        >
+          Open Purchase
+        </button>
+        <button
+          onClick={() => setViewMode("partial")}
+          className={`px-4 py-2 rounded text-xs ${
+            viewMode === "partial" ? "bg-[#Ff8045] text-white" : "bg-gray-200"
+          }`}
+        >
+          Partial Purchase
+        </button>
         <input
           type="text"
           placeholder="Global search…"
@@ -555,9 +591,7 @@ export default function OpenPurchaseList() {
         <div className="border p-4 mb-4 bg-gray-50 rounded text-xs">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
-              <label className="block mb-1 font-semibold">
-                Job Sheet # From
-              </label>
+              <label className="block mb-1 font-semibold">Job Sheet # From</label>
               <input
                 type="text"
                 className="w-full border p-1 rounded"
@@ -571,9 +605,7 @@ export default function OpenPurchaseList() {
               />
             </div>
             <div>
-              <label className="block mb-1 font-semibold">
-                Job Sheet # To
-              </label>
+              <label className="block mb-1 font-semibold">Job Sheet # To</label>
               <input
                 type="text"
                 className="w-full border p-1 rounded"
@@ -624,7 +656,7 @@ export default function OpenPurchaseList() {
                 </div>
               </React.Fragment>
             ))}
-          </div>,
+          </div>
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setShowFilters(false)}
@@ -641,7 +673,7 @@ export default function OpenPurchaseList() {
           </div>
         </div>
       )}
-      <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
+      <table className="min-w-full border-collapse border border-gray-300 text-xs">
         <thead className="bg-gray-50">
           <tr>
             {[
@@ -651,7 +683,7 @@ export default function OpenPurchaseList() {
               { key: "eventName", label: "Event" },
               { key: "product", label: "Product" },
               { key: "size", label: "Size" },
-              { key: "qtyRequired", label: "Qty Req" },
+              { key: "qtyRequired", label: "Qty Req'd" },
               { key: "qtyOrdered", label: "Qty Ordered" },
               { key: "sourcedBy", label: "Sourced By" },
               { key: "sourcingFrom", label: "Sourced From" },
@@ -733,42 +765,32 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">
                   {p.deliveryDateTime
                     ? new Date(p.deliveryDateTime).toLocaleDateString()
-                    : ""
-                  }
+                    : ""}
                 </td>
                 <td className="p-2 border">{p.vendorContactNumber}</td>
                 <td className="p-2 border">
                   {p.orderConfirmedDate
                     ? new Date(p.orderConfirmedDate).toLocaleDateString()
-                    : ""
-                  }
+                    : ""}
                 </td>
                 <td className="p-2 border">
                   {p.expectedReceiveDate
                     ? new Date(p.expectedReceiveDate).toLocaleDateString()
-                    : ""
-                  }
+                    : ""}
                 </td>
                 <td className="p-2 border">
                   {p.schedulePickUp
                     ? new Date(p.schedulePickUp).toLocaleDateString()
-                    : ""
-                  }
+                    : ""}
                 </td>
                 <td className="p-2 border">{p.remarks}</td>
                 <td className="p-2 border">{p.status || "N/A"}</td>
                 <td className="p-2 border">{latest ? latest.note : "—"}</td>
                 <td className="p-2 border space-y-1">
                   <button
-                    disabled={
-                      !perms.includes("write-purchase") || p.status === "received"
-                    }
+                    disabled={!perms.includes("write-purchase") || p.status === "received"}
                     onClick={() => {
-                      if (
-                        !perms.includes("write-purchase") ||
-                        p.status === "received"
-                      )
-                        return;
+                      if (!perms.includes("write-purchase") || p.status === "received") return;
                       setCurrentEdit(p);
                       setEditModal(true);
                     }}
@@ -779,10 +801,7 @@ export default function OpenPurchaseList() {
                   <button
                     disabled={!perms.includes("write-purchase")}
                     onClick={async () => {
-                      if (
-                        !perms.includes("write-purchase") ||
-                        !window.confirm("Delete this purchase?")
-                      )
+                      if (!perms.includes("write-purchase") || !window.confirm("Delete this purchase?"))
                         return;
                       try {
                         const token = localStorage.getItem("token");
@@ -841,8 +860,7 @@ export default function OpenPurchaseList() {
                 const newPurchases = prev.filter(
                   (x) =>
                     !(
-                      x.jobSheetId?.toString() ===
-                        updatedPurchase.jobSheetId?.toString() &&
+                      x.jobSheetId?.toString() === updatedPurchase.jobSheetId?.toString() &&
                       x.product === updatedPurchase.product &&
                       (x.size || "") === (updatedPurchase.size || "")
                     )
@@ -852,7 +870,36 @@ export default function OpenPurchaseList() {
               });
             } catch (error) {
               console.error("Error saving purchase:", error);
-              // alert("Error saving purchase");
+              alert("Error saving purchase");
+            } finally {
+              setEditModal(false);
+            }
+          }}
+          onSplit={async (u) => {
+            try {
+              const token = localStorage.getItem("token");
+              await axios.post(
+                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/split/${u._id}`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              setPurchases((prev) => {
+                const updated = prev.map((x) =>
+                  x._id === u._id
+                    ? {
+                        ...x,
+                        qtyRequired: x.qtyRequired - x.qtyOrdered,
+                        qtyOrdered: 0,
+                        status: "pending",
+                        remarks: `Split: ${x.qtyOrdered} closed, ${x.qtyRequired - x.qtyOrdered} pending`,
+                      }
+                    : x
+                );
+                return updated;
+              });
+            } catch (error) {
+              console.error("Error splitting purchase:", error);
+              alert("Error splitting purchase");
             } finally {
               setEditModal(false);
             }
