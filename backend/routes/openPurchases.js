@@ -300,14 +300,35 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
 router.post("/split/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
-    const originalPurchase = await OpenPurchase.findById(id);
-    if (!originalPurchase) {
-      return res.status(404).json({ message: "Open purchase not found" });
-    }
+    let { id } = req.params;
+    let originalPurchase;
 
-    if (originalPurchase.qtyOrdered >= originalPurchase.qtyRequired) {
-      return res.status(400).json({ message: "Cannot split; qtyOrdered is not less than qtyRequired" });
+    if (id.startsWith("temp_")) {
+      // Handle temporary record: create new OpenPurchase
+      const data = { ...req.body };
+      delete data._id; // Remove _id to prevent validation error
+      if (!data.jobSheetId || !data.product || !data.qtyRequired || !data.qtyOrdered) {
+        return res.status(400).json({ message: "Missing required fields for temporary record" });
+      }
+      if (data.qtyOrdered >= data.qtyRequired) {
+        return res.status(400).json({ message: "Cannot split; qtyOrdered is not less than qtyRequired" });
+      }
+      const js = await JobSheet.findById(data.jobSheetId);
+      if (!js) {
+        return res.status(404).json({ message: "JobSheet not found" });
+      }
+      data.deliveryDateTime = js.deliveryDate ? new Date(js.deliveryDate) : null;
+      originalPurchase = new OpenPurchase(data);
+      await originalPurchase.save();
+      id = originalPurchase._id; // Update id to real ObjectId
+    } else {
+      originalPurchase = await OpenPurchase.findById(id);
+      if (!originalPurchase) {
+        return res.status(404).json({ message: "Open purchase not found" });
+      }
+      if (originalPurchase.qtyOrdered >= originalPurchase.qtyRequired) {
+        return res.status(400).json({ message: "Cannot split; qtyOrdered is not less than qtyRequired" });
+      }
     }
 
     // Create ClosedPurchase for qtyOrdered
@@ -350,17 +371,21 @@ router.post("/split/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // Update original OpenPurchase for remaining qty
     const remainingQty = originalPurchase.qtyRequired - originalPurchase.qtyOrdered;
-    await OpenPurchase.findByIdAndUpdate(id, {
-      qtyRequired: remainingQty,
-      qtyOrdered: 0,
-      status: "pending",
-      remarks: `Split: ${originalPurchase.qtyOrdered} closed, ${remainingQty} pending`,
-    });
+    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(
+      id,
+      {
+        qtyRequired: remainingQty,
+        qtyOrdered: 0,
+        status: "pending",
+        remarks: `Split: ${originalPurchase.qtyOrdered} closed, ${remainingQty} pending`,
+      },
+      { new: true }
+    );
 
-    res.json({ message: "Purchase split successfully" });
+    res.json({ message: "Purchase split successfully", purchase: updatedPurchase });
   } catch (error) {
     console.error("Error splitting purchase:", error);
-    res.status(500).json({ message: "Server error splitting purchase" });
+    res.status(500).json({ message: "Server error splitting purchase", error: error.message });
   }
 });
 

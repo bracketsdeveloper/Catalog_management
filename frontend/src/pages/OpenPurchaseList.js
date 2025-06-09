@@ -331,6 +331,7 @@ const initAdv = {
 
 export default function OpenPurchaseList() {
   const [purchases, setPurchases] = useState([]);
+  const [closedPurchases, setClosedPurchases] = useState([]); // New state for ClosedPurchase
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [headerFilters, setHeaderFilters] = useState({});
@@ -372,7 +373,8 @@ export default function OpenPurchaseList() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(
+        // Fetch OpenPurchase records
+        const openRes = await axios.get(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -382,7 +384,15 @@ export default function OpenPurchaseList() {
             },
           }
         );
-        setPurchases(res.data);
+        setPurchases(openRes.data);
+        // Fetch ClosedPurchase records
+        const closedRes = await axios.get(
+          `${process.env.REACT_APP_BACKEND_URL}/api/admin/closedPurchases`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setClosedPurchases(closedRes.data);
       } catch (err) {
         console.error(err);
       } finally {
@@ -393,7 +403,17 @@ export default function OpenPurchaseList() {
 
   const filteredPurchases = useMemo(() => {
     if (viewMode === "partial") {
-      return purchases.filter((rec) => rec.qtyOrdered < rec.qtyRequired);
+      // Get OpenPurchase records where qtyOrdered < qtyRequired
+      const openFiltered = purchases.filter((rec) => rec.qtyOrdered < rec.qtyRequired);
+      // Get ClosedPurchase records that were split (have qtyOrdered < qtyRequired)
+      const closedFiltered = closedPurchases.filter(
+        (rec) => rec.qtyOrdered && rec.qtyOrdered < rec.qtyRequired
+      );
+      // Combine and mark source for UI rendering
+      return [
+        ...openFiltered.map((rec) => ({ ...rec, source: "open" })),
+        ...closedFiltered.map((rec) => ({ ...rec, source: "closed" })),
+      ];
     }
     // Open Purchase view: exclude job sheets where all items are received
     const jobSheetStatus = {};
@@ -406,8 +426,10 @@ export default function OpenPurchaseList() {
         jobSheetStatus[rec.jobSheetNumber].allReceived = false;
       }
     });
-    return purchases.filter((rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived);
-  }, [purchases, viewMode]);
+    return purchases
+      .filter((rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived)
+      .map((rec) => ({ ...rec, source: "open" }));
+  }, [purchases, closedPurchases, viewMode]);
 
   const globalFiltered = useMemo(() => {
     const s = search.toLowerCase();
@@ -471,7 +493,7 @@ export default function OpenPurchaseList() {
   const rows = useMemo(() => {
     const byKey = {};
     advFiltered.forEach((r) => {
-      const key = `${r.jobSheetNumber}_${r.product}_${r.size || ""}`;
+      const key = `${r.jobSheetNumber}_${r.product}_${r.size || ""}_${r.source}`;
       byKey[key] = r;
     });
     return Object.values(byKey);
@@ -521,8 +543,8 @@ export default function OpenPurchaseList() {
         Status: r.status,
       }))
     );
-    XLSX.utils.book_append_sheet(wb, ws, "OpenPurchases");
-    XLSX.writeFile(wb, "open_purchases.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Purchases");
+    XLSX.writeFile(wb, `${viewMode}_purchases.xlsx`);
   };
 
   if (loading)
@@ -729,7 +751,7 @@ export default function OpenPurchaseList() {
               : null;
             return (
               <tr
-                key={`${p._id}_${p.product}_${p.size || ""}`}
+                key={`${p._id}_${p.product}_${p.size || ""}_${p.source}`}
                 className={
                   p.status === "alert"
                     ? "bg-red-200"
@@ -787,39 +809,46 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{p.status || "N/A"}</td>
                 <td className="p-2 border">{latest ? latest.note : "—"}</td>
                 <td className="p-2 border space-y-1">
-                  <button
-                    disabled={!perms.includes("write-purchase") || p.status === "received"}
-                    onClick={() => {
-                      if (!perms.includes("write-purchase") || p.status === "received") return;
-                      setCurrentEdit(p);
-                      setEditModal(true);
-                    }}
-                    className="bg-blue-700 text-white w-full rounded py-0.5 text-[10px]"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    disabled={!perms.includes("write-purchase")}
-                    onClick={async () => {
-                      if (!perms.includes("write-purchase") || !window.confirm("Delete this purchase?"))
-                        return;
-                      try {
-                        const token = localStorage.getItem("token");
-                        await axios.delete(
-                          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
-                          { headers: { Authorization: `Bearer ${token}` } }
-                        );
-                        setPurchases((prev) =>
-                          prev.filter((x) => x._id !== p._id)
-                        );
-                      } catch {
-                        alert("Error deleting.");
-                      }
-                    }}
-                    className="bg-red-700 text-white w-full rounded py-0.5 text-[10px]"
-                  >
-                    Delete
-                  </button>
+                  {p.source === "open" && (
+                    <>
+                      <button
+                        disabled={!perms.includes("write-purchase") || p.status === "received"}
+                        onClick={() => {
+                          if (!perms.includes("write-purchase") || p.status === "received") return;
+                          setCurrentEdit(p);
+                          setEditModal(true);
+                        }}
+                        className="bg-blue-700 text-white w-full rounded py-0.5 text-[10px]"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        disabled={!perms.includes("write-purchase")}
+                        onClick={async () => {
+                          if (!perms.includes("write-purchase") || !window.confirm("Delete this purchase?"))
+                            return;
+                          try {
+                            const token = localStorage.getItem("token");
+                            await axios.delete(
+                              `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
+                              { headers: { Authorization: `Bearer ${token}` } }
+                            );
+                            setPurchases((prev) =>
+                              prev.filter((x) => x._id !== p._id)
+                            );
+                          } catch {
+                            alert("Error deleting.");
+                          }
+                        }}
+                        className="bg-red-700 text-white w-full rounded py-0.5 text-[10px]"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                  {p.source === "closed" && (
+                    <span className="text-gray-500 text-[10px]">Closed</span>
+                  )}
                 </td>
               </tr>
             );
@@ -878,28 +907,28 @@ export default function OpenPurchaseList() {
           onSplit={async (u) => {
             try {
               const token = localStorage.getItem("token");
-              await axios.post(
+              const response = await axios.post(
                 `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/split/${u._id}`,
-                {},
+                u,
                 { headers: { Authorization: `Bearer ${token}` } }
               );
               setPurchases((prev) => {
                 const updated = prev.map((x) =>
                   x._id === u._id
-                    ? {
-                        ...x,
-                        qtyRequired: x.qtyRequired - x.qtyOrdered,
-                        qtyOrdered: 0,
-                        status: "pending",
-                        remarks: `Split: ${x.qtyOrdered} closed, ${x.qtyRequired - x.qtyOrdered} pending`,
-                      }
+                    ? { ...response.data.purchase, source: "open" }
                     : x
                 );
                 return updated;
               });
+              // Refresh ClosedPurchase to show new split
+              const closedRes = await axios.get(
+                `${process.env.REACT_APP_BACKEND_URL}/api/admin/closedPurchases`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              setClosedPurchases(closedRes.data);
             } catch (error) {
               console.error("Error splitting purchase:", error);
-              alert("Error splitting purchase");
+              alert("Error splitting purchase: " + (error.response?.data?.message || error.message));
             } finally {
               setEditModal(false);
             }
