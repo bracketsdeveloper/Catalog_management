@@ -1,3 +1,4 @@
+// openPurchase.js (Model)
 const mongoose = require("mongoose");
 
 const followUpSchema = new mongoose.Schema({
@@ -14,8 +15,8 @@ const openPurchaseSchema = new mongoose.Schema({
   clientCompanyName: { type: String },
   eventName: { type: String },
   product: { type: String },
-  size: { type: String, default: "" }, // Added size field
-  sourcedBy: {type: String, default: ""},
+  size: { type: String, default: "" },
+  sourcedBy: { type: String, default: "" },
   sourcingFrom: { type: String },
   qtyRequired: { type: Number },
   qtyOrdered: { type: Number, default: 0 },
@@ -25,7 +26,7 @@ const openPurchaseSchema = new mongoose.Schema({
   schedulePickUp: { type: Date },
   followUp: { type: [followUpSchema], default: [] },
   remarks: { type: String },
-  status: { type: String, enum: ["pending", "received", "alert"] },
+  status: { type: String, enum: ["pending", "received", "alert", ""], default: "" },
   jobSheetId: { type: mongoose.Schema.Types.ObjectId, ref: "JobSheet" },
   deliveryDateTime: { type: Date },
   createdAt: { type: Date, default: Date.now }
