@@ -71,9 +71,12 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
     setDate("");
     setNote("");
   };
+
   const remove = (i) => setLocal((p) => p.filter((_, idx) => idx !== i));
+
   const markDone = (i) =>
     setLocal((p) => p.map((fu, idx) => (idx === i ? { ...fu, done: true } : fu)));
+
   const close = () => {
     onUpdate(local);
     onClose();
@@ -143,18 +146,17 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 }
 
 const statusOptions = ["", "pending", "received", "alert"];
+
 function EditPurchaseModal({ purchase, onClose, onSave, onSplit }) {
   const [data, setData] = useState({ ...purchase });
   const [fuModal, setFuModal] = useState(false);
 
   const change = (f, v) => setData((p) => ({ ...p, [f]: v }));
+
   const save = () => {
-    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
-      return;
+    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?")) return;
     const payload = { ...data };
-    if (payload.status === "") {
-      delete payload.status;
-    }
+    if (payload.status === "") delete payload.status;
     onSave(payload);
   };
 
@@ -194,9 +196,7 @@ function EditPurchaseModal({ purchase, onClose, onSave, onSplit }) {
               <div><label className="font-bold">Sourced From:</label> {data.sourcingFrom}</div>
               <div>
                 <label className="font-bold">Delivery Date:</label>{" "}
-                {data.deliveryDateTime
-                  ? new Date(data.deliveryDateTime).toLocaleDateString()
-                  : "N/A"}
+                {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : "N/A"}
               </div>
               <div><label className="font-bold">Qty Req'd:</label> {data.qtyRequired}</div>
             </div>
@@ -207,9 +207,7 @@ function EditPurchaseModal({ purchase, onClose, onSave, onSplit }) {
                   type="number"
                   className="w-full border p-1"
                   value={data.qtyOrdered || ""}
-                  onChange={(e) =>
-                    change("qtyOrdered", parseInt(e.target.value) || 0)
-                  }
+                  onChange={(e) => change("qtyOrdered", parseInt(e.target.value) || 0)}
                 />
               </div>
               <div>
@@ -238,9 +236,7 @@ function EditPurchaseModal({ purchase, onClose, onSave, onSplit }) {
                   type="date"
                   className="w-full border p-1"
                   value={data.orderConfirmedDate?.substring(0, 10) || ""}
-                  onChange={(e) =>
-                    change("orderConfirmedDate", e.target.value)
-                  }
+                  onChange={(e) => change("orderConfirmedDate", e.target.value)}
                 />
               </div>
             </div>
@@ -251,9 +247,7 @@ function EditPurchaseModal({ purchase, onClose, onSave, onSplit }) {
                   type="date"
                   className="w-full border p-1"
                   value={data.expectedReceiveDate?.substring(0, 10) || ""}
-                  onChange={(e) =>
-                    change("expectedReceiveDate", e.target.value)
-                  }
+                  onChange={(e) => change("expectedReceiveDate", e.target.value)}
                 />
               </div>
               <div>
@@ -331,19 +325,17 @@ const initAdv = {
 
 export default function OpenPurchaseList() {
   const [purchases, setPurchases] = useState([]);
-  const [closedPurchases, setClosedPurchases] = useState([]); // New state for ClosedPurchase
+  const [closedPurchases, setClosedPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
-  const [viewMode, setViewMode] = useState("open"); // "open" or "partial"
-
+  const [viewMode, setViewMode] = useState("open");
   const [perms, setPerms] = useState([]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const canExport = isSuperAdmin || perms.includes("export-purchase");
-
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editModal, setEditModal] = useState(false);
@@ -373,28 +365,22 @@ export default function OpenPurchaseList() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
+        const headers = { Authorization: `Bearer ${token}` };
         // Fetch OpenPurchase records
         const openRes = await axios.get(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: {
-              sortKey: sortConfig.key,
-              sortDirection: sortConfig.direction,
-            },
-          }
+          { headers, params: { sortKey: sortConfig.key, sortDirection: sortConfig.direction } }
         );
         setPurchases(openRes.data);
-        // Fetch ClosedPurchase records
+        // Fetch ClosedPurchase records for Partial Purchase view
         const closedRes = await axios.get(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/closedPurchases`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers, params: { partial: true } } // Filter for split records
         );
         setClosedPurchases(closedRes.data);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching purchases:", err);
+        alert("Failed to load purchases");
       } finally {
         setLoading(false);
       }
@@ -403,19 +389,15 @@ export default function OpenPurchaseList() {
 
   const filteredPurchases = useMemo(() => {
     if (viewMode === "partial") {
-      // Get OpenPurchase records where qtyOrdered < qtyRequired
       const openFiltered = purchases.filter((rec) => rec.qtyOrdered < rec.qtyRequired);
-      // Get ClosedPurchase records that were split (have qtyOrdered < qtyRequired)
       const closedFiltered = closedPurchases.filter(
         (rec) => rec.qtyOrdered && rec.qtyOrdered < rec.qtyRequired
       );
-      // Combine and mark source for UI rendering
       return [
         ...openFiltered.map((rec) => ({ ...rec, source: "open" })),
         ...closedFiltered.map((rec) => ({ ...rec, source: "closed" })),
       ];
     }
-    // Open Purchase view: exclude job sheets where all items are received
     const jobSheetStatus = {};
     purchases.forEach((rec) => {
       if (!jobSheetStatus[rec.jobSheetNumber]) {
@@ -475,10 +457,8 @@ export default function OpenPurchaseList() {
     };
     return headerFiltered.filter((r) => {
       const numOK =
-        (!advFilters.jobSheetNumber.from ||
-          r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
-        (!advFilters.jobSheetNumber.to ||
-          r.jobSheetNumber <= advFilters.jobSheetNumber.to);
+        (!advFilters.jobSheetNumber.from || r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
+        (!advFilters.jobSheetNumber.to || r.jobSheetNumber <= advFilters.jobSheetNumber.to);
       return (
         numOK &&
         inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
@@ -526,19 +506,11 @@ export default function OpenPurchaseList() {
         "Qty Ordered": r.qtyOrdered,
         "Sourced By": r.sourcedBy || "",
         "Sourced From": r.sourcingFrom,
-        "Delivery Date": r.deliveryDateTime
-          ? new Date(r.deliveryDateTime).toLocaleDateString()
-          : "",
+        "Delivery Date": r.deliveryDateTime ? new Date(r.deliveryDateTime).toLocaleDateString() : "",
         "Vendor Contact": r.vendorContactNumber,
-        "Order Confirmed": r.orderConfirmedDate
-          ? new Date(r.orderConfirmedDate).toLocaleDateString()
-          : "",
-        "Expected Receive": r.expectedReceiveDate
-          ? new Date(r.expectedReceiveDate).toLocaleDateString()
-          : "",
-        "Schedule PickUp": r.schedulePickUp
-          ? new Date(r.schedulePickUp).toLocaleDateString()
-          : "",
+        "Order Confirmed": r.orderConfirmedDate ? new Date(r.orderConfirmedDate).toLocaleDateString() : "",
+        "Expected Receive": r.expectedReceiveDate ? new Date(r.expectedReceiveDate).toLocaleDateString() : "",
+        "Schedule PickUp": r.schedulePickUp ? new Date(r.schedulePickUp).toLocaleDateString() : "",
         Remarks: r.remarks,
         Status: r.status,
       }))
@@ -655,10 +627,7 @@ export default function OpenPurchaseList() {
                     className="w-full border p-1 rounded"
                     value={advFilters[k].from}
                     onChange={(e) =>
-                      setAdvFilters((p) => ({
-                        ...p,
-                        [k]: { ...p[k], from: e.target.value },
-                      }))
+                      setAdvFilters((p) => ({ ...p, [k]: { ...p[k], from: e.target.value } }))
                     }
                   />
                 </div>
@@ -669,10 +638,7 @@ export default function OpenPurchaseList() {
                     className="w-full border p-1 rounded"
                     value={advFilters[k].to}
                     onChange={(e) =>
-                      setAdvFilters((p) => ({
-                        ...p,
-                        [k]: { ...p[k], to: e.target.value },
-                      }))
+                      setAdvFilters((p) => ({ ...p, [k]: { ...p[k], to: e.target.value } }))
                     }
                   />
                 </div>
@@ -717,11 +683,7 @@ export default function OpenPurchaseList() {
               { key: "remarks", label: "Remarks" },
               { key: "status", label: "Status" },
             ].map(({ key, label }) => (
-              <th
-                key={key}
-                onClick={() => sortBy(key)}
-                className="p-2 border cursor-pointer"
-              >
+              <th key={key} onClick={() => sortBy(key)} className="p-2 border cursor-pointer">
                 {label}
                 {sortConfig.key === key
                   ? sortConfig.direction === "asc"
@@ -737,9 +699,7 @@ export default function OpenPurchaseList() {
           </tr>
           <HeaderFilters
             headerFilters={headerFilters}
-            onFilterChange={(k, v) =>
-              setHeaderFilters((p) => ({ ...p, [k]: v }))
-            }
+            onFilterChange={(k, v) => setHeaderFilters((p) => ({ ...p, [k]: v }))}
           />
         </thead>
         <tbody>
@@ -762,9 +722,7 @@ export default function OpenPurchaseList() {
                     : ""
                 }
               >
-                <td className="p-2 border">
-                  {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
-                </td>
+                <td className="p-2 border">{new Date(p.jobSheetCreatedDate).toLocaleDateString()}</td>
                 <td className="p-2 border">
                   <button
                     className="border-b text-blue-500 hover:text-blue-700"
@@ -785,25 +743,17 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{p.sourcedBy || ""}</td>
                 <td className="p-2 border">{p.sourcingFrom}</td>
                 <td className="p-2 border">
-                  {p.deliveryDateTime
-                    ? new Date(p.deliveryDateTime).toLocaleDateString()
-                    : ""}
+                  {p.deliveryDateTime ? new Date(p.deliveryDateTime).toLocaleDateString() : ""}
                 </td>
                 <td className="p-2 border">{p.vendorContactNumber}</td>
                 <td className="p-2 border">
-                  {p.orderConfirmedDate
-                    ? new Date(p.orderConfirmedDate).toLocaleDateString()
-                    : ""}
+                  {p.orderConfirmedDate ? new Date(p.orderConfirmedDate).toLocaleDateString() : ""}
                 </td>
                 <td className="p-2 border">
-                  {p.expectedReceiveDate
-                    ? new Date(p.expectedReceiveDate).toLocaleDateString()
-                    : ""}
+                  {p.expectedReceiveDate ? new Date(p.expectedReceiveDate).toLocaleDateString() : ""}
                 </td>
                 <td className="p-2 border">
-                  {p.schedulePickUp
-                    ? new Date(p.schedulePickUp).toLocaleDateString()
-                    : ""}
+                  {p.schedulePickUp ? new Date(p.schedulePickUp).toLocaleDateString() : ""}
                 </td>
                 <td className="p-2 border">{p.remarks}</td>
                 <td className="p-2 border">{p.status || "N/A"}</td>
@@ -812,9 +762,9 @@ export default function OpenPurchaseList() {
                   {p.source === "open" && (
                     <>
                       <button
-                        disabled={!perms.includes("write-purchase") || p.status === "received"}
+                        disabled={!perms.includes("write-purchase") || (p.status === "received" && viewMode === "open")}
                         onClick={() => {
-                          if (!perms.includes("write-purchase") || p.status === "received") return;
+                          if (!perms.includes("write-purchase") || (p.status === "received" && viewMode === "open")) return;
                           setCurrentEdit(p);
                           setEditModal(true);
                         }}
@@ -833,11 +783,9 @@ export default function OpenPurchaseList() {
                               `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
                               { headers: { Authorization: `Bearer ${token}` } }
                             );
-                            setPurchases((prev) =>
-                              prev.filter((x) => x._id !== p._id)
-                            );
+                            setPurchases((prev) => prev.filter((x) => x._id !== p._id));
                           } catch {
-                            alert("Error deleting.");
+                            alert("Error deleting purchase");
                           }
                         }}
                         className="bg-red-700 text-white w-full rounded py-0.5 text-[10px]"
@@ -899,36 +847,41 @@ export default function OpenPurchaseList() {
               });
             } catch (error) {
               console.error("Error saving purchase:", error);
-              alert("Error saving purchase");
+              // alert("Error saving purchase: " + (error.response?.data?.message || error.message));
             } finally {
               setEditModal(false);
             }
           }}
-          onSplit={async (u) => {
+          onSplit={async (data, fromSave) => {
             try {
               const token = localStorage.getItem("token");
-              const response = await axios.post(
-                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/split/${u._id}`,
-                u,
-                { headers: { Authorization: `Bearer ${token}` } }
+              const headers = { Authorization: `Bearer ${token}` };
+              const { _id, isTemporary, ...payload } = data;
+              const splitResponse = await axios.post(
+                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/split/${_id}`,
+                { ...payload, qtyOrdered: data.qtyOrdered, status: "received" },
+                { headers }
               );
               setPurchases((prev) => {
-                const updated = prev.map((x) =>
-                  x._id === u._id
-                    ? { ...response.data.purchase, source: "open" }
-                    : x
-                );
+                let updated;
+                if (_id.startsWith("temp_")) {
+                  updated = [...prev, { ...splitResponse.data.purchase, source: "open" }];
+                } else {
+                  updated = prev.map((x) =>
+                    x._id === _id ? { ...splitResponse.data.purchase, source: "open" } : x
+                  );
+                }
                 return updated;
               });
-              // Refresh ClosedPurchase to show new split
               const closedRes = await axios.get(
                 `${process.env.REACT_APP_BACKEND_URL}/api/admin/closedPurchases`,
-                { headers: { Authorization: `Bearer ${token}` } }
+                { headers, params: { partial: true } }
               );
               setClosedPurchases(closedRes.data);
+              alert(fromSave ? "Purchase partially received and split successfully" : "Purchase split successfully");
             } catch (error) {
               console.error("Error splitting purchase:", error);
-              alert("Error splitting purchase: " + (error.response?.data?.message || error.message));
+              alert("Error splitting purchase: " + (error.response?.data?.error || error.message));
             } finally {
               setEditModal(false);
             }

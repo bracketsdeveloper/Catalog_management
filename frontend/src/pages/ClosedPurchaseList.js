@@ -1,4 +1,3 @@
-// pages/ClosedPurchases.js
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -7,25 +6,46 @@ import * as XLSX from "xlsx";
 import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
 
 /* ─────────── Header Filters ─────────── */
-function HeaderFilters({ filters, onChange, statusOptions }) {
-  const cols = [
-    "jobSheetCreatedDate",
-    "deliveryDateTime",
-    "jobSheetNumber",
-    "clientCompanyName",
-    "eventName",
-    "product",
-    "qtyRequired",
-    "qtyOrdered",
-    "sourcedBy",
-    "sourcingFrom",
-    "vendorContactNumber",
-    "orderConfirmedDate",
-    "expectedReceiveDate",
-    "schedulePickUp",
-    "remarks",
-    "status",
-  ];
+function HeaderFilters({ filters, onChange, statusOptions, isPartial }) {
+  const cols = isPartial
+    ? [
+        "jobSheetCreatedDate",
+        "deliveryDateTime",
+        "jobSheetNumber",
+        "clientCompanyName",
+        "eventName",
+        "product",
+        "size",
+        "qtyRequired",
+        "qtyOrdered",
+        "sourcedBy",
+        "sourcingFrom",
+        "vendorContactNumber",
+        "orderConfirmedDate",
+        "expectedReceiveDate",
+        "schedulePickUp",
+        "remarks",
+        "status",
+        "splitId",
+      ]
+    : [
+        "jobSheetCreatedDate",
+        "deliveryDateTime",
+        "jobSheetNumber",
+        "clientCompanyName",
+        "eventName",
+        "product",
+        "qtyRequired",
+        "qtyOrdered",
+        "sourcedBy",
+        "sourcingFrom",
+        "vendorContactNumber",
+        "orderConfirmedDate",
+        "expectedReceiveDate",
+        "schedulePickUp",
+        "remarks",
+        "status",
+      ];
   return (
     <tr className="bg-gray-100">
       {cols.map((c) => (
@@ -71,44 +91,33 @@ const initAdv = {
 
 /* ─────────── Main ─────────── */
 export default function ClosedPurchases() {
-  const [rows, setRows] = useState([]);
+  const [closedRows, setClosedRows] = useState([]);
+  const [partialRows, setPartialRows] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [search, setSearch] = useState("");
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
-  const [sort, setSort] = useState({
-    key: "schedulePickUp",
-    direction: "asc",
-    type: "date",
-  });
-
-  // Define available status options
-  const statusOptions = ["Pending", "received"];
-
-  // calling jobsheet global
-
+  const [sort, setSort] = useState({ key: "schedulePickUp", direction: "asc", type: "date" });
+  const [activeTab, setActiveTab] = useState("closed");
+  const statusOptions = ["pending", "received", "alert"];
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  
+
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
     setIsModalOpen(true);
   };
-  
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedJobSheetNumber(null);
   };
 
-  // Add permission state
   const [perms, setPerms] = useState([]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const canExport = isSuperAdmin || perms.includes("export-purchase");
 
-  // Add permission load effect
   useEffect(() => {
     const str = localStorage.getItem("permissions");
     if (str) {
@@ -118,18 +127,25 @@ export default function ClosedPurchases() {
     }
   }, []);
 
-  /* -------- fetch closed purchases -------- */
+  /* Fetch data */
   useEffect(() => {
     (async () => {
       try {
+        setLoading(true);
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setRows(res.data);
+        const [openRes, closedRes] = await Promise.all([
+          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/closedPurchases`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        setClosedRows(openRes.data);
+        setPartialRows(closedRes.data.filter((r) => r.splitId));
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching purchases:", err);
+        alert("Failed to load purchases");
       } finally {
         setLoading(false);
       }
@@ -144,41 +160,41 @@ export default function ClosedPurchases() {
       ? (a ?? 0) - (b ?? 0)
       : type === "date"
       ? new Date(a || 0) - new Date(b || 0)
-      : String(a ?? "").localeCompare(String(b ?? ""), "en", {
-          sensitivity: "base",
-        });
+      : String(a ?? "").localeCompare(String(b ?? ""), "en", { sensitivity: "base" });
 
-  /* -------- global search -------- */
+  /* Global search */
   const globalFiltered = useMemo(() => {
     const s = search.toLowerCase();
+    const rows = activeTab === "closed" ? closedRows : partialRows;
     return rows.filter((p) =>
       [
         "jobSheetNumber",
         "clientCompanyName",
         "eventName",
         "product",
+        "size",
         "sourcedBy",
         "sourcingFrom",
         "vendorContactNumber",
+        ...(activeTab === "partiallyClosed" ? ["splitId"] : []),
       ].some((f) => (p[f] || "").toLowerCase().includes(s))
     );
-  }, [rows, search]);
+  }, [closedRows, partialRows, search, activeTab]);
 
-  /* -------- header filters -------- */
-  const headerFiltered = useMemo(
-    () =>
-      globalFiltered.filter((r) =>
-        Object.entries(headerFilters).every(([k, v]) => {
-          if (!v) return true;
-          let val = r[k] ?? "";
-          if (isDate(k) && val) val = new Date(val).toLocaleDateString();
-          return String(val).toLowerCase().includes(v.toLowerCase());
-        }) && r.status === "received"
-      ),
+  /* Header filters */
+  const headerFiltered = useMemo(() =>
+    globalFiltered.filter((r) =>
+      Object.entries(headerFilters).every(([k, v]) => {
+        if (!v) return true;
+        let val = r[k] ?? "";
+        if (isDate(k) && val) val = new Date(val).toLocaleDateString();
+        return String(val).toLowerCase().includes(v.toLowerCase());
+      })
+    ),
     [globalFiltered, headerFilters]
   );
 
-  /* -------- advanced filters -------- */
+  /* Advanced filters */
   const advFiltered = useMemo(() => {
     const inRange = (d, { from, to }) => {
       if (!from && !to) return true;
@@ -190,10 +206,8 @@ export default function ClosedPurchases() {
     };
     return headerFiltered.filter((r) => {
       const numOK =
-        (!advFilters.jobSheetNumber.from ||
-          r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
-        (!advFilters.jobSheetNumber.to ||
-          r.jobSheetNumber <= advFilters.jobSheetNumber.to);
+        (!advFilters.jobSheetNumber.from || r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
+        (!advFilters.jobSheetNumber.to || r.jobSheetNumber <= advFilters.jobSheetNumber.to);
       return (
         numOK &&
         inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
@@ -206,21 +220,18 @@ export default function ClosedPurchases() {
     });
   }, [headerFiltered, advFilters]);
 
-  /* -------- sort -------- */
-  const sorted = useMemo(
-    () =>
-      [...advFiltered].sort((a, b) => {
-        const res = cmp(a[sort.key], b[sort.key], sort.type);
-        return sort.direction === "asc" ? res : -res;
-      }),
+  /* Sort */
+  const sorted = useMemo(() =>
+    [...advFiltered].sort((a, b) => {
+      const res = cmp(a[sort.key], b[sort.key], sort.type);
+      return sort.direction === "asc" ? res : -res;
+    }),
     [advFiltered, sort]
   );
 
-  /* -------- handlers -------- */
-  const changeHeader = (k, v) =>
-    setHeaderFilters((p) => ({ ...p, [k]: v }));
-  const changeAdv = (f, k, v) =>
-    setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
+  /* Handlers */
+  const changeHeader = (k, v) => setHeaderFilters((p) => ({ ...p, [k]: v }));
+  const changeAdv = (f, k, v) => setAdvFilters((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
   const sortBy = (k, type = "string") =>
     setSort((p) => ({
       key: k,
@@ -228,7 +239,7 @@ export default function ClosedPurchases() {
       type,
     }));
 
-  /* -------- export -------- */
+  /* Export */
   const exportToExcel = () => {
     if (!canExport) {
       alert("You don't have permission to export purchase records.");
@@ -246,35 +257,35 @@ export default function ClosedPurchases() {
       Client: r.clientCompanyName,
       Event: r.eventName,
       Product: r.product,
+      Size: activeTab === "partiallyClosed" ? r.size || "" : undefined,
       "Qty Required": r.qtyRequired,
       "Qty Ordered": r.qtyOrdered,
-      "Sourced By": r.sourcedBy,
+      "Sourced By": r.sourcedBy || "",
       "Sourced From": r.sourcingFrom,
-      "Vendor Contact": r.vendorContactNumber,
+      "Vendor Contact": r.vendorContactNumber || "",
       "Order Confirmed": r.orderConfirmedDate
-        ? r.orderConfirmedDate.substring(0, 10)
+        ? new Date(r.orderConfirmedDate).toLocaleDateString()
         : "",
       "Expected Receive": r.expectedReceiveDate
-        ? r.expectedReceiveDate.substring(0, 10)
+        ? new Date(r.expectedReceiveDate).toLocaleDateString()
         : "",
       "Schedule Pick Up": r.schedulePickUp
-        ? r.schedulePickUp.substring(0, 16)
+        ? new Date(r.schedulePickUp).toLocaleDateString()
         : "",
-      Remarks: r.remarks,
+      Remarks: r.remarks || "",
       Status: r.status,
+      "Split ID": activeTab === "partiallyClosed" ? r.splitId || "" : undefined,
     }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "Closed");
-    XLSX.writeFile(wb, "Closed_Purchases.xlsx");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), activeTab === "closed" ? "Closed" : "PartiallyClosed");
+    XLSX.writeFile(wb, `Purchases_${activeTab}.xlsx`);
   };
 
-  /* -------- skeleton -------- */
+  /* Skeleton */
   if (loading)
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">
-          Closed Purchases
-        </h1>
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">Closed Purchases</h1>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-300 rounded"></div>
           <div className="h-64 bg-gray-300 rounded"></div>
@@ -282,14 +293,25 @@ export default function ClosedPurchases() {
       </div>
     );
 
-  /* -------- UI -------- */
+  /* UI */
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
-        Closed Purchases
-      </h1>
+      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Closed Purchases</h1>
 
-      {/* toolbar */}
+      {/* Tabs */}
+      <div className="flex gap-4 mb-4">
+        {["closed", "partiallyClosed"].map((tab) => (
+          <button
+            key={tab}
+            className={`px-4 py-2 rounded ${activeTab === tab ? "bg-[#Ff8045] text-white" : "bg-gray-200"}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === "closed" ? "Closed Purchases" : "Partially Closed"}
+          </button>
+        ))}
+      </div>
+
+      {/* Toolbar */}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           className="border p-2 rounded flex-grow md:flex-none md:w-1/3"
@@ -313,21 +335,17 @@ export default function ClosedPurchases() {
         )}
       </div>
 
-      {/* advanced filters */}
+      {/* Advanced filters */}
       {showFilters && (
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block font-semibold mb-1">
-                Job Sheet # From
-              </label>
+              <label className="block font-semibold mb-1">Job Sheet # From</label>
               <input
                 type="text"
                 className="w-full border p-1 rounded"
                 value={advFilters.jobSheetNumber.from}
-                onChange={(e) =>
-                  changeAdv("jobSheetNumber", "from", e.target.value.trim())
-                }
+                onChange={(e) => changeAdv("jobSheetNumber", "from", e.target.value.trim())}
               />
             </div>
             <div>
@@ -336,12 +354,9 @@ export default function ClosedPurchases() {
                 type="text"
                 className="w-full border p-1 rounded"
                 value={advFilters.jobSheetNumber.to}
-                onChange={(e) =>
-                  changeAdv("jobSheetNumber", "to", e.target.value.trim())
-                }
+                onChange={(e) => changeAdv("jobSheetNumber", "to", e.target.value.trim())}
               />
             </div>
-
             {[
               ["jobSheetCreatedDate", "Job Sheet Created"],
               ["deliveryDateTime", "Delivery Date"],
@@ -351,9 +366,7 @@ export default function ClosedPurchases() {
             ].map(([k, label]) => (
               <React.Fragment key={k}>
                 <div>
-                  <label className="block font-semibold mb-1">
-                    {label} From
-                  </label>
+                  <label className="block font-semibold mb-1">{label} From</label>
                   <input
                     type={k === "schedulePickUp" ? "datetime-local" : "date"}
                     className="w-full border p-1 rounded"
@@ -362,9 +375,7 @@ export default function ClosedPurchases() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">
-                    {label} To
-                  </label>
+                  <label className="block font-semibold mb-1">{label} To</label>
                   <input
                     type={k === "schedulePickUp" ? "datetime-local" : "date"}
                     className="w-full border p-1 rounded"
@@ -375,7 +386,6 @@ export default function ClosedPurchases() {
               </React.Fragment>
             ))}
           </div>
-
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setShowFilters(false)}
@@ -393,35 +403,56 @@ export default function ClosedPurchases() {
         </div>
       )}
 
-      {/* table */}
-      <table className="min-w-full border-collapse border border-gray-300 text-xs">
+      {/* Table */}
+      <table className="min-w-full border-collapse border-gray-300 text-xs">
         <thead className="bg-gray-50">
           <tr>
-            {[
-              ["jobSheetCreatedDate", "Job Sheet Created Date", "date"],
-              ["deliveryDateTime", "Delivery Date", "date"],
-              ["jobSheetNumber", "Job Sheet #", "string"],
-              ["clientCompanyName", "Client Company Name", "string"],
-              ["eventName", "Event Name", "string"],
-              ["product", "Product", "string"],
-              ["qtyRequired", "Qty Required", "number"],
-              ["qtyOrdered", "Qty Ordered", "number"],
-              ["sourcedBy", "Sourced By", "string"],
-              ["sourcingFrom", "Sourced From", "string"],
-              ["vendorContactNumber", "Vendor Contact", "string"],
-              ["orderConfirmedDate", "Order Confirmed Date", "date"],
-              ["expectedReceiveDate", "Expected Receive Date", "date"],
-              ["schedulePickUp", "Schedule Pick Up", "date"],
-              ["remarks", "Remarks", "string"],
-              ["status", "Status", "string"],
-            ].map(([k, l, t]) => (
+            {(activeTab === "closed"
+              ? [
+                  ["jobSheetCreatedDate", "Job Sheet Created Date", "date"],
+                  ["deliveryDateTime", "Delivery Date", "date"],
+                  ["jobSheetNumber", "Job Sheet #", "string"],
+                  ["clientCompanyName", "Client Company Name", "string"],
+                  ["eventName", "Event Name", "string"],
+                  ["product", "Product", "string"],
+                  ["qtyRequired", "Qty Required", "number"],
+                  ["qtyOrdered", "Qty Ordered", "number"],
+                  ["sourcedBy", "Sourced By", "string"],
+                  ["sourcingFrom", "Sourced From", "string"],
+                  ["vendorContactNumber", "Vendor Contact", "string"],
+                  ["orderConfirmedDate", "Order Confirmed Date", "date"],
+                  ["expectedReceiveDate", "Expected Receive Date", "date"],
+                  ["schedulePickUp", "Schedule Pick Up", "date"],
+                  ["remarks", "Remarks", "string"],
+                  ["status", "Status", "string"],
+                ]
+              : [
+                  ["jobSheetCreatedDate", "Job Sheet Created Date", "date"],
+                  ["deliveryDateTime", "Delivery Date", "date"],
+                  ["jobSheetNumber", "Job Sheet #", "string"],
+                  ["clientCompanyName", "Client Company Name", "string"],
+                  ["eventName", "Event Name", "string"],
+                  ["product", "Product", "string"],
+                  ["size", "Size", "string"],
+                  ["qtyRequired", "Qty Required", "number"],
+                  ["qtyOrdered", "Qty Ordered", "number"],
+                  ["sourcedBy", "Sourced By", "string"],
+                  ["sourcingFrom", "Sourced From", "string"],
+                  ["vendorContactNumber", "Vendor Contact", "string"],
+                  ["orderConfirmedDate", "Order Confirmed Date", "date"],
+                  ["expectedReceiveDate", "Expected Receive Date", "date"],
+                  ["schedulePickUp", "Schedule Pick Up", "date"],
+                  ["remarks", "Remarks", "string"],
+                  ["status", "Status", "string"],
+                  ["splitId", "Split ID", "string"],
+                ]
+            ).map(([k, l, t]) => (
               <th
                 key={k}
                 onClick={() => sortBy(k, t)}
                 className="p-2 border cursor-pointer"
               >
-                {l}{" "}
-                {sort.key === k ? (sort.direction === "asc" ? "↑" : "↓") : ""}
+                {l} {sort.key === k ? (sort.direction === "asc" ? "↑" : "↓") : ""}
               </th>
             ))}
           </tr>
@@ -429,70 +460,65 @@ export default function ClosedPurchases() {
             filters={headerFilters}
             onChange={changeHeader}
             statusOptions={statusOptions}
+            isPartial={activeTab === "partiallyClosed"}
           />
         </thead>
         <tbody>
-          {sorted.map((p) => (
+          {sorted.map((r) => (
             <tr
-              key={p._id}
-              className="bg-green-300"
+              key={`${r._id}_${r.splitId || ""}`}
+              className={activeTab === "partiallyClosed" ? "bg-green-600" : "bg-green-300"}
             >
+              <td className="p-2 border">{new Date(r.jobSheetCreatedDate).toLocaleDateString()}</td>
               <td className="p-2 border">
-                {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
+                {r.deliveryDateTime ? new Date(r.deliveryDateTime).toLocaleDateString() : ""}
               </td>
               <td className="p-2 border">
-                {p.deliveryDateTime
-                  ? new Date(p.deliveryDateTime).toLocaleDateString()
-                  : ""}
+                <button
+                  className="border-b text-blue-500 hover:text-blue-700"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOpenModal(r.jobSheetNumber);
+                  }}
+                >
+                  {r.jobSheetNumber || "(No Number)"}
+                </button>
+              </td>
+              <td className="p-2 border">{r.clientCompanyName}</td>
+              <td className="p-2 border">{r.eventName}</td>
+              <td className="p-2 border">{r.product}</td>
+              {activeTab === "partiallyClosed" && (
+                <td className="p-2 border">{r.size || "N/A"}</td>
+              )}
+              <td className="p-2 border">{r.qtyRequired}</td>
+              <td className="p-2 border">{r.qtyOrdered}</td>
+              <td className="p-2 border">{r.sourcedBy || ""}</td>
+              <td className="p-2 border">{r.sourcingFrom}</td>
+              <td className="p-2 border">{r.vendorContactNumber || ""}</td>
+              <td className="p-2 border">
+                {r.orderConfirmedDate ? new Date(r.orderConfirmedDate).toLocaleDateString() : ""}
               </td>
               <td className="p-2 border">
-                   <button
-                    className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(p.jobSheetNumber);
-                    }}
-                  >
-                    {p.jobSheetNumber || "(No Number)"}
-                  </button>
-              </td>
-              <td className="p-2 border">{p.clientCompanyName}</td>
-              <td className="p-2 border">{p.eventName}</td>
-              <td className="p-2 border">{p.product}</td>
-              <td className="p-2 border">{p.qtyRequired}</td>
-              <td className="p-2 border">{p.qtyOrdered}</td>
-              <td className="p-2 border">{p.sourcedBy}</td>
-              <td className="p-2 border">{p.sourcingFrom}</td>
-              <td className="p-2 border">{p.vendorContactNumber}</td>
-              <td className="p-2 border">
-                {p.orderConfirmedDate
-                  ? p.orderConfirmedDate.substring(0, 10)
-                  : ""}
+                {r.expectedReceiveDate ? new Date(r.expectedReceiveDate).toLocaleDateString() : ""}
               </td>
               <td className="p-2 border">
-                {p.expectedReceiveDate
-                  ? p.expectedReceiveDate.substring(0, 10)
-                  : ""}
+                {r.schedulePickUp ? new Date(r.schedulePickUp).toLocaleDateString() : ""}
               </td>
-              <td className="p-2 border">
-                {p.schedulePickUp
-                  ? p.schedulePickUp.substring(0, 16)
-                  : ""}
-              </td>
-              <td className="p-2 border">{p.remarks}</td>
-              <td className="p-2 border">{p.status}</td>
+              <td className="p-2 border">{r.remarks || ""}</td>
+              <td className="p-2 border">{r.status}</td>
+              {activeTab === "partiallyClosed" && (
+                <td className="p-2 border">{r.splitId || ""}</td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
 
-       
-                <JobSheetGlobal
-                  jobSheetNumber={selectedJobSheetNumber} 
-                  isOpen={isModalOpen}
-                  onClose={handleCloseModal}
-                />
-              
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }
