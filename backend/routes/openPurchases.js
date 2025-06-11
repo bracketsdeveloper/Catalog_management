@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const mongoose = require("mongoose");
 const OpenPurchase = require("../models/OpenPurchase");
 const ClosedPurchase = require("../models/ClosedPurchase");
 const JobSheet = require("../models/JobSheet");
@@ -23,7 +22,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         aggregated.push({
           _id: `temp_${js._id}_${index}`,
           jobSheetCreatedDate: js.createdAt,
-          deliveryDateTime: deliveryDate,
           jobSheetNumber: js.jobSheetNumber,
           clientCompanyName: js.clientCompanyName,
           eventName: js.eventName,
@@ -33,6 +31,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           sourcingFrom: item.sourcingFrom || "",
           qtyRequired: item.quantity,
           qtyOrdered: 0,
+          deliveryDateTime: deliveryDate,
           vendorContactNumber: "",
           orderConfirmedDate: null,
           expectedReceiveDate: null,
@@ -95,64 +94,15 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-async function transferToClosedPurchase(openPurchase, session) {
-  const closedData = {
-    jobSheetCreatedDate: openPurchase.jobSheetCreatedDate,
-    deliveryDateTime: openPurchase.deliveryDateTime, // Include deliveryDateTime
-    jobSheetNumber: openPurchase.jobSheetNumber,
-    clientCompanyName: openPurchase.clientCompanyName,
-    eventName: openPurchase.eventName,
-    product: openPurchase.product,
-    size: openPurchase.size || "",
-    sourcedBy: openPurchase.sourcedBy,
-    sourcingFrom: openPurchase.sourcingFrom,
-    vendorContactNumber: openPurchase.vendorContactNumber,
-    orderConfirmedDate: openPurchase.orderConfirmedDate,
-    expectedReceiveDate: openPurchase.expectedReceiveDate,
-    schedulePickUp: openPurchase.schedulePickUp,
-    followUp: openPurchase.followUp,
-    remarks: openPurchase.remarks,
-    status: openPurchase.status,
-    jobSheetId: openPurchase.jobSheetId,
-    createdAt: openPurchase.createdAt,
-    closedAt: new Date(),
-    qtyOrdered: openPurchase.qtyOrdered,
-    qtyRequired: openPurchase.qtyRequired,
-    // Only assign splitId if qtyOrdered < qtyRequired
-    splitId: openPurchase.qtyOrdered < openPurchase.qtyRequired ? new mongoose.Types.ObjectId() : undefined,
-  };
-
-  const existingClosed = await ClosedPurchase.findOne({
-    jobSheetId: openPurchase.jobSheetId,
-    product: openPurchase.product,
-    size: openPurchase.size || "",
-    splitId: { $exists: false }, // Match non-split records
-  }).session(session);
-
-  if (existingClosed) {
-    await ClosedPurchase.updateOne(
-      { _id: existingClosed._id },
-      { $set: closedData },
-      { session }
-    );
-  } else {
-    const newClosed = new ClosedPurchase(closedData);
-    await newClosed.save({ session });
-  }
-}
-
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const data = { ...req.body };
     if (data._id && data._id.startsWith("temp_")) {
       delete data._id;
     }
     if (data.jobSheetId) {
-      const js = await JobSheet.findById(data.jobSheetId).session(session);
+      const js = await JobSheet.findById(data.jobSheetId);
       if (!js) {
-        await session.abortTransaction();
         return res.status(404).json({ message: "JobSheet not found" });
       }
       if (js.deliveryDate) {
@@ -160,55 +110,80 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
     const newPurchase = new OpenPurchase(data);
-    await newPurchase.save({ session });
+    await newPurchase.save();
 
     if (newPurchase.status === "received") {
       const jobSheetId = newPurchase.jobSheetId;
-      const jobSheet = await JobSheet.findById(jobSheetId).session(session);
+      const jobSheet = await JobSheet.findById(jobSheetId);
       if (jobSheet) {
         const products = jobSheet.items.map((item) => ({
           product: item.product,
           size: item.size || "",
         }));
-        const openPurchases = await OpenPurchase.find(
-          {
-            jobSheetId,
-            $or: products.map((p) => ({
-              product: p.product,
-              size: p.size,
-            })),
-          },
-          null,
-          { session }
-        );
+        const openPurchases = await OpenPurchase.find({
+          jobSheetId,
+          $or: products.map((p) => ({
+            product: p.product,
+            size: p.size,
+          })),
+        });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
-            await transferToClosedPurchase(p, session);
+            const closedData = {
+              jobSheetCreatedDate: p.jobSheetCreatedDate,
+              jobSheetNumber: p.jobSheetNumber,
+              clientCompanyName: p.clientCompanyName,
+              eventName: p.eventName,
+              product: p.product,
+              size: p.size,
+              sourcedBy: p.sourcedBy,
+              sourcingFrom: p.sourcingFrom,
+              vendorContactNumber: p.vendorContactNumber,
+              orderConfirmedDate: p.orderConfirmedDate,
+              expectedReceiveDate: p.expectedReceiveDate,
+              schedulePickUp: p.schedulePickUp,
+              followUp: p.followUp,
+              remarks: p.remarks,
+              status: p.status,
+              jobSheetId: p.jobSheetId,
+              createdAt: p.createdAt,
+              deliveryDateTime: p.deliveryDateTime,
+            };
+            // Check if ClosedPurchase exists
+            const existingClosed = await ClosedPurchase.findOne({
+              jobSheetId: p.jobSheetId,
+              product: p.product,
+              size: p.size || "",
+            });
+            if (existingClosed) {
+              // Update existing record
+              await ClosedPurchase.updateOne(
+                { _id: existingClosed._id },
+                { $set: closedData }
+              );
+            } else {
+              // Insert new record
+              const newClosed = new ClosedPurchase(closedData);
+              await newClosed.save();
+            }
           }
         }
       }
     }
 
-    await session.commitTransaction();
     res.status(201).json({ message: "Open purchase created", purchase: newPurchase });
   } catch (error) {
-    await session.abortTransaction();
     console.error("Error creating open purchase:", error);
     res.status(500).json({ message: "Server error creating open purchase" });
-  } finally {
-    session.endSession();
   }
 });
 
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const updateData = { ...req.body };
     if (updateData.jobSheetId) {
-      const js = await JobSheet.findById(updateData.jobSheetId).session(session);
+      const js = await JobSheet.findById(updateData.jobSheetId);
       if (!js) {
-        await session.abortTransaction();
         return res.status(404).json({ message: "JobSheet not found" });
       }
       if (js.deliveryDate) {
@@ -218,35 +193,66 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     const updatedPurchase = await OpenPurchase.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true, session }
+      { new: true }
     );
     if (!updatedPurchase) {
-      await session.abortTransaction();
       return res.status(404).json({ message: "Open purchase not found" });
     }
 
     if (updatedPurchase.status === "received") {
       const jobSheetId = updatedPurchase.jobSheetId;
-      const jobSheet = await JobSheet.findById(jobSheetId).session(session);
+      const jobSheet = await JobSheet.findById(jobSheetId);
       if (jobSheet) {
         const products = jobSheet.items.map((item) => ({
           product: item.product,
           size: item.size || "",
         }));
-        const openPurchases = await OpenPurchase.find(
-          {
-            jobSheetId,
-            $or: products.map((p) => ({
-              product: p.product,
-              size: p.size,
-            })),
-          },
-          null,
-          { session }
-        );
+        const openPurchases = await OpenPurchase.find({
+          jobSheetId,
+          $or: products.map((p) => ({
+            product: p.product,
+            size: p.size,
+          })),
+        });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
-            await transferToClosedPurchase(p, session);
+            const closedData = {
+              jobSheetCreatedDate: p.jobSheetCreatedDate,
+              jobSheetNumber: p.jobSheetNumber,
+              clientCompanyName: p.clientCompanyName,
+              eventName: p.eventName,
+              product: p.product,
+              size: p.size,
+              sourcedBy: p.sourcedBy,
+              sourcingFrom: p.sourcingFrom,
+              vendorContactNumber: p.vendorContactNumber,
+              orderConfirmedDate: p.orderConfirmedDate,
+              expectedReceiveDate: p.expectedReceiveDate,
+              schedulePickUp: p.schedulePickUp,
+              followUp: p.followUp,
+              remarks: p.remarks,
+              status: p.status,
+              jobSheetId: p.jobSheetId,
+              createdAt: p.createdAt,
+              deliveryDateTime: p.deliveryDateTime,
+            };
+            // Check if ClosedPurchase exists
+            const existingClosed = await ClosedPurchase.findOne({
+              jobSheetId: p.jobSheetId,
+              product: p.product,
+              size: p.size || "",
+            });
+            if (existingClosed) {
+              // Update existing record
+              await ClosedPurchase.updateOne(
+                { _id: existingClosed._id },
+                { $set: closedData }
+              );
+            } else {
+              // Insert new record
+              const newClosed = new ClosedPurchase(closedData);
+              await newClosed.save();
+            }
           }
         }
       }
@@ -257,7 +263,6 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       let mailBody = "";
       const fields = [
         "jobSheetCreatedDate",
-        "deliveryDateTime",
         "jobSheetNumber",
         "clientCompanyName",
         "eventName",
@@ -266,6 +271,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         "sourcingFrom",
         "status",
         "jobSheetId",
+        "deliveryDateTime",
       ];
       fields.forEach((field) => {
         let value = purchaseObj[field];
@@ -275,7 +281,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         mailBody += `<b>${field}:</b> ${value}<br/>`;
       });
 
-      const superAdmins = await User.find({ isSuperAdmin: true }).session(session);
+      const superAdmins = await User.find({ isSuperAdmin: true });
       const emails = superAdmins.map((user) => user.email);
       if (emails.length > 0) {
         await sendMail({
@@ -286,75 +292,10 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    await session.commitTransaction();
     res.json({ message: "Open purchase updated", purchase: updatedPurchase });
   } catch (error) {
-    await session.abortTransaction();
     console.error("Error updating open purchase:", error);
     res.status(500).json({ message: "Server error updating open purchase" });
-  } finally {
-    session.endSession();
-  }
-});
-
-router.post("/split/:id", authenticate, authorizeAdmin, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const { id } = req.params;
-    const { qtyOrdered, status, ...data } = req.body;
-
-    let openPurchase;
-    if (id.startsWith("temp_")) {
-      openPurchase = new OpenPurchase({
-        ...data,
-        jobSheetId: data.jobSheetId ? new mongoose.Types.ObjectId(data.jobSheetId) : new mongoose.Types.ObjectId(),
-        qtyRequired: data.qtyRequired,
-        qtyOrdered: data.qtyOrdered || 0,
-        status: data.status || "pending",
-        size: data.size || "",
-        deliveryDateTime: data.deliveryDateTime,
-      });
-    } else {
-      openPurchase = await OpenPurchase.findById(id).session(session);
-      if (!openPurchase) {
-        await session.abortTransaction();
-        return res.status(404).json({ error: "Open purchase not found" });
-      }
-    }
-
-    if (qtyOrdered >= openPurchase.qtyRequired) {
-      await session.abortTransaction();
-      return res.status(400).json({ error: "qtyOrdered must be less than qtyRequired" });
-    }
-
-    const closedPurchase = new ClosedPurchase({
-      ...openPurchase.toObject(),
-      jobSheetId: openPurchase.jobSheetId,
-      qtyRequired: qtyOrdered,
-      qtyOrdered,
-      status: status || "received",
-      size: openPurchase.size || "",
-      splitId: new mongoose.Types.ObjectId(), // Assign splitId for split
-      closedAt: new Date(),
-      deliveryDateTime: openPurchase.deliveryDateTime, // Include deliveryDateTime
-    });
-
-    await closedPurchase.save({ session });
-
-    openPurchase.qtyRequired -= qtyOrdered;
-    openPurchase.qtyOrdered = 0;
-    openPurchase.status = "pending";
-    await openPurchase.save({ session });
-
-    await session.commitTransaction();
-    res.json({ purchase: openPurchase });
-  } catch (error) {
-    await session.abortTransaction();
-    console.error("Error splitting purchase:", error);
-    res.status(500).json({ error: "Server error splitting purchase: " + error.message });
-  } finally {
-    session.endSession();
   }
 });
 

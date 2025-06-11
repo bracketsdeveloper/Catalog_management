@@ -10,23 +10,21 @@ const INVOICE_RECEIVED_OPTIONS = ["Yes", "No"];
 const PAYMENT_STATUS_OPTIONS = ["Not Paid", "Partially Paid", "Fully Paid"];
 
 const HEADER_COLS = [
-  { key: "orderConfirmationDate", label: "Order Confirmation Date", type: "date" },
+  { key: "orderConfirmedDate", label: "Order Confirmation Date", type: "date" },
   { key: "deliveryDateTime", label: "Delivery Date", type: "date" },
   { key: "jobSheetNumber", label: "Job Sheet" },
   { key: "clientCompanyName", label: "Client Name" },
   { key: "eventName", label: "Event Name" },
   { key: "product", label: "Product" },
-  { key: "size", label: "Size" },
   { key: "qtyRequired", label: "Qty Required", type: "number" },
   { key: "qtyOrdered", label: "Qty Ordered", type: "number" },
   { key: "sourcingFrom", label: "Source From" },
   { key: "cost", label: "Cost", type: "number" },
   { key: "negotiatedCost", label: "Negotiated Cost", type: "number" },
-  { key: "paymentMade", label: "Amount Transfer", type: "number" },
+ { key: "paymentMade", label: "Amount Transfer", type: "number" },
   { key: "vendorInvoiceNumber", label: "Vendor Invoice Number" },
   { key: "vendorInvoiceReceived", label: "Vendor Invoice Received" },
   { key: "paymentStatus", label: "Payment Status" },
-  { key: "source", label: "Source" },
 ];
 
 /* header filter row */
@@ -74,18 +72,18 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
 
     try {
       const token = localStorage.getItem("token");
+      let response;
+      // Map fields to match PurchaseInvoice schema
       const invoiceData = {
-        orderConfirmationDate: data.orderConfirmationDate,
-        deliveryDateTime: data.deliveryDateTime,
+        orderConfirmationDate: data.orderConfirmedDate,
         jobSheetNumber: data.jobSheetNumber,
         clientName: data.clientCompanyName,
         eventName: data.eventName,
         product: data.product,
-        size: data.size || "",
         sourcingFrom: data.sourcingFrom,
         cost: data.cost || 0,
         negotiatedCost: data.negotiatedCost || 0,
-        paymentMade: data.paymentMade || 0,
+       paymentMade: data.paymentMade || 0,
         vendorInvoiceNumber: data.vendorInvoiceNumber || "",
         vendorInvoiceReceived: data.vendorInvoiceReceived || "No",
         qtyRequired: data.qtyRequired || 0,
@@ -93,29 +91,33 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
         paymentStatus: data.paymentStatus || "Not Paid",
       };
 
-      let response;
+      // Check if this is an existing PurchaseInvoice by querying
       const existing = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice/find`,
         {
-          params: { jobSheetNumber: data.jobSheetNumber, product: data.product, size: data.size },
+          params: { jobSheetNumber: data.jobSheetNumber, product: data.product },
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
       if (existing.data._id) {
+        // Update existing PurchaseInvoice
+        console.log("Updating invoice with ID:", existing.data._id);
         response = await axios.put(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice/${existing.data._id}`,
           invoiceData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
+        // Create new PurchaseInvoice
+        console.log("Creating new invoice for:", data.jobSheetNumber, data.product);
         response = await axios.post(
           `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice`,
           invoiceData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       }
-      onSave({ ...response.data.invoice, source: "invoice" });
+      onSave(response.data.invoice);
     } catch (error) {
       console.error("Error saving invoice:", error);
       alert(`Failed to save invoice: ${error.response?.data?.message || error.message}`);
@@ -133,90 +135,47 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
         <div className="grid grid-cols-3 gap-4 text-sm mb-4">
           <label>
             <span className="font-bold">Order Confirmed:</span>{" "}
-            <input
-              type="date"
-              value={data.orderConfirmationDate ? data.orderConfirmationDate.split("T")[0] : ""}
-              onChange={(e) => ch("orderConfirmationDate", e.target.value)}
-              className="border p-1"
-            />
+            {data.orderConfirmedDate ? new Date(data.orderConfirmedDate).toLocaleDateString() : ""}
           </label>
           <label>
             <span className="font-bold">Delivery Date:</span>{" "}
-            <input
-              type="date"
-              value={data.deliveryDateTime ? data.deliveryDateTime.split("T")[0] : ""}
-              onChange={(e) => ch("deliveryDateTime", e.target.value)}
-              className="border p-1"
-            />
+            {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : ""}
           </label>
           <label>
-            <span className="font-bold">Job Sheet:</span>{" "}
-            <input
-              value={data.jobSheetNumber || ""}
-              onChange={(e) => ch("jobSheetNumber", e.target.value)}
-              className="border p-1"
-            />
+            <span className="font-bold">Job Sheet:</span> {data.jobSheetNumber}
           </label>
           <label>
-            <span className="font-bold">Client:</span>{" "}
-            <input
-              value={data.clientCompanyName || ""}
-              onChange={(e) => ch("clientCompanyName", e.target.value)}
-              className="border p-1"
-            />
+            <span className="font-bold">Client:</span> {data.clientCompanyName}
           </label>
           <label>
-            <span className="font-bold">Event:</span>{" "}
-            <input
-              value={data.eventName || ""}
-              onChange={(e) => ch("eventName", e.target.value)}
-              className="border p-1"
-            />
+            <span className="font-bold">Event:</span> {data.eventName}
           </label>
           <label>
-            <span className="font-bold">Product:</span>{" "}
-            <input
-              value={data.product || ""}
-              onChange={(e) => ch("product", e.target.value)}
-              className="border p-1"
-            />
+            <span className="font-bold">Product:</span> {data.product}
           </label>
           <label>
-            <span className="font-bold">Size:</span>{" "}
-            <input
-              value={data.size || ""}
-              onChange={(e) => ch("size", e.target.value)}
-              className="border p-1"
-            />
-          </label>
-          <label>
-            <span className="font-bold">Source From:</span>{" "}
-            <input
-              value={data.sourcingFrom || ""}
-              onChange={(e) => ch("sourcingFrom", e.target.value)}
-              className="border p-1"
-            />
+            <span className="font-bold">Source From:</span> {data.sourcingFrom}
           </label>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-          {[
-            ["cost", "Cost"],
-            ["negotiatedCost", "Negotiated Cost"],
-            ["paymentMade", "Amount Transfer"],
-            ["qtyRequired", "Qty Required"],
-            ["qtyOrdered", "Qty Ordered"],
-          ].map(([k, l]) => (
-            <div key={k}>
-              <label className="font-bold">{l}:</label>
-              <input
-                type="number"
-                value={data[k] ?? ""}
-                onChange={(e) => ch(k, parseFloat(e.target.value) || 0)}
-                className="w-full border p-1"
-              />
-            </div>
-          ))}
+         {[
+          ["cost", "Cost"],
+          ["negotiatedCost", "Negotiated Cost"],
+          ["qtyRequired", "Qty Required"],
+          ["qtyOrdered", "Qty Ordered"],
+        ].map(([k, l]) => (
+          <div key={k}>
+            <label className="font-bold">{l}:</label>
+            <input
+              type="number"
+              value={data[k] ?? ""}
+              onChange={(e) => ch(k, parseFloat(e.target.value) || 0)}
+              className="w-full border p-1"
+            />
+          </div>
+        ))}
+
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
@@ -240,18 +199,19 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
               ))}
             </select>
           </div>
-          <div>
-            <label className="font-bold">Payment Status:</label>
-            <select
-              value={data.paymentStatus ?? "Not Paid"}
-              onChange={(e) => ch("paymentStatus", e.target.value)}
-              className="w-full border p-1 rounded"
-            >
-              {PAYMENT_STATUS_OPTIONS.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          </div>
+          {/* Payment Status Dropdown */}
+        <div>
+          <label className="font-bold">Payment Status:</label>
+          <select
+            value={data.paymentStatus ?? "Not Paid"}
+            onChange={(e) => ch("paymentStatus", e.target.value)}
+            className="w-full border p-1 rounded"
+          >
+            <option value="Not Paid">Not Paid</option>
+            <option value="Partially Paid">Partially Paid</option>
+            <option value="Fully Paid">Fully Paid</option>
+          </select>
+        </div>
         </div>
 
         <div className="flex justify-end gap-4">
@@ -267,7 +227,7 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
 const initRange = { from: "", to: "" };
 const initAdv = {
   jobSheetNumber: { ...initRange },
-  orderConfirmationDate: { ...initRange },
+  orderConfirmedDate: { ...initRange },
   deliveryDateTime: { ...initRange },
 };
 
@@ -307,99 +267,58 @@ export default function ManagePurchaseInvoice() {
   useEffect(() => {
     (async () => {
       try {
-        setLoading(true);
         const token = localStorage.getItem("token");
-        const [invRes, openRes, closedRes] = await Promise.all([
-          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+        const [openRes, invRes] = await Promise.all([
           axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/closedPurchases`, {
+          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice`, {
             headers: { Authorization: `Bearer ${token}` },
-            params: { partial: true },
           }),
         ]);
 
+        const received = openRes.data.filter((p) => p.status === "received");
         const invoices = invRes.data;
-        const receivedOpen = openRes.data.filter((p) => p.status === "received");
-        const splitClosed = closedRes.data.filter((p) => p.splitId && p.status === "received");
 
-        // Create a set of unique keys from PurchaseInvoice
-        const invoiceKeys = new Set(
-          invoices.map((i) => `${i.jobSheetNumber}|${i.product}|${i.size || ""}`)
-        );
+        const merged = received.map((p) => {
+          const m = invoices.find(
+            (i) => i.jobSheetNumber === p.jobSheetNumber && i.product === p.product
+          );
+          return {
+            ...p,
+            qtyRequired: m?.qtyRequired ?? p.qtyRequired ?? 0,
+            qtyOrdered: m?.qtyOrdered ?? p.qtyOrdered ?? 0,
+            cost: m?.cost ?? p.cost ?? 0,
+            negotiatedCost: m?.negotiatedCost ?? p.negotiatedCost ?? 0,
+            paymentMade: m?.paymentMade ?? p.paymentMade ?? 0,
+            vendorInvoiceNumber: m?.vendorInvoiceNumber ?? p.vendorInvoiceNumber ?? "",
+            vendorInvoiceReceived: m?.vendorInvoiceReceived ?? p.vendorInvoiceReceived ?? "No",
+            paymentStatus: m?.paymentStatus ?? p.paymentStatus ?? "Not Paid",
+            _id: m?._id, // Use PurchaseInvoice _id only
+            clientCompanyName: m?.clientName ?? p.clientCompanyName,
+            orderConfirmedDate: m?.orderConfirmationDate ?? p.orderConfirmedDate,
+          };
+        });
 
-        const merged = [];
-
-        // Process PurchaseInvoice records first
         invoices.forEach((i) => {
-          merged.push({
-            ...i,
-            clientCompanyName: i.clientName,
-            orderConfirmationDate: i.orderConfirmationDate,
-            qtyRequired: i.qtyRequired ?? 0,
-            qtyOrdered: i.qtyOrdered ?? 0,
-            cost: i.cost ?? 0,
-            negotiatedCost: i.negotiatedCost ?? 0,
-            paymentMade: i.paymentMade ?? 0,
-            vendorInvoiceNumber: i.vendorInvoiceNumber ?? "",
-            vendorInvoiceReceived: i.vendorInvoiceReceived || "No",
-            paymentStatus: i.paymentStatus || "Not Paid",
-            size: i.size || "",
-            source: "invoice",
-          });
-        });
-
-        // Process OpenPurchase records, excluding those in PurchaseInvoice
-        receivedOpen.forEach((p) => {
-          const key = `${p.jobSheetNumber}|${p.product}|${p.size || ""}`;
-          if (!invoiceKeys.has(key)) {
+          if (
+            !merged.some(
+              (x) => x.jobSheetNumber === i.jobSheetNumber && x.product === i.product
+            )
+          ) {
             merged.push({
-              ...p,
-              clientCompanyName: p.clientCompanyName,
-              orderConfirmationDate: p.orderConfirmedDate,
-              qtyRequired: p.qtyRequired ?? 0,
-              qtyOrdered: p.qtyOrdered ?? 0,
-              cost: p.cost ?? 0,
-              negotiatedCost: p.negotiatedCost ?? 0,
-              paymentMade: p.paymentMade ?? 0,
-              vendorInvoiceNumber: p.vendorInvoiceNumber ?? "",
-              vendorInvoiceReceived: p.vendorInvoiceReceived ?? "No",
-              paymentStatus: p.paymentStatus ?? "Not Paid",
-              size: p.size || "",
-              source: "open",
+              ...i,
+个别: i.clientName,
+              orderConfirmedDate: i.orderConfirmationDate,
+              qtyRequired: i.qtyRequired ?? 0,
+              qtyOrdered: i.qtyOrdered ?? 0,
+              paymentStatus: i.paymentStatus ?? "Not Paid",
             });
           }
         });
-
-        // Process ClosedPurchase records, excluding those in PurchaseInvoice
-        splitClosed.forEach((p) => {
-          const key = `${p.jobSheetNumber}|${p.product}|${p.size || ""}`;
-          if (!invoiceKeys.has(key) && !merged.some((m) => m._id === p._id && m.source === "closed")) {
-            merged.push({
-              ...p,
-              clientCompanyName: p.clientCompanyName,
-              orderConfirmationDate: p.orderConfirmedDate,
-              qtyRequired: p.qtyRequired ?? 0,
-              qtyOrdered: p.qtyOrdered ?? 0,
-              cost: p.cost ?? 0,
-              negotiatedCost: p.negotiatedCost ?? 0,
-              paymentMade: p.paymentMade ?? 0,
-              vendorInvoiceNumber: p.vendorInvoiceNumber ?? "",
-              vendorInvoiceReceived: p.vendorInvoiceReceived ?? "No",
-              paymentStatus: p.paymentStatus ?? "Not Paid",
-              size: p.size || "",
-              source: "closed",
-            });
-          }
-        });
-
         setRows(merged);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        alert("Failed to load purchase invoices");
+      } catch (e) {
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -407,38 +326,37 @@ export default function ManagePurchaseInvoice() {
   }, []);
 
   /* helpers */
-  const isDate = (k) => k.includes("Date") || k === "deliveryDateTime";
+  const isDate = (k) => k.endsWith("Date") || k === "deliveryDateTime";
   const cmp = (a, b, t) => {
     if (t === "date") return new Date(a || 0) - new Date(b || 0);
     if (t === "number") return (+a || 0) - (+b || 0);
     return String(a ?? "").localeCompare(String(b ?? ""), "en", { sensitivity: "base" });
   };
 
-  /* filtering pipeline */
+  /* ---------- filtering pipeline ---------- */
   const global = useMemo(
     () =>
-      rows.filter((p) => {
+      rows.filter((r) => {
         const s = search.toLowerCase();
-        return [
-          "jobSheetNumber",
-          "clientCompanyName",
-          "eventName",
-          "product",
-          "size",
-          "sourcingFrom",
-          "vendorInvoiceNumber",
-          "paymentStatus",
-          "source",
-        ].some((f) => (p[f] || "").toLowerCase().includes(s)) ||
-          (p.orderConfirmationDate &&
-            new Date(p.orderConfirmationDate).toLocaleDateString().toLowerCase().includes(s)) ||
-          (p.deliveryDateTime &&
-            new Date(p.deliveryDateTime).toLocaleDateString().toLowerCase().includes(s));
+        return (
+          [
+            "jobSheetNumber",
+            "clientCompanyName",
+            "eventName",
+            "product",
+            "sourcingFrom",
+            "vendorInvoiceNumber",
+            "vendorInvoiceReceived",
+            "paymentStatus",
+          ].some((f) => (r[f] || "").toLowerCase().includes(s)) ||
+          (r.orderConfirmedDate &&
+            new Date(r.orderConfirmedDate).toLocaleDateString().toLowerCase().includes(s))
+        );
       }),
     [rows, search]
   );
 
-  const headerFiltered = useMemo(
+  const header = useMemo(
     () =>
       global.filter((r) =>
         Object.entries(headerFilters).every(([k, v]) => {
@@ -452,31 +370,30 @@ export default function ManagePurchaseInvoice() {
   );
 
   const advFiltered = useMemo(() => {
-    const inRange = (d, r) => {
-      if (!r.from && !r.to) return true;
+    const inRange = (d, { from, to }) => {
+      if (!from && !to) return true;
       if (!d) return false;
       const dt = new Date(d);
-      if (r.from && dt < new Date(r.from)) return false;
-      if (r.to && dt > new Date(r.to)) return false;
+      if (from && dt < new Date(from)) return false;
+      if (to && dt > new Date(to)) return false;
       return true;
     };
-    return headerFiltered.filter(
+    return header.filter(
       (r) =>
         (!adv.jobSheetNumber.from || r.jobSheetNumber >= adv.jobSheetNumber.from) &&
         (!adv.jobSheetNumber.to || r.jobSheetNumber <= adv.jobSheetNumber.to) &&
-        inRange(r.orderConfirmationDate, adv.orderConfirmationDate) &&
+        inRange(r.orderConfirmedDate, adv.orderConfirmedDate) &&
         inRange(r.deliveryDateTime, adv.deliveryDateTime)
     );
-  }, [headerFiltered, adv]);
+  }, [header, adv]);
 
-  const tabFiltered = useMemo(() => {
-    return advFiltered.filter((r) => {
-      if (activeTab === "open") return r.vendorInvoiceReceived === "No";
-      if (activeTab === "closed") return r.vendorInvoiceReceived === "Yes";
-      if (activeTab === "partial") return r.source === "closed" && r.splitId && r.status === "received";
-      return true;
-    });
-  }, [advFiltered, activeTab]);
+  const tabFiltered = useMemo(
+    () =>
+      advFiltered.filter((r) =>
+        activeTab === "open" ? r.vendorInvoiceReceived === "No" : r.vendorInvoiceReceived === "Yes"
+      ),
+    [advFiltered, activeTab]
+  );
 
   const sorted = useMemo(
     () =>
@@ -486,34 +403,23 @@ export default function ManagePurchaseInvoice() {
     [tabFiltered, sort]
   );
 
-  /* handlers */
+  /* ---------- handlers ---------- */
   const setHeaderFilter = (k, v) => setHeader((p) => ({ ...p, [k]: v }));
   const setAdvVal = (f, k, v) => setAdv((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
   const sortBy = (k, t = "string") =>
-    setSort((p) => ({
-      key: k,
-      type: t,
-      direction: p.key === k && p.direction === "asc" ? "desc" : "asc",
-    }));
+    setSort((p) => ({ key: k, type: t, direction: p.key === k && p.direction === "asc" ? "desc" : "asc" }));
 
-  const handlePartialInvoice = (inv) => {
-    setModal({ ...inv, vendorInvoiceReceived: "Yes", source: "closed" });
-  };
-
-  /* export */
+  /* ---------- export ---------- */
   const exportXlsx = () => {
     const data = sorted.map((r) => ({
-      "Order Confirmed": r.orderConfirmationDate
-        ? new Date(r.orderConfirmationDate).toLocaleDateString()
+      "Order Confirmed": r.orderConfirmedDate
+        ? new Date(r.orderConfirmedDate).toLocaleDateString()
         : "",
-      "Delivery Date": r.deliveryDateTime
-        ? new Date(r.deliveryDateTime).toLocaleDateString()
-        : "",
+      "Delivery Date": r.deliveryDateTime ? new Date(r.deliveryDateTime).toLocaleDateString() : "",
       "Job Sheet": r.jobSheetNumber,
       Client: r.clientCompanyName,
       Event: r.eventName,
       Product: r.product,
-      Size: r.size || "",
       "Qty Required": r.qtyRequired,
       "Qty Ordered": r.qtyOrdered,
       "Source From": r.sourcingFrom,
@@ -523,14 +429,13 @@ export default function ManagePurchaseInvoice() {
       "Vendor Inv #": r.vendorInvoiceNumber,
       "Inv Received": r.vendorInvoiceReceived,
       "Payment Status": r.paymentStatus,
-      Source: r.source,
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "PurchaseInvoice");
     XLSX.writeFile(wb, "PurchaseInvoice.xlsx");
   };
 
-  /* loading */
+  /* ---------- loading ---------- */
   if (loading)
     return (
       <div className="p-6">
@@ -542,7 +447,7 @@ export default function ManagePurchaseInvoice() {
       </div>
     );
 
-  /* UI */
+  /* ---------- UI ---------- */
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Manage Purchase Invoice</h1>
@@ -555,13 +460,13 @@ export default function ManagePurchaseInvoice() {
 
       {/* Tabs */}
       <div className="flex gap-4 mb-4">
-        {["open", "closed", "partial"].map((t) => (
+        {["open", "closed"].map((t) => (
           <button
             key={t}
             className={`px-4 py-2 rounded ${activeTab === t ? "bg-[#Ff8045] text-white" : "bg-gray-200"}`}
             onClick={() => setActiveTab(t)}
           >
-            {t === "open" ? "Open Purchase Invoice" : t === "closed" ? "Closed Purchase Invoice" : "Partial Invoice"}
+            {t === "open" ? "Open Purchase Invoice" : "Closed Purchase Invoice"}
           </button>
         ))}
       </div>
@@ -607,8 +512,9 @@ export default function ManagePurchaseInvoice() {
                 />
               </div>
             ))}
+
             {[
-              ["orderConfirmationDate", "Order Confirmed Date"],
+              ["orderConfirmedDate", "Order Confirmed Date"],
               ["deliveryDateTime", "Delivery Date"],
             ].flatMap(([key, label]) => [
               <div key={`${key}-from`}>
@@ -631,6 +537,7 @@ export default function ManagePurchaseInvoice() {
               </div>,
             ])}
           </div>
+
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setShowFilters(false)}
@@ -668,13 +575,11 @@ export default function ManagePurchaseInvoice() {
         <tbody>
           {sorted.map((inv, index) => (
             <tr
-              key={`${inv._id || inv.jobSheetNumber + inv.product + inv.size}-${index}`}
+              key={`${inv._id || inv.jobSheetNumber + inv.product}-${index}`}
               className={inv.vendorInvoiceReceived === "Yes" ? "bg-green-100" : ""}
             >
               <td className="p-2 border">
-                {inv.orderConfirmationDate
-                  ? new Date(inv.orderConfirmationDate).toLocaleDateString()
-                  : ""}
+                {inv.orderConfirmedDate ? new Date(inv.orderConfirmedDate).toLocaleDateString() : ""}
               </td>
               <td className="p-2 border">
                 {inv.deliveryDateTime ? new Date(inv.deliveryDateTime).toLocaleDateString() : ""}
@@ -693,7 +598,6 @@ export default function ManagePurchaseInvoice() {
               <td className="p-2 border">{inv.clientCompanyName}</td>
               <td className="p-2 border">{inv.eventName}</td>
               <td className="p-2 border">{inv.product}</td>
-              <td className="p-2 border">{inv.size || "N/A"}</td>
               <td className="p-2 border">{inv.qtyRequired}</td>
               <td className="p-2 border">{inv.qtyOrdered}</td>
               <td className="p-2 border">{inv.sourcingFrom}</td>
@@ -703,8 +607,7 @@ export default function ManagePurchaseInvoice() {
               <td className="p-2 border">{inv.vendorInvoiceNumber}</td>
               <td className="p-2 border">{inv.vendorInvoiceReceived}</td>
               <td className="p-2 border">{inv.paymentStatus}</td>
-              <td className="p-2 border">{inv.source}</td>
-              <td className="p-2 border flex gap-1">
+              <td className="p-2 border">
                 <button
                   disabled={!canEdit}
                   onClick={() => canEdit && setModal(inv)}
@@ -734,14 +637,12 @@ export default function ManagePurchaseInvoice() {
               const exists = prev.some(
                 (r) =>
                   r.jobSheetNumber === updatedInvoice.jobSheetNumber &&
-                  r.product === updatedInvoice.product &&
-                  r.size === updatedInvoice.size
+                  r.product === updatedInvoice.product
               );
               if (exists) {
                 return prev.map((r) =>
                   r.jobSheetNumber === updatedInvoice.jobSheetNumber &&
-                  r.product === updatedInvoice.product &&
-                  r.size === updatedInvoice.size
+                  r.product === updatedInvoice.product
                     ? { ...updatedInvoice, clientCompanyName: updatedInvoice.clientName }
                     : r
                 );

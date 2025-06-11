@@ -5,22 +5,13 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 /**
  * GET /api/admin/closedPurchases
- * Fetch all closed purchase records, optionally filtered by partial splits.
- * Query param: partial=true to include only records with qtyOrdered < qtyRequired or status="received".
+ * Fetch all closed purchase records.
+ * (These records should only be those manually saved as closed.)
  */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { partial } = req.query;
-    let query = {};
-    if (partial === "true") {
-      query = {
-        $or: [
-          { $expr: { $lt: ["$qtyOrdered", "$qtyRequired"] } },
-          { status: "received" },
-        ],
-      };
-    }
-    const closedPurchases = await ClosedPurchase.find(query).sort({ createdAt: -1 });
+    // Return closed purchase records sorted by creation date
+    const closedPurchases = await ClosedPurchase.find({}).sort({ createdAt: -1 });
     res.json(closedPurchases);
   } catch (error) {
     console.error("Error fetching closed purchases:", error);
@@ -30,23 +21,25 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
 /**
  * POST /api/admin/closedPurchases
- * Create a new Closed Purchase record (manual closure, not for splits).
+ * Save a Closed Purchase record by upserting (inserting or updating if duplicate found).
+ * This helps avoid duplication based on the composite key (jobSheetNumber + product).
  */
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const closedPurchase = new ClosedPurchase({
-      ...req.body,
-      jobSheetId: req.body.jobSheetId ? new mongoose.Types.ObjectId(req.body.jobSheetId) : undefined,
-      size: req.body.size || "",
-      splitId: new mongoose.Types.ObjectId(), // Ensure unique splitId
-      status: req.body.status || "received",
-      closedAt: new Date(),
-    });
-    await closedPurchase.save();
-    res.status(201).json({ message: "Closed purchase created", purchase: closedPurchase });
+    // Define the query based on unique fields (you can adjust if needed)
+    const query = {
+      jobSheetNumber: req.body.jobSheetNumber,
+      product: req.body.product
+    };
+
+    // Options: upsert true means create if not found; new true returns the updated document.
+    const options = { upsert: true, new: true, setDefaultsOnInsert: true };
+
+    const closedPurchase = await ClosedPurchase.findOneAndUpdate(query, req.body, options);
+    res.status(201).json({ message: "Closed purchase saved", purchase: closedPurchase });
   } catch (error) {
-    console.error("Error creating closed purchase:", error);
-    res.status(500).json({ message: "Server error creating closed purchase: " + error.message });
+    console.error("Error saving closed purchase:", error);
+    res.status(500).json({ message: "Server error saving closed purchase" });
   }
 });
 
@@ -56,11 +49,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
  */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const updatedClosed = await ClosedPurchase.findByIdAndUpdate(
-      req.params.id,
-      { ...req.body, size: req.body.size || "" },
-      { new: true }
-    );
+    const updatedClosed = await ClosedPurchase.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updatedClosed) return res.status(404).json({ message: "Closed purchase not found" });
     res.json({ message: "Closed purchase updated", purchase: updatedClosed });
   } catch (error) {
