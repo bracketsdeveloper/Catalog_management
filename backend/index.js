@@ -142,6 +142,9 @@ const logRoutes = require("./routes/logs");
 app.use("/api/admin/logs", logRoutes);
 
 
+app.use("/api/admin/",require("./routes/taskRoutes.js"))
+
+
 app.get("/health", (req, res) => res.send("OK"));
 
 // Start server

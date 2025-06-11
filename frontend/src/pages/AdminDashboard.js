@@ -24,6 +24,19 @@ import {
 
 
 const adminPages = [
+  /* ----------------------- TASK MANAGER ------------------------------ */
+  {
+    name: "Task Manager",
+    defaultPath: "/admin-dashboard/manage-tasks",
+    icon: <PencilIcon className="w-8 h-8 flex justify-center items-center" />,
+    subItems: [
+      {
+        name: "Manage Tasks",
+        path: "/admin-dashboard/manage-tasks",
+        permission: "manage-task",
+      },
+    ],
+  },
    {
     name: "User Management",
     defaultPath: "/admin-dashboard/manage-users",
@@ -349,6 +362,7 @@ export default function AdminDashboard() {
   const [expenseHovered, setExpenseHovered] = useState(false);
   const [followUpTrackerHovered, setFollowUpTrackerHovered] = useState(false);
   const [calculationsHovered, setCalculationsHovered] = useState(false);
+  const [taskManagerHovered, setTaskManagerHovered] = useState(false);
 
   //user management
   const [userManagementHovered, setUserManagementHovered] = useState(false);
@@ -417,7 +431,7 @@ export default function AdminDashboard() {
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 100;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered || followUpTrackerHovered || calculationsHovered;
+    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered || followUpTrackerHovered || calculationsHovered || taskManagerHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
@@ -598,6 +612,20 @@ export default function AdminDashboard() {
                     page={page}
                     hovered={calculationsHovered}
                     setHovered={setCalculationsHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ===== TASK MANAGER (mega‑menu) ==== */
+              if (page.name === "Task Manager") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={taskManagerHovered}
+                    setHovered={setTaskManagerHovered}
                     sidebarOpen={sidebarOpen}
                     sidebarHover={sidebarHover}
                   />

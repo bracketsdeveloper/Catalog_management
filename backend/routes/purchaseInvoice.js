@@ -3,18 +3,14 @@ const router = express.Router();
 const PurchaseInvoice = require("../models/PurchaseInvoice");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// GET all invoices sorted by createdAt descending
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { jobSheetNumber } = req.query;
     let filter = {};
     if (jobSheetNumber) {
-      filter.jobSheetNumber = { $regex: `^${jobSheetNumber}$`, $options: "i" }; // Case-insensitive match
+      filter.jobSheetNumber = { $regex: `^${jobSheetNumber}$`, $options: "i" };
     }
     const invoices = await PurchaseInvoice.find(filter).sort({ createdAt: -1 });
-    if (!invoices.length) {
-      return res.status(200).json([]); // Return empty array if no matches
-    }
     res.json(invoices);
   } catch (error) {
     console.error("Error fetching purchase invoices:", error);
@@ -22,16 +18,18 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// GET invoice by jobSheetNumber and product (for finding an existing record)
 router.get("/find", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { jobSheetNumber, product } = req.query;
+    const { jobSheetNumber, product, size } = req.query;
     const filter = {};
     if (jobSheetNumber) {
       filter.jobSheetNumber = { $regex: `^${jobSheetNumber}$`, $options: "i" };
     }
     if (product) {
       filter.product = product;
+    }
+    if (size) {
+      filter.size = size;
     }
     const invoice = await PurchaseInvoice.findOne(filter);
     res.json(invoice || {});
@@ -41,7 +39,6 @@ router.get("/find", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// GET invoice by id
 router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoice = await PurchaseInvoice.findById(req.params.id);
@@ -55,15 +52,16 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// POST – create or upsert invoice
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
       orderConfirmationDate,
+      deliveryDateTime,
       jobSheetNumber,
       clientName,
       eventName,
       product,
+      size,
       sourcingFrom,
       cost,
       vendorInvoiceNumber,
@@ -80,24 +78,32 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       !sourcingFrom ||
       cost === undefined
     ) {
-      return res.status(400).json({
-        message: "Required fields are missing",
-      });
+      return res.status(400).json({ message: "Required fields are missing" });
     }
 
     const invoiceData = {
-      ...req.body,
+      orderConfirmationDate,
+      deliveryDateTime,
+      jobSheetNumber,
+      clientName,
+      eventName,
+      product,
+      size: size || "",
+      sourcingFrom,
+      cost,
+      negotiatedCost: req.body.negotiatedCost || 0,
+      paymentMade: req.body.paymentMade || 0,
       vendorInvoiceNumber: vendorInvoiceNumber
         ? vendorInvoiceNumber.toUpperCase()
         : "",
       vendorInvoiceReceived: req.body.vendorInvoiceReceived || "No",
-      paymentStatus: req.body.paymentStatus || "No",
-      qtyRequired,
-      qtyOrdered,
+      paymentStatus: req.body.paymentStatus || "Not Paid",
+      qtyRequired: qtyRequired || 0,
+      qtyOrdered: qtyOrdered || 0,
     };
 
     const invoice = await PurchaseInvoice.findOneAndUpdate(
-      { jobSheetNumber, product },
+      { jobSheetNumber, product, size: size || "" },
       invoiceData,
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -108,17 +114,27 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// PUT – update invoice by id
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoiceData = {
-      ...req.body,
+      orderConfirmationDate: req.body.orderConfirmationDate,
+      deliveryDateTime: req.body.deliveryDateTime,
+      jobSheetNumber: req.body.jobSheetNumber,
+      clientName: req.body.clientName,
+      eventName: req.body.eventName,
+      product: req.body.product,
+      size: req.body.size || "",
+      sourcingFrom: req.body.sourcingFrom,
+      cost: req.body.cost || 0,
+      negotiatedCost: req.body.negotiatedCost || 0,
+      paymentMade: req.body.paymentMade || 0,
       vendorInvoiceNumber: req.body.vendorInvoiceNumber
         ? req.body.vendorInvoiceNumber.toUpperCase()
         : "",
-      qtyRequired: req.body.qtyRequired,
-      qtyOrdered: req.body.qtyOrdered,
-      paymentStatus: req.body.paymentStatus || "No",
+      vendorInvoiceReceived: req.body.vendorInvoiceReceived || "No",
+      paymentStatus: req.body.paymentStatus || "Not Paid",
+      qtyRequired: req.body.qtyRequired || 0,
+      qtyOrdered: req.body.qtyOrdered || 0,
     };
 
     const invoice = await PurchaseInvoice.findByIdAndUpdate(
@@ -136,7 +152,6 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// DELETE invoice by id
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const invoice = await PurchaseInvoice.findByIdAndDelete(req.params.id);

@@ -10,13 +10,13 @@ const INVOICE_RECEIVED_OPTIONS = ["Yes", "No"];
 const PAYMENT_STATUS_OPTIONS = ["Not Paid", "Partially Paid", "Fully Paid"];
 
 const HEADER_COLS = [
-  { key: "orderConfirmedDate", label: "Order Confirmation Date", type: "date" },
+  { key: "orderConfirmationDate", label: "Order Confirmation Date", type: "date" },
   { key: "deliveryDateTime", label: "Delivery Date", type: "date" },
   { key: "jobSheetNumber", label: "Job Sheet" },
   { key: "clientCompanyName", label: "Client Name" },
   { key: "eventName", label: "Event Name" },
   { key: "product", label: "Product" },
-  { key: "size", label: "Size" }, // Added size
+  { key: "size", label: "Size" },
   { key: "qtyRequired", label: "Qty Required", type: "number" },
   { key: "qtyOrdered", label: "Qty Ordered", type: "number" },
   { key: "sourcingFrom", label: "Source From" },
@@ -26,7 +26,7 @@ const HEADER_COLS = [
   { key: "vendorInvoiceNumber", label: "Vendor Invoice Number" },
   { key: "vendorInvoiceReceived", label: "Vendor Invoice Received" },
   { key: "paymentStatus", label: "Payment Status" },
-  { key: "source", label: "Source" }, // Added to indicate OpenPurchase/ClosedPurchase/Invoice
+  { key: "source", label: "Source" },
 ];
 
 /* header filter row */
@@ -74,9 +74,9 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
 
     try {
       const token = localStorage.getItem("token");
-      let response;
       const invoiceData = {
-        orderConfirmationDate: data.orderConfirmedDate,
+        orderConfirmationDate: data.orderConfirmationDate,
+        deliveryDateTime: data.deliveryDateTime,
         jobSheetNumber: data.jobSheetNumber,
         clientName: data.clientCompanyName,
         eventName: data.eventName,
@@ -93,6 +93,7 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
         paymentStatus: data.paymentStatus || "Not Paid",
       };
 
+      let response;
       const existing = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice/find`,
         {
@@ -132,29 +133,69 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
         <div className="grid grid-cols-3 gap-4 text-sm mb-4">
           <label>
             <span className="font-bold">Order Confirmed:</span>{" "}
-            {data.orderConfirmedDate ? new Date(data.orderConfirmedDate).toLocaleDateString() : ""}
+            <input
+              type="date"
+              value={data.orderConfirmationDate ? data.orderConfirmationDate.split("T")[0] : ""}
+              onChange={(e) => ch("orderConfirmationDate", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
             <span className="font-bold">Delivery Date:</span>{" "}
-            {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : ""}
+            <input
+              type="date"
+              value={data.deliveryDateTime ? data.deliveryDateTime.split("T")[0] : ""}
+              onChange={(e) => ch("deliveryDateTime", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
-            <span className="font-bold">Job Sheet:</span> {data.jobSheetNumber}
+            <span className="font-bold">Job Sheet:</span>{" "}
+            <input
+              value={data.jobSheetNumber || ""}
+              onChange={(e) => ch("jobSheetNumber", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
-            <span className="font-bold">Client:</span> {data.clientCompanyName}
+            <span className="font-bold">Client:</span>{" "}
+            <input
+              value={data.clientCompanyName || ""}
+              onChange={(e) => ch("clientCompanyName", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
-            <span className="font-bold">Event:</span> {data.eventName}
+            <span className="font-bold">Event:</span>{" "}
+            <input
+              value={data.eventName || ""}
+              onChange={(e) => ch("eventName", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
-            <span className="font-bold">Product:</span> {data.product}
+            <span className="font-bold">Product:</span>{" "}
+            <input
+              value={data.product || ""}
+              onChange={(e) => ch("product", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
-            <span className="font-bold">Size:</span> {data.size || "N/A"}
+            <span className="font-bold">Size:</span>{" "}
+            <input
+              value={data.size || ""}
+              onChange={(e) => ch("size", e.target.value)}
+              className="border p-1"
+            />
           </label>
           <label>
-            <span className="font-bold">Source From:</span> {data.sourcingFrom}
+            <span className="font-bold">Source From:</span>{" "}
+            <input
+              value={data.sourcingFrom || ""}
+              onChange={(e) => ch("sourcingFrom", e.target.value)}
+              className="border p-1"
+            />
           </label>
         </div>
 
@@ -226,7 +267,7 @@ function EditInvoiceModal({ invoice, onClose, onSave }) {
 const initRange = { from: "", to: "" };
 const initAdv = {
   jobSheetNumber: { ...initRange },
-  orderConfirmedDate: { ...initRange },
+  orderConfirmationDate: { ...initRange },
   deliveryDateTime: { ...initRange },
 };
 
@@ -268,7 +309,10 @@ export default function ManagePurchaseInvoice() {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
-        const [openRes, closedRes, invRes] = await Promise.all([
+        const [invRes, openRes, closedRes] = await Promise.all([
+          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
           axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -276,89 +320,78 @@ export default function ManagePurchaseInvoice() {
             headers: { Authorization: `Bearer ${token}` },
             params: { partial: true },
           }),
-          axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/purchaseInvoice`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
         ]);
 
+        const invoices = invRes.data;
         const receivedOpen = openRes.data.filter((p) => p.status === "received");
         const splitClosed = closedRes.data.filter((p) => p.splitId && p.status === "received");
-        const invoices = invRes.data;
+
+        // Create a set of unique keys from PurchaseInvoice
+        const invoiceKeys = new Set(
+          invoices.map((i) => `${i.jobSheetNumber}|${i.product}|${i.size || ""}`)
+        );
 
         const merged = [];
 
-        // Process OpenPurchase records (received)
-        receivedOpen.forEach((p) => {
-          const invoice = invoices.find(
-            (i) => i.jobSheetNumber === p.jobSheetNumber && i.product === p.product && i.size === (p.size || "")
-          );
+        // Process PurchaseInvoice records first
+        invoices.forEach((i) => {
           merged.push({
-            ...p,
-            _id: invoice?._id || p._id,
-            clientCompanyName: invoice?.clientName || p.clientCompanyName,
-            orderConfirmedDate: invoice?.orderConfirmationDate || p.orderConfirmedDate,
-            qtyRequired: invoice?.qtyRequired ?? p.qtyRequired ?? 0,
-            qtyOrdered: invoice?.qtyOrdered ?? p.qtyOrdered ?? 0,
-            cost: invoice?.cost ?? p.cost ?? 0,
-            negotiatedCost: invoice?.negotiatedCost ?? p.negotiatedCost ?? 0,
-            paymentMade: invoice?.paymentMade ?? p.paymentMade ?? 0,
-            vendorInvoiceNumber: invoice?.vendorInvoiceNumber ?? p.vendorInvoiceNumber ?? "",
-            vendorInvoiceReceived: invoice?.vendorInvoiceReceived ?? p.vendorInvoiceReceived ?? "No",
-            paymentStatus: invoice?.paymentStatus ?? p.paymentStatus ?? "Not Paid",
-            size: p.size || "",
-            source: "open",
+            ...i,
+            clientCompanyName: i.clientName,
+            orderConfirmationDate: i.orderConfirmationDate,
+            qtyRequired: i.qtyRequired ?? 0,
+            qtyOrdered: i.qtyOrdered ?? 0,
+            cost: i.cost ?? 0,
+            negotiatedCost: i.negotiatedCost ?? 0,
+            paymentMade: i.paymentMade ?? 0,
+            vendorInvoiceNumber: i.vendorInvoiceNumber ?? "",
+            vendorInvoiceReceived: i.vendorInvoiceReceived || "No",
+            paymentStatus: i.paymentStatus || "Not Paid",
+            size: i.size || "",
+            source: "invoice",
           });
         });
 
-        // Process ClosedPurchase records (split)
-        splitClosed.forEach((p) => {
-          const invoice = invoices.find(
-            (i) => i.jobSheetNumber === p.jobSheetNumber && i.product === p.product && i.size === (p.size || "")
-          );
-          if (!merged.some((m) => m._id === (invoice?._id || p._id) && m.source === "closed")) {
+        // Process OpenPurchase records, excluding those in PurchaseInvoice
+        receivedOpen.forEach((p) => {
+          const key = `${p.jobSheetNumber}|${p.product}|${p.size || ""}`;
+          if (!invoiceKeys.has(key)) {
             merged.push({
               ...p,
-              _id: invoice?._id || p._id,
-              clientCompanyName: invoice?.clientName || p.clientCompanyName,
-              orderConfirmedDate: invoice?.orderConfirmationDate || p.orderConfirmedDate,
-              qtyRequired: invoice?.qtyRequired ?? p.qtyRequired ?? 0,
-              qtyOrdered: invoice?.qtyOrdered ?? p.qtyOrdered ?? 0,
-              cost: invoice?.cost ?? p.cost ?? 0,
-              negotiatedCost: invoice?.negotiatedCost ?? p.negotiatedCost ?? 0,
-              paymentMade: invoice?.paymentMade ?? p.paymentMade ?? 0,
-              vendorInvoiceNumber: invoice?.vendorInvoiceNumber ?? p.vendorInvoiceNumber ?? "",
-              vendorInvoiceReceived: invoice?.vendorInvoiceReceived ?? p.vendorInvoiceReceived ?? "No",
-              paymentStatus: invoice?.paymentStatus ?? p.paymentStatus ?? "Not Paid",
+              clientCompanyName: p.clientCompanyName,
+              orderConfirmationDate: p.orderConfirmedDate,
+              qtyRequired: p.qtyRequired ?? 0,
+              qtyOrdered: p.qtyOrdered ?? 0,
+              cost: p.cost ?? 0,
+              negotiatedCost: p.negotiatedCost ?? 0,
+              paymentMade: p.paymentMade ?? 0,
+              vendorInvoiceNumber: p.vendorInvoiceNumber ?? "",
+              vendorInvoiceReceived: p.vendorInvoiceReceived ?? "No",
+              paymentStatus: p.paymentStatus ?? "Not Paid",
               size: p.size || "",
-              source: "closed",
+              source: "open",
             });
           }
         });
 
-        // Process standalone PurchaseInvoice records
-        invoices.forEach((i) => {
-          if (
-            !merged.some(
-              (m) =>
-                m.jobSheetNumber === i.jobSheetNumber &&
-                m.product === i.product &&
-                m.size === (i.size || "")
-            )
-          ) {
+        // Process ClosedPurchase records, excluding those in PurchaseInvoice
+        splitClosed.forEach((p) => {
+          const key = `${p.jobSheetNumber}|${p.product}|${p.size || ""}`;
+          if (!invoiceKeys.has(key) && !merged.some((m) => m._id === p._id && m.source === "closed")) {
             merged.push({
-              ...i,
-              clientCompanyName: i.clientName,
-              orderConfirmedDate: i.orderConfirmationDate,
-              qtyRequired: i.qtyRequired ?? 0,
-              qtyOrdered: i.qtyOrdered ?? 0,
-              cost: i.cost ?? 0,
-              negotiatedCost: i.negotiatedCost ?? 0,
-              paymentMade: i.paymentMade ?? 0,
-              vendorInvoiceNumber: i.vendorInvoiceNumber ?? "",
-              vendorInvoiceReceived: i.vendorInvoiceReceived || "No",
-              paymentStatus: i.paymentStatus || "Not Paid",
-              size: i.size || "",
-              source: "invoice",
+              ...p,
+              clientCompanyName: p.clientCompanyName,
+              orderConfirmationDate: p.orderConfirmedDate,
+              qtyRequired: p.qtyRequired ?? 0,
+              qtyOrdered: p.qtyOrdered ?? 0,
+              cost: p.cost ?? 0,
+              negotiatedCost: p.negotiatedCost ?? 0,
+              paymentMade: p.paymentMade ?? 0,
+              vendorInvoiceNumber: p.vendorInvoiceNumber ?? "",
+              vendorInvoiceReceived: p.vendorInvoiceReceived ?? "No",
+              paymentStatus: p.paymentStatus ?? "Not Paid",
+              size: p.size || "",
+              source: "closed",
             });
           }
         });
@@ -397,8 +430,10 @@ export default function ManagePurchaseInvoice() {
           "paymentStatus",
           "source",
         ].some((f) => (p[f] || "").toLowerCase().includes(s)) ||
-          (p.orderConfirmedDate &&
-            new Date(p.orderConfirmedDate).toLocaleDateString().toLowerCase().includes(s));
+          (p.orderConfirmationDate &&
+            new Date(p.orderConfirmationDate).toLocaleDateString().toLowerCase().includes(s)) ||
+          (p.deliveryDateTime &&
+            new Date(p.deliveryDateTime).toLocaleDateString().toLowerCase().includes(s));
       }),
     [rows, search]
   );
@@ -429,7 +464,7 @@ export default function ManagePurchaseInvoice() {
       (r) =>
         (!adv.jobSheetNumber.from || r.jobSheetNumber >= adv.jobSheetNumber.from) &&
         (!adv.jobSheetNumber.to || r.jobSheetNumber <= adv.jobSheetNumber.to) &&
-        inRange(r.orderConfirmedDate, adv.orderConfirmedDate) &&
+        inRange(r.orderConfirmationDate, adv.orderConfirmationDate) &&
         inRange(r.deliveryDateTime, adv.deliveryDateTime)
     );
   }, [headerFiltered, adv]);
@@ -468,10 +503,12 @@ export default function ManagePurchaseInvoice() {
   /* export */
   const exportXlsx = () => {
     const data = sorted.map((r) => ({
-      "Order Confirmed": r.orderConfirmedDate
-        ? new Date(r.orderConfirmedDate).toLocaleDateString()
+      "Order Confirmed": r.orderConfirmationDate
+        ? new Date(r.orderConfirmationDate).toLocaleDateString()
         : "",
-      "Delivery Date": r.deliveryDateTime ? new Date(r.deliveryDateTime).toLocaleDateString() : "",
+      "Delivery Date": r.deliveryDateTime
+        ? new Date(r.deliveryDateTime).toLocaleDateString()
+        : "",
       "Job Sheet": r.jobSheetNumber,
       Client: r.clientCompanyName,
       Event: r.eventName,
@@ -571,7 +608,7 @@ export default function ManagePurchaseInvoice() {
               </div>
             ))}
             {[
-              ["orderConfirmedDate", "Order Confirmed Date"],
+              ["orderConfirmationDate", "Order Confirmed Date"],
               ["deliveryDateTime", "Delivery Date"],
             ].flatMap(([key, label]) => [
               <div key={`${key}-from`}>
@@ -635,7 +672,9 @@ export default function ManagePurchaseInvoice() {
               className={inv.vendorInvoiceReceived === "Yes" ? "bg-green-100" : ""}
             >
               <td className="p-2 border">
-                {inv.orderConfirmedDate ? new Date(inv.orderConfirmedDate).toLocaleDateString() : ""}
+                {inv.orderConfirmationDate
+                  ? new Date(inv.orderConfirmationDate).toLocaleDateString()
+                  : ""}
               </td>
               <td className="p-2 border">
                 {inv.deliveryDateTime ? new Date(inv.deliveryDateTime).toLocaleDateString() : ""}
@@ -674,16 +713,6 @@ export default function ManagePurchaseInvoice() {
                 >
                   Edit
                 </button>
-                {/* {inv.source === "open" && inv.status === "received" && (
-                  <button
-                    disabled={!canEdit}
-                    onClick={() => canEdit && handlePartialInvoice(inv)}
-                    className="bg-green-600 text-white w-full rounded py-0.5 text-[10px]"
-                    title={!canEdit ? "No permission" : ""}
-                  >
-                    Partial Invoice
-                  </button>
-                )} */}
               </td>
             </tr>
           ))}

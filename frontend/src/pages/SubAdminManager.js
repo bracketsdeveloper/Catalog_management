@@ -80,6 +80,9 @@ const groupedPermissions = {
       "manage-events",
       "filter-potential-clients",
       "events-calender"
+    ],
+    "Task Manager" :[
+      "manage-task"
     ]
   
 };

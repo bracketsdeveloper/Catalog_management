@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const purchaseInvoiceSchema = new mongoose.Schema(
   {
     orderConfirmationDate: { type: Date, required: true },
+    deliveryDateTime: { type: Date }, // Already present
     jobSheetNumber: { type: String, required: true },
     clientName: { type: String, required: true },
     eventName: { type: String, required: true },
@@ -28,16 +29,14 @@ const purchaseInvoiceSchema = new mongoose.Schema(
     },
     qtyRequired: { type: Number },
     qtyOrdered: { type: Number },
-    paymentStatus: {
-      type: String,
-      enum: ["Yes", "No"],
-      default: "No",
-    },
+    size: { type: String, default: "" }, // Add size explicitly
   },
   { timestamps: true }
 );
 
-// Composite unique index on jobSheetNumber and product
-purchaseInvoiceSchema.index({ jobSheetNumber: 1, product: 1 }, { unique: true });
+purchaseInvoiceSchema.index(
+  { jobSheetNumber: 1, product: 1, size: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model("PurchaseInvoice", purchaseInvoiceSchema);
