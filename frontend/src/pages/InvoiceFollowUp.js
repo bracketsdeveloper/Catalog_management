@@ -6,6 +6,8 @@ import * as XLSX from "xlsx";
 import InvoiceFollowUpTable from "../components/invoicefollowup/InvoiceFollowUpTable.js";
 import InvoiceFollowUpModal from "../components/invoicefollowup/InvoiceFollowUpModal.js";
 import InvoiceFollowUpManual from "../components/invoicefollowup/invoiceFollowupManual.js";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -32,11 +34,18 @@ export default function ManageInvoiceFollowUp() {
   const handleSubmitInvoice = () => {};
 
   useEffect(() => {
+    console.log("Token:", token); // Debug: Log token
+    console.log("View:", view); // Debug: Log view
     fetchRows();
     // eslint-disable-next-line
   }, [view]);
 
   async function fetchRows() {
+    if (!token) {
+      toast.error("No authentication token found. Please log in.");
+      window.location.href = "/login"; // Adjust to your login route
+      return;
+    }
     setLoading(true);
     try {
       if (view === "old") {
@@ -54,6 +63,7 @@ export default function ManageInvoiceFollowUp() {
         const inv = invRes.data || [];
         const disp = dispRes.data || [];
         const jobs = jobsRes.data || [];
+        console.log("Fetched data (old):", { inv, disp, jobs }); // Debug: Log fetched data
         const dispMap = disp.reduce((m, d) => {
           m[d.jobSheetNumber] = d.dispatchQty;
           return m;
@@ -73,7 +83,7 @@ export default function ManageInvoiceFollowUp() {
               ...r,
               partialQty: Math.floor(partialQty),
               pendingFromDays,
-              remarks: r.remarks || "", // New field
+              remarks: r.remarks || "",
               clientName: jsMap[r.jobSheetNumber] || r.clientName || "-",
             };
           })
@@ -89,21 +99,28 @@ export default function ManageInvoiceFollowUp() {
         ]);
         const inv = invRes.data || [];
         const jobs = jobsRes.data || [];
-        const jsMap = jobs.reduce((m, j) => {
-          m[j.jobSheetNumber] = j.clientName;
-          return m;
+        console.log("Fetched data (new/closed):", { inv, jobs }); // Debug: Log fetched data
+        const jsMap = jobs.reduce((acc, curr) => {
+          acc[curr.jobSheetNumber] = curr.clientName;
+          return acc;
         }, {});
         setRows(
           inv.map(r => ({
             ...r,
-            remarks: r.remarks || "", // New field
-            clientName: jsMap[r.jobSheetNumber] || r.clientName || "-",
+            remarks: r.remarks || "",
+            clientName: jsMap[r.jobSheetNumber] || r.clientName || "",
           }))
         );
       }
     } catch (err) {
-      console.error(err);
-      alert("Error fetching data");
+      console.error("Fetch error:", err);
+      if (err.response?.status === 401) {
+        toast.error("Session expired. Please log in again.");
+        localStorage.removeItem("token");
+        window.location.href = "/login"; // Adjust to your login route
+      } else {
+        toast.error("Failed to fetch data rows");
+      }
       setRows([]);
     } finally {
       setLoading(false);
@@ -115,22 +132,22 @@ export default function ManageInvoiceFollowUp() {
       const jsn = JSON.stringify(r).toLowerCase();
       const matchesSearch = search ? jsn.includes(search.toLowerCase()) : true;
 
-      const mjn =
+      const mjnMatch =
         (!filters.jobSheetNumber.from || r.jobSheetNumber >= filters.jobSheetNumber.from) &&
         (!filters.jobSheetNumber.to || r.jobSheetNumber <= filters.jobSheetNumber.to);
 
-      const mod =
+      const modMatch =
         (!filters.orderDate.from || new Date(r.orderDate) >= new Date(filters.orderDate.from)) &&
         (!filters.orderDate.to || new Date(r.orderDate) <= new Date(filters.orderDate.to));
 
-      const mdo =
+      const mdoMatch =
         (!filters.dispatchedOn.from || new Date(r.dispatchedOn) >= new Date(filters.dispatchedOn.from)) &&
         (!filters.dispatchedOn.to || new Date(r.dispatchedOn) <= new Date(filters.dispatchedOn.to));
 
-      const mig =
+      const migMatch =
         !filters.invoiceGenerated || r.invoiceGenerated === filters.invoiceGenerated;
 
-      return matchesSearch && mjn && mod && mdo && mig;
+      return matchesSearch && mjnMatch && modMatch && mdoMatch && migMatch;
     });
   }, [rows, search, filters]);
 
@@ -147,8 +164,7 @@ export default function ManageInvoiceFollowUp() {
     setSort(
       sort.field === field
         ? { field, dir: sort.dir === "asc" ? "desc" : "asc" }
-        : { field, dir: "asc" }
-    );
+      : { field, dir: "asc" });
 
   const handleFilterChange = (field, subField, value) => {
     setFilters(prev => ({
@@ -185,7 +201,7 @@ export default function ManageInvoiceFollowUp() {
         "Invoice Generated": r.invoiceGenerated,
         "Invoice #": r.invoiceNumber,
         "Pending From (days)": r.pendingFromDays,
-        Remarks: r.remarks, // New field
+        Remarks: r.remarks,
       }))
     );
     XLSX.utils.book_append_sheet(wb, ws, "InvoiceFollowUp");
@@ -357,6 +373,7 @@ export default function ManageInvoiceFollowUp() {
           sortOrder={sort.dir}
           toggleSort={toggleSort}
           onEdit={r => setEditRow(r)}
+          view={view}
         />
       )}
 

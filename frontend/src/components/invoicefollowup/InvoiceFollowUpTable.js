@@ -10,6 +10,7 @@ import {
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
 import PrintQuotation from "../../pages/PrintQuotation";
 import axios from "axios";
+import { toast } from "react-toastify";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -42,41 +43,43 @@ export default function InvoiceFollowUpTable({
   sortOrder,
   toggleSort,
   onEdit,
-  view, // Add view prop
+  view,
 }) {
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchValues, setSearchValues] = useState({});
   const [selectedQuotationId, setSelectedQuotationId] = useState(null);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
-  const [dispatchStatuses, setDispatchStatuses] = useState({});
+  const [dispatchRows, setDispatchRows] = useState([]);
 
   const token = localStorage.getItem("token");
 
-  // Fetch dispatch statuses for all rows
+  // Fetch all DispatchSchedule rows
   useEffect(() => {
-    async function fetchDispatchStatuses() {
+    async function fetchDispatchRows() {
+      if (!token) {
+        toast.error("No authentication token found. Please log in.");
+        return;
+      }
       try {
-        const dispatchIds = rows
-          .map((r) => r.dispatchId)
-          .filter((id) => id);
-        if (dispatchIds.length === 0) return;
-
         const res = await axios.get(`${BACKEND_URL}/api/admin/dispatch-schedule`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const dispatchData = res.data || [];
-        const statusMap = {};
-        dispatchData.forEach((d) => {
-          statusMap[d._id] = d.status;
-        });
-        setDispatchStatuses(statusMap);
+        console.log("Fetched dispatch rows count:", res.data?.length || 0); // Debug: Log count
+        setDispatchRows(res.data || []);
       } catch (err) {
-        console.error("Error fetching dispatch statuses:", err);
+        console.error("Error fetching dispatch rows:", err);
+        if (err.response?.status === 401) {
+          toast.error("Session expired. Please log in again.");
+          localStorage.removeItem("token");
+          window.location.href = "/login"; // Adjust to your login route
+        } else {
+          toast.error("Failed to fetch dispatch data");
+        }
       }
     }
-    fetchDispatchStatuses();
-  }, [rows, token]);
+    fetchDispatchRows();
+  }, [token]);
 
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
@@ -101,6 +104,53 @@ export default function InvoiceFollowUpTable({
   const handleSearchChange = (field, value) => {
     setSearchValues((prev) => ({ ...prev, [field]: value }));
   };
+
+  // Debug: Log summary and sample mismatches
+  useEffect(() => {
+    if (view === "new" && dispatchRows.length > 0 && rows.length > 0) {
+      const sentDispatches = dispatchRows.filter(d => d.status === "sent").length;
+      const matchedRows = rows.filter(r =>
+        dispatchRows.some(d =>
+          d.status === "sent" &&
+          d.jobSheetNumber?.toString().toLowerCase() === r.jobSheetNumber?.toString().toLowerCase() &&
+          (d.clientCompanyName || "").toLowerCase().trim() === (r.clientCompanyName || "").toLowerCase().trim() &&
+          (d.product || "").toLowerCase().trim() === (r.product || "").toLowerCase().trim() &&
+          Number(d.dispatchQty || 0) === Number(r.partialQty || 0)
+        )
+      ).length;
+
+      // Log sample mismatches (first non-matching sent dispatch for first row)
+      if (sentDispatches > 0 && matchedRows === 0 && rows[0]) {
+        const sampleDispatch = dispatchRows.find(d => d.status === "sent");
+        if (sampleDispatch) {
+          console.log("Sample mismatch for first row:", {
+            invoice: {
+              jobSheetNumber: rows[0].jobSheetNumber,
+              clientCompanyName: rows[0].clientCompanyName,
+              product: rows[0].product,
+              partialQty: rows[0].partialQty,
+              partialQtyType: typeof rows[0].partialQty,
+            },
+            dispatch: {
+              jobSheetNumber: sampleDispatch.jobSheetNumber,
+              clientCompanyName: sampleDispatch.clientCompanyName,
+              product: sampleDispatch.product,
+              dispatchQty: sampleDispatch.dispatchQty,
+              dispatchQtyType: typeof sampleDispatch.dispatchQty,
+              status: sampleDispatch.status,
+            },
+          });
+        }
+      }
+
+      console.log("Dispatch summary:", {
+        sentDispatches,
+        matchedRows,
+        totalRows: rows.length,
+        totalDispatches: dispatchRows.length,
+      });
+    }
+  }, [view, dispatchRows, rows]);
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-x-auto">
@@ -273,19 +323,27 @@ export default function InvoiceFollowUpTable({
                   return rowValue.includes(value.toLowerCase());
                 });
               })
-              .map((r) => {
+              .map((r, index) => {
+                // Check if there's a matching DispatchSchedule row with status "sent"
+                const hasSentDispatch = dispatchRows.some((d) =>
+                  d.status === "sent" &&
+                  d.jobSheetNumber?.toString().toLowerCase() === r.jobSheetNumber?.toString().toLowerCase() &&
+                  (d.clientCompanyName || "").toLowerCase().trim() === (r.clientCompanyName || "").toLowerCase().trim() &&
+                  (d.product || "").toLowerCase().trim() === (r.product || "").toLowerCase().trim() &&
+                  Number(d.dispatchQty || 0) === Number(r.partialQty || 0)
+                );
+
                 // Determine row background color
-                const dispatchStatus = r.dispatchId ? dispatchStatuses[r.dispatchId.toString()] : null;
                 const bgClass =
-                  view === "new" && dispatchStatus === "sent"
-                    ? "bg-red-200" // Red for "new" view if dispatch status is sent
+                  view === "new" && hasSentDispatch
+                    ? "bg-red-300" // Stronger red for visibility
                     : r.invoiceGenerated === "Yes"
                     ? "bg-green-100" // Green if invoice generated
                     : ""; // Default (no color)
 
                 return (
                   <tr
-                    key={r.dispatchId || r._id}
+                    key={r._id || `row-${index}`} // Ensure unique key
                     className={`hover:bg-gray-100 ${bgClass}`}
                   >
                     <Cell val={r.orderDate} />
@@ -334,7 +392,7 @@ export default function InvoiceFollowUpTable({
                 );
               })
           ) : (
-            <tr>
+            <tr key="no-records">
               <td
                 colSpan={18}
                 className="text-center py-4 text-gray-500 border border-gray-300"

@@ -37,12 +37,12 @@ router.get("/expenses", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     // Restrict to user's own expenses or expenses where they are crmName for non-super admins with manage-expenses permission
-    if (!isSuperAdmin && permissions.includes("manage-expenses")) {
-      filter.$or = [
-        { createdBy: userId },
-        { crmName: userName }
-      ];
-    }
+    // if (!isSuperAdmin && permissions.includes("manage-expenses")) {
+    //   filter.$or = [
+    //     { createdBy: userId },
+    //     { crmName: userName }
+    //   ];
+    // }
 
     const list = await Expense.find(filter).sort({ createdAt: -1 });
     res.json(list);
