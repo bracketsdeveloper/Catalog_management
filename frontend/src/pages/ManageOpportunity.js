@@ -295,6 +295,7 @@ function ManageOpportunity() {
         createdDate: formatCreatedDate(op.createdAt),
         account: op.account,
         opportunityName: op.opportunityName,
+        OpportunityDetails : op.opportunityDetail,
         opportunityOwner: op.opportunityOwner,
         opportunityValue: op.opportunityValue,
         closureDate: formatClosureDate(op.closureDate),

@@ -277,8 +277,8 @@ export default function InvoiceFollowUpTable({
                 // Determine row background color
                 const dispatchStatus = r.dispatchId ? dispatchStatuses[r.dispatchId.toString()] : null;
                 const bgClass =
-                  view === "new" && dispatchStatus === "sent" && r.invoiceGenerated !== "Yes"
-                    ? "bg-red-200" // Red for "new" view if dispatch is sent and invoice not generated
+                  view === "new" && dispatchStatus === "sent"
+                    ? "bg-red-200" // Red for "new" view if dispatch status is sent
                     : r.invoiceGenerated === "Yes"
                     ? "bg-green-100" // Green if invoice generated
                     : ""; // Default (no color)
