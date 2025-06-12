@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
-import InvoicesSummaryTable from "../components/invoicesummary/InvoiceSummaryTable";
+import InvoicesSummaryTable from "../components/invoicesummary/InvoiceSummaryTable.js";
 import InvoicesSummaryModal from "../components/invoicesummary/InvoiceSummaryModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;

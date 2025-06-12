@@ -3,6 +3,11 @@ import { ArrowUpIcon, ArrowDownIcon, EllipsisVerticalIcon } from "@heroicons/rea
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
 import { fmt } from "../../pages/ManageInvoiceSummary";
 
+function formatIndianNumber(num) {
+  if (!num && num !== 0) return "-";
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
     sortField === field ? (
@@ -13,10 +18,14 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
       )
     ) : null;
 
+  const isRightAligned = field === "invoiceAmount";
+
   return (
     <th
       onClick={() => toggle(field)}
-      className="px-2 py-1 border border-gray-300 bg-gray-50 text-left whitespace-nowrap cursor-pointer"
+      className={`px-2 py-1 border border-gray-300 bg-gray-50 whitespace-nowrap cursor-pointer ${
+        isRightAligned ? "text-right" : "text-left"
+      }`}
     >
       {label} {arrow}
     </th>
@@ -233,7 +242,7 @@ export default function InvoiceSummaryTable({
                 <Cell val={r.clientName} />
                 <Cell val={r.eventName} />
                 <Cell val={r.invoiceDate} />
-                <Cell val={r.invoiceAmount} />
+                <Cell val={r.invoiceAmount} field="invoiceAmount" />
                 <Cell val={r.invoiceMailed} />
                 <Cell val={r.invoiceMailedOn} />
                 <Cell val={r.invoiceUploadedOnPortal} />
@@ -266,11 +275,17 @@ export default function InvoiceSummaryTable({
   );
 }
 
-function Cell({ val }) {
+function Cell({ val, field }) {
+  const isRightAligned = field === "invoiceAmount";
+  
   return (
-    <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
+    <td className={`px-2 py-1 border border-gray-300 whitespace-normal break-words ${
+      isRightAligned ? "text-right" : ""
+    }`}>
       {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
         ? fmt(val)
+        : field === "invoiceAmount"
+        ? formatIndianNumber(val)
         : val ?? "-"}
     </td>
   );

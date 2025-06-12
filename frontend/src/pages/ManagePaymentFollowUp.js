@@ -22,7 +22,7 @@ export default function ManagePaymentFollowUp() {
 
   /* UI state */
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState({ field: "", dir: "asc" });
+  const [sort, setSort] = useState({ field: "invoiceNumber", dir: "asc" });
   const [editRow, setEditRow] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({

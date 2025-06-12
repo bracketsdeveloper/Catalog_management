@@ -2,6 +2,21 @@ import React, { useState, useMemo } from "react";
 import { ArrowUpIcon, ArrowDownIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
 
+function formatIndianNumber(num) {
+  if (num === null || num === undefined || isNaN(num)) return "-";
+  
+  // Convert to string and split by decimal point
+  const [whole, decimal] = num.toString().split(".");
+  
+  // Format the whole number part
+  const lastThree = whole.substring(whole.length - 3);
+  const otherNumbers = whole.substring(0, whole.length - 3);
+  const formatted = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + (otherNumbers ? "," : "") + lastThree;
+  
+  // Add decimal part if it exists
+  return decimal ? `${formatted}.${decimal}` : formatted;
+}
+
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
     sortField === field ? (
@@ -374,7 +389,7 @@ export default function PaymentFollowUpTable({
                   <Cell val={r.clientName} />
                   <Cell val={r.invoiceNumber} />
                   <Cell val={r.invoiceDate} />
-                  <Cell val={r.invoiceAmount} />
+                  <Cell val={r.invoiceAmount} field="invoiceAmount" />
                   <Cell val={r.invoiceMailed} />
                   <Cell val={r.invoiceMailedOn} />
                   <Cell val={r.dueDate} />
@@ -385,9 +400,9 @@ export default function PaymentFollowUpTable({
                   >
                     {latestFU ? fmt(latestFU.date) : "-"}
                   </td>
-                  <Cell val={r.totalPaymentReceived} />
-                  <Cell val={r.discountAllowed} />
-                  <Cell val={r.TDS} />
+                  <Cell val={r.totalPaymentReceived} field="totalPaymentReceived" />
+                  <Cell val={r.discountAllowed} field="discountAllowed" />
+                  <Cell val={r.TDS} field="TDS" />
                   <Cell val={r.remarks} />
                   <td className="px-2 py-1 border border-gray-300">
                     <button onClick={() => onEdit(r)}>
@@ -457,11 +472,20 @@ export default function PaymentFollowUpTable({
   );
 }
 
-function Cell({ val }) {
+function Cell({ val, field }) {
   return (
-    <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
+    <td className={`px-2 py-1 border border-gray-300 whitespace-normal break-words ${
+      field === "invoiceAmount" || 
+      field === "totalPaymentReceived" || 
+      field === "discountAllowed" || 
+      field === "TDS" 
+        ? "text-right" 
+        : ""
+    }`}>
       {val instanceof Date || (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val))
         ? fmt(val)
+        : typeof val === "number" && !isNaN(val)
+        ? formatIndianNumber(val)
         : val ?? "-"}
     </td>
   );

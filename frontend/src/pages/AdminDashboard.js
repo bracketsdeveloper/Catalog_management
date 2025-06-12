@@ -26,7 +26,7 @@ import {
 const adminPages = [
   /* ----------------------- TASK MANAGER ------------------------------ */
   {
-    name: "Task Manager",
+    name: "Dashboard",
     defaultPath: "/admin-dashboard/manage-tasks",
     icon: <PencilIcon className="w-8 h-8 flex justify-center items-center" />,
     subItems: [
@@ -619,7 +619,7 @@ export default function AdminDashboard() {
               }
 
               /* ===== TASK MANAGER (mega‑menu) ==== */
-              if (page.name === "Task Manager") {
+              if (page.name === "Dashboard") {
                 return (
                   <MegaMenu
                     key={page.name}
