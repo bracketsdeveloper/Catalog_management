@@ -1,10 +1,7 @@
 import React, { useState, useMemo } from "react";
-import {
-  ArrowUpIcon,
-  ArrowDownIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowUpIcon, ArrowDownIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
+import { fmt } from "../../pages/ManageInvoiceSummary";
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -15,13 +12,13 @@ function HeadCell({ label, field, sortField, sortOrder, toggle }) {
         <ArrowDownIcon className="h-3 w-3 inline ml-0.5" />
       )
     ) : null;
+
   return (
     <th
       onClick={() => toggle(field)}
       className="px-2 py-1 border border-gray-300 bg-gray-50 text-left whitespace-nowrap cursor-pointer"
     >
-      {label}
-      {arrow}
+      {label} {arrow}
     </th>
   );
 }
@@ -32,39 +29,69 @@ export default function InvoiceSummaryTable({
   sortOrder,
   toggleSort,
   onEdit,
+  filters,
+  search,
 }) {
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // header-level filters
   const [headerFilters, setHeaderFilters] = useState({
+    invoiceNumber: "",
     jobSheetNumber: "",
     clientCompanyName: "",
     clientName: "",
     eventName: "",
-    invoiceNumber: "",
     invoiceDate: "",
     invoiceAmount: "",
     invoiceMailed: "",
-    invoiceMailedOn: "", // New field
+    invoiceMailedOn: "",
     invoiceUploadedOnPortal: "",
     crmName: "",
   });
 
   const handleFilterChange = (field, value) => {
-    setHeaderFilters((h) => ({ ...h, [field]: value }));
+    setHeaderFilters((prev) => ({ ...prev, [field]: value.trim() }));
   };
 
-  // apply header filters
   const filtered = useMemo(() => {
-    return rows.filter((r) =>
-      Object.entries(headerFilters).every(([field, value]) => {
+    return rows.filter((r) => {
+      // Global search
+      const matchesSearch = JSON.stringify(r)
+        .toLowerCase()
+        .includes(search.toLowerCase());
+
+      // Global filters
+      const matchesGlobalFilters = Object.entries(filters).every(([field, value]) => {
+        if (!value || (typeof value === "object" && !value.from && !value.to))
+          return true;
+        if (field === "jobSheetNumber") {
+          return (
+            (!value.from || r[field] >= value.from) &&
+            (!value.to || r[field] <= value.to)
+          );
+        }
+        if (field === "invoiceDate") {
+          return (
+            (!value.from || new Date(r[field]) >= new Date(value.from)) &&
+            (!value.to || new Date(r[field]) <= new Date(value.to))
+          );
+        }
+        return r[field]?.toString().toLowerCase().includes(value.toLowerCase());
+      });
+
+      // Header filters
+      const matchesHeaderFilters = Object.entries(headerFilters).every(([field, value]) => {
         if (!value) return true;
-        const cell = r[field] ?? "";
-        return cell.toString().toLowerCase().includes(value.toLowerCase());
-      })
-    );
-  }, [rows, headerFilters]);
+        const cellValue = r[field]
+          ? field === "invoiceDate" || field === "invoiceMailedOn"
+            ? fmt(r[field]).toLowerCase()
+            : r[field].toString().toLowerCase()
+          : "";
+        return cellValue.includes(value.toLowerCase());
+      });
+
+      return matchesSearch && matchesGlobalFilters && matchesHeaderFilters;
+    });
+  }, [rows, search, filters, headerFilters]);
 
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
@@ -84,57 +111,79 @@ export default function InvoiceSummaryTable({
             <HeadCell
               label="Invoice #"
               field="invoiceNumber"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Job Sheet #"
               field="jobSheetNumber"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Client Company"
               field="clientCompanyName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Client Name"
               field="clientName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Event"
               field="eventName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Date"
               field="invoiceDate"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Amount"
               field="invoiceAmount"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Mailed"
               field="invoiceMailed"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Invoice Mailed On"
               field="invoiceMailedOn"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="Uploaded on Portal"
               field="invoiceUploadedOnPortal"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <HeadCell
               label="CRM Name"
               field="crmName"
-              {...{ sortField, sortOrder, toggle: toggleSort }}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              toggle={toggleSort}
             />
             <th className="px-2 py-1 border border-gray-300 bg-gray-50">
               Actions
@@ -150,7 +199,7 @@ export default function InvoiceSummaryTable({
               "invoiceDate",
               "invoiceAmount",
               "invoiceMailed",
-              "invoiceMailedOn", // New field
+              "invoiceMailedOn",
               "invoiceUploadedOnPortal",
               "crmName",
             ].map((field) => (
@@ -170,18 +219,12 @@ export default function InvoiceSummaryTable({
         <tbody>
           {filtered.length > 0 ? (
             filtered.map((r) => (
-              <tr
-                key={`${r._id}-${r.invoiceNumber}`}
-                className="hover:bg-gray-100"
-              >
+              <tr key={r._id} className="hover:bg-gray-100">
                 <Cell val={r.invoiceNumber} />
                 <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
                   <button
                     className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(r.jobSheetNumber);
-                    }}
+                    onClick={() => handleOpenModal(r.jobSheetNumber)}
                   >
                     {r.jobSheetNumber || "No Number"}
                   </button>
@@ -205,7 +248,7 @@ export default function InvoiceSummaryTable({
           ) : (
             <tr>
               <td
-                colSpan={12} // Updated for new column
+                colSpan={12}
                 className="text-center py-4 text-gray-500 border border-gray-300"
               >
                 No records
@@ -231,9 +274,4 @@ function Cell({ val }) {
         : val ?? "-"}
     </td>
   );
-}
-
-function fmt(v) {
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
 }

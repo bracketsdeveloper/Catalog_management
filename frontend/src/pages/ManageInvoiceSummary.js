@@ -8,6 +8,11 @@ import InvoicesSummaryModal from "../components/invoicesummary/InvoiceSummaryMod
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
+export function fmt(v) {
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
+}
+
 export default function ManageInvoicesSummary() {
   const token = localStorage.getItem("token");
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
@@ -21,7 +26,7 @@ export default function ManageInvoicesSummary() {
 
   /* UI state */
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState({ field: "", dir: "asc" });
+  const [sort, setSort] = useState({ field: "invoiceNumber", dir: "asc" });
   const [editRow, setEditRow] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
@@ -42,7 +47,14 @@ export default function ManageInvoicesSummary() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/invoices-summary`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setRows(res.data || []);
+      const data = res.data || [];
+      // Remove duplicates based on _id
+      const uniqueRows = Array.from(
+        new Map(data.map((row) => [row._id, row])).values()
+      );
+      console.log("Fetched rows:", data);
+      console.log("Unique rows after deduplication:", uniqueRows);
+      setRows(uniqueRows);
     } catch (err) {
       console.error(err);
       alert("Failed to fetch Invoices Summary");
@@ -93,12 +105,12 @@ export default function ManageInvoicesSummary() {
     });
   }, [filtered, sort]);
 
-  const toggleSort = (field) =>
-    setSort(
-      sort.field === field
-        ? { field, dir: sort.dir === "asc" ? "desc" : "asc" }
-        : { field, dir: "asc" }
-    );
+  const toggleSort = (field) => {
+    setSort((prev) => ({
+      field,
+      dir: prev.field === field && prev.dir === "asc" ? "desc" : "asc",
+    }));
+  };
 
   const handleFilterChange = (field, subField, value) => {
     if (subField) {
@@ -127,7 +139,7 @@ export default function ManageInvoicesSummary() {
         "Invoice Date": fmt(r.invoiceDate),
         "Invoice Amount": r.invoiceAmount,
         "Invoice Mailed": r.invoiceMailed,
-        "Invoice Mailed On": fmt(r.invoiceMailedOn), // New field
+        "Invoice Mailed On": fmt(r.invoiceMailedOn),
         "Uploaded on Portal": r.invoiceUploadedOnPortal,
         "CRM Name": r.crmName,
       }))
@@ -268,6 +280,8 @@ export default function ManageInvoicesSummary() {
           sortOrder={sort.dir}
           toggleSort={toggleSort}
           onEdit={(r) => setEditRow(r)}
+          filters={filters}
+          search={search}
         />
       )}
 
@@ -281,9 +295,4 @@ export default function ManageInvoicesSummary() {
       )}
     </div>
   );
-}
-
-function fmt(v) {
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
-}
+}   
