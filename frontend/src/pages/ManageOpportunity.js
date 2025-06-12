@@ -26,7 +26,7 @@ function formatClosureDate(dateStr) {
 function ManageOpportunity() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
-  const canExportCRM = permissions.includes("export-crm");
+  const canExportCRM = permissions.includes("crm-export");
   const canViewAllOpp = permissions.includes("viewallopp");
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin || canViewAllOpp ? "all-opportunities" : "my-opportunities"

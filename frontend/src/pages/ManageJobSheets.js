@@ -40,7 +40,7 @@ export default function ManageJobSheets() {
   const [latestActions, setLatestActions] = useState({});
 
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
-  const canExportCRM = permissions.includes("export-crm");
+  const canExportCRM = permissions.includes("crm-export");
 
   const dateFilterRef = useRef(null);
 

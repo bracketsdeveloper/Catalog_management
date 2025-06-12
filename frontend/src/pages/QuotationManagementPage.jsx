@@ -39,7 +39,7 @@ export default function QuotationManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchValues, setSearchValues] = useState({}); // New state for header search
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
-  const canExportCRM = permissions.includes("export-crm");
+  const canExportCRM = permissions.includes("crm-export");
 
   useEffect(() => {
     function handleDocumentClick() {

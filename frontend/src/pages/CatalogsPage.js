@@ -53,7 +53,7 @@ export default function CatalogManagementPage() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [searchValues, setSearchValues] = useState({});
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
-  const canExportCRM = permissions.includes("export-crm");
+  const canExportCRM = permissions.includes("crm-export");
 
   useEffect(() => {
     function handleDocumentClick() {
