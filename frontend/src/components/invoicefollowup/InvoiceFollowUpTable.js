@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -9,6 +9,9 @@ import {
 } from "@heroicons/react/24/outline";
 import JobSheetGlobal from "../jobsheet/globalJobsheet";
 import PrintQuotation from "../../pages/PrintQuotation";
+import axios from "axios";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 function HeadCell({ label, field, sortField, sortOrder, toggle }) {
   const arrow =
@@ -39,12 +42,41 @@ export default function InvoiceFollowUpTable({
   sortOrder,
   toggleSort,
   onEdit,
+  view, // Add view prop
 }) {
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchValues, setSearchValues] = useState({});
   const [selectedQuotationId, setSelectedQuotationId] = useState(null);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+  const [dispatchStatuses, setDispatchStatuses] = useState({});
+
+  const token = localStorage.getItem("token");
+
+  // Fetch dispatch statuses for all rows
+  useEffect(() => {
+    async function fetchDispatchStatuses() {
+      try {
+        const dispatchIds = rows
+          .map((r) => r.dispatchId)
+          .filter((id) => id);
+        if (dispatchIds.length === 0) return;
+
+        const res = await axios.get(`${BACKEND_URL}/api/admin/dispatch-schedule`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const dispatchData = res.data || [];
+        const statusMap = {};
+        dispatchData.forEach((d) => {
+          statusMap[d._id] = d.status;
+        });
+        setDispatchStatuses(statusMap);
+      } catch (err) {
+        console.error("Error fetching dispatch statuses:", err);
+      }
+    }
+    fetchDispatchStatuses();
+  }, [rows, token]);
 
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
@@ -241,57 +273,66 @@ export default function InvoiceFollowUpTable({
                   return rowValue.includes(value.toLowerCase());
                 });
               })
-              .map((r) => (
-                <tr
-                  key={r.dispatchId || r._id}
-                  className={`hover:bg-gray-100 ${
-                    r.invoiceGenerated === "Yes" ? "bg-green-100" : ""
-                  }`}
-                >
-                  <Cell val={r.orderDate} />
-                  <td className="px-2 py-1 border border-gray-300">
-                    <button
-                      className="text-blue-500 hover:text-blue-700"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleOpenModal(r.jobSheetNumber);
-                      }}
-                    >
-                      {r.jobSheetNumber || "No Number"}
-                    </button>
-                  </td>
-                  <Cell val={r.clientCompanyName} />
-                  <Cell val={r.clientName} />
-                  <Cell val={r.eventName} />
-                  <td className="px-2 py-1 border border-gray-300">
-                    <button
-                      className="text-blue-500 hover:text-blue-700"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleOpenQuotationModal(r.quotationId);
-                      }}
-                    >
-                      {r.quotationNumber}
-                    </button>
-                  </td>
-                  <Cell val={r.quotationTotal} />
-                  <Cell val={r.crmName} />
-                  <Cell val={r.product} />
-                  <Cell val={r.partialQty} field="partialQty" />
-                  <Cell val={r.dispatchedOn} />
-                  <Cell val={r.deliveredThrough} />
-                  <Cell val={r.poStatus} />
-                  <Cell val={r.invoiceGenerated} />
-                  <Cell val={r.invoiceNumber} />
-                  <Cell val={r.pendingFromDays} field="pendingFromDays" />
-                  <Cell val={r.remarks} />
-                  <td className="px-2 py-1 border border-gray-300">
-                    <button onClick={() => onEdit(r)}>
-                      <EllipsisVerticalIcon className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))
+              .map((r) => {
+                // Determine row background color
+                const dispatchStatus = r.dispatchId ? dispatchStatuses[r.dispatchId.toString()] : null;
+                const bgClass =
+                  view === "new" && dispatchStatus === "sent" && r.invoiceGenerated !== "Yes"
+                    ? "bg-red-200" // Red for "new" view if dispatch is sent and invoice not generated
+                    : r.invoiceGenerated === "Yes"
+                    ? "bg-green-100" // Green if invoice generated
+                    : ""; // Default (no color)
+
+                return (
+                  <tr
+                    key={r.dispatchId || r._id}
+                    className={`hover:bg-gray-100 ${bgClass}`}
+                  >
+                    <Cell val={r.orderDate} />
+                    <td className="px-2 py-1 border border-gray-300">
+                      <button
+                        className="text-blue-500 hover:text-blue-700"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleOpenModal(r.jobSheetNumber);
+                        }}
+                      >
+                        {r.jobSheetNumber || "No Number"}
+                      </button>
+                    </td>
+                    <Cell val={r.clientCompanyName} />
+                    <Cell val={r.clientName} />
+                    <Cell val={r.eventName} />
+                    <td className="px-2 py-1 border border-gray-300">
+                      <button
+                        className="text-blue-500 hover:text-blue-700"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleOpenQuotationModal(r.quotationId);
+                        }}
+                      >
+                        {r.quotationNumber}
+                      </button>
+                    </td>
+                    <Cell val={r.quotationTotal} />
+                    <Cell val={r.crmName} />
+                    <Cell val={r.product} />
+                    <Cell val={r.partialQty} field="partialQty" />
+                    <Cell val={r.dispatchedOn} />
+                    <Cell val={r.deliveredThrough} />
+                    <Cell val={r.poStatus} />
+                    <Cell val={r.invoiceGenerated} />
+                    <Cell val={r.invoiceNumber} />
+                    <Cell val={r.pendingFromDays} field="pendingFromDays" />
+                    <Cell val={r.remarks} />
+                    <td className="px-2 py-1 border border-gray-300">
+                      <button onClick={() => onEdit(r)}>
+                        <EllipsisVerticalIcon className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
           ) : (
             <tr>
               <td
@@ -337,9 +378,11 @@ function Cell({ val, field }) {
     <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
       {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
         ? fmt(val)
-        : typeof val === 'number' && !isNaN(val)
-          ? field === 'partialQty' || field === 'pendingFromDays' ? Math.floor(val) : val.toFixed(2)
-          : val ?? "-"}
+        : typeof val === "number" && !isNaN(val)
+        ? field === "partialQty" || field === "pendingFromDays"
+          ? Math.floor(val)
+          : val.toFixed(2)
+        : val ?? "-"}
     </td>
   );
 }
