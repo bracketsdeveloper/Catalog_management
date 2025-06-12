@@ -1,4 +1,3 @@
-// components/AddSampleModal.jsx
 "use client";
 import React, { useState, useEffect, forwardRef } from "react";
 import axios from "axios";
@@ -21,9 +20,12 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
     qty:               "",
     returnable:        "",
     returnableDays:    "",
-    productPicture:    "",   // ← new field
+    productPicture:    "",
+    opportunityNumber: "", // Added
+    remarks:           "", // Added
   });
   const [suggestions, setSuggestions] = useState([]);
+  const [opportunitySuggestions, setOpportunitySuggestions] = useState([]); // Added
   const [allFilters, setAllFilters] = useState({
     categories: [], subCategories: [], brands: []
   });
@@ -50,6 +52,8 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
         returnable:       initialData.returnable,
         returnableDays:   initialData.returnableDays || "",
         productPicture:   initialData.productPicture || "",
+        opportunityNumber: initialData.opportunityNumber || "", // Added
+        remarks:          initialData.remarks || "", // Added
       });
       setColorOptions(
         (initialData.color || "")
@@ -87,8 +91,23 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
     }
   }, [form.productId, form.productName]);
 
-  // When suggestion is clicked, populate form and derive colors + picture
-  const handleSelect = p => {
+  // Fetch opportunity suggestions
+  useEffect(() => {
+    const q = form.opportunityNumber;
+    if (q.trim()) {
+      axios.get(
+        `${BACKEND_URL}/api/admin/samples/opportunity-suggestions?search=${encodeURIComponent(q)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then(res => setOpportunitySuggestions(res.data))
+      .catch(console.error);
+    } else {
+      setOpportunitySuggestions([]);
+    }
+  }, [form.opportunityNumber]);
+
+  // When product suggestion is clicked
+  const handleSelectProduct = p => {
     setForm(f => ({
       ...f,
       productId:        p.productId,
@@ -107,6 +126,15 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
         .filter(c => c)
     );
     setSuggestions([]);
+  };
+
+  // When opportunity suggestion is clicked
+  const handleSelectOpportunity = opp => {
+    setForm(f => ({
+      ...f,
+      opportunityNumber: opp.opportunityCode,
+    }));
+    setOpportunitySuggestions([]);
   };
 
   const handleChange = (key, val) =>
@@ -160,6 +188,30 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
               customInput={<DateInput />}
             />
           </div>
+
+          {/* Opportunity Number */}
+          <div>
+            <label className="block mb-1">Opportunity #</label>
+            <input
+              type="text"
+              className="border rounded p-2 w-full"
+              value={form.opportunityNumber}
+              onChange={e => handleChange("opportunityNumber", e.target.value)}
+            />
+            {opportunitySuggestions.length > 0 && (
+              <ul className="border bg-white max-h-40 overflow-auto mt-1">
+                {opportunitySuggestions.map(opp => (
+                  <li
+                    key={opp._id}
+                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleSelectOpportunity(opp)}
+                  >
+                    {opp.opportunityCode} — {opp.opportunityName}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {/* Product ID / Name */}
           <div>
             <label className="block mb-1">Product ID or Name</label>
@@ -180,7 +232,7 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
                   <li
                     key={p._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => handleSelect(p)}
+                    onClick={() => handleSelectProduct(p)}
                   >
                     {p.productId} — {p.name}
                   </li>
@@ -325,6 +377,16 @@ export default function AddSampleModal({ initialData, onClose, onSave }) {
               />
             </div>
           )}
+          
+          {/* Remarks */}
+          <div>
+            <label className="block mb-1">Remarks</label>
+            <textarea
+              className="border rounded p-2 w-full"
+              value={form.remarks}
+              onChange={e => handleChange("remarks", e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end space-x-2">

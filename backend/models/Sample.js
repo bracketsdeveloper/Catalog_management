@@ -1,4 +1,3 @@
-// models/Sample.js
 const mongoose = require("mongoose");
 const Counter = require("./Counterforjobsheet");
 
@@ -18,10 +17,12 @@ const sampleSchema = new mongoose.Schema({
   qty:                { type: Number },
   returnable:         { 
     type: String, 
-    enum: ["Returnable","Non Returnable",""], 
+    enum: ["Returnable", "Non Returnable", ""], 
     default: "" 
   },
-  returnableDays:     { type: Number, default: 0 },   // ← new
+  returnableDays:     { type: Number, default: 0 },
+  opportunityNumber:  { type: String }, // New field
+  remarks:            { type: String }, // New field
   createdAt:          { type: Date,   default: Date.now },
 });
 

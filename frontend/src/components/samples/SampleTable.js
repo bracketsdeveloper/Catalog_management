@@ -1,4 +1,3 @@
-// client/src/components/samples/SampleTable.jsx
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -9,7 +8,7 @@ export default function SampleTable({
   sortField,
   sortOrder,
   toggleSort,
-  onEdit
+  onEdit,
 }) {
   const [preview, setPreview] = useState(null);
 
@@ -17,6 +16,7 @@ export default function SampleTable({
   const [headerFilters, setHeaderFilters] = useState({
     sampleInDate: "",
     sampleReferenceCode: "",
+    opportunityNumber: "", // Added
     productId: "",
     productName: "",
     category: "",
@@ -24,7 +24,9 @@ export default function SampleTable({
     brandName: "",
     sampleRate: "",
     qty: "",
-    returnable: ""
+    returnable: "",
+    
+    remarks: "", // Added
   });
   const handleFilterChange = (field, val) =>
     setHeaderFilters((h) => ({ ...h, [field]: val }));
@@ -71,6 +73,7 @@ export default function SampleTable({
                 { label: "Date", field: "sampleInDate" },
                 { label: "Picture", field: null },
                 { label: "Ref Code", field: "sampleReferenceCode" },
+                { label: "Opp #", field: "opportunityNumber" }, // Added
                 { label: "Product ID", field: "productId" },
                 { label: "Name", field: "productName" },
                 { label: "Category", field: "category" },
@@ -78,7 +81,9 @@ export default function SampleTable({
                 { label: "Brand", field: "brandName" },
                 { label: "Rate", field: "sampleRate" },
                 { label: "Qty", field: "qty" },
-                { label: "Returnable", field: "returnable" }
+                { label: "Returnable", field: "returnable" },
+                
+                { label: "Remarks", field: "remarks" }, // Added
               ].map(({ label, field }) => (
                 <th
                   key={label}
@@ -102,6 +107,7 @@ export default function SampleTable({
                 "sampleInDate",
                 null,
                 "sampleReferenceCode",
+                "opportunityNumber", // Added
                 "productId",
                 "productName",
                 "category",
@@ -109,7 +115,9 @@ export default function SampleTable({
                 "brandName",
                 "sampleRate",
                 "qty",
-                "returnable"
+                "returnable",
+                
+                "remarks", // Added
               ].map((field, idx) => (
                 <td key={idx} className="px-4 py-1">
                   {field ? (
@@ -152,6 +160,7 @@ export default function SampleTable({
                   )}
                 </td>
                 <td className="px-4 py-2">{s.sampleReferenceCode}</td>
+                <td className="px-4 py-2">{s.opportunityNumber}</td>
                 <td className="px-4 py-2">{s.productId}</td>
                 <td className="px-4 py-2">{s.productName}</td>
                 <td className="px-4 py-2">{s.category}</td>
@@ -163,6 +172,7 @@ export default function SampleTable({
                   {s.returnable}
                   {s.returnable === "Returnable" && ` (${s.returnableDays} d)`}
                 </td>
+                <td className="px-4 py-2">{s.remarks}</td>
                 <td className="px-4 py-2">
                   <button
                     onClick={() => onEdit(s)}
@@ -177,7 +187,7 @@ export default function SampleTable({
             {!sorted.length && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={14} // Updated to account for new columns
                   className="px-4 py-6 text-center text-gray-500"
                 >
                   No samples found.

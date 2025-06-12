@@ -90,7 +90,7 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, isS
           <option value="thisYear">This Year</option>
         </select>
       </div>
-      <table className="w-full border-collapse">
+      <table className="w-full border-collapse text-xs">
         <thead>
         <tr>
           {headers.map((h) => (
@@ -114,25 +114,25 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, isS
         ) : (
           getFilteredTasks().map((task) => (
             <tr key={task._id}>
-              <td className="border p-2">{task.taskRef || "-"}</td>
-              <td className="border p-2">{task.ticketName || "-"}</td>
-              <td className="border p-2">{task.opportunityCode || "-"}</td>
-              <td className="border p-2">{task.assignedBy?.name || "-"}</td>
-              <td className="border p-2">{task.assignedTo?.name || "-"}</td>
-              <td className="border p-2">{formatDate(task.toBeClosedBy)}</td>
-              <td className="border p-2">{getScheduleSummary(task)}</td>
-              <td className="border p-2">{task.completedOn || "-"}</td>
-              <td className="border p-2">
+              <td className="border text-center">{task.taskRef || "-"}</td>
+              <td className="border text-center">{task.ticketName || "-"}</td>
+              <td className="border text-center">{task.opportunityCode || "-"}</td>
+              <td className="border text-center">{task.assignedBy?.name || "-"}</td>
+              <td className="border text-center">{task.assignedTo?.name || "-"}</td>
+              <td className="border text-center">{formatDate(task.toBeClosedBy)}</td>
+              <td className="border text-center">{getScheduleSummary(task)}</td>
+              <td className="border text-center">{task.completedOn || "-"}</td>
+              <td className="border text-center">
                 <button
                   onClick={() => handleEdit(task)}
-                  className="bg-blue-600 text-white px-3 py-1 rounded mr-2"
+                  className="bg-blue-600 text-white text-xs px-3 py-0 rounded mr-2"
                 >
                   Edit
                 </button>
                 {isSuperAdmin && (
                   <button
                     onClick={() => handleDelete(task._id)}
-                    className="bg-red-600 text-white px-3 py-1 rounded"
+                    className="bg-red-600 text-white px-3 py-0 rounded"
                   >
                     Delete
                   </button>

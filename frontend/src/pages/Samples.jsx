@@ -1,4 +1,3 @@
-// client/src/pages/Samples.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -18,12 +17,12 @@ export default function Samples() {
 
   /* panel filters */
   const [flt, setFlt] = useState({
-    dateFrom: "",    // yyyy-MM-dd
+    dateFrom: "",
     dateTo: "",
     category: "",
     subCategory: "",
     brand: "",
-    returnable: ""   // "" | "Returnable" | "Non Returnable"
+    returnable: "",
   });
 
   /* column sort state */
@@ -31,7 +30,7 @@ export default function Samples() {
   const toggleSort = (field) => {
     setSort((s) => ({
       field,
-      dir: s.field === field && s.dir === "asc" ? "desc" : "asc"
+      dir: s.field === field && s.dir === "asc" ? "desc" : "asc",
     }));
   };
 
@@ -51,7 +50,7 @@ export default function Samples() {
         url += `?search=${encodeURIComponent(search.trim())}`;
       }
       const { data } = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setAll(data);
     } catch (err) {
@@ -102,7 +101,9 @@ export default function Samples() {
       Rate: s.sampleRate,
       Qty: s.qty,
       Returnable: s.returnable,
-      "Return Days": s.returnableDays ?? ""
+      "Return Days": s.returnableDays ?? "",
+      "Opportunity #": s.opportunityNumber ?? "", // Added
+      Remarks: s.remarks ?? "", // Added
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();

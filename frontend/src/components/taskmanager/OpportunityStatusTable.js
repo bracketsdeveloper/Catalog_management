@@ -49,14 +49,14 @@ function OpportunityStatusTable({ opportunities, formatDate, handleSort, sortCon
   };
 
   return (
-    <table className="w-full border-collapse">
+    <table className="max-w-xl border-collapse text-xs">
       <thead>
         <tr>
           {headers.map((h) => (
             <th
               key={h.key}
               onClick={() => handleSort(h.key)}
-              className="border p-2 cursor-pointer text-left"
+              className="border cursor-pointer text-center"
             >
               {h.label} {sortConfig.key === h.key ? (sortConfig.direction === "asc" ? "↑" : "↓") : ""}
             </th>
@@ -75,11 +75,11 @@ function OpportunityStatusTable({ opportunities, formatDate, handleSort, sortCon
             const latestLog = latestLogs[opp._id] || {};
             return (
               <tr key={opp._id}>
-                <td className="border p-2">{opp.opportunityCode || "-"}</td>
-                <td className="border p-2">{opp.account || "-"}</td>
-                <td className="border p-2">{opp.opportunityName || "-"}</td>
-                <td className="border p-2">{opp.opportunityStage || "-"}</td>
-                <td className="border p-2">
+                <td className="border text-center">{opp.opportunityCode || "-"}</td>
+                <td className="border text-center">{opp.account || "-"}</td>
+                <td className="border text-center">{opp.opportunityName || "-"}</td>
+                <td className="border text-center">{opp.opportunityStage || "-"}</td>
+                <td className="border text-center">
                   {latestLog.performedBy ? getLogMessage(latestLog) : formatDate(opp.createdAt)}
                 </td>
               </tr>

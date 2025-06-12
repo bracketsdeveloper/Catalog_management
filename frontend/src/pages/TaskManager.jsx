@@ -1,19 +1,16 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import SearchBar from "../components/taskmanager/SearchBar";
-import ToggleViewButtons from "../components/taskmanager/ToggleViewButtons";
 import OpportunityStatusTable from "../components/taskmanager/OpportunityStatusTable";
 import TicketsTable from "../components/taskmanager/TicketsTable";
 import CreateTicketModal from "../components/taskmanager/CreateTicketModal";
-import TaskCalendar from "../components/taskmanager/TaskCalendar";
+import CalendarPage from "./CalendarPage";
 import "../styles/fullcalendar.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-function TaskManager() {
+function TaskManagementPage() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
-  const [viewMode, setViewMode] = useState("calendar");
-  const [subView, setSubView] = useState("opportunity");
   const [searchTerm, setSearchTerm] = useState("");
   const [opportunities, setOpportunities] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -26,13 +23,30 @@ function TaskManager() {
     Authorization: `Bearer ${localStorage.getItem("token")}`,
   });
 
+  // Fetch current user
+  useEffect(() => {
+    axios
+      .get(`${BACKEND_URL}/api/admin/users`, { headers: getAuthHeaders() })
+      .then((res) => setCurrentUser(res.data))
+      .catch((err) => console.error("Error fetching current user:", err));
+  }, []);
+
+  // Fetch users
+  useEffect(() => {
+    const endpoint = isSuperAdmin ? `${BACKEND_URL}/api/admin/users?all=true` : `${BACKEND_URL}/api/admin/users`;
+    axios
+      .get(endpoint, { headers: getAuthHeaders() })
+      .then((res) => setUsers(isSuperAdmin ? res.data : [res.data]))
+      .catch((err) => console.error("Error fetching users:", err));
+  }, [isSuperAdmin]);
+
+  // Fetch opportunities
   const fetchOpportunities = async () => {
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/tasks/opportunities`, {
         headers: getAuthHeaders(),
         params: { searchTerm },
       });
-      console.log("Opportunities fetched:", res.data);
       setOpportunities(res.data || []);
     } catch (error) {
       console.error("Error fetching opportunities:", error);
@@ -40,13 +54,13 @@ function TaskManager() {
     }
   };
 
+  // Fetch tasks
   const fetchTasks = async () => {
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/tasks`, {
         headers: getAuthHeaders(),
         params: { searchTerm },
       });
-      console.log("Tasks fetched:", res.data);
       setTasks(res.data || []);
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -54,35 +68,9 @@ function TaskManager() {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const endpoint = isSuperAdmin ? `${BACKEND_URL}/api/admin/users?all=true` : `${BACKEND_URL}/api/admin/users`;
-      const res = await axios.get(endpoint, { headers: getAuthHeaders() });
-      console.log("Users fetched:", res.data);
-      setUsers(isSuperAdmin ? res.data : [res.data]);
-      if (!isSuperAdmin) setCurrentUser(res.data);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      setUsers([]);
-    }
-  };
-
-  const fetchCurrentUser = async () => {
-    if (isSuperAdmin) return;
-    try {
-      const res = await axios.get(`${BACKEND_URL}/api/admin/users`, { headers: getAuthHeaders() });
-      console.log("Current user fetched:", res.data);
-      setCurrentUser(res.data);
-    } catch (error) {
-      console.error("Error fetching current user:", error);
-    }
-  };
-
   useEffect(() => {
     fetchOpportunities();
     fetchTasks();
-    fetchUsers();
-    fetchCurrentUser();
   }, [searchTerm]);
 
   const handleSort = (key) => {
@@ -95,12 +83,12 @@ function TaskManager() {
     setSortConfig({ key, direction });
   };
 
-  const sortedData = useMemo(() => {
+  const sortedTasks = useMemo(() => {
     if (!sortConfig.key || !sortConfig.direction) return tasks;
     const sorted = [...tasks].sort((a, b) => {
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
-      if (sortConfig.key === "toBeClosedBy" || sortConfig.key === "assignedOn" || sortConfig.key === "fromDate" || sortConfig.key === "toDate") {
+      if (["toBeClosedBy", "assignedOn"].includes(sortConfig.key)) {
         aVal = new Date(aVal);
         bVal = new Date(bVal);
       }
@@ -148,9 +136,7 @@ function TaskManager() {
   };
 
   const handleDeleteTicket = async (taskId) => {
-    if (!window.confirm("Are you sure you want to delete this ticket? All related scheduled tickets will be deleted.")) {
-      return;
-    }
+    if (!window.confirm("Are you sure you want to delete this ticket?")) return;
     try {
       await axios.delete(`${BACKEND_URL}/api/admin/tasks/${taskId}`, {
         headers: getAuthHeaders(),
@@ -162,85 +148,56 @@ function TaskManager() {
     }
   };
 
-  const handleDateClick = ({ date }) => {
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    setShowCreateModal({ toBeClosedBy: dateStr + "T09:00", fromDate: dateStr + "T09:00" });
-  };
-
-  const handleEventClick = ({ event }) => {
-    setShowCreateModal({ ...event.extendedProps.task, isEditing: event.extendedProps.task.isEditing || true });
-  };
-
-  const handleRefresh = () => {
-    fetchTasks();
-  };
-
   const formatDate = (date) => {
     if (!date) return "-";
     return new Date(date).toLocaleString("en-GB");
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-800 p-6">
-      <h1 className="text-xl md:text-2xl font-bold mb-4 text-purple-700">
-        Task Management
-      </h1>
-      <div className="flex flex-col gap-4">
+    <div className="min-h-screen bg-gray-100 text-gray-900 px-6 py-8 sm:px-10 md:px-16 lg:px-20">
+      <h1 className="text-3xl font-semibold mb-6 text-indigo-700">Task Management</h1>
+      <div className="flex flex-col gap-6">
         <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-        <div className="flex flex-col gap-2">
-          <ToggleViewButtons viewMode={viewMode} setViewMode={setViewMode} />
-          {viewMode === "list" && (
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => setSubView("opportunity")}
-                className={`px-4 py-2 rounded text-sm ${subView === "opportunity" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
-              >
-                Opportunity Status
-              </button>
-              <button
-                onClick={() => setSubView("tickets")}
-                className={`px-4 py-2 rounded text-sm ${subView === "tickets" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
-              >
-                Tickets Management
-              </button>
-            </div>
-          )}
-        </div>
-        {viewMode === "list" && subView === "opportunity" && (
-          <OpportunityStatusTable
-            opportunities={opportunities}
-            formatDate={formatDate}
-            handleSort={handleSort}
-            sortConfig={sortConfig}
-          />
-        )}
-        {viewMode === "list" && subView === "tickets" && (
-          <div>
-            <button
-              onClick={() => setShowCreateModal({})}
-              className="bg-green-500 text-white px-4 py-2 rounded mb-4"
-            >
-              Generate Ticket
-            </button>
-            <TicketsTable
-              tasks={sortedData}
-              formatDate={formatDate}
-              handleSort={handleSort}
-              sortConfig={sortConfig}
-              onReopen={(task) => setShowCreateModal({ ...task, isEditing: true })}
-              onDelete={handleDeleteTicket}
-              isSuperAdmin={isSuperAdmin}
-            />
+        <div className="flex gap-6">
+          {/* Left: Calendar (45%) */}
+          <div className="w-[65%] bg-white rounded-lg shadow-md p-4">
+            <CalendarPage />
           </div>
-        )}
-        {viewMode === "calendar" && (
-          <TaskCalendar
-            isSuperAdmin={isSuperAdmin}
-            onDateClick={handleDateClick}
-            onEventClick={handleEventClick}
-            onRefresh={handleRefresh}
-          />
-        )}
+          {/* Right: Tables (55%) */}
+          <div className="w-[45%] flex flex-col gap-6 h-[calc(150vh-120px)]">
+            {/* Top: Opportunity Status Table */}
+            <div className="flex-1 max-h-[50%] bg-white rounded-lg shadow-md p-4 overflow-y-auto">
+              <h2 className="text-lg font-medium mb-2 text-gray-700">Opportunities</h2>
+              <OpportunityStatusTable
+                opportunities={opportunities}
+                formatDate={formatDate}
+                handleSort={handleSort}
+                sortConfig={sortConfig}
+              />
+            </div>
+            {/* Bottom: Tickets Table */}
+            <div className="flex-1 max-h-[50%] bg-white rounded-lg shadow-md p-4 overflow-y-auto">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-lg font-medium text-gray-700">Tickets</h2>
+                <button
+                  onClick={() => setShowCreateModal({})}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  Create Ticket
+                </button>
+              </div>
+              <TicketsTable
+                tasks={sortedTasks}
+                formatDate={formatDate}
+                handleSort={handleSort}
+                sortConfig={sortConfig}
+                onReopen={(task) => setShowCreateModal({ ...task, isEditing: true })}
+                onDelete={handleDeleteTicket}
+                isSuperAdmin={isSuperAdmin}
+              />
+            </div>
+          </div>
+        </div>
       </div>
       {showCreateModal && (
         <CreateTicketModal
@@ -258,4 +215,4 @@ function TaskManager() {
   );
 }
 
-export default TaskManager;
+export default TaskManagementPage;
