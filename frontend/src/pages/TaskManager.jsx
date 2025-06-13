@@ -18,12 +18,24 @@ function TaskManagementPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
+  const [opportunityFilter, setOpportunityFilter] = useState(isSuperAdmin ? "all" : "my");
+  const [selectedUser, setSelectedUser] = useState("all");
+
+  const [filter, setFilter] = useState(() => localStorage.getItem("taskFilter") || "open");
+  const [dateFilter, setDateFilter] = useState(() => localStorage.getItem("taskDateFilter") || "");
+
+  useEffect(() => {
+    localStorage.setItem("taskFilter", filter);
+  }, [filter]);
+
+  useEffect(() => {
+    localStorage.setItem("taskDateFilter", dateFilter);
+  }, [dateFilter]);
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,
   });
 
-  // Fetch current user
   useEffect(() => {
     axios
       .get(`${BACKEND_URL}/api/admin/users`, { headers: getAuthHeaders() })
@@ -31,7 +43,6 @@ function TaskManagementPage() {
       .catch((err) => console.error("Error fetching current user:", err));
   }, []);
 
-  // Fetch users
   useEffect(() => {
     const endpoint = isSuperAdmin ? `${BACKEND_URL}/api/admin/users?all=true` : `${BACKEND_URL}/api/admin/users`;
     axios
@@ -40,12 +51,18 @@ function TaskManagementPage() {
       .catch((err) => console.error("Error fetching users:", err));
   }, [isSuperAdmin]);
 
-  // Fetch opportunities
   const fetchOpportunities = async () => {
     try {
-      const res = await axios.get(`${BACKEND_URL}/api/admin/tasks/opportunities`, {
+      const params = { searchTerm };
+      if (!isSuperAdmin) {
+        params.filter = opportunityFilter;
+      } else if (selectedUser !== "all") {
+        params.filter = "my";
+        params.userName = users.find((u) => u._id === selectedUser)?.name;
+      }
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
         headers: getAuthHeaders(),
-        params: { searchTerm },
+        params,
       });
       setOpportunities(res.data || []);
     } catch (error) {
@@ -54,7 +71,6 @@ function TaskManagementPage() {
     }
   };
 
-  // Fetch tasks
   const fetchTasks = async () => {
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/tasks`, {
@@ -71,7 +87,7 @@ function TaskManagementPage() {
   useEffect(() => {
     fetchOpportunities();
     fetchTasks();
-  }, [searchTerm]);
+  }, [searchTerm, opportunityFilter, selectedUser, users]);
 
   const handleSort = (key) => {
     let direction = "asc";
@@ -148,10 +164,33 @@ function TaskManagementPage() {
     }
   };
 
+  const handleReopen = async (taskId, newClosingDate) => {
+    try {
+      const task = tasks.find((t) => t._id === taskId);
+      if (!task) throw new Error("Task not found");
+      const updateData = {
+        ...task,
+        toBeClosedBy: newClosingDate,
+        reopened: true,
+        completedOn: "Not Done",
+      };
+      delete updateData._id;
+      await axios.put(`${BACKEND_URL}/api/admin/tasks/${taskId}`, updateData, {
+        headers: getAuthHeaders(),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error reopening ticket:", error);
+      alert(`Error: ${error.response?.data?.message || "Failed to reopen ticket"}`);
+    }
+  };
+
   const formatDate = (date) => {
     if (!date) return "-";
     return new Date(date).toLocaleString("en-GB");
   };
+
+  console.log("TaskManagementPage props for TicketsTable:", { filter, setFilter, dateFilter, setDateFilter });
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 px-6 py-8 sm:px-10 md:px-16 lg:px-20">
@@ -159,13 +198,10 @@ function TaskManagementPage() {
       <div className="flex flex-col gap-6">
         <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
         <div className="flex gap-6">
-          {/* Left: Calendar (45%) */}
-          <div className="w-[65%] bg-white rounded-lg shadow-md p-4">
+          <div className="w-[55%] bg-white rounded-lg shadow-md p-4">
             <CalendarPage />
           </div>
-          {/* Right: Tables (55%) */}
           <div className="w-[45%] flex flex-col gap-6 h-[calc(150vh-120px)]">
-            {/* Top: Opportunity Status Table */}
             <div className="flex-1 max-h-[50%] bg-white rounded-lg shadow-md p-4 overflow-y-auto">
               <h2 className="text-lg font-medium mb-2 text-gray-700">Opportunities</h2>
               <OpportunityStatusTable
@@ -173,9 +209,12 @@ function TaskManagementPage() {
                 formatDate={formatDate}
                 handleSort={handleSort}
                 sortConfig={sortConfig}
+                isSuperAdmin={isSuperAdmin}
+                setOpportunityFilter={setOpportunityFilter}
+                setSelectedUser={setSelectedUser}
+                users={users}
               />
             </div>
-            {/* Bottom: Tickets Table */}
             <div className="flex-1 max-h-[50%] bg-white rounded-lg shadow-md p-4 overflow-y-auto">
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-lg font-medium text-gray-700">Tickets</h2>
@@ -193,7 +232,13 @@ function TaskManagementPage() {
                 sortConfig={sortConfig}
                 onReopen={(task) => setShowCreateModal({ ...task, isEditing: true })}
                 onDelete={handleDeleteTicket}
+                onReopenTicket={handleReopen}
                 isSuperAdmin={isSuperAdmin}
+                filter={filter}
+                setFilter={setFilter}
+                dateFilter={dateFilter}
+                setDateFilter={setDateFilter}
+                users={users}
               />
             </div>
           </div>

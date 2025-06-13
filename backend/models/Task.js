@@ -1,4 +1,3 @@
-// Task.js
 const mongoose = require("mongoose");
 const Counter = require("./Counter");
 
@@ -33,6 +32,7 @@ const taskSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   createdAt: { type: Date, default: Date.now },
+  reopened: { type: Boolean, default: false }, // New field for reopened status
   logs: [logSchema],
 });
 

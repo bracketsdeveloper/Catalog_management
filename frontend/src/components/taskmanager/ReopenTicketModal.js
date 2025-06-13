@@ -41,6 +41,11 @@ function ReopenTicketModal({ task, onClose, onSubmit }) {
               className="w-full border p-2 rounded"
             />
           </div>
+          <div className="mb-4">
+            <p className="text-sm text-gray-600">
+              Note: This ticket will be marked as <span className="font-medium text-yellow-800">Re-Opened</span> upon submission.
+            </p>
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"

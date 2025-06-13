@@ -20,6 +20,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
     completedOn: initialData.completedOn || "Not Done",
     schedule: initialData.schedule || "None",
     selectedDates: initialData.selectedDates ? [...new Set(initialData.selectedDates.map((d) => new Date(new Date(d).getTime() + 5.5 * 60 * 60 * 1000).toISOString().split("T")[0]))] : [],
+    reopened: initialData.reopened || false,
   });
   const [showOpportunitySuggestions, setShowOpportunitySuggestions] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
@@ -89,9 +90,9 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
   }, [formData.schedule, formData.fromDate, formData.toDate, isEditing]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => {
-      const newFormData = { ...prev, [name]: value };
+      const newFormData = { ...prev, [name]: type === "checkbox" ? checked : value };
       if (name === "schedule" && !isEditing) {
         newFormData.selectedDates = generateDates(value, prev.fromDate, prev.toDate);
       }
@@ -136,6 +137,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
         schedule: formData.schedule,
         fromDate: formData.fromDate && formData.schedule !== "None" ? new Date(new Date(formData.fromDate).getTime() - 5.5 * 60 * 60 * 1000).toISOString() : null,
         toDate: formData.toDate && formData.schedule !== "None" ? new Date(new Date(formData.toDate).getTime() - 5.5 * 60 * 60 * 1000).toISOString() : null,
+        reopened: formData.reopened || false,
       };
 
       if (isEditing && formData._id) {
@@ -144,6 +146,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
           _id: formData._id,
           toBeClosedBy: new Date(new Date(formData.toBeClosedBy).getTime() - 5.5 * 60 * 60 * 1000).toISOString(),
           selectedDates: formData.selectedDates.map((d) => new Date(new Date(d).getTime() - 5.5 * 60 * 60 * 1000).toISOString()),
+          reopened: formData.reopened,
         }, true);
       } else if (formData.schedule === "None") {
         await onSubmit({
@@ -309,6 +312,19 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               <option value="Done">Done</option>
             </select>
           </div>
+          {isSuperAdmin && isEditing && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Reopened Status</label>
+              <input
+                type="checkbox"
+                name="reopened"
+                checked={formData.reopened}
+                onChange={handleChange}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-700">Mark as Reopened</span>
+            </div>
+          )}
           {formData.schedule === "SelectedDates" && (
             <div className="mb-4">
               <label className="block text-sm font-medium">Select Dates</label>

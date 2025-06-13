@@ -95,6 +95,7 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
         fromDate: fromDateNormalized,
         toDate: toDateNormalized,
         selectedDates: selectedDatesNormalized,
+        reopened: taskData.reopened || false, // Ensure reopened field is set
         logs: [createLogEntry(req, "create", null, null, null)],
       });
       await task.save();
@@ -162,14 +163,12 @@ router.get("/tasks/calendar", authenticate, authorizeAdmin, async (req, res) => 
 
     const flatTasks = [];
     tasks.forEach((task) => {
-      // Use only the toBeClosedBy date for calendar display
       if (task.toBeClosedBy) {
         const date = new Date(task.toBeClosedBy);
         if (!date) {
           console.warn("Invalid toBeClosedBy date for task:", { taskId: task._id });
           return;
         }
-        // Reverse the IST adjustment made during storage (+5.5 hours)
         const adjustedDate = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
         const dateOnly = adjustedDate.toISOString().split("T")[0];
         const isOverdue = new Date(date) < new Date() && task.completedOn === "Not Done";
@@ -203,7 +202,7 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
     if (!isSuperAdmin && task.createdBy.toString() !== req.user._id.toString() && task.assignedTo.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Unauthorized" });
     }
-    const { toBeClosedBy, selectedDates, assignedTo, fromDate, toDate, schedule, opportunityId } = req.body;
+    const { toBeClosedBy, selectedDates, assignedTo, fromDate, toDate, schedule, opportunityId, reopened } = req.body;
     const logs = [];
     const fieldsToCheck = [
       "ticketName",
@@ -215,6 +214,7 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       "assignedTo",
       "fromDate",
       "toDate",
+      "reopened", // Add reopened to fields to check
     ];
     let opportunityCode = task.opportunityCode;
 
@@ -250,6 +250,9 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
             date.setHours(0, 0, 0, 0);
             return date;
           });
+        }
+        if (field === "reopened") {
+          newVal = Boolean(req.body[field]); // Ensure reopened is treated as a boolean
         }
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           logs.push(createLogEntry(req, "update", field, oldVal, newVal));

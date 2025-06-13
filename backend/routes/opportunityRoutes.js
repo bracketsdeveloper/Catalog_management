@@ -74,21 +74,25 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
 
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { filter, searchTerm } = req.query;
-    const userName = req.user.name;
+    const { filter, searchTerm, userName } = req.query;
+    const currentUserName = req.user.name;
 
     const andConditions = [];
 
-    switch (filter) {
-      case "my":
-        andConditions.push({ opportunityOwner: userName });
-        break;
-      case "team":
-        andConditions.push(
-          { "teamMembers.userName": userName },
-          { opportunityOwner: { $ne: userName } }
-        );
-        break;
+    if (userName && req.user.isSuperAdmin) {
+      andConditions.push({ opportunityOwner: userName });
+    } else {
+      switch (filter) {
+        case "my":
+          andConditions.push({ opportunityOwner: currentUserName });
+          break;
+        case "team":
+          andConditions.push(
+            { "teamMembers.userName": currentUserName },
+            { opportunityOwner: { $ne: currentUserName } }
+          );
+          break;
+      }
     }
 
     if (searchTerm) {
