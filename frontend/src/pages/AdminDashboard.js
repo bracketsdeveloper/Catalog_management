@@ -35,6 +35,11 @@ const adminPages = [
         path: "/admin-dashboard/manage-tasks",
         permission: "manage-task",
       },
+      {
+        name: "Manage Tasks",
+        path: "/admin-dashboard/manage-tasks",
+        permission: "manage-task",
+      },
     ],
   },
    {
