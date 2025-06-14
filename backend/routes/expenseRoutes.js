@@ -83,7 +83,6 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
     const permissions = req.user.permissions || [];
     const userId = req.user._id;
     const userName = req.user.name;
-
     const filter = { _id: req.params.id };
 
     // Restrict to user's own expense or expenses where they are crmName for non-super admins with manage-expenses permiss
