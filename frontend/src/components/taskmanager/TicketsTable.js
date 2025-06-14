@@ -28,8 +28,26 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
     { key: "actions", label: "Actions" },
   ];
 
+  const now = new Date(); // Current date/time: June 13, 2025, 10:26 AM IST
+
+  // Calculate counts for each filter category
+  const openTicketsCount = tasks.filter((task) => {
+    const taskDate = new Date(task.toBeClosedBy);
+    return taskDate > now && task.completedOn === "Not Done" && !task.reopened;
+  }).length;
+
+  const closedTicketsCount = tasks.filter((task) => task.completedOn === "Done").length;
+
+  const reopenedTicketsCount = tasks.filter((task) => task.reopened === true).length;
+
+  const incompleteTasksCount = tasks.filter((task) => {
+    const taskDate = new Date(task.toBeClosedBy);
+    return taskDate < now && task.completedOn === "Not Done";
+  }).length;
+
+  const allTicketsCount = tasks.length;
+
   const getFilteredTasks = () => {
-    const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const startOfWeek = new Date(today);
@@ -109,31 +127,31 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
           className={`px-2 py-1 rounded-md text-sm ${filter === "open" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("open")}
         >
-          Open Tickets
+          Open Tickets ({openTicketsCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "closed" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("closed")}
         >
-          Closed Tickets
+          Closed Tickets ({closedTicketsCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "reopened" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("reopened")}
         >
-          Re-Opened
+          Re-Opened ({reopenedTicketsCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "incomplete" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("incomplete")}
         >
-          Incomplete Tasks
+          Incomplete Tasks ({incompleteTasksCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("")}
         >
-          All Tickets
+          All Tickets ({allTicketsCount})
         </button>
       </div>
 
@@ -212,7 +230,6 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
           ) : (
             filteredTasks.map((task) => {
               const taskDate = new Date(task.toBeClosedBy);
-              const now = new Date();
               const isPastDue = taskDate < now;
               const isNotDone = task.completedOn === "Not Done";
               const showReopenButton = isPastDue && isNotDone && filter !== "reopened";

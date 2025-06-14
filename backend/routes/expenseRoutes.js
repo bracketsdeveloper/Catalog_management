@@ -88,7 +88,7 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
     const filter = { _id: req.params.id };
 
     // Restrict to user's own expense or expenses where they are crmName for non-super admins with manage-expenses permission
-    if (!isSuperAdmin && permissions.includes("manage-expenses")) {
+    if (permissions.includes("manage-expenses")) {
       filter.$or = [
         { createdBy: userId },
         { crmName: userName }
