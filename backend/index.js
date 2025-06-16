@@ -15,7 +15,7 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Configure CORS for frontend (localhost:3000)
-const allowedOrigins = ['http://localhost:3000', 'https://catalog-management.vercel.app'];
+const allowedOrigins = ['http://localhost:3000', 'http://69.62.73.158:3001','https://catalog-management.vercel.app'];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;

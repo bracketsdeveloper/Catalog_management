@@ -48,7 +48,7 @@ const DeliveryChallan = () => {
               margin: 0;
             }
             body {
-              font-family: Arial, sans-serif;
+              font-family: Calibri, sans-serif;
               width: 210mm;
               height: 297mm;
               margin: 0 auto;
@@ -77,6 +77,13 @@ const DeliveryChallan = () => {
             }
             thead tr {
               border-bottom: 1px solid black;
+            }
+            .table-row {
+              line-height: 1.2; /* Reset line height for normal text */
+            }
+            .table-cell {
+              padding-top: 2.5px; /* 2.5px top + 2.5px bottom = 5px gap */
+              padding-bottom: 2.5px;
             }
             .text-xs {
               font-size: 11px;
@@ -187,12 +194,12 @@ const DeliveryChallan = () => {
               font-size: 18px;
               line-height: 1.4;
             }
-            .table-row {
-              margin: 5px 0;
+            .two-column {
+              display: flex;
+              justify-content: space-between;
             }
-            .table-cell {
-              padding-top: 5px;
-              padding-bottom: 5px;
+            .column {
+              width: 45%;
             }
           </style>
         </head>
@@ -202,10 +209,8 @@ const DeliveryChallan = () => {
       </html>
     `;
 
-    // Trigger print dialog after 5 seconds
     setTimeout(() => {
       window.print();
-      // Restore original content after printing
       document.body.innerHTML = originalContents;
     }, 2000);
   };
@@ -247,16 +252,15 @@ const DeliveryChallan = () => {
           height: '297mm',
           padding: '20px',
           boxSizing: 'border-box',
-          border: '1px solid #000'
+          border: '1px solid #000',
+          fontFamily: 'Calibri, sans-serif'
         }}
       >
-        {/* Title with centered DELIVERY CHALLAN and right-aligned ORIGINAL */}
         <div className="title-container">
           <h1 className="delivery-challan-title uppercase">DELIVERY CHALLAN</h1>
           <p className="original-recipient">(ORIGINAL FOR RECIPIENT)</p>
         </div>
 
-        {/* Company details with increased font size */}
         <div className="text-center border-header company-details">
           <h2 className="font-bold">ACE PRINT PACK</h2>
           <p>#61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore 560018</p>
@@ -265,46 +269,46 @@ const DeliveryChallan = () => {
           <p>GSTIN: 29ABCFA9924A12L | UDYAM-KR-03-0063533</p>
         </div>
 
-        {/* Recipient and Document Details */}
         <div className="flex justify-between mb-3 text-xs">
           <div className="w-1/2">
             <h3 className="font-bold">To:</h3>
             <p className="font-bold">{customerCompany}</p>
             <p>{customerAddress}</p>
           </div>
-          <div className="w-1/2 text-right">
-            <div className="inline-block text-left">
-              <div className="flex">
-                <span className="w-28 font-bold">DC No.:</span>
-                <span className="font-medium">{dcNumber}</span>
+          <div className="w-1/2">
+            <div className="two-column">
+              <div className="column text-left">
+                <div className="flex">
+                  <span className="w-28 font-bold">DC No.:</span>
+                  <span className="font-medium">{dcNumber}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-28 font-bold">Date:</span>
+                  <span className="font-medium">{format(new Date(dcDate), "dd/MM/yyyy")}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-28 font-bold">Ref No:</span>
+                  <span className="font-medium">{quotationNumber}</span>
+                </div>
               </div>
-              <div className="flex">
-                <span className="w-28 font-bold">Date:</span>
-                <span className="font-medium">{format(new Date(dcDate), "dd/MM/yyyy")}</span>
-              </div>
-              <div className="flex">
-                <span className="w-28 font-bold">Ref No:</span>
-                <span className="font-medium">{quotationNumber}</span>
-              </div>
-              <div className="flex">
-                <span className="w-28 font-bold">Other Reference:</span>
-                <span className="font-medium">{otherReferences}</span>
+              <div className="column text-left">
+                <div className="flex">
+                  <span className="w-28 font-bold">PO Number:</span>
+                  <span className="font-medium">{poNumber}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-28 font-bold">PO Date:</span>
+                  <span className="font-medium">{poDate ? format(new Date(poDate), "dd/MM/yyyy") : "N/A"}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-28 font-bold">Other Reference:</span>
+                  <span className="font-medium">{otherReferences}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* PO Details */}
-        <div className="flex justify-between mb-2 text-xs">
-          <div>
-            <span className="font-bold">PO Number:</span> {poNumber}
-          </div>
-          <div>
-            <span className="font-bold">PO Date:</span> {poDate ? format(new Date(poDate), "dd/MM/yyyy") : "N/A"}
-          </div>
-        </div>
-
-        {/* Table for Items with vertical borders only */}
         <div className="flex-1 mb-2" style={{ minHeight: '250px' }}>
           <table className="w-full border border-black text-xs h-full">
             <thead>
@@ -322,7 +326,7 @@ const DeliveryChallan = () => {
                     <td className="p-1 text-center align-top table-cell">{item.slNo || index + 1}</td>
                     <td className="p-1 align-top table-cell">{item.product || "N/A"}</td>
                     <td className="p-1 text-center align-top table-cell">{item.hsnCode || "N/A"}</td>
-                    <td className="p-1 align-top text-center table-cell">{item.quantity ? `${item.quantity} No's` : "N/A"}</td>
+                    <td className="p-1 align-top text-right table-cell">{item.quantity ? `${item.quantity} No's` : "N/A"}</td>
                   </tr>
                 ))
               ) : (
@@ -334,7 +338,6 @@ const DeliveryChallan = () => {
           </table>
         </div>
 
-        {/* Material Terms */}
         <div className="border border-black p-1 text-xs mb-3">
           <ol className="list-decimal list-inside pl-2">
             {materialTerms.map((term, index) => (
@@ -343,7 +346,6 @@ const DeliveryChallan = () => {
           </ol>
         </div>
 
-        {/* Footer with increased spacing */}
         <div className="text-xs signature-section">
           <div className="flex justify-between items-start">
             <div>
@@ -354,7 +356,6 @@ const DeliveryChallan = () => {
             </div>
           </div>
           
-          {/* Increased space between sections */}
           <div className="signature-space"></div>
           
           <div className="flex justify-between items-end">
