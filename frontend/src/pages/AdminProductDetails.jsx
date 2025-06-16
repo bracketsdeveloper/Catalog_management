@@ -1,12 +1,10 @@
-// src/pages/AdminProductDetails.jsx
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import PropTypes from "prop-types";
 import axios from "axios";
-import { ChevronLeftIcon } from "@heroicons/react/24/solid";
-import Loader from "../components/Loader";
 import SingleProductModal from "../components/manageproducts/SingleProductModal";
 import uploadImage from "../helpers/uploadImage";
 import colorsList from "../helpers/colors.json";
+import { ChevronLeftIcon } from "@heroicons/react/24/solid";
 
 // Build exact lookup from JSON
 const COLOR_MAP = {};
@@ -18,162 +16,182 @@ colorsList.forEach(({ name, hex }) => {
 function getColorHex(colorName) {
   const key = colorName.trim().toLowerCase();
   if (COLOR_MAP[key]) return COLOR_MAP[key];
-  const found = Object.keys(COLOR_MAP).find(k => k.includes(key));
+  const found = Object.keys(COLOR_MAP).find((k) => k.includes(key));
   return found ? COLOR_MAP[found] : "#ffffff";
 }
 
-export default function AdminProductDetails({ prodId: propProdId }) {
-  const { prodId: routeProdId } = useParams();
-  const prodId = propProdId || routeProdId;
-
-  const navigate = useNavigate();
+export default function AdminProductDetails({ product, onEditToggle }) {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-  const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Helper to load state from localStorage
+  const loadState = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  };
+
   const [editing, setEditing] = useState(false);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [activeImageIndex, setActiveImageIndex] = useState(
+    loadState(`productImageIndex_${product?._id}`, 0)
+  );
   const [uploadProgress, setUploadProgress] = useState(0);
   const [formData, setFormData] = useState({
-    productTag: "",
-    productId: "",
-    variantId: "",
-    category: "",
-    subCategory: "",
-    variationHinge: "",
-    name: "",
-    brandName: "",
-    images: [],
-    productDetails: "",
-    qty: 0,
-    MRP_Currency: "",
-    MRP: 0,
-    MRP_Unit: "",
-    deliveryTime: "",
-    size: "",
-    color: "",
-    material: "",
-    priceRange: "",
-    weight: "",
-    hsnCode: "",
-    productCost_Currency: "",
-    productCost: 0,
-    productCost_Unit: "",
-    productGST: 0
+    productTag: product?.productTag || "",
+    productId: product?.productId || "",
+    variantId: product?.variantId || "",
+    category: product?.category || "",
+    subCategory: product?.subCategory || "",
+    variationHinge: product?.variationHinge || "",
+    name: product?.name || "",
+    brandName: product?.brandName || "",
+    images: product?.images || [],
+    productDetails: product?.productDetails || "",
+    qty: product?.qty || 0,
+    MRP_Currency: product?.MRP_Currency || "",
+    MRP: product?.MRP || 0,
+    MRP_Unit: product?.MRP_Unit || "",
+    deliveryTime: product?.deliveryTime || "",
+    size: product?.size || "",
+    color: product?.color || "",
+    material: product?.material || "",
+    priceRange: product?.priceRange || "",
+    weight: product?.weight || "",
+    hsnCode: product?.hsnCode || "",
+    productCost_Currency: product?.productCost_Currency || "",
+    productCost: product?.productCost || 0,
+    productCost_Unit: product?.productCost_Unit || "",
+    productGST: product?.productGST || 0,
   });
 
-  // Fetch product details
-  const fetchProduct = async () => {
-    if (!prodId) {
-      setError("No product ID provided");
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/products/${prodId}?full=true`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const prod = res.data.product || res.data;
-      setProduct(prod);
-      setActiveImageIndex(0);
-      setError(null);
-      setFormData({
-        productTag: prod.productTag || "",
-        productId: prod.productId || "",
-        variantId: prod.variantId || "",
-        category: prod.category || "",
-        subCategory: prod.subCategory || "",
-        variationHinge: prod.variationHinge || "",
-        name: prod.name || "",
-        brandName: prod.brandName || "",
-        images: prod.images || [],
-        productDetails: prod.productDetails || "",
-        qty: prod.qty || 0,
-        MRP_Currency: prod.MRP_Currency || "",
-        MRP: prod.MRP || 0,
-        MRP_Unit: prod.MRP_Unit || "",
-        deliveryTime: prod.deliveryTime || "",
-        size: prod.size || "",
-        color: prod.color || "",
-        material: prod.material || "",
-        priceRange: prod.priceRange || "",
-        weight: prod.weight || "",
-        hsnCode: prod.hsnCode || "",
-        productCost_Currency: prod.productCost_Currency || "",
-        productCost: prod.productCost || 0,
-        productCost_Unit: prod.productCost_Unit || "",
-        productGST: prod.productGST || 0
-      });
-    } catch (err) {
-      console.error("Error fetching product details:", err);
-      setError("Failed to fetch product details");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Persist activeImageIndex to localStorage
   useEffect(() => {
-    fetchProduct();
-  }, [prodId]);
+    if (product?._id) {
+      localStorage.setItem(
+        `productImageIndex_${product._id}`,
+        JSON.stringify(activeImageIndex)
+      );
+    }
+  }, [activeImageIndex, product?._id]);
+
+  // Validate activeImageIndex when product changes
+  useEffect(() => {
+    if (product?.images?.length > 0) {
+      const validIndex = Math.min(activeImageIndex, product.images.length - 1);
+      setActiveImageIndex(validIndex);
+      localStorage.setItem(
+        `productImageIndex_${product._id}`,
+        JSON.stringify(validIndex)
+      );
+    } else {
+      setActiveImageIndex(0);
+    }
+  }, [product]);
+
+  // Update formData when product changes
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        productTag: product.productTag || "",
+        productId: product.productId || "",
+        variantId: product.variantId || "",
+        category: product.category || "",
+        subCategory: product.subCategory || "",
+        variationHinge: product.variationHinge || "",
+        name: product.name || "",
+        brandName: product.brandName || "",
+        images: product.images || [],
+        productDetails: product.productDetails || "",
+        qty: product.qty || 0,
+        MRP_Currency: product.MRP_Currency || "",
+        MRP: product.MRP || 0,
+        MRP_Unit: product.MRP_Unit || "",
+        deliveryTime: product.deliveryTime || "",
+        size: product.size || "",
+        color: product.color || "",
+        material: product.material || "",
+        priceRange: product.priceRange || "",
+        weight: product.weight || "",
+        hsnCode: product.hsnCode || "",
+        productCost_Currency: product.productCost_Currency || "",
+        productCost: product.productCost || 0,
+        productCost_Unit: product.productCost_Unit || "",
+        productGST: product.productGST || 0,
+      });
+    }
+  }, [product]);
 
   // Handlers
-  const handleBack = () => navigate(-1);
-  const handleEditToggle = () => setEditing(prev => !prev);
-  const handleChange = e => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleEditToggle = () => {
+    setEditing((prev) => !prev);
+    if (editing && onEditToggle) {
+      onEditToggle(); // Notify parent to refresh product list
+    }
+    // Reset activeImageIndex when exiting edit mode
+    if (editing && product?.images?.length > 0) {
+      const validIndex = Math.min(activeImageIndex, product.images.length - 1);
+      setActiveImageIndex(validIndex);
+      localStorage.setItem(
+        `productImageIndex_${product._id}`,
+        JSON.stringify(validIndex)
+      );
+    }
   };
-  const handleFileChange = async e => {
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     const urls = [];
     for (let file of files) {
-      const up = await uploadImage(file);
-      urls.push(up.secure_url);
+      try {
+        const up = await uploadImage(file);
+        urls.push(up.secure_url);
+      } catch (err) {
+        console.error("Image upload error:", err);
+      }
     }
-    setFormData(prev => ({ ...prev, images: [...prev.images, ...urls] }));
+    setFormData((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
   };
-  const handleProductUpdate = async e => {
+
+  const handleProductUpdate = async (e) => {
     e.preventDefault();
     setUploadProgress(0);
     try {
       const token = localStorage.getItem("token");
       const payload = { ...formData, productGST: Number(formData.productGST) };
-      await axios.put(`${BACKEND_URL}/api/admin/products/${prodId}`, payload, {
-        headers: { Authorization: `Bearer ${token}` }
+      await axios.put(`${BACKEND_URL}/api/admin/products/${product._id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       setEditing(false);
-      fetchProduct();
+      if (onEditToggle) {
+        onEditToggle(); // Notify parent to refresh product list
+      }
     } catch (err) {
       console.error("Error updating product:", err);
-      setError("Failed to update product");
+      alert("Failed to update product");
     } finally {
       setUploadProgress(0);
     }
   };
 
   // Render
-  if (loading) return <Loader />;
-  if (error) return <div className="p-4 text-red-600">{error}</div>;
-  if (!product) return <div className="p-4">Product not found</div>;
+  if (!product || !product._id) {
+    return (
+      <div className="p-4 text-red-600 text-center">
+        No product data available
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-6">
+    <div className="bg-white py-6">
       <div className="mx-auto max-w-6xl p-4 md:p-6">
-
-      {!propProdId && (
-          <button
-            onClick={handleBack}
-            className="mb-6 inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-50 shadow"
-          >
-            <ChevronLeftIcon className="h-5 w-5 mr-2 text-gray-500" />
-            Back
-          </button>
-        )}
-
         {!editing ? (
           <div className="flex flex-col md:flex-row bg-white rounded-lg shadow-lg ring-1 ring-gray-200 overflow-hidden">
             {/* Image Gallery */}
@@ -194,7 +212,9 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                           key={idx}
                           src={thumb}
                           alt={`Thumb ${idx}`}
-                          className={`h-20 w-20 object-cover border border-gray-300 cursor-pointer ${activeImageIndex === idx ? "opacity-80" : ""}`}
+                          className={`h-20 w-20 object-cover border border-gray-300 cursor-pointer ${
+                            activeImageIndex === idx ? "opacity-80" : ""
+                          }`}
                           onClick={() => setActiveImageIndex(idx)}
                         />
                       ))}
@@ -212,7 +232,8 @@ export default function AdminProductDetails({ prodId: propProdId }) {
             <div className="md:w-1/2 p-6">
               <h1 className="text-2xl font-semibold text-gray-900">{product.name}</h1>
               <p className="mt-2 text-xl font-bold text-purple-600">
-                ₹{product.productCost}
+                {product.productCost_Currency || "₹"}
+                {product.productCost}
                 {product.productCost_Unit && ` / ${product.productCost_Unit}`}
               </p>
 
@@ -220,12 +241,12 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                 {/* Product Tag */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-600">Product Tag</h3>
-                  <p className="text-sm">{product.productTag}</p>
+                  <p className="text-sm">{product.productTag || "N/A"}</p>
                 </div>
                 {/* Product ID */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-600">Product ID</h3>
-                  <p className="text-sm">{product.productId}</p>
+                  <p className="text-sm">{product.productId || "N/A"}</p>
                 </div>
                 {/* Variant ID */}
                 {product.variantId && (
@@ -238,7 +259,7 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                 <div className="col-span-2">
                   <h3 className="text-sm font-medium text-gray-600">Category</h3>
                   <p className="text-sm">
-                    {product.category}
+                    {product.category || "N/A"}
                     {product.subCategory && ` / ${product.subCategory}`}
                   </p>
                 </div>
@@ -259,20 +280,19 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                 {/* Quantity */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-600">Quantity</h3>
-                  <p className="text-sm">{product.qty}</p>
+                  <p className="text-sm">{product.qty || 0}</p>
                 </div>
                 {/* Delivery Time */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-600">Delivery Time</h3>
-                  <p className="text-sm">{product.deliveryTime}</p>
+                  <p className="text-sm">{product.deliveryTime || "N/A"}</p>
                 </div>
-
                 {/* Size badges */}
                 {product.size && (
                   <div className="col-span-2">
                     <h3 className="text-sm font-medium text-gray-600">Size</h3>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {product.size.split(",").map(sz => (
+                      {product.size.split(",").map((sz) => (
                         <span
                           key={sz}
                           className="text-sm font-medium border border-gray-300 rounded px-2 py-1"
@@ -283,13 +303,12 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                     </div>
                   </div>
                 )}
-
                 {/* Color swatches */}
                 {product.color && (
                   <div className="col-span-2">
                     <h3 className="text-sm font-medium text-gray-600">Color</h3>
                     <div className="flex flex-wrap gap-4 mt-1">
-                      {product.color.split(",").map(clr => {
+                      {product.color.split(",").map((clr) => {
                         const name = clr.trim();
                         const hex = getColorHex(name);
                         return (
@@ -305,7 +324,6 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                     </div>
                   </div>
                 )}
-
                 {/* Material */}
                 {product.material && (
                   <div>
@@ -339,7 +357,7 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                   <div>
                     <h3 className="text-sm font-medium text-gray-600">MRP</h3>
                     <p className="text-sm">
-                      {product.MRP_Currency} {product.MRP}
+                      {product.MRP_Currency || ""} {product.MRP}
                       {product.MRP_Unit && ` / ${product.MRP_Unit}`}
                     </p>
                   </div>
@@ -352,7 +370,6 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                   </div>
                 )}
               </div>
-
               {/* Details */}
               {product.productDetails && (
                 <div className="mt-6 text-sm text-gray-600">
@@ -360,9 +377,8 @@ export default function AdminProductDetails({ prodId: propProdId }) {
                   <p className="mt-1">{product.productDetails}</p>
                 </div>
               )}
-
               {/* Edit Button */}
-              {!propProdId && localStorage.getItem("role") === "ADMIN" && (
+              {localStorage.getItem("role") === "ADMIN" && (
                 <button
                   onClick={handleEditToggle}
                   className="mt-6 px-6 py-2 bg-blue-600 rounded text-white font-medium hover:bg-blue-700 shadow"
@@ -373,7 +389,6 @@ export default function AdminProductDetails({ prodId: propProdId }) {
             </div>
           </div>
         ) : (
-          /* SingleProductModal for editing */
           <SingleProductModal
             editProductId={product._id}
             newProductData={formData}
@@ -382,12 +397,47 @@ export default function AdminProductDetails({ prodId: propProdId }) {
             closeSingleProductModal={handleEditToggle}
             handleFileChange={handleFileChange}
             uploadProgress={uploadProgress}
-            categories={product.categories}
-            subCategories={product.subCategories}
-            brands={product.brands}
+            categories={product.categories || []}
+            subCategories={product.subCategories || []}
+            brands={product.brands || []}
           />
         )}
       </div>
     </div>
   );
 }
+
+AdminProductDetails.propTypes = {
+  product: PropTypes.shape({
+    _id: PropTypes.string.isRequired,
+    name: PropTypes.string,
+    productTag: PropTypes.string,
+    productId: PropTypes.string,
+    variantId: PropTypes.string,
+    category: PropTypes.string,
+    subCategory: PropTypes.string,
+    variationHinge: PropTypes.string,
+    brandName: PropTypes.string,
+    images: PropTypes.arrayOf(PropTypes.string),
+    productDetails: PropTypes.string,
+    qty: PropTypes.number,
+    MRP_Currency: PropTypes.string,
+    MRP: PropTypes.number,
+    MRP_Unit: PropTypes.string,
+    deliveryTime: PropTypes.string,
+    size: PropTypes.string,
+    color: PropTypes.string,
+    material: PropTypes.string,
+    priceRange: PropTypes.string,
+    weight: PropTypes.string,
+    hsnCode: PropTypes.string,
+    productCost_Currency: PropTypes.string,
+    productCost: PropTypes.number,
+    productCost_Unit: PropTypes.string,
+    productGST: PropTypes.number,
+    categories: PropTypes.arrayOf(PropTypes.string),
+    subCategories: PropTypes.arrayOf(PropTypes.string),
+    brands: PropTypes.arrayOf(PropTypes.string),
+  }).isRequired,
+  onEditToggle: PropTypes.func,
+};

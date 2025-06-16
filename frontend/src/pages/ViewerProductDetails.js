@@ -7,29 +7,55 @@ export default function ViewerProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-  
+
   const [product, setProduct] = useState(null);
   const [visibleAttributes, setVisibleAttributes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [productIds, setProductIds] = useState([]); // Store list of product IDs
 
   useEffect(() => {
     const fetchProductDetails = async () => {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${BACKEND_URL}/api/viewer/products/${id}`, {
+        // Fetch product details
+        const productRes = await axios.get(`${BACKEND_URL}/api/viewer/products/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setProduct(res.data.product);
-        setVisibleAttributes(res.data.visibleAttributes || []);
+        setProduct(productRes.data.product);
+        setVisibleAttributes(productRes.data.visibleAttributes || []);
+
+        // Fetch list of product IDs (adjust endpoint as needed)
+        const idsRes = await axios.get(`${BACKEND_URL}/api/viewer/products/ids`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setProductIds(idsRes.data.productIds || []); // Expecting { productIds: ["id1", "id2", ...] }
       } catch (error) {
-        console.error("Error fetching product details:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
     fetchProductDetails();
   }, [id, BACKEND_URL]);
+
+  // Find current product index and determine prev/next IDs
+  const currentIndex = productIds.indexOf(id);
+  const prevProductId = currentIndex > 0 ? productIds[currentIndex - 1] : null;
+  const nextProductId = currentIndex < productIds.length - 1 ? productIds[currentIndex + 1] : null;
+
+  // Navigate to previous or next product
+  const handlePrevProduct = () => {
+    if (prevProductId) {
+      navigate(`/viewer/products/${prevProductId}`);
+    }
+  };
+
+  const handleNextProduct = () => {
+    if (nextProductId) {
+      navigate(`/viewer/products/${nextProductId}`);
+    }
+  };
 
   if (loading) {
     return <Loader />;
@@ -65,7 +91,7 @@ export default function ViewerProductDetails() {
     productDetails: "Details",
   };
 
-  // Render only the attributes that are included in visibleAttributes.
+  // Render only the attributes that are included in visibleAttributes
   const renderAttributes = () => {
     return visibleAttributes.map((attr) => {
       const label = attributeLabels[attr] || attr;
@@ -82,12 +108,29 @@ export default function ViewerProductDetails() {
 
   return (
     <div className="relative p-6 md:p-8 bg-white text-gray-900 min-h-screen">
-      <button
-        onClick={() => navigate(-1)}
-        className="absolute top-4 left-4 bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-white"
-      >
-        Back
-      </button>
+      {/* Navigation Buttons */}
+      <div className="absolute top-4 left-4 flex items-center gap-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-white"
+        >
+          Back
+        </button>
+        <button
+          onClick={handlePrevProduct}
+          disabled={!prevProductId}
+          className={`px-3 py-2 rounded text-white ${prevProductId ? "bg-purple-600 hover:bg-purple-700" : "bg-gray-400 cursor-not-allowed"}`}
+        >
+          ← Prev
+        </button>
+        <button
+          onClick={handleNextProduct}
+          disabled={!nextProductId}
+          className={`px-3 py-2 rounded text-white ${nextProductId ? "bg-purple-600 hover:bg-purple-700" : "bg-gray-400 cursor-not-allowed"}`}
+        >
+          Next →
+        </button>
+      </div>
       <div className="flex flex-col md:flex-row gap-8 mt-12">
         {/* Left: Product Image */}
         <div className="md:w-2/5">

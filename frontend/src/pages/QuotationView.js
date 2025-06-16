@@ -19,6 +19,21 @@ export default function QuotationView() {
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [editingTermIdx, setEditingTermIdx] = useState(null);
   const [products, setProducts] = useState([]);
+  const [operationModalOpen, setOperationModalOpen] = useState(false);
+  const [newOperation, setNewOperation] = useState({
+    ourCost: "",
+    branding: "",
+    delivery: "",
+    markup: "",
+    total: "",
+    vendor: "",
+    remarks: "",
+    reference: "",
+  });
+  const [editingOperationId, setEditingOperationId] = useState(null);
+  const [vendors, setVendors] = useState([]);
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const token = localStorage.getItem("token");
 
   const defaultTerms = [
@@ -48,6 +63,22 @@ export default function QuotationView() {
     // eslint-disable-next-line
   }, [editableQuotation?.terms]);
 
+  useEffect(() => {
+    if (operationModalOpen) {
+      fetchVendors();
+    }
+    // eslint-disable-next-line
+  }, [operationModalOpen]);
+
+  useEffect(() => {
+    const ourCost = parseFloat(newOperation.ourCost) || 0;
+    const branding = parseFloat(newOperation.branding) || 0;
+    const delivery = parseFloat(newOperation.delivery) || 0;
+    const markup = parseFloat(newOperation.markup) || 0;
+    const total = (ourCost + branding + delivery + markup).toFixed(2);
+    setNewOperation((prev) => ({ ...prev, total }));
+  }, [newOperation.ourCost, newOperation.branding, newOperation.delivery, newOperation.markup]);
+
   async function fetchProducts() {
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/products`, {
@@ -56,6 +87,17 @@ export default function QuotationView() {
       setProducts(res.data.products || []);
     } catch (error) {
       console.error("Error fetching products:", error.response?.data || error.message);
+    }
+  }
+
+  async function fetchVendors() {
+    try {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/vendors`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setVendors(res.data || []);
+    } catch (error) {
+      console.error("Error fetching vendors:", error.response?.data || error.message);
     }
   }
 
@@ -73,7 +115,7 @@ export default function QuotationView() {
         ...item,
         quantity: parseFloat(item.quantity) || 1,
         slNo: item.slNo || idx + 1,
-        productGST: item.productGST != null ? parseFloat(item.productGST) : 18, // Respect 0
+        productGST: item.productGST != null ? parseFloat(item.productGST) : 18,
         rate: parseFloat(item.rate) || 0,
         product: item.product || "Unknown Product",
       }));
@@ -86,6 +128,28 @@ export default function QuotationView() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleVendorInputChange(value) {
+    setNewOperation((prev) => ({ ...prev, vendor: value }));
+    if (value.trim() === "") {
+      setVendorSuggestions([]);
+      setShowVendorDropdown(false);
+      return;
+    }
+    const lowerValue = value.toLowerCase();
+    const suggestions = vendors.filter(
+      (vendor) =>
+        vendor.vendorName?.toLowerCase().includes(lowerValue) ||
+        vendor.vendorCompany?.toLowerCase().includes(lowerValue)
+    );
+    setVendorSuggestions(suggestions);
+    setShowVendorDropdown(suggestions.length > 0);
+  }
+
+  function handleVendorSelect(vendor) {
+    setNewOperation((prev) => ({ ...prev, vendor: vendor.vendorName }));
+    setShowVendorDropdown(false);
   }
 
   async function handleSaveQuotation() {
@@ -106,6 +170,7 @@ export default function QuotationView() {
         fieldsToDisplay,
         displayTotals,
         displayHSNCodes,
+        operations,
       } = editableQuotation;
 
       const updatedItems = items.map((item) => {
@@ -114,7 +179,7 @@ export default function QuotationView() {
         const marginFactor = 1 + updatedMargin / 100;
         const effRate = baseRate * marginFactor;
         const amount = effRate * quantity;
-        const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18; // Respect 0
+        const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18;
         const gstAmount = parseFloat((amount * (gstRate / 100)).toFixed(2));
         const total = parseFloat((amount + gstAmount).toFixed(2));
         return {
@@ -144,9 +209,8 @@ export default function QuotationView() {
         fieldsToDisplay,
         displayTotals,
         displayHSNCodes,
+        operations,
       };
-
-      console.log("Updating quotation with payload:", body);
 
       const updateRes = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
         method: "PUT",
@@ -160,8 +224,6 @@ export default function QuotationView() {
       if (!updateRes.ok) {
         throw new Error("Failed to update quotation");
       }
-
-      console.log("Creating new quotation with payload:", body);
 
       const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
         method: "POST",
@@ -177,8 +239,6 @@ export default function QuotationView() {
       }
 
       const data = await createRes.json();
-      console.log("Response from server:", data);
-
       if (!data || !data.quotation || !data.quotation._id) {
         throw new Error("Invalid response from server: Missing quotation data");
       }
@@ -207,7 +267,7 @@ export default function QuotationView() {
         const parsedValue = parseFloat(newValue);
         newItems[index] = {
           ...newItems[index],
-          [field]: isNaN(parsedValue) ? (field === "productGST" ? 18 : 1) : parsedValue, // Allow 0 for productGST
+          [field]: isNaN(parsedValue) ? (field === "productGST" ? 18 : 1) : parsedValue,
         };
       } else {
         newItems[index] = { ...newItems[index], [field]: newValue };
@@ -262,6 +322,101 @@ export default function QuotationView() {
     setEditingTermIdx(null);
   }
 
+  async function handleAddOperation() {
+    try {
+      const body = { ...newOperation };
+
+      const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}/operations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error("Failed to add operation cost");
+
+      const data = await res.json();
+      setEditableQuotation(data.quotation);
+      setQuotation(data.quotation);
+      setNewOperation({
+        ourCost: "",
+        branding: "",
+        delivery: "",
+        markup: "",
+        total: "",
+        vendor: "",
+        remarks: "",
+        reference: "",
+      });
+      setShowVendorDropdown(false);
+      setOperationModalOpen(false);
+    } catch (error) {
+      console.error("Error adding operation:", error);
+      alert("Failed to add operation cost");
+    }
+  }
+
+  async function handleUpdateOperation() {
+    try {
+      const body = { ...newOperation };
+
+      const res = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}/operations/${editingOperationId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error("Failed to update operation cost");
+
+      const data = await res.json();
+      setEditableQuotation(data.quotation);
+      setQuotation(data.quotation);
+      setNewOperation({
+        ourCost: "",
+        branding: "",
+        delivery: "",
+        markup: "",
+        total: "",
+        vendor: "",
+        remarks: "",
+        reference: "",
+      });
+      setShowVendorDropdown(false);
+      setOperationModalOpen(false);
+      setEditingOperationId(null);
+    } catch (error) {
+      console.error("Error updating operation:", error);
+      alert("Failed to update operation cost");
+    }
+  }
+
+  function handleViewOperation(op) {
+    console.log("Operation data (raw):", op);
+    console.log("Operation data (JSON):", JSON.stringify(op, null, 2));
+
+    const operationData = {
+      ourCost: String(op?.ourCost ?? ""),
+      branding: String(op?.branding ?? ""),
+      delivery: String(op?.delivery ?? ""),
+      markup: String(op?.markup ?? ""),
+      total: String(op?.total ?? ""),
+      vendor: String(op?.vendor ?? ""),
+      remarks: String(op?.remarks ?? ""),
+      reference: String(op?.reference ?? ""),
+    };
+
+    setNewOperation(operationData);
+    setEditingOperationId(op?._id?.toString() || null);
+    setOperationModalOpen(true);
+
+    console.log("Set newOperation:", JSON.stringify(operationData, null, 2));
+  }
+
   const handleExportPDF = () => {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
@@ -283,6 +438,25 @@ export default function QuotationView() {
         </button>
         <div className="flex space-x-4">
           <button
+            onClick={async () => {
+              try {
+                const res = await axios.post(
+                  `${BACKEND_URL}/api/admin/delivery-challans/${id}`,
+                  {},
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
+                alert("Delivery Challan created successfully!");
+                navigate(`/admin-delivery-challan/${res.data.deliveryChallan._id}`);
+              } catch (error) {
+                console.error("Error generating delivery challan:", error);
+                alert("Failed to generate delivery challan.");
+              }
+            }}
+            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-xs"
+          >
+            Generate Delivery Challan
+          </button>
+          <button
             onClick={handleSaveQuotation}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
           >
@@ -299,6 +473,12 @@ export default function QuotationView() {
             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
           >
             {editableQuotation.displayHSNCodes ? "Hide HSN Codes" : "Show HSN Codes"}
+          </button>
+          <button
+            onClick={() => setOperationModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-xs"
+          >
+            {editableQuotation.operations?.length > 0 ? "View Operations Cost" : "Add Operations Cost"}
           </button>
         </div>
       </div>
@@ -409,6 +589,187 @@ export default function QuotationView() {
         </div>
       )}
 
+      {operationModalOpen && (
+        <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50">
+          <div className="bg-white p-6 rounded w-1/2">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingOperationId ? "View/Edit Operation Cost" : "Add Operation Cost"}
+            </h2>
+            {/* <div className="mb-4 text-xs text-red-500">
+              Debug: {JSON.stringify(newOperation)}
+            </div> */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="mb-4">
+                <label className="block text-xs">Our Cost</label>
+                <input
+                  type="text"
+                  value={newOperation.ourCost || ""}
+                  onChange={(e) => setNewOperation((prev) => ({ ...prev, ourCost: e.target.value }))}
+                  className="border p-2 w-full text-xs"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs">Branding</label>
+                <input
+                  type="text"
+                  value={newOperation.branding || ""}
+                  onChange={(e) => setNewOperation((prev) => ({ ...prev, branding: e.target.value }))}
+                  className="border p-2 w-full text-xs"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs">Delivery</label>
+                <input
+                  type="text"
+                  value={newOperation.delivery || ""}
+                  onChange={(e) => setNewOperation((prev) => ({ ...prev, delivery: e.target.value }))}
+                  className="border p-2 w-full text-xs"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs">Markup</label>
+                <input
+                  type="text"
+                  value={newOperation.markup || ""}
+                  onChange={(e) => setNewOperation((prev) => ({ ...prev, markup: e.target.value }))}
+                  className="border p-2 w-full text-xs"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs">Total</label>
+                <input
+                  type="text"
+                  value={newOperation.total || ""}
+                  readOnly
+                  className="border p-2 w-full text-xs bg-gray-100"
+                />
+              </div>
+              <div className="mb-4 relative">
+                <label className="block text-xs">Vendor</label>
+                <input
+                  type="text"
+                  value={newOperation.vendor || ""}
+                  onChange={(e) => handleVendorInputChange(e.target.value)}
+                  onFocus={() => handleVendorInputChange(newOperation.vendor)}
+                  className="border p-2 w-full text-xs"
+                />
+                {showVendorDropdown && (
+                  <ul className="absolute z-10 bg-white border rounded w-full max-h-40 overflow-y-auto text-xs">
+                    {vendorSuggestions.map((vendor) => (
+                      <li
+                        key={vendor._id}
+                        onClick={() => handleVendorSelect(vendor)}
+                        className="p-2 hover:bg-gray-100 cursor-pointer"
+                      >
+                        {vendor.vendorName} ({vendor.vendorCompany})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs">Remarks</label>
+                <textarea
+                  value={newOperation.remarks || ""}
+                  onChange={(e) => setNewOperation((prev) => ({ ...prev, remarks: e.target.value }))}
+                  className="border p-2 w-full text-xs"
+                  rows="3"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs">Reference</label>
+                <input
+                  type="text"
+                  value={newOperation.reference || ""}
+                  onChange={(e) => setNewOperation((prev) => ({ ...prev, reference: e.target.value }))}
+                  className="border p-2 w-full text-xs"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setOperationModalOpen(false);
+                  setEditingOperationId(null);
+                  setNewOperation({
+                    ourCost: "",
+                    branding: "",
+                    delivery: "",
+                    markup: "",
+                    total: "",
+                    vendor: "",
+                    remarks: "",
+                    reference: "",
+                  });
+                  setShowVendorDropdown(false);
+                }}
+                className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
+              >
+                Cancel
+              </button>
+              {editingOperationId ? (
+                <button
+                  onClick={handleUpdateOperation}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+                >
+                  Update Operation
+                </button>
+              ) : (
+                <button
+                  onClick={handleAddOperation}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+                >
+                  Add Operation
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editableQuotation.operations?.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-xs">Operations Costs</h3>
+          <table className="w-full border-collapse mb-6 text-xs">
+            <thead>
+              <tr className="border-b">
+                <th className="p-2 text-left">Our Cost</th>
+                <th className="p-2 text-left">Branding</th>
+                <th className="p-2 text-left">Delivery</th>
+                <th className="p-2 text-left">Markup</th>
+                <th className="p-2 text-left">Total</th>
+                <th className="p-2 text-left">Vendor</th>
+                <th className="p-2 text-left">Remarks</th>
+                <th className="p-2 text-left">Reference</th>
+                <th className="p-2 text-left">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {editableQuotation.operations.map((op, idx) => (
+                <tr key={op._id || idx} className="border-b">
+                  <td className="p-2">{op.ourCost || ""}</td>
+                  <td className="p-2">{op.branding || ""}</td>
+                  <td className="p-2">{op.delivery || ""}</td>
+                  <td className="p-2">{op.markup || ""}</td>
+                  <td className="p-2">{op.total || ""}</td>
+                  <td className="p-2">{op.vendor || ""}</td>
+                  <td className="p-2">{op.remarks || ""}</td>
+                  <td className="p-2">{op.reference || ""}</td>
+                  <td className="p-2">
+                    <button
+                      onClick={() => handleViewOperation(op)}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs"
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <table className="w-full border-collapse mb-6 text-xs">
         <thead>
           <tr className="border-b">
@@ -431,7 +792,7 @@ export default function QuotationView() {
             const quantity = parseFloat(item.quantity) || 1;
             const effRate = baseRate * marginFactor;
             const amount = effRate * quantity;
-            const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18; // Respect 0
+            const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18;
             const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
             const total = parseFloat((amount + gstVal).toFixed(2));
             const imageUrl =
@@ -499,7 +860,7 @@ export default function QuotationView() {
                     type="number"
                     onSave={(newVal) => {
                       const newGST = parseFloat(newVal);
-                      updateItemField(index, "productGST", isNaN(newGST) ? 18 : newGST); // Allow 0
+                      updateItemField(index, "productGST", isNaN(newGST) ? 18 : newGST);
                     }}
                   />
                   %
@@ -570,14 +931,14 @@ function EditableField({ value, onSave, type = "text" }) {
           xmlns="http://www.w3.org/2000/svg"
           className="h-4 w-4"
           fill="none"
-          viewBox="0 24 24"
+          viewBox="0 0 24 24"
           stroke="currentColor"
         >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M11 4h2M12 5v6m-7 7h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
+            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
           />
         </svg>
       </button>
@@ -640,7 +1001,7 @@ function computedTotal(quotation) {
     const margin = parseFloat(quotation.margin) || 0;
     const marginFactor = 1 + margin / 100;
     const amount = baseRate * marginFactor * quantity;
-    const gst = item.productGST != null ? parseFloat(item.productGST) : 18; // Respect 0
+    const gst = item.productGST != null ? parseFloat(item.productGST) : 18;
     const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
     sum += amount + gstVal;
   });

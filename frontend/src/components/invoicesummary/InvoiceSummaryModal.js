@@ -17,7 +17,7 @@ export default function InvoicesSummaryModal({ row, onClose, onSaved }) {
       : "",
     invoiceMailedOn: row.invoiceMailedOn
       ? new Date(row.invoiceMailedOn).toISOString().slice(0, 10)
-      : "", // New field
+      : "",
     invoiceNumber: row.invoiceNumber || "",
   });
   const [error, setError] = useState("");
@@ -37,7 +37,7 @@ export default function InvoicesSummaryModal({ row, onClose, onSaved }) {
     const body = {
       ...form,
       invoiceDate: form.invoiceDate ? new Date(form.invoiceDate) : null,
-      invoiceMailedOn: form.invoiceMailedOn ? new Date(form.invoiceMailedOn) : null, // New field
+      invoiceMailedOn: form.invoiceMailedOn ? new Date(form.invoiceMailedOn) : null,
       invoiceAmount: parseFloat(form.invoiceAmount) || 0,
     };
 

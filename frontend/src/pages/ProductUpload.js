@@ -1,5 +1,5 @@
-// src/pages/ProductManagementPage.jsx
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { useDropzone } from "react-dropzone";
@@ -10,19 +10,33 @@ import SkeletonCard from "../components/manageproducts/SkeletonCard";
 import SingleProductModal from "../components/manageproducts/SingleProductModal";
 import DropdownFilter from "../components/manageproducts/DropdownFilter";
 import BulkUploadModal from "../components/manageproducts/BulkUploadModal";
+import AdminProductDetails from "./AdminProductDetails"; // Ensure correct path
 
 // Helpers
 import uploadImage from "../helpers/uploadImage";
 
 export default function ProductManagementPage() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // ------------------------------------------------------------------
-  // STATE
-  // ------------------------------------------------------------------
+  // Helper to load state from localStorage
+  const loadState = (key, defaultValue) => {
+    try {
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  };
+
+  // Get page from URL query params or localStorage
+  const queryParams = new URLSearchParams(location.search);
+  const initialPage = parseInt(queryParams.get("page")) || loadState("productPage", 1);
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 100;
 
@@ -34,12 +48,12 @@ export default function ProductManagementPage() {
     variationHinges: [],
   });
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedSubCategories, setSelectedSubCategories] = useState([]);
-  const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
-  const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+  const [searchTerm, setSearchTerm] = useState(loadState("productSearchTerm", ""));
+  const [selectedCategories, setSelectedCategories] = useState(loadState("productCategories", []));
+  const [selectedSubCategories, setSelectedSubCategories] = useState(loadState("productSubCategories", []));
+  const [selectedBrands, setSelectedBrands] = useState(loadState("productBrands", []));
+  const [selectedPriceRanges, setSelectedPriceRanges] = useState(loadState("productPriceRanges", []));
+  const [selectedVariationHinges, setSelectedVariationHinges] = useState(loadState("productVariationHinges", []));
 
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
@@ -55,7 +69,6 @@ export default function ProductManagementPage() {
     variationHinges: {},
   });
 
-  // Single product modal
   const [singleProductModalOpen, setSingleProductModalOpen] = useState(false);
   const [editProductId, setEditProductId] = useState(null);
   const [newProductData, setNewProductData] = useState({
@@ -87,25 +100,72 @@ export default function ProductManagementPage() {
   });
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Bulk upload
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [csvData, setCsvData] = useState([]);
 
-  // Advanced image search
-  const [advancedSearchActive, setAdvancedSearchActive] = useState(false);
-  const [advancedSearchResults, setAdvancedSearchResults] = useState([]);
+  const [advancedSearchActive, setAdvancedSearchActive] = useState(loadState("productAdvancedSearchActive", false));
+  const [advancedSearchResults, setAdvancedSearchResults] = useState(loadState("productAdvancedSearchResults", []));
   const [advancedSearchLoading, setAdvancedSearchLoading] = useState(false);
 
-  // Carousel indices
-  const [carouselIndexMap, setCarouselIndexMap] = useState({});
+  const [carouselIndexMap, setCarouselIndexMap] = useState(loadState("productCarouselIndexMap", {}));
 
-  // ------------------------------------------------------------------
-  // HELPERS
-  // ------------------------------------------------------------------
+  // State for product details modal
+  const [productDetailsModalOpen, setProductDetailsModalOpen] = useState(false);
+  const [selectedProductIndex, setSelectedProductIndex] = useState(0);
+
+  // Persist state to localStorage and update URL
+  useEffect(() => {
+    localStorage.setItem("productPage", JSON.stringify(currentPage));
+    const currentQueryParams = new URLSearchParams(location.search);
+    if (parseInt(currentQueryParams.get("page")) !== currentPage) {
+      navigate(`/admin-dashboard/manage-products?page=${currentPage}`, { replace: true });
+    }
+  }, [currentPage, navigate, location.search]);
+
+  useEffect(() => {
+    localStorage.setItem("productSearchTerm", JSON.stringify(searchTerm));
+  }, [searchTerm]);
+
+  useEffect(() => {
+    localStorage.setItem("productCategories", JSON.stringify(selectedCategories));
+  }, [selectedCategories]);
+
+  useEffect(() => {
+    localStorage.setItem("productSubCategories", JSON.stringify(selectedSubCategories));
+  }, [selectedSubCategories]);
+
+  useEffect(() => {
+    localStorage.setItem("productBrands", JSON.stringify(selectedBrands));
+  }, [selectedBrands]);
+
+  useEffect(() => {
+    localStorage.setItem("productPriceRanges", JSON.stringify(selectedPriceRanges));
+  }, [selectedPriceRanges]);
+
+  useEffect(() => {
+    localStorage.setItem("productVariationHinges", JSON.stringify(selectedVariationHinges));
+  }, [selectedVariationHinges]);
+
+  useEffect(() => {
+    localStorage.setItem("productAdvancedSearchActive", JSON.stringify(advancedSearchActive));
+  }, [advancedSearchActive]);
+
+  useEffect(() => {
+    localStorage.setItem("productAdvancedSearchResults", JSON.stringify(advancedSearchResults));
+  }, [advancedSearchResults]);
+
+  useEffect(() => {
+    localStorage.setItem("productCarouselIndexMap", JSON.stringify(carouselIndexMap));
+  }, [carouselIndexMap]);
+
+  // Helpers
   const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
 
-  const toggleFilter = (value, list, setList) =>
-    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  const toggleFilter = (value, list, setList) => {
+    const newList = list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+    setList(newList);
+    return newList;
+  };
 
   const updateCountsFromServer = (data) => {
     const obj = (arr) =>
@@ -119,9 +179,7 @@ export default function ProductManagementPage() {
     });
   };
 
-  // ------------------------------------------------------------------
-  // LOAD STATIC FILTER OPTIONS
-  // ------------------------------------------------------------------
+  // Load static filter options
   const fetchFilterOptions = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -133,7 +191,7 @@ export default function ProductManagementPage() {
         categories: categories.map((c) => c.name),
         subCategories: subCategories.map((c) => c.name),
         brands: brands.map((b) => b.name),
-        priceRanges: priceRanges.map((p) => p.name),
+        priceRanges: [],
         variationHinges: variationHinges.map((v) => v.name),
       });
       updateCountsFromServer(res.data);
@@ -144,12 +202,9 @@ export default function ProductManagementPage() {
 
   useEffect(() => {
     fetchFilterOptions();
-    // eslint-disable-next-line
   }, []);
 
-  // ------------------------------------------------------------------
-  // MAIN FETCH
-  // ------------------------------------------------------------------
+  // Main fetch
   const fetchProducts = async (page = currentPage) => {
     setLoading(true);
     try {
@@ -162,11 +217,11 @@ export default function ProductManagementPage() {
           p.append("search", terms.join(","));
         }
         if (selectedCategories.length) p.append("categories", selectedCategories.join(","));
-        if (selectedSubCategories.length) p.append("subCategories", selectedSubCategories.join(","));
-        if (selectedBrands.length) p.append("brands", selectedBrands.join(","));
-        if (selectedPriceRanges.length) p.append("priceRanges", selectedPriceRanges.join(","));
+        if (selectedSubCategories.length) p.append("subCategory", selectedSubCategories.join(","));
+        if (selectedBrands.length) p.append("brandNames", selectedBrands.join(","));
+        if (selectedPriceRanges.length) p.append("priceRange", selectedPriceRanges.join(""));
         if (selectedVariationHinges.length)
-          p.append("variationHinges", selectedVariationHinges.join(","));
+          p.append("variationHinge", selectedVariationHinges.join(","));
         return p;
       };
 
@@ -180,8 +235,14 @@ export default function ProductManagementPage() {
       );
 
       setProducts(prodRes.data.products);
-      setCurrentPage(prodRes.data.currentPage);
       setTotalPages(prodRes.data.totalPages);
+      setCurrentPage(page);
+
+      if (page > prodRes.data.totalPages) {
+        setCurrentPage(1);
+        localStorage.setItem("productPage", JSON.stringify(1));
+        fetchProducts(1);
+      }
 
       const countParams = buildParams();
       const countRes = await axios.get(
@@ -197,8 +258,13 @@ export default function ProductManagementPage() {
   };
 
   useEffect(() => {
+    fetchProducts(currentPage);
+  }, [currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    localStorage.setItem("productPage", JSON.stringify(1));
     fetchProducts(1);
-    // eslint-disable-next-line
   }, [
     searchTerm,
     selectedCategories,
@@ -208,9 +274,7 @@ export default function ProductManagementPage() {
     selectedVariationHinges,
   ]);
 
-  // ------------------------------------------------------------------
-  // SINGLE PRODUCT MODAL HANDLERS
-  // ------------------------------------------------------------------
+  // Single product modal handlers
   const openSingleProductModal = (product = null) => {
     if (product) {
       setEditProductId(product._id);
@@ -293,7 +357,7 @@ export default function ProductManagementPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
-      fetchProducts();
+      fetchProducts(currentPage);
       closeSingleProductModal();
     } catch (err) {
       console.error("Error creating/updating product:", err);
@@ -324,15 +388,16 @@ export default function ProductManagementPage() {
       await axios.delete(`${BACKEND_URL}/api/admin/products/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchProducts();
+      fetchProducts(currentPage);
+      if (displayProducts[selectedProductIndex]?._id === id) {
+        setProductDetailsModalOpen(false);
+      }
     } catch (err) {
       console.error("Error deleting product:", err);
     }
   };
 
-  // ------------------------------------------------------------------
-  // BULK UPLOAD
-  // ------------------------------------------------------------------
+  // Bulk upload
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       "text/csv": [".csv"],
@@ -395,7 +460,7 @@ export default function ProductManagementPage() {
       });
       alert("Bulk upload successful!");
       setCsvData([]);
-      fetchProducts();
+      fetchProducts(currentPage);
     } catch (err) {
       console.error("Bulk upload error:", err);
       alert("Error uploading. Check console.");
@@ -482,9 +547,7 @@ export default function ProductManagementPage() {
     document.body.removeChild(link);
   };
 
-  // ------------------------------------------------------------------
-  // ADVANCED IMAGE SEARCH
-  // ------------------------------------------------------------------
+  // Advanced image search
   const { getRootProps: advRoot, getInputProps: advInput } = useDropzone({
     accept: "image/*",
     multiple: false,
@@ -513,9 +576,7 @@ export default function ProductManagementPage() {
     setAdvancedSearchResults([]);
   };
 
-  // ------------------------------------------------------------------
-  // IMAGE CAROUSEL HANDLERS
-  // ------------------------------------------------------------------
+  // Image carousel handlers
   const handleNextImage = (id) => {
     setCarouselIndexMap((prev) => {
       const p = products.find((x) => x._id === id);
@@ -534,19 +595,46 @@ export default function ProductManagementPage() {
     });
   };
 
+  // Product details modal handlers
   const handleViewProduct = (id) => {
-    window.location.href = `/admin-dashboard/product-details/${id}`;
+    const index = displayProducts.findIndex((p) => p._id === id);
+    if (index !== -1) {
+      setSelectedProductIndex(index);
+      setProductDetailsModalOpen(true);
+    }
   };
 
-  // ------------------------------------------------------------------
-  // PAGINATION
-  // ------------------------------------------------------------------
-  const prevPage = () => currentPage > 1 && fetchProducts(currentPage - 1);
-  const nextPage = () => currentPage < totalPages && fetchProducts(currentPage + 1);
+  const handleNextProduct = () => {
+    setSelectedProductIndex((prev) => (prev + 1) % displayProducts.length);
+  };
 
-  // ------------------------------------------------------------------
-  // CLEAR FILTERS
-  // ------------------------------------------------------------------
+  const handlePrevProduct = () => {
+    setSelectedProductIndex((prev) => (prev - 1 + displayProducts.length) % displayProducts.length);
+  };
+
+  const closeProductDetailsModal = () => {
+    setProductDetailsModalOpen(false);
+    setSelectedProductIndex(0);
+  };
+
+  const handleEditToggle = () => {
+    fetchProducts(currentPage); // Refresh product list after edit
+  };
+
+  // Pagination
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Clear filters
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategories([]);
@@ -554,11 +642,64 @@ export default function ProductManagementPage() {
     setSelectedBrands([]);
     setSelectedPriceRanges([]);
     setSelectedVariationHinges([]);
+    setCurrentPage(1);
+    setAdvancedSearchActive(false);
+    setAdvancedSearchResults([]);
+    setCarouselIndexMap({});
+    localStorage.removeItem("productSearchTerm");
+    localStorage.removeItem("productCategories");
+    localStorage.removeItem("productSubCategories");
+    localStorage.removeItem("productBrands");
+    localStorage.removeItem("productPriceRanges");
+    localStorage.removeItem("productVariationHinges");
+    localStorage.removeItem("productPage");
+    localStorage.removeItem("productAdvancedSearchActive");
+    localStorage.removeItem("productAdvancedSearchResults");
+    localStorage.removeItem("productCarouselIndexMap");
   };
 
-  // ------------------------------------------------------------------
-  // RENDER
-  // ------------------------------------------------------------------
+  // Product Details Modal Component
+  const ProductDetailsModal = ({ isOpen, onClose, product, onNext, onPrev }) => {
+    if (!isOpen || !product) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-2xl"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          {/* Navigation Arrows */}
+          <div className="absolute top-1/2 transform -translate-y-1/2 flex justify-between w-full px-4">
+            <button
+              onClick={onPrev}
+              className="bg-gray-800 text-white p-2 rounded-full hover:bg-gray-600"
+              aria-label="Previous Product"
+            >
+              ←
+            </button>
+            <button
+              onClick={onNext}
+              className="bg-gray-800 text-white p-2 rounded-full hover:bg-gray-600"
+              aria-label="Next Product"
+            >
+              →
+            </button>
+          </div>
+          {/* Product Details */}
+          <div className="p-6">
+            <AdminProductDetails product={product} onEditToggle={handleEditToggle} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render
   const displayProducts = advancedSearchActive ? advancedSearchResults : products;
   const { categories, subCategories, brands, priceRanges, variationHinges } = filterOptions;
 
@@ -759,6 +900,15 @@ export default function ProductManagementPage() {
           handleDownloadTemplate={handleDownloadTemplate}
           processBulkUpload={processBulkUpload}
           csvData={csvData}
+        />
+      )}
+      {productDetailsModalOpen && (
+        <ProductDetailsModal
+          isOpen={productDetailsModalOpen}
+          onClose={closeProductDetailsModal}
+          product={displayProducts[selectedProductIndex]}
+          onNext={handleNextProduct}
+          onPrev={handlePrevProduct}
         />
       )}
     </div>

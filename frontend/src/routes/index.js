@@ -64,6 +64,8 @@ import ManageBrandingCharges from "../pages/ManageBrandingCharges";
 import QuotationManagementPage from "../pages/QuotationManagementPage";
 import LogsTable from "../pages/LogsTable";
 import TaskManager from "../pages/TaskManager";
+import DeliveryChallanManagementPage from "../pages/DeliveryChallanManagementPage";
+import DeliveryChallan from "../components/examples/dc";
 
 
 const router = createBrowserRouter([
@@ -350,6 +352,14 @@ const router = createBrowserRouter([
                     {
                         path : "manage-tasks",
                         element:<TaskManager/>
+                    },
+                    {
+                        path : "manage-dc",
+                        element:<DeliveryChallanManagementPage/>
+                    },
+                    {
+                        path : "dc/:id",
+                        element : <DeliveryChallan/>
                     }
 
                 ]

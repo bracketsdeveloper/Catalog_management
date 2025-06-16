@@ -35,7 +35,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
     const summaryMap = {};
     savedSummaries.forEach((s) => {
-      summaryMap[s.invoiceNumber] = s;
+      const key = `${s.dispatchId.toString()}-${s.invoiceNumber}`;
+      summaryMap[key] = s;
     });
 
     const jobSheetMap = {};
@@ -74,7 +75,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         : [];
 
       return invoiceNumbers.map((invoiceNumber) => {
-        const existing = summaryMap[invoiceNumber] || {};
+        const key = `${d._id.toString()}-${invoiceNumber}`;
+        const existing = summaryMap[key] || {};
         const jobSheet = jobSheetMap[followUp.jobSheetNumber] || {};
 
         return {
@@ -88,7 +90,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           invoiceDate: existing.invoiceDate || null,
           invoiceAmount: existing.invoiceAmount || 0,
           invoiceMailed: existing.invoiceMailed || "No",
-          invoiceMailedOn: existing.invoiceMailedOn || null, // Include new field
+          invoiceMailedOn: existing.invoiceMailedOn || null,
           invoiceUploadedOnPortal: existing.invoiceUploadedOnPortal || "",
           crmName: jobSheet.crmName || "",
         };
@@ -106,7 +108,6 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { dispatchId, invoiceNumber, jobSheetNumber, invoiceMailedOn } = req.body;
 
-    // Split invoiceNumber if comma-separated
     const invoiceNumbers = invoiceNumber
       ? invoiceNumber.split(",").map((n) => n.trim()).filter(Boolean)
       : [];
@@ -117,17 +118,16 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 
     const results = [];
     for (const invNum of invoiceNumbers) {
-      // Check for existing invoiceNumber
       const exists = await InvoicesSummary.findOne({
+        dispatchId,
         invoiceNumber: invNum,
       });
       if (exists) {
         return res
           .status(400)
-          .json({ message: `Invoice number ${invNum} already exists` });
+          .json({ message: `Invoice number ${invNum} already exists for this dispatch` });
       }
 
-      // Fetch jobSheet for clientName and crmName
       const jobSheet = jobSheetNumber
         ? await JobSheet.findOne({ jobSheetNumber }).lean()
         : null;
@@ -135,7 +135,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       const doc = new InvoicesSummary({
         ...req.body,
         invoiceNumber: invNum,
-        invoiceMailedOn: invoiceMailedOn ? new Date(invoiceMailedOn) : null, // Handle new field
+        invoiceMailedOn: invoiceMailedOn ? new Date(invoiceMailedOn) : null,
         clientName: jobSheet?.clientName || "",
         crmName: jobSheet?.crmIncharge || "",
         createdBy: req.user.email,
@@ -150,7 +150,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     if (err.code === 11000) {
       return res
         .status(400)
-        .json({ message: `Invoice number already exists` });
+        .json({ message: `Invoice number already exists for this dispatch` });
     }
     res.status(500).json({ message: "Create failed", error: err.message });
   }
@@ -158,22 +158,21 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { invoiceNumber, jobSheetNumber, invoiceMailedOn } = req.body;
+    const { dispatchId, invoiceNumber, jobSheetNumber, invoiceMailedOn } = req.body;
 
-    // If invoiceNumber is being updated, check for conflicts
     if (invoiceNumber) {
       const existing = await InvoicesSummary.findOne({
+        dispatchId,
         invoiceNumber,
         _id: { $ne: req.params.id },
       });
       if (existing) {
         return res
           .status(400)
-          .json({ message: `Invoice number ${invoiceNumber} already exists` });
+          .json({ message: `Invoice number ${invoiceNumber} already exists for this dispatch` });
       }
     }
 
-    // Fetch jobSheet for clientName and crmName
     const jobSheet = jobSheetNumber
       ? await JobSheet.findOne({ jobSheetNumber }).lean()
       : null;
@@ -182,7 +181,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       req.params.id,
       {
         ...req.body,
-        invoiceMailedOn: invoiceMailedOn ? new Date(invoiceMailedOn) : null, // Handle new field
+        invoiceMailedOn: invoiceMailedOn ? new Date(invoiceMailedOn) : null,
         clientName: jobSheet?.clientName || "",
         crmName: jobSheet?.crmIncharge || "",
         updatedAt: Date.now(),
@@ -196,7 +195,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     if (err.code === 11000) {
       return res
         .status(400)
-        .json({ message: `Invoice number already exists` });
+        .json({ message: `Invoice number already exists for this dispatch` });
     }
     res.status(500).json({ message: "Update failed" });
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
 export default function FilterDropdown({
   label,
@@ -31,6 +31,14 @@ export default function FilterDropdown({
     };
   }, [setOpen, selected]);
 
+  // Memoize toggle to prevent unnecessary re-renders
+  const stableToggle = useCallback(
+    (newSelected) => {
+      toggle(newSelected);
+    },
+    [toggle]
+  );
+
   // Filter options based on search term, counts, and dependencies
   useEffect(() => {
     const filtered = options.filter((opt) => {
@@ -38,20 +46,24 @@ export default function FilterDropdown({
       const hasProducts = (counts[norm(opt)] || 0) > 0;
       let respectsDependencies = true;
 
-      if (dependsOn[label]) {
-        respectsDependencies = dependsOn[label].every((parentFilter) => {
+      if (dependsOn[label.toLowerCase()]) {
+        respectsDependencies = dependsOn[label.toLowerCase()].every((parentFilter) => {
           const parentOptions = allSelections[parentFilter] || [];
           if (parentOptions.length === 0) return true;
-          return parentOptions.some((parent) => {
-            return parentChildMap[parentFilter]?.[opt]?.includes(parent);
-          });
+          return parentOptions.some((parent) =>
+            (parentChildMap[parentFilter]?.[norm(opt)] || []).includes(norm(parent))
+          );
         });
       }
 
       return matchesSearch && hasProducts && respectsDependencies;
     });
 
-    setFilteredOptions(filtered);
+    // Only update state if filtered options have changed
+    setFilteredOptions((prev) => {
+      if (JSON.stringify(prev) === JSON.stringify(filtered)) return prev;
+      return filtered;
+    });
   }, [searchTerm, counts, options, dependsOn, allSelections, label, parentChildMap]);
 
   // Handle temporary selection changes
@@ -63,7 +75,7 @@ export default function FilterDropdown({
 
   // Apply temporary selections to parent state
   const applyFilters = () => {
-    toggle(tempSelected);
+    stableToggle(tempSelected);
     setOpen(false);
   };
 

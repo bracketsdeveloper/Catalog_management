@@ -1,18 +1,7 @@
 const mongoose = require("mongoose");
 const Counter = require("./Counter");
 
-const operationsSchema = new mongoose.Schema({
-  ourCost: { type: String, default: "" },
-  branding: { type: String, default: "" },
-  delivery: { type: String, default: "" },
-  markup: { type: String, default: "" },
-  total: { type: String, default: "" },
-  vendor: { type: String, default: "" },
-  remarks: { type: String, default: "" },
-  reference: { type: String, default: "" },
-});
-
-const quotationItemSchema = new mongoose.Schema({
+const deliveryChallanItemSchema = new mongoose.Schema({
   slNo: { type: Number, default: 1 },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
   product: { type: String, default: "" },
@@ -44,8 +33,10 @@ const remarkSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 });
 
-const quotationSchema = new mongoose.Schema({
-  quotationNumber: { type: String, unique: true },
+const deliveryChallanSchema = new mongoose.Schema({
+  dcNumber: { type: String, unique: true },
+  quotationId: { type: mongoose.Schema.Types.ObjectId, ref: "Quotation" },
+  quotationNumber: { type: String, default: "" },
   opportunityNumber: { type: String, default: "" },
   catalogName: { type: String, default: "" },
   fieldsToDisplay: { type: [String], default: [] },
@@ -60,12 +51,11 @@ const quotationSchema = new mongoose.Schema({
   customerAddress: { type: String, default: "" },
   margin: { type: Number, default: 0 },
   gst: { type: Number, default: 18 },
-  items: [quotationItemSchema],
+  items: [deliveryChallanItemSchema],
   totalAmount: { type: Number, default: 0 },
   grandTotal: { type: Number, default: 0 },
   displayTotals: { type: Boolean, default: false },
   displayHSNCodes: { type: Boolean, default: true },
-  approveStatus: { type: Boolean, default: false },
   remarks: { type: [remarkSchema], default: [] },
   terms: [
     {
@@ -73,25 +63,36 @@ const quotationSchema = new mongoose.Schema({
       content: { type: String, default: "" },
     },
   ],
-  operations: [operationsSchema],
+  poNumber: { type: String, default: "" },
+  poDate: { type: Date, default: null },
+  otherReferences: { type: String, default: "" }, // New field
+  materialTerms: {
+    type: [String],
+    default: [
+      "Material received in good condition and correct quantity.",
+      "No physical damage or shortage noticed at the time of delivery.",
+      "Accepted after preliminary inspection and verification with delivery documents.",
+    ],
+  },
   createdBy: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
+  dcDate: { type: Date, default: Date.now },
 });
 
-quotationSchema.pre("save", async function (next) {
-  if (this.isNew && !this.quotationNumber) {
+deliveryChallanSchema.pre("save", async function (next) {
+  if (this.isNew && !this.dcNumber) {
     try {
       await Counter.findOneAndUpdate(
-        { id: "quotationNumber", seq: { $lt: 9000 } },
-        { $set: { seq: 9000 } },
+        { id: "dcNumber", seq: { $lt: 8000 } },
+        { $set: { seq: 8000 } },
         { upsert: true }
       );
       const counter = await Counter.findOneAndUpdate(
-        { id: "quotationNumber" },
+        { id: "dcNumber" },
         { $inc: { seq: 1 } },
         { new: true }
       );
-      this.quotationNumber = counter.seq.toString().padStart(4, "0");
+      this.dcNumber = counter.seq.toString().padStart(4, "0");
       next();
     } catch (err) {
       next(err);
@@ -101,4 +102,4 @@ quotationSchema.pre("save", async function (next) {
   }
 });
 
-module.exports = mongoose.model("Quotation", quotationSchema);
+module.exports = mongoose.model("DeliveryChallan", deliveryChallanSchema);

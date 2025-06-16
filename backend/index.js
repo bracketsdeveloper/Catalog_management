@@ -141,6 +141,8 @@ app.use("/api/logistics", logisticsRoutes);
 const logRoutes = require("./routes/logs");
 app.use("/api/admin/logs", logRoutes);
 
+app.use("/api/admin/",require("./routes/deliveryChallan.js"))
+
 
 app.use("/api/admin/",require("./routes/taskRoutes.js"))
 

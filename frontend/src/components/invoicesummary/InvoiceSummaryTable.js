@@ -63,12 +63,10 @@ export default function InvoiceSummaryTable({
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      // Global search
       const matchesSearch = JSON.stringify(r)
         .toLowerCase()
         .includes(search.toLowerCase());
 
-      // Global filters
       const matchesGlobalFilters = Object.entries(filters).every(([field, value]) => {
         if (!value || (typeof value === "object" && !value.from && !value.to))
           return true;
@@ -87,12 +85,13 @@ export default function InvoiceSummaryTable({
         return r[field]?.toString().toLowerCase().includes(value.toLowerCase());
       });
 
-      // Header filters
       const matchesHeaderFilters = Object.entries(headerFilters).every(([field, value]) => {
         if (!value) return true;
         const cellValue = r[field]
           ? field === "invoiceDate" || field === "invoiceMailedOn"
             ? fmt(r[field]).toLowerCase()
+            : field === "invoiceAmount"
+            ? formatIndianNumber(r[field]).toLowerCase()
             : r[field].toString().toLowerCase()
           : "";
         return cellValue.includes(value.toLowerCase());
@@ -277,11 +276,13 @@ export default function InvoiceSummaryTable({
 
 function Cell({ val, field }) {
   const isRightAligned = field === "invoiceAmount";
-  
+
   return (
-    <td className={`px-2 py-1 border border-gray-300 whitespace-normal break-words ${
-      isRightAligned ? "text-right" : ""
-    }`}>
+    <td
+      className={`px-2 py-1 border border-gray-300 whitespace-normal break-words ${
+        isRightAligned ? "text-right" : ""
+      }`}
+    >
       {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
         ? fmt(val)
         : field === "invoiceAmount"

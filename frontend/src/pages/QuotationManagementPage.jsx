@@ -90,6 +90,47 @@ export default function QuotationManagementPage() {
     }
   }
 
+  async function handleGenerateDeliveryChallan(quotation) {
+    try {
+      const token = localStorage.getItem("token");
+      const items = quotation.items.map((item) => ({
+        slNo: item.slNo || null,
+        productId: item.productId || null,
+        product: item.product || "",
+        quantity: item.quantity || 1,
+        rate: item.rate || 0,
+        productprice: item.productprice || item.rate || 0,
+        amount: item.amount || 0,
+        productGST: item.productGST || quotation.gst || 18,
+        total: item.total || 0,
+        baseCost: item.baseCost || 0,
+        material: item.material || "",
+        weight: item.weight || "",
+        brandingTypes: item.brandingTypes || [],
+        suggestedBreakdown: item.suggestedBreakdown || {},
+        imageIndex: item.imageIndex || 0,
+      }));
+  
+      const payload = {
+        items,
+        poNumber: "",
+        poDate: null,
+        otherReferences: "",
+      };
+  
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/delivery-challans/${quotation._id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert("Delivery Challan created successfully!");
+      navigate(`/admin-dashboard/dc/${res.data.deliveryChallan._id}`);
+    } catch (error) {
+      console.error("Error generating delivery challan:", error);
+      alert("Failed to generate delivery challan.");
+    }
+  }
+
   async function fetchQuotation() {
     try {
       setLoading(true);
@@ -763,67 +804,80 @@ export default function QuotationManagementPage() {
           userEmail={userEmail}
         />
       )}
-      {openDropdownForQuotation && selectedQuotationForDropdown && createPortal(
-        <div
-          style={{ top: dropdownPosition.top, left: dropdownPosition.left, position: "absolute", zIndex: 9999 }}
-          className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
-          onClick={e => e.stopPropagation()}
-        >
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              navigate(`/admin-dashboard/quotations/${selectedQuotationForDropdown._id}`);
-              setOpenDropdownForQuotation(null);
-              setSelectedQuotationForDropdown(null);
-              dropdownButtonRef.current = null;
-            }}
-            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-          >
-            View
-          </button>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              if (selectedQuotationForDropdown.quotationNumber >= 10496) {
-                handleEditQuotation(selectedQuotationForDropdown);
-              } else {
-                handleEditQuotationOld(selectedQuotationForDropdown);
-              }
-              setOpenDropdownForQuotation(null);
-              setSelectedQuotationForDropdown(null);
-              dropdownButtonRef.current = null;
-            }}
-            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-          >
-            Edit
-          </button>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              openRemarksModal(selectedQuotationForDropdown);
-              setOpenDropdownForQuotation(null);
-              setSelectedQuotationForDropdown(null);
-              dropdownButtonRef.current = null;
-            }}
-            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-          >
-            Remarks
-          </button>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              handleDeleteQuotation(selectedQuotationForDropdown);
-              setOpenDropdownForQuotation(null);
-              setSelectedQuotationForDropdown(null);
-              dropdownButtonRef.current = null;
-            }}
-            className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
-          >
-            Delete
-          </button>
-        </div>,
-        document.body
-      )}
+     // Inside QuotationManagementPage.js, update the dropdown rendering part
+{openDropdownForQuotation && selectedQuotationForDropdown && createPortal(
+  <div
+    style={{ top: dropdownPosition.top, left: dropdownPosition.left, position: "absolute", zIndex: 9999 }}
+    className="w-48 bg-white border border-gray-200 rounded shadow-md p-2"
+    onClick={e => e.stopPropagation()}
+  >
+    <button
+      onClick={e => {
+        e.stopPropagation();
+        navigate(`/admin-dashboard/quotations/${selectedQuotationForDropdown._id}`);
+        setOpenDropdownForQuotation(null);
+        setSelectedQuotationForDropdown(null);
+        dropdownButtonRef.current = null;
+      }}
+      className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+    >
+      View
+    </button>
+    <button
+      onClick={e => {
+        e.stopPropagation();
+        if (selectedQuotationForDropdown.quotationNumber >= 10496) {
+          handleEditQuotation(selectedQuotationForDropdown);
+        } else {
+          handleEditQuotationOld(selectedQuotationForDropdown);
+        }
+        setOpenDropdownForQuotation(null);
+        setSelectedQuotationForDropdown(null);
+        dropdownButtonRef.current = null;
+      }}
+      className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+    >
+      Edit
+    </button>
+    <button
+      onClick={e => {
+        e.stopPropagation();
+        openRemarksModal(selectedQuotationForDropdown);
+        setOpenDropdownForQuotation(null);
+        setSelectedQuotationForDropdown(null);
+        dropdownButtonRef.current = null;
+      }}
+      className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+    >
+      Remarks
+    </button>
+    <button
+      onClick={async (e) => {
+        e.stopPropagation();
+        await handleGenerateDeliveryChallan(selectedQuotationForDropdown);
+        setOpenDropdownForQuotation(null);
+        setSelectedQuotationForDropdown(null);
+        dropdownButtonRef.current = null;
+      }}
+      className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+    >
+      Generate Delivery Challan
+    </button>
+    <button
+      onClick={e => {
+        e.stopPropagation();
+        handleDeleteQuotation(selectedQuotationForDropdown);
+        setOpenDropdownForQuotation(null);
+        setSelectedQuotationForDropdown(null);
+        dropdownButtonRef.current = null;
+      }}
+      className="block w-full text-left px-2 py-1 hover:bg-gray-100 text-sm"
+    >
+      Delete
+    </button>
+  </div>,
+  document.body
+)}
     </div>
   );
 }

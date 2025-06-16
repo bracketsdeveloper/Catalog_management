@@ -83,6 +83,9 @@ const groupedPermissions = {
     ],
     "Task Manager" :[
       "manage-task"
+    ],
+    "Sales" : [
+      "manage-dc"
     ]
   
 };

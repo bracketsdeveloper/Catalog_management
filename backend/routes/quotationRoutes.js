@@ -29,7 +29,6 @@ async function createLog(action, oldValue, newValue, user, ip) {
 
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // console.log("Creating quotation with payload:", req.body);
     const {
       opportunityNumber,
       catalogName,
@@ -46,6 +45,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       terms,
       displayTotals,
       displayHSNCodes,
+      operations,
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -54,11 +54,11 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
 
     const defaultTerms = [
       {
-        heading: "Delivery",
+        heading: "Checkout",
         content:
           "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
       },
-      { heading: "Branding", content: "As mentioned above" },
+      { heading: "Checkout", content: "As mentioned above" },
       { heading: "Payment Terms", content: "Within 30 days upon delivery" },
       {
         heading: "Quote Validity",
@@ -78,11 +78,16 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
+      const hsnCode = it.hsnCode || "";
+      if (!hsnCode && it.productId) {
+        console.warn(`HSN code missing for productId ${it.productId} in quotation item ${idx + 1}`);
+      }
+
       return {
         slNo: it.slNo || idx + 1,
         productId: it.productId || null,
         product: it.productName || it.product || "",
-        hsnCode: it.hsnCode || "",
+        hsnCode,
         quantity: qty,
         rate,
         productprice: price,
@@ -98,7 +103,23 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       };
     });
 
-    // console.log("Built items:", builtItems);
+    const builtOperations = Array.isArray(operations) ? operations.map(op => {
+      const ourCost = parseFloat(op.ourCost) || 0;
+      const branding = parseFloat(op.branding) || 0;
+      const delivery = parseFloat(op.delivery) || 0;
+      const markup = parseFloat(op.markup) || 0;
+      const total = (ourCost + branding + delivery + markup).toFixed(2);
+      return {
+        ourCost: op.ourCost || "",
+        branding: op.branding || "",
+        delivery: op.delivery || "",
+        markup: op.markup || "",
+        total,
+        vendor: op.vendor || "",
+        remarks: op.remarks || "",
+        reference: op.reference || "",
+      };
+    }) : [];
 
     const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
@@ -121,13 +142,14 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       displayTotals: !!displayTotals,
       displayHSNCodes: !!displayHSNCodes,
       terms: quotationTerms,
+      operations: builtOperations,
       createdBy: req.user.email,
     });
 
     const savedQuotation = await quotation.save();
     await createLog("create", null, savedQuotation, req.user, req.ip);
 
-    res.status(201).json({ message: "Quotation created", quotation: savedQuotation });
+    res.status(201).json({ message: "Quotation created", quotation: savedQuotation.toObject() });
   } catch (err) {
     console.error("Error creating quotation:", err);
     res.status(400).json({ message: err.message || "Server error creating quotation" });
@@ -139,7 +161,7 @@ router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     const list = await Quotation.find()
       .populate("items.productId", "images name productCost category subCategory hsnCode")
       .sort({ createdAt: -1 });
-    res.json(list);
+    res.json(list.map(q => q.toObject()));
   } catch (err) {
     console.error("Error fetching quotations:", err);
     res.status(500).json({ message: "Server error fetching quotations" });
@@ -151,7 +173,7 @@ router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
     const quote = await Quotation.findById(req.params.id)
       .populate("items.productId", "images name productCost category subCategory hsnCode");
     if (!quote) return res.status(404).json({ message: "Quotation not found" });
-    res.json(quote);
+    res.json(quote.toObject());
   } catch (err) {
     console.error("Error fetching quotation:", err);
     res.status(400).json({ message: err.message || "Server error fetching quotation" });
@@ -179,6 +201,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       terms,
       displayTotals,
       displayHSNCodes,
+      operations,
     } = req.body;
 
     const builtItems = Array.isArray(items) && items.length
@@ -193,11 +216,16 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
           const total = parseFloat((amount + gstVal).toFixed(2));
 
+          const hsnCode = it.hsnCode || "";
+          if (!hsnCode && it.productId) {
+            console.warn(`HSN code missing for productId ${it.productId} in quotation item ${idx + 1}`);
+          }
+
           return {
             slNo: it.slNo || idx + 1,
             productId: it.productId || null,
             product: it.productName || it.product || "",
-            hsnCode: it.hsnCode || "",
+            hsnCode,
             quantity: qty,
             rate,
             productprice: price,
@@ -214,7 +242,23 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         })
       : existing.items;
 
-    // console.log("Built items:", builtItems);
+    const builtOperations = Array.isArray(operations) ? operations.map(op => {
+      const ourCost = parseFloat(op.ourCost) || 0;
+      const branding = parseFloat(op.branding) || 0;
+      const delivery = parseFloat(op.delivery) || 0;
+      const markup = parseFloat(op.markup) || 0;
+      const total = (ourCost + branding + delivery + markup).toFixed(2);
+      return {
+        ourCost: op.ourCost || "",
+        branding: op.branding || "",
+        delivery: op.delivery || "",
+        markup: op.markup || "",
+        total,
+        vendor: op.vendor || "",
+        remarks: op.remarks || "",
+        reference: op.reference || "",
+      };
+    }) : existing.operations;
 
     const totalAmount = builtItems.reduce((sum, x) => sum + (x.amount || 0), 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + (x.total || 0), 0);
@@ -237,6 +281,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       displayTotals: displayTotals ?? existing.displayTotals,
       displayHSNCodes: displayHSNCodes ?? existing.displayHSNCodes,
       terms: Array.isArray(terms) && terms.length > 0 ? terms : existing.terms,
+      operations: builtOperations,
     };
 
     const updated = await Quotation.findByIdAndUpdate(
@@ -363,8 +408,8 @@ router.get("/quotations/:id/export-word", authenticate, authorizeAdmin, async (r
     });
     res.send(buffer);
   } catch (err) {
-    console.error("Export error:", err);
-    res.status(500).json({ message: "Error generating Word document" });
+    console.error("Error exporting quotation:", err);
+    res.status(400).json({ message: "Error generating quotation" });
   }
 });
 
@@ -376,10 +421,10 @@ router.put("/quotations/:id/approve", authenticate, authorizeAdmin, async (req, 
       { new: true }
     );
     if (!updatedQuotation) return res.status(404).json({ message: "Quotation not found" });
-    res.json({ message: "Quotation approved", quotation: updatedQuotation });
-  } catch (error) {
-    console.error("Error approving quotation:", error);
-    res.status(500).json({ message: "Server error approving quotation" });
+    res.json({ message: "Quotation approved", quotation: updatedQuotation.toObject() });
+  } catch (err) {
+    console.error("Error approving quotation:", err);
+    res.status(400).json({ message: "Error approving quotation" });
   }
 });
 
@@ -392,21 +437,88 @@ router.put("/quotations/:id/remarks", authenticate, authorizeAdmin, async (req, 
       { new: true }
     );
     if (!updatedQuotation) return res.status(404).json({ message: "Quotation not found" });
-    res.json({ message: "Remarks updated", quotation: updatedQuotation });
+    res.json({ message: "Remarks updated", quotation: updatedQuotation.toObject() });
   } catch (error) {
     console.error("Error updating remarks for quotation:", error);
-    res.status(500).json({ message: "Server error updating remarks for quotation" });
+    res.status(400).json({ message: "Server error updating remarks" });
   }
 });
 
-router.post("/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
+router.post("/quotations/:id/operations", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { ourCost, branding, delivery, markup, vendor, remarks, reference } = req.body;
+    const quotation = await Quotation.findById(req.params.id);
+    if (!quotation) return res.status(404).json({ message: "Quotation not found" });
+
+    const ourCostNum = parseFloat(ourCost) || 0;
+    const brandingNum = parseFloat(branding) || 0;
+    const deliveryNum = parseFloat(delivery) || 0;
+    const markupNum = parseFloat(markup) || 0;
+    const total = (ourCostNum + brandingNum + deliveryNum + markupNum).toFixed(2);
+
+    const newOperation = {
+      ourCost: ourCost || "",
+      branding: branding || "",
+      delivery: delivery || "",
+      markup: markup || "",
+      total,
+      vendor: vendor || "",
+      remarks: remarks || "",
+      reference: reference || "",
+    };
+
+    quotation.operations.push(newOperation);
+    const updatedQuotation = await quotation.save();
+    await createLog("add operation", null, updatedQuotation, req.user, req.ip);
+
+    res.json({ message: "Operation cost added", quotation: updatedQuotation.toObject() });
+  } catch (err) {
+    console.error("Error adding operation cost:", err);
+    res.status(400).json({ message: "Server error adding operation cost" });
+  }
+});
+
+router.put("/quotations/:id/operations/:opId", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { ourCost, branding, delivery, markup, vendor, remarks, reference } = req.body;
+    const quotation = await Quotation.findById(req.params.id);
+    if (!quotation) return res.status(404).json({ message: "Quotation not found" });
+
+    const operation = quotation.operations.id(req.params.opId);
+    if (!operation) return res.status(404).json({ message: "Operation not found" });
+
+    const ourCostNum = parseFloat(ourCost) || 0;
+    const brandingNum = parseFloat(branding) || 0;
+    const deliveryNum = parseFloat(delivery) || 0;
+    const markupNum = parseFloat(markup) || 0;
+    const total = (ourCostNum + brandingNum + deliveryNum + markupNum).toFixed(2);
+
+    operation.ourCost = ourCost || operation.ourCost;
+    operation.branding = branding || operation.branding;
+    operation.delivery = delivery || operation.delivery;
+    operation.markup = markup || operation.markup;
+    operation.total = total;
+    operation.vendor = vendor || operation.vendor;
+    operation.remarks = remarks || operation.remarks;
+    operation.reference = reference || operation.reference;
+
+    const updatedQuotation = await quotation.save();
+    await createLog("update operation", null, updatedQuotation, req.user, req.ip);
+
+    res.json({ message: "Operation cost updated", quotation: updatedQuotation.toObject() });
+  } catch (err) {
+    console.error("Error updating operation cost:", err);
+    res.status(400).json({ message: "Server error updating operation cost" });
+  }
+});
+
+router.post("/logs/:id/latest", authenticate, async (req, res) => {
   try {
     const { quotationIds } = req.body;
     if (!Array.isArray(quotationIds) || quotationIds.length === 0) {
       return res.status(400).json({ message: "Invalid or empty quotation IDs" });
     }
 
-    // Convert string IDs to ObjectId
     const objectIds = quotationIds.map(id => new mongoose.Types.ObjectId(id));
 
     const logs = await Log.aggregate([
@@ -462,12 +574,10 @@ router.post("/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
       } : {};
     });
 
-    // console.log("Latest logs response:", JSON.stringify(latestLogs, null, 2));
-
     res.json(latestLogs);
   } catch (err) {
     console.error("Error fetching latest logs:", err);
-    res.status(500).json({ message: "Server error fetching latest logs" });
+    res.status(400).json({ message: "Server error fetching latest logs" });
   }
 });
 

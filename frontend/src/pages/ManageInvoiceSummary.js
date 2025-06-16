@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
-import InvoicesSummaryTable from "../components/invoicesummary/InvoiceSummaryTable.js";
+import InvoicesSummaryTable from "../components/invoicesummary/InvoiceSummaryTable";
 import InvoicesSummaryModal from "../components/invoicesummary/InvoiceSummaryModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -48,12 +48,9 @@ export default function ManageInvoicesSummary() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = res.data || [];
-      // Remove duplicates based on _id
       const uniqueRows = Array.from(
         new Map(data.map((row) => [row._id, row])).values()
       );
-      console.log("Fetched rows:", data);
-      console.log("Unique rows after deduplication:", uniqueRows);
       setRows(uniqueRows);
     } catch (err) {
       console.error(err);
@@ -295,4 +292,4 @@ export default function ManageInvoicesSummary() {
       )}
     </div>
   );
-}   
+}
