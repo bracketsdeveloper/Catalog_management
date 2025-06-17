@@ -2,6 +2,8 @@
   import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
   //import  logoImg from  '../../public/pacer-logo.jpeg';
   import { CgOrganisation } from "react-icons/cg";
+  import { toast } from "react-toastify";
+  import "react-toastify/dist/ReactToastify.css";
 
   import {
     UserIcon,
@@ -395,7 +397,21 @@
     const navigate = useNavigate();
     const location = useLocation();
 
-      const isAdminDashboard = location.pathname === "/admin-dashboard" || location.pathname === "/admin-dashboard/";
+    const isAdminDashboard = location.pathname === "/admin-dashboard" || location.pathname === "/admin-dashboard/";
+
+    // Function to get time-based greeting
+    const getTimeBasedGreeting = () => {
+      const hour = new Date().getHours();
+      const username = localStorage.getItem("username") || "User";
+      
+      if (hour >= 5 && hour < 12) {
+        return `Good Morning ${username}`;
+      } else if (hour >= 12 && hour < 17) {
+        return `Good Afternoon ${username}`;
+      } else {
+        return `Good Evening ${username}`;
+      }
+    };
 
     /* fetch role / permissions from localStorage once */
     useEffect(() => {
@@ -413,11 +429,20 @@
         setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
       }
 
+      // Show greeting toast only when on the main admin dashboard page
+      if (isAdminDashboard) {
+        const greeting = getTimeBasedGreeting();
+        toast.success(greeting, {
+          position: "top-center",
+          autoClose: 3000,
+        });
+      }
+
       // Cleanup function (if needed)
       return () => {
         // Any cleanup logic here
       };
-    }, []);
+    }, [isAdminDashboard]); // Add isAdminDashboard as dependency
 
     /* ---------------------- SIGN‑OUT ------------------------------- */
     const handleSignOut = () => {
