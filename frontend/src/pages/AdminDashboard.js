@@ -402,7 +402,7 @@
     // Function to get time-based greeting
     const getTimeBasedGreeting = () => {
       const hour = new Date().getHours();
-      const username = localStorage.getItem("username") || "User";
+      const username = localStorage.getItem("name") || "User";
       
       if (hour >= 5 && hour < 12) {
         return `Good Morning ${username}`;

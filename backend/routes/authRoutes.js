@@ -111,6 +111,7 @@ router.post("/login", async (req, res) => {
       message: "Login successful.",
       token,
       role: user.role,
+      name: user.name,
       isSuperAdmin: user.isSuperAdmin || false,
       permissions: user.permissions || [],
     };

@@ -34,10 +34,11 @@ export default function SignIn() {
         autoClose: 3000,
       });
 
-      const { token, role, permissions, isSuperAdmin } = response.data;
+      const { token, role, name, permissions, isSuperAdmin } = response.data;
 
       localStorage.setItem("token", token);
       localStorage.setItem("role", role || "GENERAL");
+      localStorage.setItem("name", name || "");
       localStorage.setItem("permissions", JSON.stringify(permissions || []));
       localStorage.setItem("isSuperAdmin", isSuperAdmin ? "true" : "false");
 
