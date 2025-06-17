@@ -1,3 +1,4 @@
+// src/pages/ProductManagementPage.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
@@ -10,7 +11,7 @@ import SkeletonCard from "../components/manageproducts/SkeletonCard";
 import SingleProductModal from "../components/manageproducts/SingleProductModal";
 import DropdownFilter from "../components/manageproducts/DropdownFilter";
 import BulkUploadModal from "../components/manageproducts/BulkUploadModal";
-import AdminProductDetails from "./AdminProductDetails"; // Ensure correct path
+import AdminProductDetails from "./AdminProductDetails";
 
 // Helpers
 import uploadImage from "../helpers/uploadImage";
@@ -191,7 +192,7 @@ export default function ProductManagementPage() {
         categories: categories.map((c) => c.name),
         subCategories: subCategories.map((c) => c.name),
         brands: brands.map((b) => b.name),
-        priceRanges: [],
+        priceRanges: priceRanges.map((p) => p.name),
         variationHinges: variationHinges.map((v) => v.name),
       });
       updateCountsFromServer(res.data);
@@ -217,11 +218,11 @@ export default function ProductManagementPage() {
           p.append("search", terms.join(","));
         }
         if (selectedCategories.length) p.append("categories", selectedCategories.join(","));
-        if (selectedSubCategories.length) p.append("subCategory", selectedSubCategories.join(","));
-        if (selectedBrands.length) p.append("brandNames", selectedBrands.join(","));
-        if (selectedPriceRanges.length) p.append("priceRange", selectedPriceRanges.join(""));
+        if (selectedSubCategories.length) p.append("subCategories", selectedSubCategories.join(","));
+        if (selectedBrands.length) p.append("brands", selectedBrands.join(","));
+        if (selectedPriceRanges.length) p.append("priceRanges", selectedPriceRanges.join(","));
         if (selectedVariationHinges.length)
-          p.append("variationHinge", selectedVariationHinges.join(","));
+          p.append("variationHinges", selectedVariationHinges.join(","));
         return p;
       };
 
