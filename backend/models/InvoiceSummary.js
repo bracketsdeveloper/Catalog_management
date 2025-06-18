@@ -5,7 +5,7 @@ const invoicesSummarySchema = new mongoose.Schema(
     dispatchId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "DispatchSchedule",
-      required: true,
+      // required: true,
     },
     jobSheetNumber: String,
     clientCompanyName: String,

@@ -33,18 +33,14 @@ export default function PrintQuotation() {
           slNo: item.slNo || idx + 1,
           rate: parseFloat(item.rate) || 0,
           productGST: parseFloat(item.productGST) || 0,
-          product: item.product || "",
+          product: formatProductName(item.product || ""), // Format product name
         }));
-      // Format terms to add two spaces between words
       const formattedTerms = (data.terms || []).map(term => ({
         ...term,
         content: term.content
-          .replace(/([a-z])([A-Z0-9])/g, '$1  $2') // Add two spaces between lowercase and uppercase/number
-          .replace(/([0-9])([A-Za-z])/g, '$1  $2') // Add two spaces between number and letter
-          .replace(/\s+/g, '  ') // Replace all single spaces with two spaces
-          .replace(/([a-z])([A-Z0-9])/g, '$1  $2') // Add space between lowercase and uppercase/number
-          .replace(/([0-9])([A-Za-z])/g, '$1  $2') // Add space between number and letter
-          .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+          .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
+          .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+          .replace(/\s+/g, ' ')
           .trim()
       }));
       setQuotation({ ...data, items: sanitizedItems, terms: formattedTerms });
@@ -55,6 +51,22 @@ export default function PrintQuotation() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Function to format product names
+  function formatProductName(name) {
+    return name
+      .replace(/([a-z])([A-Z0-9])/g, '$1 $2') // Add space between lowercase and uppercase/number
+      .replace(/([0-9])([A-Za-z])/g, '$1 $2') // Add space between number and letter
+      .replace(/([-])/g, '$1 ') // Add space after hyphen
+      .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+      .trim();
+  }
+
+  // Function to add 3 spaces after each word
+  function addSpacesAfterWords(text) {
+    if (!text) return text;
+    return text.split(' ').join('   '); // 3 spaces between words
   }
 
   const handleExportPDF = () => {
@@ -151,23 +163,16 @@ export default function PrintQuotation() {
   };
 
   const formatCurrency = (amount) => {
-    // Convert to string and split into parts (integer and decimal)
     const parts = amount.toFixed(2).split('.');
     let integerPart = parts[0];
     const decimalPart = parts[1];
-
-    // Handle negative numbers (if any)
     const isNegative = integerPart.startsWith('-');
     if (isNegative) integerPart = integerPart.slice(1);
-
-    // Format the integer part with Indian-style commas
     const lastThree = integerPart.slice(-3);
     const otherDigits = integerPart.slice(0, -3);
     const formattedOtherDigits = otherDigits.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
     integerPart = formattedOtherDigits ? `${formattedOtherDigits},${lastThree}` : lastThree;
-
-    // Reattach negative sign and decimal part
-    return `${isNegative ? '-' : ''}${integerPart}.${decimalPart}`;
+    return `${isNegative ? '-' : ' '}${integerPart}.${decimalPart}`;
   };
 
   return (
@@ -192,12 +197,12 @@ export default function PrintQuotation() {
               margin-top: 0 !important;
             }
             .table-container.many-rows tr:nth-child(5) { 
-              page-break-after: always !important; /* First page: 5 rows */
+              page-break-after: always !important;
             }
             .table-container.many-rows tr:nth-child(12),
             .table-container.many-rows tr:nth-child(19),
             .table-container.many-rows tr:nth-child(26) { 
-              page-break-after: always !important; /* Subsequent pages: 7 rows */
+              page-break-after: always !important;
             }
             .table-container thead { 
               display: table-header-group;
@@ -258,6 +263,8 @@ export default function PrintQuotation() {
               position: relative;
               margin-top: 0.5in;
               width: 100%;
+            }
+            .footer-block.page-break-before {
               page-break-before: always !important;
             }
 
@@ -324,6 +331,7 @@ export default function PrintQuotation() {
 
           .header-section .gstin-text, .customer-info .company-address {
             font-size: 10pt !important;
+            max-width: 40% !important;
           }
 
           .footer-block .company-name {
@@ -385,7 +393,7 @@ export default function PrintQuotation() {
             </div>
           </div>
           <div className="text-right">
-            <div className="gstin-text font-bold">GSTIN: 29ABCFA9924A1ZL</div>
+            <div className="gstin-text font-bold">GSTIN:29ABCFA9924A1ZL</div>
           </div>
         </div>
 
@@ -395,9 +403,9 @@ export default function PrintQuotation() {
           </div>
           <div className="company-address">{quotation.customerCompany}</div>
           <div className="company-address">{quotation.customerAddress}</div>
-          <div className="company-address">&nbsp;</div>
+          <div className="company-address"> </div>
           <div className="company-address font-bold">Quotation: {quotation.catalogName}</div>
-          <div className="company-address">&nbsp;</div>
+          <div className="company-address"> </div>
         </div>
       </div>
 
@@ -450,15 +458,15 @@ export default function PrintQuotation() {
                       />
                     )}
                   </td>
-                  <td className="border px-2 py-1 text-center product-cell">{item.product}</td>
+                  <td className="border px-2 py-1 text-center product-cell">{addSpacesAfterWords(item.product)}</td>
                   {quotation.displayHSNCodes && (
-                    <td className="border px-2 py-1 text-center hsn-cell">{hsnCode}</td>
+                    <td className="border px-2 py-1 text-center hsn-cell">{addSpacesAfterWords(hsnCode)}</td>
                   )}
                   <td className="border px-2 py-1 text-center quantity-cell">{quantity}</td>
-                  <td className="border px-2 py-1 text-center rate-cell">₹{formatCurrency(effRate)}</td>
-                  <td className="border px-2 py-1 text-center amount-cell">₹{formatCurrency(amount)}</td>
+                  <td className="border px-2 py-1 text-center rate-cell">{formatCurrency(effRate)}</td>
+                  <td className="border px-2 py-1 text-center amount-cell">{formatCurrency(amount)}</td>
                   <td className="border px-2 py-1 text-center gst-cell">{gstPercent}%</td>
-                  <td className="border px-2 py-1 text-center total-cell">₹{formatCurrency(total)}</td>
+                  <td className="border px-2 py-1 text-center total-cell">{formatCurrency(total)}</td>
                 </tr>
               );
             })}
@@ -471,45 +479,65 @@ export default function PrintQuotation() {
                   colSpan={quotation.displayHSNCodes ? 5 : 4} 
                   className="border px-2 py-2 text-center"
                 >
-                  Total
+                  {addSpacesAfterWords("Total")}
                 </td>
                 <td className="border px-2 py-2"></td>
-                <td className="border px-2 py-2 text-center">₹{formatCurrency(computedAmount(quotation))}</td>
+                <td className="border px-2 py-2 text-center">{formatCurrency(computedAmount(quotation))}</td>
                 <td className="border px-2 py-2"></td>
-                <td className="border px-2 py-2 text-center">₹{formatCurrency(computedTotal(quotation))}</td>
+                <td className="border px-2 py-2 text-center">{formatCurrency(computedTotal(quotation))}</td>
               </tr>
             </tfoot>
           )}
         </table>
       </div>
 
-      <div className="print-section terms-section mt-4 border-t pt-2">
-        <div className="bordered-text flex justify-center text-center  font-bold">
-          Product subject to availability at the time of order confirmation
+      {quotation.items.length === 3 && (
+        <div className="print-section terms-section mt-4 border-t pt-2">
+          <div className="bordered-text flex justify-center text-center font-bold">
+            {addSpacesAfterWords("Product subject to availability at the time of order confirmation")}
+          </div>
+          {quotation.terms?.length > 0 &&
+            quotation.terms.map((term, idx) => (
+              <div key={idx} className="mb-1">
+                <div className="font-bold text-xs">{addSpacesAfterWords(term.heading)}:</div>
+                <div className="text-xs">{addSpacesAfterWords(term.content)}</div>
+              </div>
+            ))}
+          <div className="bordered-text flex justify-center text-center font-bold">
+            {addSpacesAfterWords("Rates may vary in case there is a change in specifications / quantity / timelines")}
+          </div>
         </div>
-        {quotation.terms?.length > 0 &&
-          quotation.terms.map((term, idx) => (
-            <div key={idx} className="mb-1">
-              <div className="font-bold text-xs">{term.heading}:</div>
-              <div className="text-xs">{term.content}</div>
-            </div>
-          ))}
-        <div className="bordered-text flex justify-center text-center  font-bold">
-          Rates may vary in case there is a change in specifications / quantity / timelines
-        </div>
-      </div>
+      )}
 
-      <div className="print-section footer-block mt-8">
+      {quotation.items.length !== 3 && (
+        <div className="print-section terms-section mt-4 border-t pt-2">
+          <div className="bordered-text flex justify-center text-center font-bold">
+            {addSpacesAfterWords("Product subject to availability at the time of order confirmation")}
+          </div>
+          {quotation.terms?.length > 0 &&
+            quotation.terms.map((term, idx) => (
+              <div key={idx} className="mb-1">
+                <div className="font-bold text-xs">{addSpacesAfterWords(term.heading)}:</div>
+                <div className="text-xs">{addSpacesAfterWords(term.content)}</div>
+              </div>
+            ))}
+          <div className="bordered-text flex justify-center text-center font-bold">
+            {addSpacesAfterWords("Rates may vary in case there is a change in specifications / quantity / timelines")}
+          </div>
+        </div>
+      )}
+
+      <div className={`print-section footer-block mt-8 ${quotation.items.length !== 3 ? 'page-break-before' : ''}`}>
         <div className="flex justify-between items-start">
           <div className="flex flex-col">
-            <div className="company-name">For Ace Print Pack</div>
+            <div className="company-name">{addSpacesAfterWords("For Ace Print Pack")}</div>
             <img
               src="/signature.png"
               alt="Signature"
               style={{ height: '0.8in', width: 'auto', margin: '0.1in 0' }}
               crossOrigin="anonymous"
             />
-            <div className="signatory-text">Neeraj Dinodia</div>
+            <div className="signatory-text">{addSpacesAfterWords("Neeraj Dinodia")}</div>
           </div>
         </div>
       </div>
