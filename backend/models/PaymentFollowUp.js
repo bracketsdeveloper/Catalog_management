@@ -22,24 +22,33 @@ const paymentFollowUpSchema = new mongoose.Schema(
       ref: "DispatchSchedule",
       required: true,
     },
-    jobSheetNumber: String, // New field
-    clientCompanyName: String, // New field
-    clientName: String, // New field
-    invoiceNumber: String, // From InvoiceFollowUp
-    invoiceDate: Date, // Manually entered
-    invoiceAmount: Number, // Manually entered
-    invoiceMailed: String, // From InvoicesSummary (Yes/No)
-    invoiceMailedOn: Date, // From InvoicesSummary
-    dueDate: Date, // Calculated or manually entered
-    followUps: [followUpSchema], // Array of follow-up entries
-    paymentReceived: [paymentSchema], // New sub-schema for payments
-    discountAllowed: Number, // New field
-    TDS: Number, // New field
-    remarks: String, // New field
+    jobSheetNumber: { type: String, required: true }, // Make required
+    clientCompanyName: String,
+    clientName: String,
+    invoiceNumber: { type: String, required: true }, // Make required
+    invoiceDate: Date,
+    invoiceAmount: Number,
+    invoiceMailed: String,
+    invoiceMailedOn: Date,
+    dueDate: Date,
+    followUps: [followUpSchema],
+    paymentReceived: [paymentSchema],
+    discountAllowed: Number,
+    TDS: Number,
+    remarks: String,
     createdBy: String,
     updatedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    indexes: [
+      // Composite unique index
+      {
+        key: { dispatchId: 1, jobSheetNumber: 1, invoiceNumber: 1 },
+        unique: true,
+      },
+    ],
+  }
 );
 
 module.exports = mongoose.model("PaymentFollowUp", paymentFollowUpSchema);

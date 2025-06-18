@@ -17,6 +17,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     const [invoiceFollowUps, dispatchRows, invoiceSummaries, savedFollowUps, jobSheets, companies] =
       await Promise.all([
         InvoiceFollowUp.find({
+          invoiceGenerated: "Yes", // Only fetch where invoiceGenerated is "Yes"
           $or: [
             { jobSheetNumber: { $regex: search, $options: "i" } },
             { clientCompanyName: { $regex: search, $options: "i" } },
@@ -48,7 +49,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     const dispatchMap = {};
     for (const d of dispatchRows) {
       if (d.jobSheetNumber) {
-        // Store only the first dispatchId per jobSheetNumber to avoid product duplication
         dispatchMap[d.jobSheetNumber] = dispatchMap[d.jobSheetNumber] || d._id.toString();
       }
     }
@@ -80,14 +80,14 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     // Step 3: Aggregate by jobSheetNumber and invoiceNumber
     const formatDate = (date) => (date ? new Date(date).toISOString().split("T")[0] : null);
 
-    const merged = invoiceFollowUps.flatMap(followUp => {
+    const merged = invoiceFollowUps.flatMap((followUp) => {
       if (!followUp.jobSheetNumber || !followUp.dispatchId) {
         console.log(`Skipping followUp with missing jobSheetNumber or dispatchId: ${followUp._id}`);
         return [];
       }
 
       const invoiceNumbers = followUp.invoiceNumber
-        ? followUp.invoiceNumber.split(",").map(n => n.trim()).filter(Boolean)
+        ? followUp.invoiceNumber.split(",").map((n) => n.trim()).filter(Boolean)
         : [];
 
       if (!invoiceNumbers.length) {
@@ -101,13 +101,13 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         return [];
       }
 
-      return invoiceNumbers.map(invoiceNumber => {
+      return invoiceNumbers.map((invoiceNumber) => {
         const summary = summaryMap[invoiceNumber] || {};
         const paymentKey = `${followUp.jobSheetNumber}-${invoiceNumber}`;
         const existing = paymentMap[paymentKey] || {};
 
         // Calculate dueDate
-        const invoiceDate = summary.invoiceDate ? new Date(summary.invoiceDate) : null;
+        const invoiceDate = summary.date;
         let dueDate = existing.dueDate ? new Date(existing.dueDate) : invoiceDate;
         if (invoiceDate && followUp.clientCompanyName && companyMap[followUp.clientCompanyName]) {
           const terms = companyMap[followUp.clientCompanyName];
@@ -120,9 +120,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 
         // Calculate overDueSince
         const today = new Date();
-        const overDueSince = dueDate
-          ? Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
-          : null;
+        const overDueSince =
+          dueDate && Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
 
         // Handle paymentReceived
         let totalPaymentReceived = 0;
@@ -138,7 +137,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
             {
               paymentDate: existing.updatedAt || new Date(),
               referenceNumber: `LEGACY-${existing._id || invoiceNumber}`,
-              bankName: "Unknown",
+              bankName: "",
               amount: existing.paymentReceived,
               updatedOn: existing.updatedAt || new Date(),
             },
@@ -155,7 +154,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           invoiceNumber,
           invoiceDate: formatDate(summary.invoiceDate),
           invoiceAmount: parseFloat(summary.invoiceAmount) || 0,
-          invoiceMailed: summary.invoiceMailed === true ? "Yes" : "No",
+          invoiceMailed: summary.invoiceMailed === "Yes" ? "Yes" : "No",
           invoiceMailedOn: formatDate(summary.invoiceMailedOn),
           dueDate: formatDate(dueDate),
           overDueSince,
@@ -167,13 +166,13 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           remarks: existing.remarks || "",
         };
       });
-    }).filter(row => row !== null);
+    }).filter((row) => row);
 
     console.log(`Merged records: ${merged.length}`);
     res.json(merged);
   } catch (err) {
-    console.error("Payment Follow-Up Error:", err);
-    res.status(500).json({ message: "Server error fetching Payment Follow-Up" });
+    console.error("Payment Fetch Error:", err);
+    res.status(500).json({ message: "Error fetching Payment Follow-Up" });
   }
 });
 
@@ -182,10 +181,9 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { jobSheetNumber, invoiceNumber, dispatchId } = req.body;
 
-    // Validate that jobSheetNumber-invoiceNumber pair is unique
-    const existing = await PaymentFollowUp.findOne({ jobSheetNumber, invoiceNumber });
-    if (existing) {
-      return res.status(400).json({ message: "Payment Follow-Up for this Job Sheet and Invoice already exists" });
+    // Validate required fields
+    if (!jobSheetNumber || !invoiceNumber || !dispatchId) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
     const doc = new PaymentFollowUp({
@@ -203,11 +201,17 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       remarks: req.body.remarks || "",
       createdBy: req.user.email,
     });
+
     await doc.save();
     res.status(201).json(doc);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Create failed" });
+    if (err.code === 11000) {
+      return res
+        .status(400)
+        .json({ message: "Payment already exists for this dispatch, job sheet, and invoice" });
+    }
+    res.status(400).json({ message: "Create failed" });
   }
 });
 
@@ -216,14 +220,9 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { jobSheetNumber, invoiceNumber, dispatchId } = req.body;
 
-    // Validate that jobSheetNumber-invoiceNumber pair is unique (excluding current record)
-    const existing = await PaymentFollowUp.findOne({
-      jobSheetNumber,
-      invoiceNumber,
-      _id: { $ne: req.params.id },
-    });
-    if (existing) {
-      return res.status(400).json({ message: "Payment Follow-Up for this Job Sheet and Invoice already exists" });
+    // Validate required fields
+    if (!jobSheetNumber || !invoiceNumber || !dispatchId) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
     const updated = await PaymentFollowUp.findByIdAndUpdate(
@@ -245,11 +244,19 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       },
       { new: true }
     );
-    if (!updated) return res.status(404).json({ message: "Not found" });
+
+    if (!updated) {
+      return res.status(404).json({ message: "Not found" });
+    }
     res.json(updated);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Update failed" });
+    if (err.code === 11000) {
+      return res
+        .status(400)
+        .json({ message: "Payment already exists for this dispatch, job sheet, and invoice" });
+    }
+    res.status(400).json({ message: "Update failed" });
   }
 });
 

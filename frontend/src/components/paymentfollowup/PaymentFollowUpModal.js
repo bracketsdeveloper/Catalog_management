@@ -25,6 +25,9 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
     discountAllowed: row.discountAllowed || 0,
     TDS: row.TDS || 0,
     remarks: row.remarks || "",
+    dispatchId: row.dispatchId || "", // Ensure dispatchId is included
+    jobSheetNumber: row.jobSheetNumber || "", // Ensure jobSheetNumber is included
+    invoiceNumber: row.invoiceNumber || "", // Ensure invoiceNumber is included
   });
 
   const [followUpModal, setFollowUpModal] = useState(false);
@@ -49,6 +52,10 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
 
   /* Add Follow-Up */
   const addFollowUp = () => {
+    if (!newFollowUp.note || !newFollowUp.by) {
+      setError("Note and By fields are required");
+      return;
+    }
     const updatedFollowUps = [
       ...(form.followUps || []),
       {
@@ -90,6 +97,11 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
 
   /* Save */
   async function handleSave() {
+    if (!form.jobSheetNumber || !form.invoiceNumber || !form.dispatchId) {
+      setError("Job Sheet Number, Invoice Number, and Dispatch ID are required");
+      return;
+    }
+
     const body = {
       ...form,
       invoiceDate: form.invoiceDate ? new Date(form.invoiceDate) : null,
@@ -99,6 +111,7 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
       discountAllowed: parseFloat(form.discountAllowed) || 0,
       TDS: parseFloat(form.TDS) || 0,
     };
+
     try {
       if (isSaved) {
         await axios.put(
@@ -117,7 +130,9 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
       onClose();
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || "Save failed");
+      const message =
+        err.response?.data?.message || "Save failed. Please check for duplicates.";
+      setError(message);
     }
   }
 
@@ -283,8 +298,8 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
               </div>
             </div>
           </div>
-        )
-      }
+        )}
+
         {/* Follow-Up Modal */}
         {followUpModal && (
           <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
@@ -308,9 +323,13 @@ export default function PaymentFollowUpModal({ row, onClose, onSaved }) {
                   onChange={(v) => setNewFollowUp({ ...newFollowUp, by: v })}
                 />
               </div>
+              {error && <div className="text-red-500 mt-2">{error}</div>}
               <div className="flex justify-end gap-2 mt-4">
                 <button
-                  onClick={() => setFollowUpModal(false)}
+                  onClick={() => {
+                    setFollowUpModal(false);
+                    setError("");
+                  }}
                   className="px-4 py-2 border rounded hover:bg-gray-100"
                 >
                   Cancel
