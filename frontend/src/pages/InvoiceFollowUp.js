@@ -34,8 +34,6 @@ export default function ManageInvoiceFollowUp() {
   const handleSubmitInvoice = () => {};
 
   useEffect(() => {
-    console.log("Token:", token); // Debug: Log token
-    console.log("View:", view); // Debug: Log view
     fetchRows();
     // eslint-disable-next-line
   }, [view]);

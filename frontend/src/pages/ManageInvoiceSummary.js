@@ -48,12 +48,14 @@ export default function ManageInvoicesSummary() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = res.data || [];
+      console.log("Fetched data:", data);
       const uniqueRows = Array.from(
-        new Map(data.map((row) => [row._id, row])).values()
+        new Map(data.map((row) => [row._id || `${row.dispatchId}-${row.invoiceNumber}`, row])).values()
       );
+      console.log("Unique rows:", uniqueRows);
       setRows(uniqueRows);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch error:", err);
       alert("Failed to fetch Invoices Summary");
       setRows([]);
     } finally {
@@ -63,7 +65,7 @@ export default function ManageInvoicesSummary() {
 
   /* Search + filter */
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    const filteredRows = rows.filter((r) => {
       const matchesSearch = JSON.stringify(r)
         .toLowerCase()
         .includes(search.toLowerCase());
@@ -76,9 +78,9 @@ export default function ManageInvoicesSummary() {
 
       const matchesInvoiceDate =
         (!filters.invoiceDate.from ||
-          new Date(r.invoiceDate) >= new Date(filters.invoiceDate.from)) &&
+          (r.invoiceDate && new Date(r.invoiceDate) >= new Date(filters.invoiceDate.from))) &&
         (!filters.invoiceDate.to ||
-          new Date(r.invoiceDate) <= new Date(filters.invoiceDate.to));
+          (r.invoiceDate && new Date(r.invoiceDate) <= new Date(filters.invoiceDate.to)));
 
       const matchesInvoiceMailed =
         !filters.invoiceMailed ||
@@ -91,6 +93,8 @@ export default function ManageInvoicesSummary() {
         matchesInvoiceMailed
       );
     });
+    console.log("Filtered rows:", filteredRows);
+    return filteredRows;
   }, [rows, search, filters]);
 
   const sorted = useMemo(() => {

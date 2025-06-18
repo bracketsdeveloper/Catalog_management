@@ -1,43 +1,34 @@
 const express = require("express");
 const router = express.Router();
 const InvoicesSummary = require("../models/InvoiceSummary");
-const DispatchSchedule = require("../models/DispatchSchedule");
 const InvoiceFollowUp = require("../models/InvoiceFollowUp");
 const JobSheet = require("../models/JobSheet");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const invoiceFollowUps = await InvoiceFollowUp.find({}).lean();
+    console.log("Fetching InvoiceFollowUps with invoiceGenerated: Yes...");
+    const invoiceFollowUps = await InvoiceFollowUp.find({ invoiceGenerated: "Yes" }).lean();
+    console.log("InvoiceFollowUps:", invoiceFollowUps.length, invoiceFollowUps);
+
     if (!invoiceFollowUps.length) {
+      console.log("No InvoiceFollowUps found");
       return res.json([]);
     }
 
-    const dispatchIds = invoiceFollowUps
-      .map((f) => f.dispatchId)
-      .filter((id) => id);
-
-    const [dispatchRows, jobSheets, savedSummaries] = await Promise.all([
-      DispatchSchedule.find({
-        status: "sent",
-        _id: { $in: dispatchIds },
-      }).lean(),
+    const [jobSheets, savedSummaries] = await Promise.all([
       JobSheet.find({}).lean(),
       InvoicesSummary.find({}).lean(),
     ]);
-
-    const followUpMap = {};
-    invoiceFollowUps.forEach((f) => {
-      if (f.dispatchId) {
-        followUpMap[f.dispatchId.toString()] = f;
-      }
-    });
+    console.log("JobSheets:", jobSheets.length);
+    console.log("SavedSummaries:", savedSummaries.length);
 
     const summaryMap = {};
     savedSummaries.forEach((s) => {
-      const key = `${s.dispatchId.toString()}-${s.invoiceNumber}`;
+      const key = `${s.dispatchId?.toString()}-${s.invoiceNumber}`;
       summaryMap[key] = s;
     });
+    console.log("SummaryMap keys:", Object.keys(summaryMap));
 
     const jobSheetMap = {};
     jobSheets.forEach((j) => {
@@ -46,42 +37,22 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         crmName: j.crmIncharge || "",
       };
     });
+    console.log("JobSheetMap keys:", Object.keys(jobSheetMap));
 
-    const dispatchMap = {};
-    dispatchRows.forEach((d) => {
-      const followUp = followUpMap[d._id.toString()];
-      if (!followUp) return;
-
-      const jobSheetNumber = followUp.jobSheetNumber || "";
-      if (!jobSheetNumber) {
-        console.warn(`Missing jobSheetNumber for dispatchId ${d._id}`);
-        return;
-      }
-
-      if (
-        !dispatchMap[jobSheetNumber] ||
-        new Date(d.sentOn) > new Date(dispatchMap[jobSheetNumber].sentOn)
-      ) {
-        dispatchMap[jobSheetNumber] = d;
-      }
-    });
-
-    const uniqueDispatchRows = Object.values(dispatchMap);
-
-    const merged = uniqueDispatchRows.flatMap((d) => {
-      const followUp = followUpMap[d._id.toString()];
+    const merged = invoiceFollowUps.flatMap((followUp) => {
       const invoiceNumbers = followUp.invoiceNumber
         ? followUp.invoiceNumber.split(",").map((n) => n.trim()).filter(Boolean)
         : [];
+      console.log(`FollowUp ${followUp._id}: InvoiceNumbers`, invoiceNumbers);
 
       return invoiceNumbers.map((invoiceNumber) => {
-        const key = `${d._id.toString()}-${invoiceNumber}`;
+        const key = `${followUp.dispatchId?.toString()}-${invoiceNumber}`;
         const existing = summaryMap[key] || {};
         const jobSheet = jobSheetMap[followUp.jobSheetNumber] || {};
 
         return {
           _id: existing._id || undefined,
-          dispatchId: d._id,
+          dispatchId: followUp.dispatchId,
           jobSheetNumber: followUp.jobSheetNumber || "",
           clientCompanyName: followUp.clientCompanyName || "",
           clientName: jobSheet.clientName || "",
@@ -96,10 +67,11 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         };
       });
     });
+    console.log("Merged rows:", merged.length, merged);
 
     res.json(merged);
   } catch (err) {
-    console.error(err);
+    console.error("Error in GET /invoices-summary:", err);
     res.status(500).json({ message: "Server error fetching Invoices Summary" });
   }
 });

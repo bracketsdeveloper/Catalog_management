@@ -62,7 +62,7 @@ export default function InvoiceSummaryTable({
   };
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    const filteredRows = rows.filter((r) => {
       const matchesSearch = JSON.stringify(r)
         .toLowerCase()
         .includes(search.toLowerCase());
@@ -78,8 +78,8 @@ export default function InvoiceSummaryTable({
         }
         if (field === "invoiceDate") {
           return (
-            (!value.from || new Date(r[field]) >= new Date(value.from)) &&
-            (!value.to || new Date(r[field]) <= new Date(value.to))
+            (!value.from || (r[field] && new Date(r[field]) >= new Date(value.from))) &&
+            (!value.to || (r[field] && new Date(r[field]) <= new Date(value.to)))
           );
         }
         return r[field]?.toString().toLowerCase().includes(value.toLowerCase());
@@ -99,6 +99,8 @@ export default function InvoiceSummaryTable({
 
       return matchesSearch && matchesGlobalFilters && matchesHeaderFilters;
     });
+    console.log("Table filtered rows:", filteredRows);
+    return filteredRows;
   }, [rows, search, filters, headerFilters]);
 
   const handleOpenModal = (jobSheetNumber) => {
@@ -283,7 +285,7 @@ function Cell({ val, field }) {
         isRightAligned ? "text-right" : ""
       }`}
     >
-      {val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)
+      {val instanceof Date || (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val))
         ? fmt(val)
         : field === "invoiceAmount"
         ? formatIndianNumber(val)
