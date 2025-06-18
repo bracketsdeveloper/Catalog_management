@@ -35,11 +35,15 @@ const DeliveryChallan = () => {
 
   const handlePrint = () => {
     const printContents = printRefs.current
-      .map(ref => ref.innerHTML)
-      .join('<div style="page-break-after: always;"></div>');
-    
+      .map((ref, index) => `
+        <div class="print-content" style="${index < 2 ? 'page-break-after: always;' : ''}">
+          ${ref.innerHTML}
+        </div>
+      `)
+      .join('');
+
     const originalContents = document.body.innerHTML;
-    
+
     document.body.innerHTML = `
       <!DOCTYPE html>
       <html>
@@ -48,14 +52,14 @@ const DeliveryChallan = () => {
           <style>
             @page {
               size: A4;
-              margin: 0;
+              margin: 5mm; /* Small margin to prevent border clipping */
             }
             body {
               font-family: Calibri, sans-serif;
               width: 210mm;
               height: 297mm;
               margin: 0 auto;
-              padding: 20px;
+              padding: 0;
               box-sizing: border-box;
             }
             .print-content {
@@ -65,11 +69,8 @@ const DeliveryChallan = () => {
               flex-direction: column;
               border: 1px solid #000;
               padding: 15px;
+              margin: 0;
               box-sizing: border-box;
-              page-break-after: always;
-            }
-            .print-content:last-child {
-              page-break-after: auto;
             }
             table {
               border-collapse: collapse;
@@ -79,17 +80,17 @@ const DeliveryChallan = () => {
             th, td {
               border-left: 1px solid black;
               border-right: 1px solid black;
-              padding: 2px 6px; /* Reduced padding */
+              padding: 2px 6px;
               text-align: left;
             }
             thead tr {
               border-bottom: 1px solid black;
             }
             .table-row {
-              line-height: 1; /* Reduced line height */
+              line-height: 1;
             }
             .table-cell {
-              padding-top: 1px; /* Reduced padding */
+              padding-top: 1px;
               padding-bottom: 1px;
             }
             .text-xs {
@@ -211,7 +212,7 @@ const DeliveryChallan = () => {
           </style>
         </head>
         <body>
-          <div class="print-content">${printContents}</div>
+          ${printContents}
         </body>
       </html>
     `;
@@ -244,17 +245,16 @@ const DeliveryChallan = () => {
   } = deliveryChallan || {};
 
   const PageContent = ({ index, label }) => (
-    <div 
-      ref={el => printRefs.current[index] = el}
+    <div
+      ref={el => (printRefs.current[index] = el)}
       className="bg-white font-sans flex flex-col"
-      style={{ 
-        width: '210mm',
-        height: '297mm',
-        padding: '20px',
-        boxSizing: 'border-box',
-        border: '1px solid #000',
-        fontFamily: 'Calibri, sans-serif',
-        pageBreakAfter: index < 2 ? 'always' : 'auto'
+      style={{
+        width: "210mm",
+        height: "297mm",
+        padding: "15px",
+        boxSizing: "border-box",
+        border: "1px solid #000",
+        fontFamily: "Calibri, sans-serif",
       }}
     >
       <div className="title-container">
@@ -310,7 +310,7 @@ const DeliveryChallan = () => {
         </div>
       </div>
 
-      <div className="flex-1 mb-2" style={{ minHeight: '350px' }}> {/* Increased table height */}
+      <div className="flex-1 mb-2" style={{ minHeight: "350px" }}>
         <table className="w-full border border-black text-xs h-full">
           <thead>
             <tr className="border-b border-black">
@@ -356,9 +356,9 @@ const DeliveryChallan = () => {
             <p>For Ace Print Pack</p>
           </div>
         </div>
-        
+
         <div className="signature-space"></div>
-        
+
         <div className="flex justify-between items-end">
           <div>
             <p>Seal & Signature:</p>
@@ -379,7 +379,7 @@ const DeliveryChallan = () => {
       >
         Export to PDF
       </button>
-      
+
       <PageContent index={0} label="ORIGINAL" />
       <PageContent index={1} label="DUPLICATE" />
       <PageContent index={2} label="TRIPLICATE" />
