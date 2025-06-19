@@ -441,7 +441,7 @@ export default function QuotationView() {
             onClick={async () => {
               try {
                 const res = await axios.post(
-                  `${BACKEND_URL}/api/admin/delivery-challans/${id}`,
+                  `${BACKEND_URL}/api/admin/dc/${id}`,
                   {},
                   { headers: { Authorization: `Bearer ${token}` } }
                 );

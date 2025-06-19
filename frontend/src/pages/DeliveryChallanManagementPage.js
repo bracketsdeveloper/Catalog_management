@@ -13,7 +13,9 @@ const defaultMaterialTerms = [
   "Material received in good condition and correct quantity.",
   // Changed Material Terms to correct typo in default values
   "No physical damage or shortage observed at the time of delivery.",
-  "Accepted after preliminary inspection and validation with delivery documents."
+  "Accepted after preliminary inspection and validation with delivery documents.",
+  "optional term edit or remove this",
+  "optional term edit or remove this",
 ];
 
 const defaultFieldsToDisplay = [];

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { format } from "date-fns";
+import { createPortal } from "react-dom";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -12,6 +13,8 @@ const DeliveryChallan = () => {
   const [deliveryChallan, setDeliveryChallan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({});
   const printRefs = useRef([]);
 
   useEffect(() => {
@@ -22,6 +25,17 @@ const DeliveryChallan = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         setDeliveryChallan(res.data);
+        setEditFormData({
+          customerCompany: res.data.customerCompany || "",
+          customerAddress: res.data.customerAddress || "",
+          dcNumber: res.data.dcNumber || "",
+          dcDate: res.data.dcDate ? format(new Date(res.data.dcDate), "yyyy-MM-dd") : "",
+          quotationNumber: res.data.quotationNumber || "",
+          otherReferences: res.data.otherReferences || "",
+          poNumber: res.data.poNumber || "",
+          poDate: res.data.poDate ? format(new Date(res.data.poDate), "yyyy-MM-dd") : "",
+          materialTerms: res.data.materialTerms || [],
+        });
         setError(null);
       } catch (err) {
         console.error("Error fetching delivery challan:", err);
@@ -32,6 +46,156 @@ const DeliveryChallan = () => {
     }
     fetchChallan();
   }, [id]);
+
+  const handleEditInputChange = (e, field, index = null) => {
+    const value = e.target.value;
+    setEditFormData((prev) => {
+      if (field === "materialTerms" && index !== null) {
+        const newMaterialTerms = [...prev.materialTerms];
+        newMaterialTerms[index] = value;
+        return { ...prev, materialTerms: newMaterialTerms };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const updatedData = {
+        ...editFormData,
+        poDate: editFormData.poDate ? new Date(editFormData.poDate) : null,
+        dcDate: new Date(editFormData.dcDate),
+      };
+      await axios.put(
+        `${BACKEND_URL}/api/admin/delivery-challans/${id}`,
+        updatedData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert("Delivery Challan updated successfully!");
+      setOpenEditModal(false);
+      // Refresh data
+      const res = await axios.get(`${BACKEND_URL}/api/admin/delivery-challans/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDeliveryChallan(res.data);
+    } catch (error) {
+      console.error("Error updating delivery challan:", error);
+      alert("Failed to update delivery challan.");
+    }
+  };
+
+  const renderEditModal = () => {
+    if (!openEditModal) return null;
+    return createPortal(
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+          <h2 className="text-xl font-bold mb-4">Edit Delivery Challan</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium">DC Number</label>
+              <input
+                type="text"
+                value={editFormData.dcNumber}
+                disabled
+                className="w-full p-2 border rounded text-sm bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Quotation Number</label>
+              <input
+                type="text"
+                value={editFormData.quotationNumber}
+                onChange={(e) => handleEditInputChange(e, "quotationNumber")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">PO Number</label>
+              <input
+                type="text"
+                value={editFormData.poNumber}
+                onChange={(e) => handleEditInputChange(e, "poNumber")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">PO Date</label>
+              <input
+                type="date"
+                value={editFormData.poDate}
+                onChange={(e) => handleEditInputChange(e, "poDate")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Other References</label>
+              <input
+                type="text"
+                value={editFormData.otherReferences}
+                onChange={(e) => handleEditInputChange(e, "otherReferences")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">DC Date</label>
+              <input
+                type="date"
+                value={editFormData.dcDate}
+                onChange={(e) => handleEditInputChange(e, "dcDate")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Customer Company</label>
+              <input
+                type="text"
+                value={editFormData.customerCompany}
+                onChange={(e) => handleEditInputChange(e, "customerCompany")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium">Customer Address</label>
+              <textarea
+                value={editFormData.customerAddress}
+                onChange={(e) => handleEditInputChange(e, "customerAddress")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium">Material Terms</label>
+              {editFormData.materialTerms.map((term, index) => (
+                <div key={index} className="mb-2">
+                  <input
+                    type="text"
+                    value={term}
+                    onChange={(e) => handleEditInputChange(e, "materialTerms", index)}
+                    className="w-full p-2 border rounded text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => setOpenEditModal(false)}
+              className="px-4 py-2 border rounded text-sm hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              className="px-4 py-2 bg-[#Ff8045] text-white rounded text-sm hover:bg-[#Ff8045]/90"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
 
   const handlePrint = () => {
     const printContents = printRefs.current
@@ -52,7 +216,7 @@ const DeliveryChallan = () => {
           <style>
             @page {
               size: A4;
-              margin: 5mm; /* Small margin to prevent border clipping */
+              margin: 5mm;
             }
             body {
               font-family: Calibri, sans-serif;
@@ -76,25 +240,20 @@ const DeliveryChallan = () => {
               border-collapse: collapse;
               width: 100%;
               border: 1px solid black;
+              line-height: 1.1;
             }
             th, td {
               border-left: 1px solid black;
               border-right: 1px solid black;
-              padding: 2px 6px;
+              padding: 0;
               text-align: left;
+              vertical-align: top;
             }
             thead tr {
               border-bottom: 1px solid black;
             }
-            .table-row {
-              line-height: 1;
-            }
-            .table-cell {
-              padding-top: 1px;
-              padding-bottom: 1px;
-            }
             .text-xs {
-              font-size: 11px;
+              font-size: 14px;
             }
             .flex {
               display: flex;
@@ -168,11 +327,6 @@ const DeliveryChallan = () => {
             .flex-1 {
               flex: 1;
             }
-            .border-header {
-              border-bottom: 2px solid #000;
-              padding-bottom: 10px;
-              margin-bottom: 10px;
-            }
             .signature-section {
               margin-top: 50px;
             }
@@ -199,15 +353,18 @@ const DeliveryChallan = () => {
               transform: translateY(-50%);
             }
             .company-details {
-              font-size: 18px;
+              font-size: 15px;
               line-height: 1.4;
             }
             .two-column {
               display: flex;
-              justify-content: space-between;
+              width: 100%;
             }
-            .column {
-              width: 45%;
+            .column-35 {
+              width: 35%;
+            }
+            .column-65 {
+              width: 65%;
             }
           </style>
         </head>
@@ -259,50 +416,54 @@ const DeliveryChallan = () => {
     >
       <div className="title-container">
         <h1 className="delivery-challan-title uppercase">DELIVERY CHALLAN</h1>
-        <p className="original-recipient">({label})</p>
+        <p className="original-recipient italic">({label})</p>
       </div>
 
       <div className="text-center border-header company-details">
-        <h2 className="font-bold">ACE PRINT PACK</h2>
-        <p>#61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore 560018</p>
-        <p>+91 9945261108</p>
-        <p>accounts@aceprintpack.com | www.aceprintpack.com</p>
-        <p>GSTIN: 29ABCFA9924A12L | UDYAM-KR-03-0063533</p>
+        <h1 className="font-bold text-2xl">ACE PRINT PACK</h1>
+        <p># 61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore 560018</p>
+        <p>  M: +91 9945261108 | accounts@aceprintpack.com</p>
+        <p> www.aceprintpack.com</p>
+        <p>GSTIN: 29ABCFA9924A1ZL | UDYAM-KR-03-0063533</p>
       </div>
 
-      <div className="flex justify-between mb-3 text-xs">
-        <div className="w-1/2">
-          <h3 className="font-bold">To:</h3>
-          <p className="font-bold">{customerCompany}</p>
-          <p>{customerAddress}</p>
+      <div className="flex justify-between mb-0 text-xs border-l border-t border-r border-black ">
+        <div className="w-1/2 border-r border-black">
+          <h3 className="font-bold ml-2 mt-2">To:</h3>
+          <p className="font-bold ml-2">{customerCompany}</p>
+          <p className="ml-2">{customerAddress}</p>
         </div>
         <div className="w-1/2">
           <div className="two-column">
-            <div className="column text-left">
-              <div className="flex">
-                <span className="w-28 font-bold">DC No.:</span>
+            <div className="column-35 text-left border-r border-black">
+              <div className="flex m-2">
+                <span className=" font-bold">DC No.:</span>
                 <span className="font-medium">{dcNumber}</span>
               </div>
-              <div className="flex">
-                <span className="w-28 font-bold">Date:</span>
+              <div className="flex m-2">
+                <span className=" font-bold">Date:</span>
                 <span className="font-medium">{format(new Date(dcDate), "dd/MM/yyyy")}</span>
               </div>
-              <div className="flex">
-                <span className="w-28 font-bold">Ref No:</span>
+              <div className="flex m-2">
+                <span className=" font-bold">Ref QN No:</span>
                 <span className="font-medium">{quotationNumber}</span>
               </div>
+              <div className="flex m-2">
+                <span className=" font-bold">Ref No:</span>
+                <span className="font-medium">#00000</span>
+              </div>
             </div>
-            <div className="column text-left">
-              <div className="flex">
-                <span className="w-28 font-bold">PO Number:</span>
+            <div className="column-65">
+              <div className="flex m-2">
+                <span className=" font-bold">PO Number:</span>
                 <span className="font-medium">{poNumber}</span>
               </div>
-              <div className="flex">
-                <span className="w-28 font-bold">PO Date:</span>
+              <div className="flex m-2">
+                <span className=" font-bold">PO Date:</span>
                 <span className="font-medium">{poDate ? format(new Date(poDate), "dd/MM/yyyy") : "N/A"}</span>
               </div>
-              <div className="flex">
-                <span className="w-28 font-bold">Other Reference:</span>
+              <div className="flex m-2">
+                <span className=" font-bold">Other Reference:</span>
                 <span className="font-medium">{otherReferences}</span>
               </div>
             </div>
@@ -311,28 +472,44 @@ const DeliveryChallan = () => {
       </div>
 
       <div className="flex-1 mb-2" style={{ minHeight: "350px" }}>
-        <table className="w-full border border-black text-xs h-full">
+        <table className="w-full border border-black text-xs h-full" style={{ lineHeight: '1.1' }}>
           <thead>
             <tr className="border-b border-black">
-              <th className="p-1 text-center w-[5%]">Sl No</th>
-              <th className="p-1 text-center w-[65%]">Particulars</th>
-              <th className="p-1 text-center w-[15%]">HSN/SAC</th>
-              <th className="p-1 text-center w-[15%]">Quantity</th>
+              <th className="p-0 text-center" style={{ width: '5%', padding: '1px' }}>Sl No</th>
+              <th className="p-0 text-center" style={{ width: '65%', padding: '1px' }}>Particulars</th>
+              <th className="p-0 text-center" style={{ width: '15%', padding: '1px' }}>HSN/SAC</th>
+              <th className="p-0 text-center" style={{ width: '15%', padding: '1px' }}>Quantity</th>
             </tr>
           </thead>
           <tbody>
             {items.length > 0 ? (
-              items.map((item, index) => (
-                <tr key={index} className="table-row">
-                  <td className="p-1 text-center align-top table-cell">{item.slNo || index + 1}</td>
-                  <td className="p-1 align-top table-cell">{item.product || "N/A"}</td>
-                  <td className="p-1 text-center align-top table-cell">{item.hsnCode || "N/A"}</td>
-                  <td className="p-1 align-top text-right table-cell">{item.quantity ? `${item.quantity} No's` : "N/A"}</td>
-                </tr>
-              ))
+              <tr style={{ lineHeight: '2' }}>
+                <td className="p-0 text-center align-top" style={{ padding: '1px' }}>
+                  {items.map((_, index) => (
+                    <div key={index}>{index + 1}</div>
+                  ))}
+                </td>
+                <td className="p-0 align-top" style={{ padding: '1px' }}>
+                  {items.map((item, index) => (
+                    <div key={index}>{item.product || "N/A"}</div>
+                  ))}
+                </td>
+                <td className="p-0 text-center align-top" style={{ padding: '1px' }}>
+                  {items.map((item, index) => (
+                    <div key={index}>{item.hsnCode || "N/A"}</div>
+                  ))}
+                </td>
+                <td className="p-0 text-center align-top" style={{ padding: '1px' }}>
+                  {items.map((item, index) => (
+                    <div key={index}>{item.quantity ? `${item.quantity} No's` : "N/A"}</div>
+                  ))}
+                </td>
+              </tr>
             ) : (
-              <tr className="table-row">
-                <td colSpan={4} className="p-1 text-center table-cell">No items found</td>
+              <tr style={{ lineHeight: '1.1' }}>
+                <td colSpan={4} className="p-0 text-center" style={{ padding: '1px' }}>
+                  No items found
+                </td>
               </tr>
             )}
           </tbody>
@@ -353,7 +530,7 @@ const DeliveryChallan = () => {
             <p>Date: _________________________</p>
           </div>
           <div className="text-right">
-            <p>For Ace Print Pack</p>
+            <p className="pr-2">For Ace Print Pack</p>
           </div>
         </div>
 
@@ -373,16 +550,26 @@ const DeliveryChallan = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <button
-        onClick={handlePrint}
-        className="mb-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        Export to PDF
-      </button>
+      <div className="flex gap-4 mb-4">
+        <button
+          onClick={handlePrint}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Export to PDF
+        </button>
+        <button
+          onClick={() => setOpenEditModal(true)}
+          className="bg-[#Ff8045] text-white px-4 py-2 rounded hover:bg-[#Ff8045]/90"
+        >
+          Edit
+        </button>
+      </div>
 
       <PageContent index={0} label="ORIGINAL" />
       <PageContent index={1} label="DUPLICATE" />
       <PageContent index={2} label="TRIPLICATE" />
+
+      {renderEditModal()}
     </div>
   );
 };
