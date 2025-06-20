@@ -54,11 +54,11 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
 
     const defaultTerms = [
       {
-        heading: "Checkout",
+        heading: "Delivery",
         content:
           "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
       },
-      { heading: "Checkout", content: "As mentioned above" },
+      { heading: "Branding", content: "As mentioned above" },
       { heading: "Payment Terms", content: "Within 30 days upon delivery" },
       {
         heading: "Quote Validity",

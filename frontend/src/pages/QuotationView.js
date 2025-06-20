@@ -560,6 +560,7 @@ export default function QuotationView() {
                 placeholder="Term Heading"
                 onChange={(e) => setNewTerm((prev) => ({ ...prev, heading: e.target.value }))}
                 className="border p-2 w-full text-xs"
+                readOnly={editingTermIdx !== null}
               />
             </div>
             <div className="mb-4">
