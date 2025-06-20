@@ -33,7 +33,7 @@ export default function PrintQuotation() {
           slNo: item.slNo || idx + 1,
           rate: parseFloat(item.rate) || 0,
           productGST: parseFloat(item.productGST) || 0,
-          product: formatProductName(item.product || ""),
+          product: formatProductName(item.product || ""), // Format product name
         }));
       const formattedTerms = (data.terms || []).map(term => ({
         ...term,
@@ -53,24 +53,50 @@ export default function PrintQuotation() {
     }
   }
 
+  // Function to format product names
   function formatProductName(name) {
     return name
-      .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
-      .replace(/([0-9])([A-Za-z])/g, '$1 $2')
-      .replace(/([-])/g, '$1 ')
-      .replace(/\s+/g, ' ')
+      .replace(/([a-z])([A-Z0-9])/g, '$1 $2') // Add space between lowercase and uppercase/number
+      .replace(/([0-9])([A-Za-z])/g, '$1 $2') // Add space between number and letter
+      .replace(/([-])/g, '$1 ') // Add space after hyphen
+      .replace(/\s+/g, ' ') // Collapse multiple spaces into one
       .trim();
   }
 
+  // Function to add 3 spaces after each word
   function addSpacesAfterWords(text) {
     if (!text) return text;
-    return text.split(' ').join('   ');
+    return text.split(' ').join('   '); // 3 spaces between words
   }
 
   const handleExportPDF = () => {
     const element = document.getElementById("printable");
     const clonedElement = element.cloneNode(true);
     clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
+
+    clonedElement.querySelectorAll(".product-image").forEach((img) => {
+      const naturalWidth = img.naturalWidth;
+      const naturalHeight = img.naturalHeight;
+      const aspectRatio = naturalWidth / naturalHeight;
+
+      const maxWidth = 150;
+      const maxHeight = 100;
+
+      let width = naturalWidth;
+      let height = naturalHeight;
+
+      if (width > maxWidth) {
+        width = maxWidth;
+        height = width / aspectRatio;
+      }
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * aspectRatio;
+      }
+
+      img.style.width = `${width}px`;
+      img.style.height = `${height}px`;
+    });
 
     const opt = {
       margin: [30, 5, 45, 5],
@@ -86,10 +112,12 @@ export default function PrintQuotation() {
       },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: { 
-        mode: ['avoid-all', 'css'],
-        avoid: ['.page-break-avoid', '.terms-section', '.footer-block', 'tr', 'td', 'th'],
+        mode: ['css'],
+        avoid: ['.terms-section', '.footer-block'],
         before: '.page-break-before',
-        after: '.page-break-after'
+        after: quotation?.items?.length > 5 
+          ? ['.page-break-after', '.table-container tr:nth-child(5)', '.table-container tr:nth-child(12)', '.table-container tr:nth-child(19)', '.table-container tr:nth-child(26)']
+          : ['.page-break-after']
       }
     };
 
@@ -158,22 +186,29 @@ export default function PrintQuotation() {
               -webkit-print-color-adjust: exact;
             }
             .no-print { display: none !important; }
-            .page-break-avoid {
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-            }
-            .page-break-before {
-              page-break-before: always !important;
-            }
-            .page-break-after {
-              page-break-after: always !important;
-            }
+            .print-section { page-break-inside: auto; }
             .header-section { margin-bottom: 8px !important; }
             .customer-info { 
+              page-break-after: auto !important;
               margin-bottom: 8px !important;
             }
             .table-container { 
+              page-break-before: auto !important;
               margin-top: 0 !important;
+            }
+            .table-container.many-rows tr:nth-child(5) { 
+              page-break-after: always !important;
+            }
+            .table-container.many-rows tr:nth-child(12),
+            .table-container.many-rows tr:nth-child(19),
+            .table-container.many-rows tr:nth-child(26) { 
+              page-break-after: always !important;
+            }
+            .table-container thead { 
+              display: table-header-group;
+            }
+            table { 
+              border: none !important;
             }
             
             .company-header {
@@ -229,6 +264,9 @@ export default function PrintQuotation() {
               margin-top: 0.5in;
               width: 100%;
             }
+            .footer-block.page-break-before {
+              page-break-before: always !important;
+            }
 
             .bordered-text {
               font-family: Calibri, sans-serif !important;
@@ -254,14 +292,6 @@ export default function PrintQuotation() {
               text-align: center !important;
               border: 0.25px solid #333 !important;
             }
-            
-            table {
-              page-break-inside: auto !important;
-            }
-            tr {
-              page-break-inside: avoid !important;
-              page-break-after: auto !important;
-            }
           }
 
           .table-container table {
@@ -270,7 +300,6 @@ export default function PrintQuotation() {
             border-collapse: collapse;
             width: 100%;
             border: none !important;
-            table-layout: fixed;
           }
 
           .table-container th {
@@ -283,7 +312,6 @@ export default function PrintQuotation() {
           .table-container td {
             border: 0.25px solid #333 !important;
             color: #1A4A7B;
-            word-wrap: break-word;
           }
 
           .header-section, .customer-info, .totals-section, .terms-section, .footer-block {
@@ -352,7 +380,7 @@ export default function PrintQuotation() {
         </button>
       </div>
 
-      <div className="print-section header-section page-break-avoid">
+      <div className="print-section header-section">
         <div className="flex justify-between items-start mt-6">
           <div>
             <div className="date-text">
@@ -369,7 +397,7 @@ export default function PrintQuotation() {
           </div>
         </div>
 
-        <div className="customer-info mt-2 page-break-avoid">
+        <div className="customer-info mt-2">
           <div className="customer-name">
             {quotation.salutation && quotation.customerName ? `${quotation.salutation} ${quotation.customerName}` : quotation.customerName}
           </div>
@@ -381,10 +409,10 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      <div className="print-section table-container mt-2 page-break-avoid">
+      <div className={`print-section table-container mt-2 ${quotation.items.length > 5 ? 'many-rows' : ''}`}>
         <table className="w-full border-collapse">
           <thead>
-            <tr className="page-break-avoid">
+            <tr>
               <th className="border px-2 py-2 text-center sl-no-cell">Sl_No.</th>
               <th className="border px-2 py-2 text-center image-cell">Image</th>
               <th className="border px-2 py-2 text-center product-cell">Product</th>
@@ -411,7 +439,7 @@ export default function PrintQuotation() {
               const hsnCode = item.hsnCode || item.productId?.hsnCode || "";
 
               return (
-                <tr key={idx} className="page-break-avoid">
+                <tr key={idx}>
                   <td className="border px-2 py-1 text-center sl-no-cell">{item.slNo}</td>
                   <td className="border px-2 py-1 text-center image-cell">
                     {imageUrl && (
@@ -419,6 +447,13 @@ export default function PrintQuotation() {
                         src={imageUrl}
                         alt={item.product}
                         className="product-image"
+                        style={{ 
+                          maxWidth: '200px',
+                          maxHeight: '150px',
+                          width: 'auto',
+                          height: 'auto',
+                          objectFit: 'contain'
+                        }}
                         crossOrigin="anonymous"
                       />
                     )}
@@ -439,7 +474,7 @@ export default function PrintQuotation() {
           
           {quotation.displayTotals && (
             <tfoot>
-              <tr className="table-totals page-break-avoid">
+              <tr className="table-totals">
                 <td 
                   colSpan={quotation.displayHSNCodes ? 5 : 4} 
                   className="border px-2 py-2 text-center"
@@ -456,7 +491,25 @@ export default function PrintQuotation() {
         </table>
       </div>
 
-      <div className="print-section terms-section mt-4 border-t pt-2 page-break-avoid">
+      {quotation.items.length === 3 && (
+        <div className="print-section terms-section mt-4 border-t pt-2">
+          <div className="bordered-text flex justify-center text-center font-bold">
+            {addSpacesAfterWords("Product subject to availability at the time of order confirmation")}
+          </div>
+          {quotation.terms?.length > 0 &&
+            quotation.terms.map((term, idx) => (
+              <div key={idx} className="mb-1">
+                <div className="font-bold text-xs">{addSpacesAfterWords(term.heading)}:</div>
+                <div className="text-xs">{addSpacesAfterWords(term.content)}</div>
+              </div>
+            ))}
+          <div className="bordered-text flex justify-center text-center font-bold">
+            {addSpacesAfterWords("Rates may vary in case there is a change in specifications / quantity / timelines")}
+          </div>
+        </div>
+      )}
+
+<div className="print-section terms-section mt-4 border-t pt-2 page-break-avoid">
         <div className="bordered-text flex justify-center text-center font-bold">
           {addSpacesAfterWords("Product subject to availability at the time of order confirmation")}
         </div>
@@ -472,7 +525,8 @@ export default function PrintQuotation() {
         </div>
       </div>
 
-      <div className={`print-section footer-block mt-8 page-break-avoid ${quotation.items.length > 15 ? 'page-break-before' : ''}`}>
+
+<div className={`print-section footer-block mt-8 page-break-avoid ${quotation.items.length > 15 ? 'page-break-before' : ''}`}>
         <div className="flex justify-between items-start">
           <div className="flex flex-col">
             <div className="company-name">{addSpacesAfterWords("For Ace Print Pack")}</div>
