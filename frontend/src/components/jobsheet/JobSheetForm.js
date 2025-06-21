@@ -286,6 +286,7 @@ const JobSheetForm = ({
         <label className="block mb-1 font-medium text-purple-700">Client Company *</label>
         <input
           type="text"
+          
           className="border border-purple-300 rounded w-full p-2"
           value={clientCompanyName}
           onChange={(e) => {
