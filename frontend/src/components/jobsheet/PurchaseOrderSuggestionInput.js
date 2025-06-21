@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 // Use your backend proxy endpoint for purchase orders
-const PO_API_URL = "http://localhost:5000/api/erp/purchase-orders";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const PO_API_URL = `${BACKEND_URL}/api/erp/purchase-orders`;
 
 const PurchaseOrderSuggestionInput = ({ value, onChange, placeholder, label, onPOSelect }) => {
   const [allPOs, setAllPOs] = useState([]);

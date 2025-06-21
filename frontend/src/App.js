@@ -3,7 +3,6 @@ import { Outlet, useNavigation } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import { ToastContainer } from 'react-toastify';
-import { CartProvider } from './context/CartContext';
 import { TailSpin } from 'react-loader-spinner';
 
 const Loader = () => (
@@ -16,13 +15,13 @@ function App() {
   const navigation = useNavigation();
 
   return (
-    <CartProvider>
+    <>
       <ToastContainer />
       <Header />
       {navigation.state === 'loading' && <Loader />}
       <Outlet />
       {/* <Footer /> */}
-    </CartProvider>
+   </>
   );
 }
 

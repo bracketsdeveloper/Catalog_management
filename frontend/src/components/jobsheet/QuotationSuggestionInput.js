@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 // Adjust the URL as per your backend setup
-const QUOTATION_API_URL = "http://localhost:5000/api/admin/quotations";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const QUOTATION_API_URL = `${BACKEND_URL}/api/admin/quotations`;
 
 const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelect }) => {
   const [quotations, setQuotations] = useState([]);

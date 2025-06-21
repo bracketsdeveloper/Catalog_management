@@ -4,7 +4,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 function TaskCalendar({ isSuperAdmin, onDateClick, onEventClick, onRefresh }) {
   const [calendarEvents, setCalendarEvents] = useState([]);

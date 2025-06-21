@@ -7,7 +7,7 @@ import CreateTicketModal from "../components/taskmanager/CreateTicketModal";
 import CalendarPage from "./CalendarPage";
 import "../styles/fullcalendar.css";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 function TaskManagementPage() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";

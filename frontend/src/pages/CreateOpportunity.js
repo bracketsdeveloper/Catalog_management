@@ -13,7 +13,7 @@ import TeamTab from "../components/opportunities/TeamTab";
 import CompetitorTab from "../components/opportunities/CompetitorTab";
 import NoteTab from "../components/opportunities/NoteTab";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CreateOpportunity() {
   const navigate = useNavigate();

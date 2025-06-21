@@ -10,7 +10,7 @@ import OpportunityTable from "../components/manageopportunities/OpportunityTable
 import KanbanView from "../components/manageopportunities/KanbanView";
 import * as XLSX from "xlsx";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 function getAuthHeaders() {
   const token = localStorage.getItem("token");

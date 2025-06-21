@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const PROXY_API_URL = "http://localhost:5000/api/admin/users";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const PROXY_API_URL = `${BACKEND_URL}/api/admin/users`;
 
 const UserSuggestionInput = ({ value, onChange, placeholder, label, onUserSelect }) => {
   const [allUsers, setAllUsers] = useState([]);
