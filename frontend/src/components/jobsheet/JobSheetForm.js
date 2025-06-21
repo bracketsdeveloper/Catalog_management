@@ -202,6 +202,17 @@ const JobSheetForm = ({
     />
   ));
 
+  // Get clients for the currently selected company
+  const getCurrentCompanyClients = () => {
+    if (!clientCompanyName) return [];
+    const selectedCompany = companies.find(
+      company => company.companyName === clientCompanyName
+    );
+    return selectedCompany?.clients || [];
+  };
+
+  const currentCompanyClients = getCurrentCompanyClients();
+
   return (
     <div className="space-y-4 mb-6">
       {/* Row: Opportunity Number and Reference Quotation */}
@@ -286,7 +297,6 @@ const JobSheetForm = ({
         <label className="block mb-1 font-medium text-purple-700">Client Company *</label>
         <input
           type="text"
-          
           className="border border-purple-300 rounded w-full p-2"
           value={clientCompanyName}
           onChange={(e) => {
@@ -334,17 +344,21 @@ const JobSheetForm = ({
             }}
             required
           />
-          {clientDropdownOpen && clients?.length > 0 && (
+          {clientDropdownOpen && currentCompanyClients.length > 0 && (
             <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
-              {clients.map((client, index) => (
-                <div
-                  key={index}
-                  className="p-2 cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleClientSelect(client)}
-                >
-                  {client.name} ({client.contactNumber})
-                </div>
-              ))}
+              {currentCompanyClients
+                .filter(client => 
+                  client.name.toLowerCase().includes(clientName.toLowerCase())
+                )
+                .map((client, index) => (
+                  <div
+                    key={index}
+                    className="p-2 cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleClientSelect(client)}
+                  >
+                    {client.name} ({client.contactNumber})
+                  </div>
+                ))}
             </div>
           )}
         </div>

@@ -19,8 +19,8 @@ export default function CreateJobSheet() {
   const isEditMode = Boolean(id);
   const [existingIsDraft, setExistingIsDraft] = useState(false);
   const [eventName, setEventName] = useState("");
-  const [opportunityNumber, setOpportunityNumber] = useState(""); // New state
-  const [opportunitySuggestions, setOpportunitySuggestions] = useState([]); // New state
+  const [opportunityNumber, setOpportunityNumber] = useState("");
+  const [opportunitySuggestions, setOpportunitySuggestions] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,6 +69,8 @@ export default function CreateJobSheet() {
   const [companies, setCompanies] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
   useEffect(() => {
     fetchFilterOptions();
@@ -201,6 +203,14 @@ export default function CreateJobSheet() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCompanies(res.data || []);
+      
+      const allClients = [];
+      res.data.forEach(company => {
+        if (company.clients && Array.isArray(company.clients)) {
+          allClients.push(...company.clients);
+        }
+      });
+      setClients(allClients);
     } catch (error) {
       console.error("Error fetching companies:", error);
     }
@@ -215,7 +225,7 @@ export default function CreateJobSheet() {
       const data = res.data;
       setExistingIsDraft(data.isDraft === true);
       setEventName(data.eventName || "");
-      setOpportunityNumber(data.opportunityNumber || ""); // Added
+      setOpportunityNumber(data.opportunityNumber || "");
       setOrderDate(data.orderDate ? data.orderDate.slice(0, 10) : "");
       setClientCompanyName(data.clientCompanyName || "");
       setClientName(data.clientName || "");
@@ -432,7 +442,7 @@ export default function CreateJobSheet() {
 
     const body = {
       eventName: eventName || ".",
-      opportunityNumber, // Added
+      opportunityNumber,
       orderDate: orderDate || today,
       clientCompanyName: clientCompanyName || ".",
       clientName: clientName || ".",
@@ -546,6 +556,12 @@ export default function CreateJobSheet() {
 
   const showSaveDraftButton = !isEditMode || existingIsDraft;
 
+  const handleClientSelect = (client) => {
+    setClientName(client.name);
+    setContactNumber(client.contactNumber);
+    setClientDropdownOpen(false);
+  };
+
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -573,10 +589,10 @@ export default function CreateJobSheet() {
       <JobSheetForm
         eventName={eventName}
         setEventName={setEventName}
-        opportunityNumber={opportunityNumber} // Added
-        setOpportunityNumber={setOpportunityNumber} // Added
-        opportunitySuggestions={opportunitySuggestions} // Added
-        handleOpportunitySelect={handleOpportunitySelect} // Added
+        opportunityNumber={opportunityNumber}
+        setOpportunityNumber={setOpportunityNumber}
+        opportunitySuggestions={opportunitySuggestions}
+        handleOpportunitySelect={handleOpportunitySelect}
         orderDate={orderDate}
         setOrderDate={setOrderDate}
         clientCompanyName={clientCompanyName}
@@ -627,6 +643,10 @@ export default function CreateJobSheet() {
         handleInlineUpdate={handleInlineUpdate}
         handleRemoveSelectedItem={handleRemoveSelectedItem}
         handleEditItem={handleEditItem}
+        clients={clients}
+        clientDropdownOpen={clientDropdownOpen}
+        setClientDropdownOpen={setClientDropdownOpen}
+        handleClientSelect={handleClientSelect}
       />
 
       <ProductGrid
