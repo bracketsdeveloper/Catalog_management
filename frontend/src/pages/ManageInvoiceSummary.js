@@ -49,8 +49,11 @@ export default function ManageInvoicesSummary() {
       });
       const data = res.data || [];
       console.log("Fetched data:", data);
+      // Deduplicate by invoiceNumber and jobSheetNumber
       const uniqueRows = Array.from(
-        new Map(data.map((row) => [row._id || `${row.dispatchId}-${row.invoiceNumber}`, row])).values()
+        new Map(
+          data.map((row) => [`${row.invoiceNumber}-${row.jobSheetNumber}`, row])
+        ).values()
       );
       console.log("Unique rows:", uniqueRows);
       setRows(uniqueRows);
@@ -65,10 +68,23 @@ export default function ManageInvoicesSummary() {
 
   /* Search + filter */
   const filtered = useMemo(() => {
-    const filteredRows = rows.filter((r) => {
-      const matchesSearch = JSON.stringify(r)
-        .toLowerCase()
-        .includes(search.toLowerCase());
+    return rows.filter((r) => {
+      // Search across specific fields
+      const searchableFields = [
+        r.invoiceNumber,
+        r.jobSheetNumber,
+        r.clientCompanyName,
+        r.clientName,
+        r.eventName,
+        r.invoiceDate ? fmt(r.invoiceDate) : "",
+        r.invoiceAmount ? r.invoiceAmount.toString() : "",
+        r.invoiceMailed,
+        r.invoiceMailedOn ? fmt(r.invoiceMailedOn) : "",
+        r.invoiceUploadedOnPortal,
+        r.crmName,
+      ].join(" ").toLowerCase();
+
+      const matchesSearch = searchableFields.includes(search.toLowerCase());
 
       const matchesJobSheetNumber =
         (!filters.jobSheetNumber.from ||
@@ -78,9 +94,11 @@ export default function ManageInvoicesSummary() {
 
       const matchesInvoiceDate =
         (!filters.invoiceDate.from ||
-          (r.invoiceDate && new Date(r.invoiceDate) >= new Date(filters.invoiceDate.from))) &&
+          (r.invoiceDate &&
+            new Date(r.invoiceDate) >= new Date(filters.invoiceDate.from))) &&
         (!filters.invoiceDate.to ||
-          (r.invoiceDate && new Date(r.invoiceDate) <= new Date(filters.invoiceDate.to)));
+          (r.invoiceDate &&
+            new Date(r.invoiceDate) <= new Date(filters.invoiceDate.to)));
 
       const matchesInvoiceMailed =
         !filters.invoiceMailed ||
@@ -93,8 +111,6 @@ export default function ManageInvoicesSummary() {
         matchesInvoiceMailed
       );
     });
-    console.log("Filtered rows:", filteredRows);
-    return filteredRows;
   }, [rows, search, filters]);
 
   const sorted = useMemo(() => {
@@ -296,4 +312,4 @@ export default function ManageInvoicesSummary() {
       )}
     </div>
   );
-}
+} 

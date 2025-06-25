@@ -66,6 +66,7 @@ import LogsTable from "../pages/LogsTable";
 import TaskManager from "../pages/TaskManager";
 import DeliveryChallanManagementPage from "../pages/DeliveryChallanManagementPage";
 import DeliveryChallan from "../components/examples/dc";
+import ManageTicketsPage from "../pages/ManageTickets";
 
 
 const router = createBrowserRouter([
@@ -360,6 +361,10 @@ const router = createBrowserRouter([
                     {
                         path : "dc/:id",
                         element : <DeliveryChallan/>
+                    },
+                    {
+                        path : "manage-tickets",
+                        element : <ManageTicketsPage/>
                     }
 
                 ]

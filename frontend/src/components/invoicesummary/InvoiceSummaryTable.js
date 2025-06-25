@@ -62,45 +62,62 @@ export default function InvoiceSummaryTable({
   };
 
   const filtered = useMemo(() => {
-    const filteredRows = rows.filter((r) => {
-      const matchesSearch = JSON.stringify(r)
+    return rows.filter((r) => {
+      const matchesSearch = [
+        r.invoiceNumber,
+        r.jobSheetNumber,
+        r.clientCompanyName,
+        r.clientName,
+        r.eventName,
+        r.invoiceDate ? fmt(r.invoiceDate) : "",
+        r.invoiceAmount ? formatIndianNumber(r.invoiceAmount) : "",
+        r.invoiceMailed,
+        r.invoiceMailedOn ? fmt(r.invoiceMailedOn) : "",
+        r.invoiceUploadedOnPortal,
+        r.crmName,
+      ]
+        .join(" ")
         .toLowerCase()
         .includes(search.toLowerCase());
 
-      const matchesGlobalFilters = Object.entries(filters).every(([field, value]) => {
-        if (!value || (typeof value === "object" && !value.from && !value.to))
-          return true;
-        if (field === "jobSheetNumber") {
-          return (
-            (!value.from || r[field] >= value.from) &&
-            (!value.to || r[field] <= value.to)
-          );
+      const matchesGlobalFilters = Object.entries(filters).every(
+        ([field, value]) => {
+          if (!value || (typeof value === "object" && !value.from && !value.to))
+            return true;
+          if (field === "jobSheetNumber") {
+            return (
+              (!value.from || r[field] >= value.from) &&
+              (!value.to || r[field] <= value.to)
+            );
+          }
+          if (field === "invoiceDate") {
+            return (
+              (!value.from ||
+                (r[field] && new Date(r[field]) >= new Date(value.from))) &&
+              (!value.to ||
+                (r[field] && new Date(r[field]) <= new Date(value.to)))
+            );
+          }
+          return r[field]?.toString().toLowerCase().includes(value.toLowerCase());
         }
-        if (field === "invoiceDate") {
-          return (
-            (!value.from || (r[field] && new Date(r[field]) >= new Date(value.from))) &&
-            (!value.to || (r[field] && new Date(r[field]) <= new Date(value.to)))
-          );
-        }
-        return r[field]?.toString().toLowerCase().includes(value.toLowerCase());
-      });
+      );
 
-      const matchesHeaderFilters = Object.entries(headerFilters).every(([field, value]) => {
-        if (!value) return true;
-        const cellValue = r[field]
-          ? field === "invoiceDate" || field === "invoiceMailedOn"
-            ? fmt(r[field]).toLowerCase()
-            : field === "invoiceAmount"
-            ? formatIndianNumber(r[field]).toLowerCase()
-            : r[field].toString().toLowerCase()
-          : "";
-        return cellValue.includes(value.toLowerCase());
-      });
+      const matchesHeaderFilters = Object.entries(headerFilters).every(
+        ([field, value]) => {
+          if (!value) return true;
+          const cellValue = r[field]
+            ? field === "invoiceDate" || field === "invoiceMailedOn"
+              ? fmt(r[field]).toLowerCase()
+              : field === "invoiceAmount"
+              ? formatIndianNumber(r[field]).toLowerCase()
+              : r[field].toString().toLowerCase()
+            : "";
+          return cellValue.includes(value.toLowerCase());
+        }
+      );
 
       return matchesSearch && matchesGlobalFilters && matchesHeaderFilters;
     });
-    console.log("Table filtered rows:", filteredRows);
-    return filteredRows;
   }, [rows, search, filters, headerFilters]);
 
   const handleOpenModal = (jobSheetNumber) => {
@@ -229,7 +246,7 @@ export default function InvoiceSummaryTable({
         <tbody>
           {filtered.length > 0 ? (
             filtered.map((r) => (
-              <tr key={r._id} className="hover:bg-gray-100">
+              <tr key={`${r.invoiceNumber}-${r.jobSheetNumber}`} className="hover:bg-gray-100">
                 <Cell val={r.invoiceNumber} />
                 <td className="px-2 py-1 border border-gray-300 whitespace-normal break-words">
                   <button

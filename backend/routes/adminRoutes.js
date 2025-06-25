@@ -566,7 +566,7 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
 
     const insertedProducts = await Product.insertMany(productsData);
 
-    for (const prod of insertedProducts) {
+    for (const prod of insertedProducts) { 
       await createLog(
         "create",
         null,

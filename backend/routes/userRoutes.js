@@ -4,6 +4,7 @@ const { authenticate } = require("../middleware/authenticate");
 
 const router = express.Router();
 
+// Fetch current user
 router.get("/", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
@@ -14,6 +15,7 @@ router.get("/", authenticate, async (req, res) => {
   }
 });
 
+// Update user profile
 router.put("/edit", authenticate, async (req, res) => {
   const { name, dateOfBirth, address } = req.body;
 
@@ -21,7 +23,6 @@ router.put("/edit", authenticate, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Update fields
     user.name = name || user.name;
     user.dateOfBirth = dateOfBirth || user.dateOfBirth;
     user.address = address || user.address;
@@ -37,7 +38,7 @@ router.put("/edit", authenticate, async (req, res) => {
 router.get("/users", authenticate, async (req, res) => {
   console.log("Request to fetch all users received.");
   try {
-    const users = await User.find({}, "name dateOfBirth address email phone role");
+    const users = await User.find({}, "name dateOfBirth address email phone role handles isSuperAdmin");
     console.log("Users fetched successfully:", users);
     res.status(200).json(users);
   } catch (err) {
@@ -46,6 +47,7 @@ router.get("/users", authenticate, async (req, res) => {
   }
 });
 
+// Add profile
 router.post("/add-profile", authenticate, async (req, res) => {
   const { name, dateOfBirth } = req.body;
 
@@ -95,6 +97,66 @@ router.put("/users/:id/role", authenticate, async (req, res) => {
   } catch (err) {
     console.error("Error updating user role:", err);
     res.status(500).json({ message: "Server error while updating role" });
+  }
+});
+
+// Update SuperAdmin status (SuperAdmin only)
+router.put("/users/:id/superadmin", authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { isSuperAdmin } = req.body;
+
+  if (req.user.isSuperAdmin !== true) {
+    return res.status(403).json({ message: "Only SuperAdmins can modify SuperAdmin status" });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      id,
+      { isSuperAdmin },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      console.error("User not found:", id);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log("SuperAdmin status updated successfully:", user);
+    res.status(200).json({ message: "SuperAdmin status updated successfully", user });
+  } catch (err) {
+    console.error("Error updating SuperAdmin status:", err);
+    res.status(500).json({ message: "Server error while updating SuperAdmin status" });
+  }
+});
+
+// Update user handles
+router.put("/users/:id/handles", authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { handles } = req.body;
+
+  console.log(`Request to update handles for user ${id} to ${handles}`);
+  if (!Array.isArray(handles) || !handles.every((h) => ["CRM", "PURCHASE", "PRODUCTION", "SALES"].includes(h))) {
+    console.error("Invalid handles specified:", handles);
+    return res.status(400).json({ message: "Invalid handles specified" });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      id,
+      { handles },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      console.error("User not found:", id);
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    console.log("User handles updated successfully:", user);
+    res.status(200).json({ message: "Handles updated successfully", user });
+  } catch (err) {
+    console.error("Error updating user handles:", err);
+    res.status(500).json({ message: "Server error while updating handles" });
   }
 });
 

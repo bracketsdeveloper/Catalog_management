@@ -7,17 +7,23 @@ import * as XLSX from "xlsx";
 export default function UserManagement() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const [users, setUsers] = useState([]);
-  const [editingRole, setEditingRole] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
   const [updatedRole, setUpdatedRole] = useState("");
+  const [updatedSuperAdmin, setUpdatedSuperAdmin] = useState(false);
+  const [updatedHandles, setUpdatedHandles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+
+  // Available handles options
+  const handleOptions = ["CRM", "PURCHASE", "PRODUCTION", "SALES"];
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${BACKEND_URL}/api/admin/users`, {
+        const response = await axios.get(`${BACKEND_URL}/api/user/users`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
@@ -36,10 +42,11 @@ export default function UserManagement() {
     fetchUsers();
   }, []);
 
-  const handleRoleChange = async (userId) => {
+  const handleUpdateUser = async (userId) => {
     try {
+      // Update role
       await axios.put(
-        `${BACKEND_URL}/api/admin/users/${userId}/role`,
+        `${BACKEND_URL}/api/user/users/${userId}/role`,
         { role: updatedRole },
         {
           headers: {
@@ -47,14 +54,62 @@ export default function UserManagement() {
           },
         }
       );
-      setUsers((prev) =>
-        prev.map((u) => (u._id === userId ? { ...u, role: updatedRole } : u))
+
+      // Update SuperAdmin status if user is SuperAdmin
+      if (isSuperAdmin) {
+        await axios.put(
+          `${BACKEND_URL}/api/user/users/${userId}/superadmin`,
+          { isSuperAdmin: updatedSuperAdmin },
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+      }
+
+      // Update handles
+      await axios.put(
+        `${BACKEND_URL}/api/user/users/${userId}/handles`,
+        { handles: updatedHandles },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
       );
-      setEditingRole(null);
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u._id === userId
+            ? {
+                ...u,
+                role: updatedRole,
+                isSuperAdmin: isSuperAdmin ? updatedSuperAdmin : u.isSuperAdmin,
+                handles: updatedHandles,
+              }
+            : u
+        )
+      );
+      setEditingUser(null);
     } catch (err) {
-      console.error("Error updating role:", err.response || err.message);
-      alert("Failed to update role. Please try again.");
+      console.error("Error updating user:", err.response || err.message);
+      alert("Failed to update user. Please try again.");
     }
+  };
+
+  const openEditModal = (user) => {
+    setEditingUser(user._id);
+    setUpdatedRole(user.role);
+    setUpdatedSuperAdmin(user.isSuperAdmin);
+    setUpdatedHandles(Array.isArray(user.handles) ? user.handles : []);
+  };
+
+  const closeEditModal = () => {
+    setEditingUser(null);
+    setUpdatedRole("");
+    setUpdatedSuperAdmin(false);
+    setUpdatedHandles([]);
   };
 
   const filteredUsers =
@@ -76,6 +131,8 @@ export default function UserManagement() {
       Address: u.address || "",
       Email: u.email,
       Role: u.role === "GENERAL" ? "DEACTIVE" : u.role,
+      Handles: Array.isArray(u.handles) ? u.handles.join(", ") : "N/A",
+      SuperAdmin: u.isSuperAdmin ? "Yes" : "No",
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(dataForExcel);
@@ -119,78 +176,103 @@ export default function UserManagement() {
         <table className="min-w-full bg-white border border-purple-200 rounded-lg">
           <thead>
             <tr className="bg-purple-100 text-purple-900">
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
-                Phone
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
-                Account Status
-              </th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
-                Actions
-              </th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Name</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Phone</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Email</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Handles</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Account Status</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">SuperAdmin</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredUsers.map((user) => (
               <tr key={user._id} className="border-b border-purple-200">
                 <td className="px-6 py-4 text-sm">{user.name}</td>
-                <td className="px-6 py-4 text-sm">
-                  {user.phone || "N/A"}
-                </td>
+                <td className="px-6 py-4 text-sm">{user.phone || "N/A"}</td>
                 <td className="px-6 py-4 text-sm">{user.email}</td>
                 <td className="px-6 py-4 text-sm">
-                  {editingRole === user._id ? (
-                    <select
-                      value={updatedRole}
-                      onChange={(e) => setUpdatedRole(e.target.value)}
-                      className="bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
-                    >
-                      <option value="GENERAL">DEACTIVATE</option>
-                      <option value="ADMIN">ADMIN</option>
-                    </select>
-                  ) : (
-                    user.role === "GENERAL" ? "DEACTIVE" : user.role
-                  )}
+                  {Array.isArray(user.handles) ? user.handles.join(", ") : "N/A"}
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  {editingRole === user._id ? (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleRoleChange(user._id)}
-                        className="bg-pink-600 text-white px-3 py-1 rounded-md hover:bg-pink-700"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingRole(null)}
-                        className="bg-gray-300 text-gray-900 px-3 py-1 rounded-md hover:bg-gray-400"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditingRole(user._id);
-                        setUpdatedRole(user.role);
-                      }}
-                      className="bg-[#66C3D0] text-white px-3 py-1 rounded-md hower:bg-[#44b977]/70"
-                    >
-                      Edit
-                    </button>
-                  )}
+                  {user.role === "GENERAL" ? "DEACTIVE" : user.role}
+                </td>
+                <td className="px-6 py-4 text-sm">{user.isSuperAdmin ? "Yes" : "No"}</td>
+                <td className="px-6 py-4 text-sm">
+                  <button
+                    onClick={() => openEditModal(user)}
+                    className="bg-[#66C3D0] text-white px-3 py-1 rounded-md hover:bg-[#44b977]/70"
+                  >
+                    Edit
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Edit Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-[#Ff8045]">Edit User</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Role</label>
+              <select
+                value={updatedRole}
+                onChange={(e) => setUpdatedRole(e.target.value)}
+                className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+              >
+                <option value="GENERAL">DEACTIVATE</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+            </div>
+            {isSuperAdmin && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">SuperAdmin</label>
+                <select
+                  value={updatedSuperAdmin}
+                  onChange={(e) => setUpdatedSuperAdmin(e.target.value === "true")}
+                  className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+                >
+                  <option value={false}>No</option>
+                  <option value={true}>Yes</option>
+                </select>
+              </div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Handles</label>
+              <select
+                value={updatedHandles[0] || ""}
+                onChange={(e) => setUpdatedHandles([e.target.value])}
+                className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+              >
+                <option value="" disabled>Select handle</option>
+                {handleOptions.map((handle) => (
+                  <option key={handle} value={handle}>
+                    {handle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={closeEditModal}
+                className="bg-gray-300 text-gray-900 px-4 py-2 rounded-md hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleUpdateUser(editingUser)}
+                className="bg-pink-600 text-white px-4 py-2 rounded-md hover:bg-pink-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,11 @@ const userSchema = new mongoose.Schema({
     enum: ["ADMIN", "GENERAL", "VIEWER"],
     default: "GENERAL",
   },
+  handles: {
+    type: [String],
+    enum: ["CRM", "PURCHASE", "PRODUCTION", "SALES"],
+    default: [],
+  },
   isVerified: { type: Boolean, default: false },
   isSuperAdmin: { type: Boolean, default: false },
   permissions: { type: [String], default: [] },
