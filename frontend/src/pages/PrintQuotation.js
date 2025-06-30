@@ -509,21 +509,7 @@ export default function PrintQuotation() {
         </div>
       )}
 
-<div className="print-section terms-section mt-4 border-t pt-2 page-break-avoid">
-        <div className="bordered-text flex justify-center text-center font-bold">
-          {addSpacesAfterWords("Product subject to availability at the time of order confirmation")}
-        </div>
-        {quotation.terms?.length > 0 &&
-          quotation.terms.map((term, idx) => (
-            <div key={idx} className="mb-1 page-break-avoid">
-              <div className="font-bold text-xs">{addSpacesAfterWords(term.heading)}:</div>
-              <div className="text-xs">{addSpacesAfterWords(term.content)}</div>
-            </div>
-          ))}
-        <div className="bordered-text flex justify-center text-center font-bold">
-          {addSpacesAfterWords("Rates may vary in case there is a change in specifications / quantity / timelines")}
-        </div>
-      </div>
+
 
 
 <div className={`print-section footer-block mt-8 page-break-avoid ${quotation.items.length > 15 ? 'page-break-before' : ''}`}>
