@@ -37,12 +37,12 @@ router.get("/expenses", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     // Restrict to user's own expenses or expenses where they are crmName for non-super admins with manage-expenses permission
-    // if (!isSuperAdmin && permissions.includes("manage-expenses")) {
-    //   filter.$or = [
-    //     { createdBy: userId },
-    //     { crmName: userName }
-    //   ];
-    // }
+    if (!isSuperAdmin && permissions.includes("manage-expenses")) {
+      filter.$or = [
+        { createdBy: userId },
+        { crmName: userName }
+      ];
+    }
 
     const list = await Expense.find(filter).sort({ createdAt: -1 });
     res.json(list);
@@ -80,12 +80,20 @@ router.get("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
 // UPDATE
 router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const isSuperAdmin = req.user.isSuperAdmin;
     const permissions = req.user.permissions || [];
     const userId = req.user._id;
     const userName = req.user.name;
+
     const filter = { _id: req.params.id };
 
-    // Restrict to user's own expense or expenses where they are crmName for non-super admins with manage-expenses permiss
+    // Restrict to user's own expense or expenses where they are crmName for non-super admins with manage-expenses permission
+    if (!isSuperAdmin && permissions.includes("manage-expenses")) {
+      filter.$or = [
+        { createdBy: userId },
+        { crmName: userName }
+      ];
+    }
 
     const exp = await Expense.findOneAndUpdate(filter, req.body, { new: true });
     if (!exp) return res.status(404).json({ message: "Not found" });
