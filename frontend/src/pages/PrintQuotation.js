@@ -509,8 +509,7 @@ export default function PrintQuotation() {
         </div>
       )}
 
-{quotation.items.length === 1 && 2 && (
-  <div className="print-section terms-section mt-4 border-t pt-2 page-break-avoid">
+<div className="print-section terms-section mt-4 border-t pt-2 page-break-avoid">
         <div className="bordered-text flex justify-center text-center font-bold">
           {addSpacesAfterWords("Product subject to availability at the time of order confirmation")}
         </div>
@@ -525,9 +524,6 @@ export default function PrintQuotation() {
           {addSpacesAfterWords("Rates may vary in case there is a change in specifications / quantity / timelines")}
         </div>
       </div>
-)}
-
-
 
 
 <div className={`print-section footer-block mt-8 page-break-avoid ${quotation.items.length > 15 ? 'page-break-before' : ''}`}>
