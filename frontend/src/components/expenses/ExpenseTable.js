@@ -7,7 +7,7 @@ export default function ExpenseTable({ data, onEdit }) {
     "Sample Logistics",
     "Additional Overheads",
     "Sample Lost",
-    "Damages",
+    "Damages"
   ];
   const FULL_ORDER_SECTIONS = [
     "Product Cost",
@@ -18,31 +18,26 @@ export default function ExpenseTable({ data, onEdit }) {
     "Success Fee",
     "Additional Qty Ordered",
     "Damages",
-    "Any Additional Expenses",
+    "Any Additional Expenses"
   ];
 
-  // Determine visible order sections based on permissions
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const ORDER_SECTIONS = isSuperAdmin
     ? FULL_ORDER_SECTIONS
     : permissions.includes("manage-expenses")
-    ? FULL_ORDER_SECTIONS.filter(
-        (s) => s !== "Product Cost" && s !== "Branding Cost" && s !== "Success Fee"
-      )
+    ? FULL_ORDER_SECTIONS.filter(s => s !== "Product Cost" && s !== "Branding Cost" && s !== "Success Fee")
     : FULL_ORDER_SECTIONS;
 
-  // Add logic to conditionally include/exclude "Order Total" and "Grand Total" columns
   const showTotals = isSuperAdmin || !permissions.includes("manage-expenses");
 
   const sumBy = (list, section) =>
-    (list || []).filter((i) => i.section === section).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    (list || []).filter(i => i.section === section).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   return (
     <div className="overflow-x-auto border border-gray-300">
       <table className="table-auto w-full text-xs whitespace-nowrap">
         <thead>
-          {/* Group Headers */}
           <tr>
             <th colSpan={5} className="border"></th>
             <th
@@ -59,14 +54,13 @@ export default function ExpenseTable({ data, onEdit }) {
             </th>
             <th colSpan={2} className="border"></th>
           </tr>
-          {/* Sub-Headers */}
           <tr className="bg-gray-50">
-            {["Opportunity #", "Client Company", "Client Name", "Event Name", "CRM Name"].map((h) => (
+            {["Opportunity #", "Client Company", "Client Name", "Event Name", "CRM Name"].map(h => (
               <th key={h} className="px-2 py-1 border text-left">
                 {h}
               </th>
             ))}
-            {SAMPLE_SECTIONS.map((s) => (
+            {SAMPLE_SECTIONS.map(s => (
               <th key={s} className="px-2 py-1 border bg-yellow-100">
                 {s}
               </th>
@@ -74,7 +68,7 @@ export default function ExpenseTable({ data, onEdit }) {
             <th className="px-2 py-1 border bg-yellow-100">Sample Total</th>
             <th className="px-2 py-1 border bg-orange-100">Order Confirmed</th>
             <th className="px-2 py-1 border bg-orange-100">JobSheet #</th>
-            {ORDER_SECTIONS.map((s) => (
+            {ORDER_SECTIONS.map(s => (
               <th key={s} className="px-2 py-1 border bg-orange-100">
                 {s}
               </th>
@@ -89,25 +83,21 @@ export default function ExpenseTable({ data, onEdit }) {
           </tr>
         </thead>
         <tbody>
-          {data.map((exp) => {
+          {data.map((exp, idx) => {
             const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
-            const orderTotal = ORDER_SECTIONS.reduce(
-              (t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0),
-              0
-            );
-            const allSampleFilled = SAMPLE_SECTIONS.every((s) => sumBy(exp.expenses, s) > 0);
-            const allOrderFilled =
-              exp.orderConfirmed && ORDER_SECTIONS.every((s) => sumBy(exp.orderExpenses, s) > 0);
+            const orderTotal = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
+            const allSampleFilled = SAMPLE_SECTIONS.every(s => sumBy(exp.expenses, s) > 0);
+            const allOrderFilled = exp.orderConfirmed && ORDER_SECTIONS.every(s => sumBy(exp.orderExpenses, s) > 0);
             const rowClass = allSampleFilled && allOrderFilled ? "bg-green-100" : "";
 
             return (
-              <tr key={exp._id} className={`${rowClass} hover:bg-gray-50`}>
+              <tr key={`${exp._id}-${idx}`} className={`${rowClass} hover:bg-gray-50`}>
                 <td className="px-2 py-1 border">{exp.opportunityCode}</td>
                 <td className="px-2 py-1 border">{exp.clientCompanyName}</td>
                 <td className="px-2 py-1 border">{exp.clientName}</td>
                 <td className="px-2 py-1 border">{exp.eventName}</td>
                 <td className="px-2 py-1 border">{exp.crmName}</td>
-                {SAMPLE_SECTIONS.map((s) => (
+                {SAMPLE_SECTIONS.map(s => (
                   <td key={s} className="px-2 py-1 border">
                     {sumBy(exp.expenses, s) || "-"}
                   </td>
@@ -115,7 +105,7 @@ export default function ExpenseTable({ data, onEdit }) {
                 <td className="px-2 py-1 border">{sampleTotal}</td>
                 <td className="px-2 py-1 border">{exp.orderConfirmed ? "Yes" : "No"}</td>
                 <td className="px-2 py-1 border">{exp.jobSheetNumber || "-"}</td>
-                {ORDER_SECTIONS.map((s) => (
+                {ORDER_SECTIONS.map(s => (
                   <td key={s} className="px-2 py-1 border">
                     {exp.orderConfirmed ? sumBy(exp.orderExpenses, s) || "-" : ""}
                   </td>
@@ -138,7 +128,7 @@ export default function ExpenseTable({ data, onEdit }) {
             );
           })}
         </tbody>
-      </table> 
+      </table>
     </div>
   );
 }

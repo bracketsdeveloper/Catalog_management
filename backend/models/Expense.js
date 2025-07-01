@@ -7,6 +7,11 @@ const expenseItemSchema = new mongoose.Schema({
   remarks: { type: String }
 });
 
+const jobSheetSchema = new mongoose.Schema({
+  jobSheetNumber: { type: String, required: true },
+  orderExpenses: [expenseItemSchema]
+});
+
 const expenseSchema = new mongoose.Schema({
   opportunityCode: { type: String, required: true },
   clientCompanyName: { type: String, required: true },
@@ -15,9 +20,8 @@ const expenseSchema = new mongoose.Schema({
   crmName: { type: String },
   expenses: [expenseItemSchema],
   orderConfirmed: { type: Boolean, default: false },
-  jobSheetNumber: { type: String },
-  orderExpenses: [expenseItemSchema],
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true } // New field
+  jobSheets: [jobSheetSchema],
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Expense", expenseSchema);

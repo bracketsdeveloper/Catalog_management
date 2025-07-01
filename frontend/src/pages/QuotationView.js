@@ -154,6 +154,7 @@ export default function QuotationView() {
 
   async function handleSaveQuotation() {
     if (!editableQuotation) return;
+  
     try {
       const updatedMargin = parseFloat(editableQuotation.margin) || 0;
       const {
@@ -171,17 +172,20 @@ export default function QuotationView() {
         displayTotals,
         displayHSNCodes,
         operations,
+        priceRange,
       } = editableQuotation;
-
+  
+      // Prepare updated items with recalculated amounts
       const updatedItems = items.map((item) => {
         const baseRate = parseFloat(item.rate) || 0;
         const quantity = parseFloat(item.quantity) || 1;
         const marginFactor = 1 + updatedMargin / 100;
         const effRate = baseRate * marginFactor;
         const amount = effRate * quantity;
-        const gstRate = item.productGST != null ? parseFloat(item.productGST) : 18;
+        const gstRate = item.productGST != null ? parseFloat(item.productGST) : parseFloat(gst) || 18;
         const gstAmount = parseFloat((amount * (gstRate / 100)).toFixed(2));
         const total = parseFloat((amount + gstAmount).toFixed(2));
+  
         return {
           ...item,
           rate: baseRate,
@@ -190,10 +194,11 @@ export default function QuotationView() {
           productprice: baseRate,
           productGST: gstRate,
           quantity,
-          productId: item.productId?._id || item.productId,
+          productId: item.productId?._id || item.productId || null,
         };
       });
-
+  
+      // Prepare the payload for creating a new quotation
       const body = {
         opportunityNumber,
         catalogName,
@@ -210,21 +215,10 @@ export default function QuotationView() {
         displayTotals,
         displayHSNCodes,
         operations,
+        priceRange,
       };
-
-      const updateRes = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!updateRes.ok) {
-        throw new Error("Failed to update quotation");
-      }
-
+  
+      // Create a new quotation
       const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
         method: "POST",
         headers: {
@@ -233,16 +227,18 @@ export default function QuotationView() {
         },
         body: JSON.stringify(body),
       });
-
+  
       if (!createRes.ok) {
-        throw new Error("Failed to create new quotation");
+        const errorData = await createRes.json();
+        throw new Error(errorData.message || "Failed to create new quotation");
       }
-
+  
       const data = await createRes.json();
       if (!data || !data.quotation || !data.quotation._id) {
         throw new Error("Invalid response from server: Missing quotation data");
       }
-
+  
+      // Update state and navigate to the new quotation
       alert("New Quotation created!");
       setQuotation(data.quotation);
       setEditableQuotation(data.quotation);
