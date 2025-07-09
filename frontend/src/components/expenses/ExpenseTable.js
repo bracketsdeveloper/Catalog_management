@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 export default function ExpenseTable({ data, onEdit }) {
   const SAMPLE_SECTIONS = [
@@ -31,8 +31,94 @@ export default function ExpenseTable({ data, onEdit }) {
 
   const showTotals = isSuperAdmin || !permissions.includes("manage-expenses");
 
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filters, setFilters] = useState({});
+
   const sumBy = (list, section) =>
     (list || []).filter(i => i.section === section).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const sortedAndFilteredData = () => {
+    let result = [...data];
+
+    // Apply filters
+    Object.keys(filters).forEach((key) => {
+      if (filters[key]) {
+        const searchLower = filters[key].toLowerCase();
+        result = result.filter((exp) => {
+          if (key === "sampleTotal") {
+            const total = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
+            return total.toString().includes(searchLower);
+          }
+          if (key === "orderTotal") {
+            const total = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
+            return total.toString().includes(searchLower);
+          }
+          if (key === "grandTotal") {
+            const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
+            const orderTotal = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
+            return (sampleTotal + orderTotal).toString().includes(searchLower);
+          }
+          if (SAMPLE_SECTIONS.includes(key)) {
+            return sumBy(exp.expenses, key).toString().includes(searchLower);
+          }
+          if (ORDER_SECTIONS.includes(key)) {
+            return exp.orderConfirmed ? sumBy(exp.orderExpenses, key).toString().includes(searchLower) : false;
+          }
+          const value = exp[key] || "";
+          return value.toLowerCase().includes(searchLower);
+        });
+      }
+    });
+
+    // Apply sorting
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aValue, bValue;
+        if (sortConfig.key === "sampleTotal") {
+          aValue = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(a.expenses, s), 0);
+          bValue = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(b.expenses, s), 0);
+        } else if (sortConfig.key === "orderTotal") {
+          aValue = ORDER_SECTIONS.reduce((t, s) => t + (a.orderConfirmed ? sumBy(a.orderExpenses, s) : 0), 0);
+          bValue = ORDER_SECTIONS.reduce((t, s) => t + (b.orderConfirmed ? sumBy(b.orderExpenses, s) : 0), 0);
+        } else if (sortConfig.key === "grandTotal") {
+          const aSample = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(a.expenses, s), 0);
+          const bSample = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(b.expenses, s), 0);
+          const aOrder = ORDER_SECTIONS.reduce((t, s) => t + (a.orderConfirmed ? sumBy(a.orderExpenses, s) : 0), 0);
+          const bOrder = ORDER_SECTIONS.reduce((t, s) => t + (b.orderConfirmed ? sumBy(b.orderExpenses, s) : 0), 0);
+          aValue = aSample + aOrder;
+          bValue = bSample + bOrder;
+        } else if (SAMPLE_SECTIONS.includes(sortConfig.key)) {
+          aValue = sumBy(a.expenses, sortConfig.key);
+          bValue = sumBy(b.expenses, sortConfig.key);
+        } else if (ORDER_SECTIONS.includes(sortConfig.key)) {
+          aValue = a.orderConfirmed ? sumBy(a.orderExpenses, sortConfig.key) : 0;
+          bValue = b.orderConfirmed ? sumBy(b.orderExpenses, sortConfig.key) : 0;
+        } else {
+          aValue = a[sortConfig.key] || "";
+          bValue = b[sortConfig.key] || "";
+        }
+        if (typeof aValue === "string") {
+          return sortConfig.direction === "asc"
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        }
+        return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue;
+      });
+    }
+
+    return result;
+  };
 
   return (
     <div className="overflow-x-auto border border-gray-300">
@@ -55,35 +141,59 @@ export default function ExpenseTable({ data, onEdit }) {
             <th colSpan={2} className="border"></th>
           </tr>
           <tr className="bg-gray-50">
-            {["Opportunity #", "Client Company", "Client Name", "Event Name", "CRM Name"].map(h => (
-              <th key={h} className="px-2 py-1 border text-left">
-                {h}
+            {[
+              "opportunityCode",
+              "clientCompanyName",
+              "clientName",
+              "eventName",
+              "crmName",
+              ...SAMPLE_SECTIONS,
+              "sampleTotal",
+              "orderConfirmed",
+              "jobSheetNumber",
+              ...ORDER_SECTIONS,
+              ...(showTotals ? ["orderTotal", "grandTotal"] : []),
+              "actions"
+            ].map((key) => (
+              <th key={key} className="px-2 py-1 border text-left">
+                <div className="flex items-center space-x-1">
+                  <span
+                    onClick={() => key !== "actions" && handleSort(key)}
+                    className={key !== "actions" ? "cursor-pointer hover:underline" : ""}
+                  >
+                    {key === "sampleTotal"
+                      ? "Sample Total"
+                      : key === "orderTotal"
+                      ? "Order Total"
+                      : key === "grandTotal"
+                      ? "Grand Total"
+                      : key === "opportunityCode"
+                      ? "Opportunity #"
+                      : key === "clientCompanyName"
+                      ? "Client Company"
+                      : key === "jobSheetNumber"
+                      ? "JobSheet #"
+                      : key}
+                    {sortConfig.key === key && (
+                      <span>{sortConfig.direction === "asc" ? " ↑" : " ↓"}</span>
+                    )}
+                  </span>
+                </div>
+                {key !== "actions" && (
+                  <input
+                    type="text"
+                    value={filters[key] || ""}
+                    onChange={(e) => handleFilterChange(key, e.target.value)}
+                    className="mt-1 w-full px-1 py-0.5 text-xs border rounded"
+                    placeholder="Filter..."
+                  />
+                )}
               </th>
             ))}
-            {SAMPLE_SECTIONS.map(s => (
-              <th key={s} className="px-2 py-1 border bg-yellow-100">
-                {s}
-              </th>
-            ))}
-            <th className="px-2 py-1 border bg-yellow-100">Sample Total</th>
-            <th className="px-2 py-1 border bg-orange-100">Order Confirmed</th>
-            <th className="px-2 py-1 border bg-orange-100">JobSheet #</th>
-            {ORDER_SECTIONS.map(s => (
-              <th key={s} className="px-2 py-1 border bg-orange-100">
-                {s}
-              </th>
-            ))}
-            {showTotals && (
-              <>
-                <th className="px-2 py-1 border bg-orange-100">Order Total</th>
-                <th className="px-2 py-1 border">Grand Total</th>
-              </>
-            )}
-            <th className="px-2 py-1 border">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {data.map((exp, idx) => {
+          {sortedAndFilteredData().map((exp, idx) => {
             const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
             const orderTotal = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
             const allSampleFilled = SAMPLE_SECTIONS.every(s => sumBy(exp.expenses, s) > 0);
