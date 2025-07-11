@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import debounce from "lodash/debounce";
 
 const SAMPLE_SECTIONS = [
   "Sample Product Cost",
@@ -9,7 +10,7 @@ const SAMPLE_SECTIONS = [
   "Sample Lost",
   "Damages"
 ];
-const ORDER_SECTIONS = [
+const FULL_ORDER_SECTIONS = [
   "Product Cost",
   "Branding Cost",
   "Logistics",
@@ -25,6 +26,12 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 export default function AddExpenseModal({ expense, onClose }) {
   const isEdit = Boolean(expense);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
+  const ORDER_SECTIONS = isSuperAdmin
+    ? FULL_ORDER_SECTIONS
+    : FULL_ORDER_SECTIONS.filter(
+        s => s !== "Product Cost" && s !== "Branding Cost" && s !== "Success Fee"
+      );
 
   const [opptyCode, setOpptyCode] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -36,7 +43,7 @@ export default function AddExpenseModal({ expense, onClose }) {
   });
   const [expenses, setExpenses] = useState([]);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
-  const [jobSheets, setJobSheets] = useState([{ jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]);
+  const [jobSheets, setJobSheets] = useState([]);
 
   // Populate form for editing
   useEffect(() => {
@@ -60,15 +67,27 @@ export default function AddExpenseModal({ expense, onClose }) {
       expense.jobSheets?.length
         ? expense.jobSheets.map(js => ({
             jobSheetNumber: js.jobSheetNumber,
-            orderExpenses: js.orderExpenses.map(item => ({
-              ...item,
-              expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
-            })),
-            jsSuggestions: []
+            orderExpenses: js.orderExpenses
+              .filter(item => ORDER_SECTIONS.includes(item.section))
+              .map(item => ({
+                ...item,
+                expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
+              })),
+            jsSuggestions: [],
+            invoiceData: null
           }))
-        : [{ jobSheetNumber: expense.jobSheetNumber || "", orderExpenses: expense.orderExpenses || [], jsSuggestions: [] }]
+        : []
     );
-  }, [expense, isEdit]);
+  }, [expense, isEdit, ORDER_SECTIONS]);
+
+  // Clear jobSheets when orderConfirmed is toggled off
+  useEffect(() => {
+    if (!orderConfirmed) {
+      setJobSheets([]);
+    } else if (jobSheets.length === 0) {
+      setJobSheets([{ jobSheetNumber: "", orderExpenses: [], jsSuggestions: [], invoiceData: null }]);
+    }
+  }, [orderConfirmed, jobSheets.length]);
 
   // Fetch opportunity suggestions
   useEffect(() => {
@@ -92,29 +111,67 @@ export default function AddExpenseModal({ expense, onClose }) {
     setSuggestions([]);
   };
 
-  // Fetch jobsheet suggestions for each jobsheet
-  const fetchJsSuggestions = (index, jobSheetNumber) => {
-    if (!jobSheetNumber) {
-      setJobSheets(js => {
-        const newJs = [...js];
-        newJs[index].jsSuggestions = [];
-        return newJs;
-      });
-      return;
-    }
-    axios
-      .get(`${BACKEND}/api/admin/jobsheets?searchTerm=${encodeURIComponent(jobSheetNumber)}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-      })
-      .then(r => {
+  // Debounced fetch for jobsheet suggestions and invoice data
+  const fetchJsSuggestions = useCallback(
+    debounce(async (index, jobSheetNumber) => {
+      if (!jobSheetNumber) {
         setJobSheets(js => {
           const newJs = [...js];
-          newJs[index].jsSuggestions = r.data;
+          newJs[index].jsSuggestions = [];
+          newJs[index].invoiceData = null;
           return newJs;
         });
-      })
-      .catch(() => {});
-  };
+        return;
+      }
+
+      try {
+        const res = await axios.get(
+          `${BACKEND}/api/admin/jobsheets?searchTerm=${encodeURIComponent(jobSheetNumber)}`,
+          { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+        );
+        setJobSheets(js => {
+          const newJs = [...js];
+          newJs[index].jsSuggestions = res.data;
+          return newJs;
+        });
+      } catch (error) {
+        console.error(`Error fetching jobsheet suggestions for ${jobSheetNumber}:`, error);
+      }
+
+      // Fetch invoice data for super admins
+      if (isSuperAdmin && orderConfirmed) {
+        try {
+          const purchaseRes = await axios.get(`${BACKEND}/api/admin/purchaseInvoice`, {
+            params: { jobSheetNumber },
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+          });
+          const productionRes = await axios.get(`${BACKEND}/api/admin/productionjobsheetinvoice`, {
+            params: { jobSheet: jobSheetNumber },
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+          });
+
+          const newInvoiceData = {
+            purchaseInvoices: purchaseRes.data || [],
+            productionInvoices: productionRes.data || []
+          };
+
+          setJobSheets(js => {
+            const newJs = [...js];
+            newJs[index].invoiceData = newInvoiceData;
+            return newJs;
+          });
+        } catch (error) {
+          console.error(`Error fetching invoices for jobSheetNumber ${jobSheetNumber}:`, error);
+          setJobSheets(js => {
+            const newJs = [...js];
+            newJs[index].invoiceData = { purchaseInvoices: [], productionInvoices: [] };
+            return newJs;
+          });
+        }
+      }
+    }, 500),
+    [isSuperAdmin, orderConfirmed]
+  );
 
   const pickJS = (index, j) => {
     setJobSheets(js => {
@@ -123,7 +180,61 @@ export default function AddExpenseModal({ expense, onClose }) {
       newJs[index].jsSuggestions = [];
       return newJs;
     });
+    fetchJsSuggestions(index, j.jobSheetNumber);
   };
+
+  // Auto-fill Product Cost and Branding Cost for each jobsheet
+  useEffect(() => {
+    if (!isSuperAdmin || !orderConfirmed) {
+      setJobSheets(js => js.map(j => ({
+        ...j,
+        orderExpenses: j.orderExpenses.filter(
+          item => item.section !== "Product Cost" && item.section !== "Branding Cost"
+        )
+      })));
+      return;
+    }
+
+    setJobSheets(js => js.map((j, index) => {
+      if (!j.invoiceData) return j;
+
+      const productCost = j.invoiceData.purchaseInvoices.reduce((total, inv) => {
+        const qty = Number(inv.qtyRequired) || 0;
+        const cost = Number(inv.negotiatedCost) || 0;
+        return total + qty * cost;
+      }, 0);
+
+      const brandingCost = j.invoiceData.productionInvoices.reduce((total, inv) => {
+        const qty = Number(inv.qtyRequired) || 0;
+        const cost = Number(inv.negotiatedCost) || 0;
+        return total + qty * cost;
+      }, 0);
+
+      let updatedOrderExpenses = j.orderExpenses.filter(
+        item => item.section !== "Product Cost" && item.section !== "Branding Cost"
+      );
+
+      if (productCost > 0) {
+        updatedOrderExpenses.push({
+          section: "Product Cost",
+          amount: productCost,
+          expenseDate: new Date().toISOString().slice(0, 10),
+          remarks: "Auto-filled from Purchase Invoices"
+        });
+      }
+
+      if (brandingCost > 0) {
+        updatedOrderExpenses.push({
+          section: "Branding Cost",
+          amount: brandingCost,
+          expenseDate: new Date().toISOString().slice(0, 10),
+          remarks: "Auto-filled from Production Job Sheet Invoices"
+        });
+      }
+
+      return { ...j, orderExpenses: updatedOrderExpenses };
+    }));
+  }, [jobSheets, isSuperAdmin, orderConfirmed]);
 
   // Row helpers
   const addRow = (list, setList) => setList([...list, { section: "", amount: "", expenseDate: "", remarks: "" }]);
@@ -135,8 +246,12 @@ export default function AddExpenseModal({ expense, onClose }) {
   const removeRow = (list, setList, idx) => setList(list.filter((_, i) => i !== idx));
 
   // Jobsheet helpers
-  const addJobSheet = () => setJobSheets([...jobSheets, { jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]);
+  const addJobSheet = () => setJobSheets([...jobSheets, { jobSheetNumber: "", orderExpenses: [], jsSuggestions: [], invoiceData: null }]);
   const updateJobSheetNumber = (index, value) => {
+    if (jobSheets.some((js, i) => i !== index && js.jobSheetNumber === value && value !== "")) {
+      alert("JobSheet number must be unique");
+      return;
+    }
     setJobSheets(js => {
       const newJs = [...js];
       newJs[index].jobSheetNumber = value;
@@ -146,29 +261,65 @@ export default function AddExpenseModal({ expense, onClose }) {
   };
   const removeJobSheet = index => setJobSheets(js => js.filter((_, i) => i !== index));
 
-  const filteredOrderSections = isSuperAdmin
-    ? ORDER_SECTIONS
-    : ORDER_SECTIONS.filter(s => s !== "Product Cost" && s !== "Branding Cost");
-
   // Submit handler
   const handleSubmit = async () => {
+    // Validate required fields
+    if (!opptyCode || !form.clientCompanyName || !form.clientName) {
+      alert("Please fill in Opportunity #, Client Company, and Client Name");
+      return;
+    }
+
+    // Validate expenses
+    for (const item of expenses) {
+      if (!item.section || item.amount == null || !item.expenseDate) {
+        alert("All expenses must have section, amount, and date");
+        return;
+      }
+    }
+
+    // Validate jobSheets if orderConfirmed
+    if (orderConfirmed) {
+      if (!jobSheets.length) {
+        alert("At least one job sheet is required when order is confirmed");
+        return;
+      }
+      for (const js of jobSheets) {
+        if (!js.jobSheetNumber || js.jobSheetNumber.trim() === "") {
+          alert("All job sheets must have a non-empty job sheet number");
+          return;
+        }
+        for (const item of js.orderExpenses) {
+          if (!item.section || item.amount == null || !item.expenseDate) {
+            alert("All order expenses must have section, amount, and date");
+            return;
+          }
+        }
+      }
+    }
+
     const payload = {
       opportunityCode: opptyCode,
       ...form,
       expenses,
       orderConfirmed,
-      jobSheets: jobSheets.map(js => ({
+      jobSheets: orderConfirmed ? jobSheets.map(js => ({
         jobSheetNumber: js.jobSheetNumber,
         orderExpenses: js.orderExpenses
-      }))
+      })) : []
     };
     const config = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
-    if (isEdit) {
-      await axios.put(`${BACKEND}/api/admin/expenses/${expense._id}`, payload, config);
-    } else {
-      await axios.post(`${BACKEND}/api/admin/expenses`, payload, config);
+    try {
+      console.log("Submitting payload:", JSON.stringify(payload, null, 2));
+      if (isEdit) {
+        await axios.put(`${BACKEND}/api/admin/expenses/${expense._id}`, payload, config);
+      } else {
+        await axios.post(`${BACKEND}/api/admin/expenses`, payload, config);
+      }
+      onClose();
+    } catch (error) {
+      console.error("Error saving expense:", error);
+      alert(`Failed to save expense: ${error.response?.data?.message || error.message}`);
     }
-    onClose();
   };
 
   return (
@@ -358,9 +509,10 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded flex-1"
+                      disabled={it.section === "Product Cost" || it.section === "Branding Cost"}
                     >
                       <option value="">Select</option>
-                      {filteredOrderSections.map(s => (
+                      {ORDER_SECTIONS.map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
@@ -376,6 +528,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded w-20"
+                      readOnly={it.section === "Product Cost" || it.section === "Branding Cost"}
                     />
                     <input
                       type="date"
@@ -388,6 +541,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded w-32"
+                      readOnly={it.section === "Product Cost" || it.section === "Branding Cost"}
                     />
                     <input
                       placeholder="Remarks"
@@ -400,6 +554,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded flex-1"
+                      readOnly={it.section === "Product Cost" || it.section === "Branding Cost"}
                     />
                     <button
                       onClick={() => {
@@ -410,6 +565,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="text-red-600 px-1"
+                      disabled={it.section === "Product Cost" || it.section === "Branding Cost"}
                     >
                       ×
                     </button>

@@ -6,14 +6,58 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 // CREATE
 router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const { opportunityCode, clientCompanyName, clientName, eventName, crmName, expenses, orderConfirmed, jobSheets } = req.body;
+
+    // Validate required fields
+    if (!opportunityCode || !clientCompanyName || !clientName) {
+      return res.status(400).json({ message: "Missing required fields: opportunityCode, clientCompanyName, or clientName" });
+    }
+    if (opportunityCode.trim() === "" || clientCompanyName.trim() === "" || clientName.trim() === "") {
+      return res.status(400).json({ message: "Required fields cannot be empty strings" });
+    }
+
+    // Validate expenses subdocuments
+    if (expenses && expenses.length) {
+      for (const item of expenses) {
+        if (!item.section || item.amount == null || !item.expenseDate) {
+          return res.status(400).json({ message: "Invalid expense: section, amount, and expenseDate are required" });
+        }
+      }
+    }
+
+    // Validate jobSheets subdocuments
+    if (orderConfirmed && jobSheets && jobSheets.length) {
+      for (const js of jobSheets) {
+        if (!js.jobSheetNumber || js.jobSheetNumber.trim() === "") {
+          return res.status(400).json({ message: "Invalid jobSheet: jobSheetNumber is required and cannot be empty" });
+        }
+        if (js.orderExpenses && js.orderExpenses.length) {
+          for (const item of js.orderExpenses) {
+            if (!item.section || item.amount == null || !item.expenseDate) {
+              return res.status(400).json({ message: "Invalid orderExpense: section, amount, and expenseDate are required" });
+            }
+          }
+        }
+      }
+    }
+
     const exp = new Expense({
-      ...req.body,
+      opportunityCode,
+      clientCompanyName,
+      clientName,
+      eventName,
+      crmName,
+      expenses,
+      orderConfirmed,
+      jobSheets: orderConfirmed ? jobSheets : [], // Clear jobSheets if not orderConfirmed
       createdBy: req.user._id
     });
+
     await exp.save();
     res.status(201).json({ message: "Expense created", expense: exp });
   } catch (e) {
-    res.status(500).json({ message: e.message });
+    console.error("Error creating expense:", e);
+    res.status(500).json({ message: `Failed to create expense: ${e.message}` });
   }
 });
 
@@ -35,18 +79,17 @@ router.get("/expenses", authenticate, authorizeAdmin, async (req, res) => {
       ];
     }
 
+    if (!isSuperAdmin && permissions.includes("manage-expenses")) {
+      filter.$or = [
+        { createdBy: userId },
+        { crmName: userName }
+      ];
+    }
+
     const list = await Expense.find(filter).sort({ createdAt: -1 });
-
-    // Normalize data for backward compatibility
-    const normalizedList = list.map(exp => {
-      if (!exp.jobSheets && (exp.jobSheetNumber || exp.orderExpenses)) {
-        exp.jobSheets = [{ jobSheetNumber: exp.jobSheetNumber || "", orderExpenses: exp.orderExpenses || [] }];
-      }
-      return exp;
-    });
-
-    res.json(normalizedList);
+    res.json(list);
   } catch (e) {
+    console.error("Error fetching expenses:", e);
     res.status(500).json({ message: e.message });
   }
 });
@@ -69,15 +112,11 @@ router.get("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     const exp = await Expense.findOne(filter);
-    if (!exp) return res.status(404).json({ message: "Not found" });
-
-    // Normalize data for backward compatibility
-    if (!exp.jobSheets && (exp.jobSheetNumber || exp.orderExpenses)) {
-      exp.jobSheets = [{ jobSheetNumber: exp.jobSheetNumber || "", orderExpenses: exp.orderExpenses || [] }];
-    }
+    if (!exp) return res.status(404).json({ message: "Expense not found" });
 
     res.json(exp);
   } catch (e) {
+    console.error("Error fetching expense:", e);
     res.status(500).json({ message: e.message });
   }
 });
@@ -85,11 +124,52 @@ router.get("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
 // UPDATE
 router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const { opportunityCode, clientCompanyName, clientName, eventName, crmName, expenses, orderConfirmed, jobSheets } = req.body;
+
+    // Validate required fields
+    if (!opportunityCode || !clientCompanyName || !clientName) {
+      return res.status(400).json({ message: "Missing required fields: opportunityCode, clientCompanyName, or clientName" });
+    }
+    if (opportunityCode.trim() === "" || clientCompanyName.trim() === "" || clientName.trim() === "") {
+      return res.status(400).json({ message: "Required fields cannot be empty strings" });
+    }
+
+    // Validate expenses subdocuments
+    if (expenses && expenses.length) {
+      for (const item of expenses) {
+        if (!item.section || item.amount == null || !item.expenseDate) {
+          return res.status(400).json({ message: "Invalid expense: section, amount, and expenseDate are required" });
+        }
+      }
+    }
+
+    // Validate jobSheets subdocuments
+    if (orderConfirmed && jobSheets && jobSheets.length) {
+      for (const js of jobSheets) {
+        if (!js.jobSheetNumber || js.jobSheetNumber.trim() === "") {
+          return res.status(400).json({ message: "Invalid jobSheet: jobSheetNumber is required and cannot be empty" });
+        }
+        if (js.orderExpenses && js.orderExpenses.length) {
+          for (const item of js.orderExpenses) {
+            if (!item.section || item.amount == null || !item.expenseDate) {
+              return res.status(400).json({ message: "Invalid orderExpense: section, amount, and expenseDate are required" });
+            }
+          }
+        }
+      }
+    }
+
     const filter = { _id: req.params.id };
-    const exp = await Expense.findOneAndUpdate(filter, req.body, { new: true });
-    if (!exp) return res.status(404).json({ message: "Not found" });
+    const exp = await Expense.findOneAndUpdate(
+      filter,
+      { ...req.body, jobSheets: orderConfirmed ? jobSheets : [] }, // Clear jobSheets if not orderConfirmed
+      { new: true }
+    );
+    if (!exp) return res.status(404).json({ message: "Expense not found" });
+
     res.json({ message: "Expense updated", expense: exp });
   } catch (e) {
+    console.error("Error updating expense:", e);
     res.status(500).json({ message: e.message });
   }
 });
@@ -112,9 +192,10 @@ router.delete("/expenses/:id", authenticate, authorizeAdmin, async (req, res) =>
     }
 
     const exp = await Expense.findOneAndDelete(filter);
-    if (!exp) return res.status(404).json({ message: "Not found" });
+    if (!exp) return res.status(404).json({ message: "Expense not found" });
     res.json({ message: "Expense deleted" });
   } catch (e) {
+    console.error("Error deleting expense:", e);
     res.status(500).json({ message: e.message });
   }
 });

@@ -8,14 +8,14 @@ const expenseItemSchema = new mongoose.Schema({
 });
 
 const jobSheetSchema = new mongoose.Schema({
-  jobSheetNumber: { type: String, required: true },
+  jobSheetNumber: { type: String, required: true, minlength: 1 }, // Ensure non-empty
   orderExpenses: [expenseItemSchema]
 });
 
 const expenseSchema = new mongoose.Schema({
-  opportunityCode: { type: String, required: true },
-  clientCompanyName: { type: String, required: true },
-  clientName: { type: String, required: true },
+  opportunityCode: { type: String, required: true, minlength: 1 },
+  clientCompanyName: { type: String, required: true, minlength: 1 },
+  clientName: { type: String, required: true, minlength: 1 },
   eventName: { type: String },
   crmName: { type: String },
   expenses: [expenseItemSchema],
