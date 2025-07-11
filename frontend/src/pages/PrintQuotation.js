@@ -26,7 +26,7 @@ export default function PrintQuotation() {
       });
       const data = res.data;
       const sanitizedItems = (data.items || [])
-        .filter((item) => item.product && parseFloat(item.quantity) > 0 && parseFloat(item.rate) > 0)
+        .filter((item) => item.product && parseFloat(item.quantity) > 0) // <-- Only filter by quantity
         .map((item, idx) => ({
           ...item,
           quantity: parseFloat(item.quantity) || 1,
