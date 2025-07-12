@@ -52,7 +52,7 @@ export default function ManageExpenses() {
           exp.eventName,
           exp.crmName
         ];
-        if (!fieldsToSearch.some(field => field.toLowerCase().includes(searchLower))) {
+        if (!fieldsToSearch.some(field => field?.toLowerCase()?.includes(searchLower))) {
           return [];
         }
       }
@@ -62,12 +62,11 @@ export default function ManageExpenses() {
       if (filters.createdTo && new Date(exp.createdAt) > new Date(filters.createdTo)) return [];
       if (filters.updatedFrom && new Date(exp.updatedAt) < new Date(filters.updatedFrom)) return [];
       if (filters.updatedTo && new Date(exp.updatedAt) > new Date(filters.updatedTo)) return [];
-      if (filters.crmName && !exp.crmName.toLowerCase().includes(filters.crmName.toLowerCase())) return [];
+      if (filters.crmName && !exp.crmName?.toLowerCase()?.includes(filters.crmName.toLowerCase())) return [];
       if (filters.orderConfirmed === "yes" && !exp.orderConfirmed) return [];
       if (filters.orderConfirmed === "no" && exp.orderConfirmed) return [];
 
-      // Handle missing jobSheets
-      const jobSheets = exp.jobSheets?.length ? exp.jobSheets : [{ jobSheetNumber: exp.jobSheetNumber || "", orderExpenses: exp.orderExpenses || [] }];
+      const jobSheets = exp.jobSheets?.length ? exp.jobSheets : [];
 
       if (!exp.orderConfirmed || !jobSheets.length) {
         return [{
@@ -78,8 +77,8 @@ export default function ManageExpenses() {
       }
       return jobSheets.map(jobSheet => ({
         ...exp,
-        jobSheetNumber: jobSheet.jobSheetNumber,
-        orderExpenses: jobSheet.orderExpenses
+        jobSheetNumber: jobSheet.jobSheetNumber || "",
+        orderExpenses: jobSheet.orderExpenses || []
       }));
     });
   }, [expenses, searchTerm, filters]);

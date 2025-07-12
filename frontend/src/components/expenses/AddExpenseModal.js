@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
-import debounce from "lodash/debounce";
 
 const SAMPLE_SECTIONS = [
   "Sample Product Cost",
@@ -10,7 +9,7 @@ const SAMPLE_SECTIONS = [
   "Sample Lost",
   "Damages"
 ];
-const FULL_ORDER_SECTIONS = [
+const ORDER_SECTIONS = [
   "Product Cost",
   "Branding Cost",
   "Logistics",
@@ -26,12 +25,6 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 export default function AddExpenseModal({ expense, onClose }) {
   const isEdit = Boolean(expense);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
-  const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
-  const ORDER_SECTIONS = isSuperAdmin
-    ? FULL_ORDER_SECTIONS
-    : FULL_ORDER_SECTIONS.filter(
-        s => s !== "Product Cost" && s !== "Branding Cost" && s !== "Success Fee"
-      );
 
   const [opptyCode, setOpptyCode] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -43,7 +36,8 @@ export default function AddExpenseModal({ expense, onClose }) {
   });
   const [expenses, setExpenses] = useState([]);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
-  const [jobSheets, setJobSheets] = useState([]);
+  const [jobSheets, setJobSheets] = useState([{ jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]);
+  const [error, setError] = useState("");
 
   // Populate form for editing
   useEffect(() => {
@@ -57,48 +51,69 @@ export default function AddExpenseModal({ expense, onClose }) {
       crmName: expense.crmName
     });
     setExpenses(
-      expense.expenses.map(item => ({
+      expense.expenses?.map(item => ({
         ...item,
         expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
-      }))
+      })) || []
     );
-    setOrderConfirmed(expense.orderConfirmed);
+    setOrderConfirmed(expense.orderConfirmed || false);
     setJobSheets(
       expense.jobSheets?.length
         ? expense.jobSheets.map(js => ({
-            jobSheetNumber: js.jobSheetNumber,
-            orderExpenses: js.orderExpenses
-              .filter(item => ORDER_SECTIONS.includes(item.section))
-              .map(item => ({
-                ...item,
-                expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
-              })),
-            jsSuggestions: [],
-            invoiceData: null
+            jobSheetNumber: js.jobSheetNumber || "",
+            orderExpenses: js.orderExpenses?.map(item => ({
+              ...item,
+              expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
+            })) || [],
+            jsSuggestions: []
           }))
-        : []
+        : [{ jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]
     );
-  }, [expense, isEdit, ORDER_SECTIONS]);
-
-  // Clear jobSheets when orderConfirmed is toggled off
-  useEffect(() => {
-    if (!orderConfirmed) {
-      setJobSheets([]);
-    } else if (jobSheets.length === 0) {
-      setJobSheets([{ jobSheetNumber: "", orderExpenses: [], jsSuggestions: [], invoiceData: null }]);
-    }
-  }, [orderConfirmed, jobSheets.length]);
+  }, [expense, isEdit]);
 
   // Fetch opportunity suggestions
   useEffect(() => {
-    if (!opptyCode) return;
+    if (!opptyCode) {
+      setSuggestions([]);
+      return;
+    }
     axios
       .get(`${BACKEND}/api/admin/opportunities?searchTerm=${encodeURIComponent(opptyCode)}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
       })
       .then(r => setSuggestions(r.data))
-      .catch(() => {});
+      .catch(() => setSuggestions([]));
   }, [opptyCode]);
+
+  // Fetch jobsheet suggestions for each jobsheet
+  const fetchJsSuggestions = (index, jobSheetNumber) => {
+    if (!jobSheetNumber) {
+      setJobSheets(js => {
+        const newJs = [...js];
+        newJs[index].jsSuggestions = [];
+        return newJs;
+      });
+      return;
+    }
+    axios
+      .get(`${BACKEND}/api/admin/jobsheets?searchTerm=${encodeURIComponent(jobSheetNumber)}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      })
+      .then(r => {
+        setJobSheets(js => {
+          const newJs = [...js];
+          newJs[index].jsSuggestions = r.data;
+          return newJs;
+        });
+      })
+      .catch(() => {
+        setJobSheets(js => {
+          const newJs = [...js];
+          newJs[index].jsSuggestions = [];
+          return newJs;
+        });
+      });
+  };
 
   const pickOpp = o => {
     setOpptyCode(o.opportunityCode);
@@ -111,68 +126,6 @@ export default function AddExpenseModal({ expense, onClose }) {
     setSuggestions([]);
   };
 
-  // Debounced fetch for jobsheet suggestions and invoice data
-  const fetchJsSuggestions = useCallback(
-    debounce(async (index, jobSheetNumber) => {
-      if (!jobSheetNumber) {
-        setJobSheets(js => {
-          const newJs = [...js];
-          newJs[index].jsSuggestions = [];
-          newJs[index].invoiceData = null;
-          return newJs;
-        });
-        return;
-      }
-
-      try {
-        const res = await axios.get(
-          `${BACKEND}/api/admin/jobsheets?searchTerm=${encodeURIComponent(jobSheetNumber)}`,
-          { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-        );
-        setJobSheets(js => {
-          const newJs = [...js];
-          newJs[index].jsSuggestions = res.data;
-          return newJs;
-        });
-      } catch (error) {
-        console.error(`Error fetching jobsheet suggestions for ${jobSheetNumber}:`, error);
-      }
-
-      // Fetch invoice data for super admins
-      if (isSuperAdmin && orderConfirmed) {
-        try {
-          const purchaseRes = await axios.get(`${BACKEND}/api/admin/purchaseInvoice`, {
-            params: { jobSheetNumber },
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-          });
-          const productionRes = await axios.get(`${BACKEND}/api/admin/productionjobsheetinvoice`, {
-            params: { jobSheet: jobSheetNumber },
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-          });
-
-          const newInvoiceData = {
-            purchaseInvoices: purchaseRes.data || [],
-            productionInvoices: productionRes.data || []
-          };
-
-          setJobSheets(js => {
-            const newJs = [...js];
-            newJs[index].invoiceData = newInvoiceData;
-            return newJs;
-          });
-        } catch (error) {
-          console.error(`Error fetching invoices for jobSheetNumber ${jobSheetNumber}:`, error);
-          setJobSheets(js => {
-            const newJs = [...js];
-            newJs[index].invoiceData = { purchaseInvoices: [], productionInvoices: [] };
-            return newJs;
-          });
-        }
-      }
-    }, 500),
-    [isSuperAdmin, orderConfirmed]
-  );
-
   const pickJS = (index, j) => {
     setJobSheets(js => {
       const newJs = [...js];
@@ -180,78 +133,20 @@ export default function AddExpenseModal({ expense, onClose }) {
       newJs[index].jsSuggestions = [];
       return newJs;
     });
-    fetchJsSuggestions(index, j.jobSheetNumber);
   };
-
-  // Auto-fill Product Cost and Branding Cost for each jobsheet
-  useEffect(() => {
-    if (!isSuperAdmin || !orderConfirmed) {
-      setJobSheets(js => js.map(j => ({
-        ...j,
-        orderExpenses: j.orderExpenses.filter(
-          item => item.section !== "Product Cost" && item.section !== "Branding Cost"
-        )
-      })));
-      return;
-    }
-
-    setJobSheets(js => js.map((j, index) => {
-      if (!j.invoiceData) return j;
-
-      const productCost = j.invoiceData.purchaseInvoices.reduce((total, inv) => {
-        const qty = Number(inv.qtyRequired) || 0;
-        const cost = Number(inv.negotiatedCost) || 0;
-        return total + qty * cost;
-      }, 0);
-
-      const brandingCost = j.invoiceData.productionInvoices.reduce((total, inv) => {
-        const qty = Number(inv.qtyRequired) || 0;
-        const cost = Number(inv.negotiatedCost) || 0;
-        return total + qty * cost;
-      }, 0);
-
-      let updatedOrderExpenses = j.orderExpenses.filter(
-        item => item.section !== "Product Cost" && item.section !== "Branding Cost"
-      );
-
-      if (productCost > 0) {
-        updatedOrderExpenses.push({
-          section: "Product Cost",
-          amount: productCost,
-          expenseDate: new Date().toISOString().slice(0, 10),
-          remarks: "Auto-filled from Purchase Invoices"
-        });
-      }
-
-      if (brandingCost > 0) {
-        updatedOrderExpenses.push({
-          section: "Branding Cost",
-          amount: brandingCost,
-          expenseDate: new Date().toISOString().slice(0, 10),
-          remarks: "Auto-filled from Production Job Sheet Invoices"
-        });
-      }
-
-      return { ...j, orderExpenses: updatedOrderExpenses };
-    }));
-  }, [jobSheets, isSuperAdmin, orderConfirmed]);
 
   // Row helpers
   const addRow = (list, setList) => setList([...list, { section: "", amount: "", expenseDate: "", remarks: "" }]);
   const updateRow = (list, setList, idx, field, val) => {
-    const a = [...list];
-    a[idx][field] = val;
-    setList(a);
+    const newList = [...list];
+    newList[idx][field] = val;
+    setList(newList);
   };
   const removeRow = (list, setList, idx) => setList(list.filter((_, i) => i !== idx));
 
   // Jobsheet helpers
-  const addJobSheet = () => setJobSheets([...jobSheets, { jobSheetNumber: "", orderExpenses: [], jsSuggestions: [], invoiceData: null }]);
+  const addJobSheet = () => setJobSheets([...jobSheets, { jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]);
   const updateJobSheetNumber = (index, value) => {
-    if (jobSheets.some((js, i) => i !== index && js.jobSheetNumber === value && value !== "")) {
-      alert("JobSheet number must be unique");
-      return;
-    }
     setJobSheets(js => {
       const newJs = [...js];
       newJs[index].jobSheetNumber = value;
@@ -261,37 +156,56 @@ export default function AddExpenseModal({ expense, onClose }) {
   };
   const removeJobSheet = index => setJobSheets(js => js.filter((_, i) => i !== index));
 
-  // Submit handler
+  const filteredOrderSections = isSuperAdmin
+    ? ORDER_SECTIONS
+    : ORDER_SECTIONS.filter(s => s !== "Product Cost" && s !== "Branding Cost");
+
+  // Get available sections for dropdowns, excluding already selected ones
+  const getAvailableSections = (list, currentIdx) =>
+    list[currentIdx].section
+      ? SAMPLE_SECTIONS.filter(s => s === list[currentIdx].section || !list.some((item, i) => i !== currentIdx && item.section === s))
+      : SAMPLE_SECTIONS.filter(s => !list.some((item, i) => i !== currentIdx && item.section === s));
+
+  const getAvailableOrderSections = (list, currentIdx) =>
+    list[currentIdx].section
+      ? filteredOrderSections.filter(s => s === list[currentIdx].section || !list.some((item, i) => i !== currentIdx && item.section === s))
+      : filteredOrderSections.filter(s => !list.some((item, i) => i !== currentIdx && item.section === s));
+
+  // Submit handler with validation
   const handleSubmit = async () => {
     // Validate required fields
     if (!opptyCode || !form.clientCompanyName || !form.clientName) {
-      alert("Please fill in Opportunity #, Client Company, and Client Name");
+      setError("Opportunity #, Client Company, and Client Name are required.");
+      return;
+    }
+    if (opptyCode.trim() === "" || form.clientCompanyName.trim() === "" || form.clientName.trim() === "") {
+      setError("Required fields cannot be empty.");
       return;
     }
 
     // Validate expenses
-    for (const item of expenses) {
-      if (!item.section || item.amount == null || !item.expenseDate) {
-        alert("All expenses must have section, amount, and date");
-        return;
+    if (expenses.length) {
+      for (const item of expenses) {
+        if (!item.section || item.amount === "" || !item.expenseDate) {
+          setError("All expense fields (section, amount, date) are required.");
+          return;
+        }
       }
     }
 
-    // Validate jobSheets if orderConfirmed
-    if (orderConfirmed) {
-      if (!jobSheets.length) {
-        alert("At least one job sheet is required when order is confirmed");
-        return;
-      }
+    // Validate jobSheets
+    if (orderConfirmed && jobSheets.length) {
       for (const js of jobSheets) {
         if (!js.jobSheetNumber || js.jobSheetNumber.trim() === "") {
-          alert("All job sheets must have a non-empty job sheet number");
+          setError("JobSheet number is required.");
           return;
         }
-        for (const item of js.orderExpenses) {
-          if (!item.section || item.amount == null || !item.expenseDate) {
-            alert("All order expenses must have section, amount, and date");
-            return;
+        if (js.orderExpenses.length) {
+          for (const item of js.orderExpenses) {
+            if (!item.section || item.amount === "" || !item.expenseDate) {
+              setError("All order expense fields (section, amount, date) are required.");
+              return;
+            }
           }
         }
       }
@@ -307,25 +221,25 @@ export default function AddExpenseModal({ expense, onClose }) {
         orderExpenses: js.orderExpenses
       })) : []
     };
+
     const config = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
     try {
-      console.log("Submitting payload:", JSON.stringify(payload, null, 2));
       if (isEdit) {
         await axios.put(`${BACKEND}/api/admin/expenses/${expense._id}`, payload, config);
       } else {
         await axios.post(`${BACKEND}/api/admin/expenses`, payload, config);
       }
       onClose();
-    } catch (error) {
-      console.error("Error saving expense:", error);
-      alert(`Failed to save expense: ${error.response?.data?.message || error.message}`);
+    } catch (e) {
+      setError(`Failed to ${isEdit ? "update" : "create"} expense: ${e.response?.data?.message || e.message}`);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl p-6 rounded shadow-lg overflow-auto max-h-full">
+      <div className="bg-white w-full max-w-3xl p-6 rounded shadow-lg overflow-auto max-h-[90vh]">
         <h2 className="text-lg font-bold mb-4">{isEdit ? "Edit" : "Add"} Expenses</h2>
+        {error && <div className="text-red-600 text-xs mb-4">{error}</div>}
 
         {/* Opportunity selector */}
         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -385,51 +299,55 @@ export default function AddExpenseModal({ expense, onClose }) {
         </div>
 
         {/* Sample expenses */}
-        <button
-          onClick={() => addRow(expenses, setExpenses)}
-          className="bg-blue-500 text-white px-3 py-1 rounded text-xs mb-2"
-        >
-          + Add Expense
-        </button>
-        {expenses.map((it, i) => (
-          <div key={i} className="flex gap-2 mb-2 text-xs">
-            <select
-              value={it.section}
-              onChange={e => updateRow(expenses, setExpenses, i, "section", e.target.value)}
-              className="border p-1 rounded flex-1"
-            >
-              <option value="">Select</option>
-              {SAMPLE_SECTIONS.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              placeholder="Amount"
-              value={it.amount}
-              onChange={e => updateRow(expenses, setExpenses, i, "amount", e.target.value)}
-              className="border p-1 rounded w-20"
-            />
-            <input
-              type="date"
-              value={it.expenseDate}
-              onChange={e => updateRow(expenses, setExpenses, i, "expenseDate", e.target.value)}
-              className="border p-1 rounded w-32"
-            />
-            <input
-              placeholder="Remarks"
-              value={it.remarks}
-              onChange={e => updateRow(expenses, setExpenses, i, "remarks", e.target.value)}
-              className="border p-1 rounded flex-1"
-            />
-            <button
-              onClick={() => removeRow(expenses, setExpenses, i)}
-              className="text-red-600 px-1"
-            >
-              ×
-            </button>
-          </div>
-        ))}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold mb-2">Sample Expenses</h3>
+          <button
+            onClick={() => addRow(expenses, setExpenses)}
+            className="bg-blue-500 text-white px-3 py-1 rounded text-xs mb-2"
+          >
+            + Add Expense
+          </button>
+          {expenses.map((it, i) => (
+            <div key={i} className="flex gap-2 mb-2 text-xs">
+              <select
+                value={it.section}
+                onChange={e => updateRow(expenses, setExpenses, i, "section", e.target.value)}
+                className="border p-1 rounded flex-1"
+              >
+                <option value="">Select</option>
+                {getAvailableSections(expenses, i).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                placeholder="Amount"
+                value={it.amount}
+                onChange={e => updateRow(expenses, setExpenses, i, "amount", e.target.value)}
+                className="border p-1 rounded w-20"
+                min="0"
+              />
+              <input
+                type="date"
+                value={it.expenseDate}
+                onChange={e => updateRow(expenses, setExpenses, i, "expenseDate", e.target.value)}
+                className="border p-1 rounded w-32"
+              />
+              <input
+                placeholder="Remarks"
+                value={it.remarks}
+                onChange={e => updateRow(expenses, setExpenses, i, "remarks", e.target.value)}
+                className="border p-1 rounded flex-1"
+              />
+              <button
+                onClick={() => removeRow(expenses, setExpenses, i)}
+                className="text-red-600 px-1"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
 
         {/* Order confirmed */}
         <div className="mt-4 text-xs">
@@ -444,19 +362,21 @@ export default function AddExpenseModal({ expense, onClose }) {
           </select>
         </div>
 
+        {/* JobSheets */}
         {orderConfirmed && (
-          <>
+          <div className="mt-4">
+            <h3 className="text-sm font-semibold mb-2">Job Sheets</h3>
             <button
               onClick={addJobSheet}
-              className="bg-blue-500 text-white px-3 py-1 rounded text-xs my-2"
+              className="bg-blue-500 text-white px-3 py-1 rounded text-xs mb-2"
             >
               + Add JobSheet
             </button>
             {jobSheets.map((js, index) => (
               <div key={index} className="mt-4 border-t pt-4">
-                <div className="flex justify-between items-center">
-                  <div className="text-xs">
-                    <label className="block">JobSheet #{index + 1}</label>
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-xs flex-1">
+                    <label className="block font-medium">JobSheet #{index + 1}</label>
                     <input
                       value={js.jobSheetNumber}
                       onChange={e => updateJobSheetNumber(index, e.target.value)}
@@ -479,7 +399,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                   {jobSheets.length > 1 && (
                     <button
                       onClick={() => removeJobSheet(index)}
-                      className="text-red-600 px-1 text-xs"
+                      className="text-red-600 px-2 text-xs"
                     >
                       Remove JobSheet
                     </button>
@@ -493,7 +413,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                       return newJs;
                     });
                   }}
-                  className="bg-blue-500 text-white px-3 py-1 rounded text-xs my-2"
+                  className="bg-blue-500 text-white px-3 py-1 rounded text-xs mb-2"
                 >
                   + Add Order Expense
                 </button>
@@ -509,10 +429,9 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded flex-1"
-                      disabled={it.section === "Product Cost" || it.section === "Branding Cost"}
                     >
                       <option value="">Select</option>
-                      {ORDER_SECTIONS.map(s => (
+                      {getAvailableOrderSections(js.orderExpenses, i).map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
@@ -528,7 +447,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded w-20"
-                      readOnly={it.section === "Product Cost" || it.section === "Branding Cost"}
+                      min="0"
                     />
                     <input
                       type="date"
@@ -541,7 +460,6 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded w-32"
-                      readOnly={it.section === "Product Cost" || it.section === "Branding Cost"}
                     />
                     <input
                       placeholder="Remarks"
@@ -554,7 +472,6 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="border p-1 rounded flex-1"
-                      readOnly={it.section === "Product Cost" || it.section === "Branding Cost"}
                     />
                     <button
                       onClick={() => {
@@ -565,7 +482,6 @@ export default function AddExpenseModal({ expense, onClose }) {
                         });
                       }}
                       className="text-red-600 px-1"
-                      disabled={it.section === "Product Cost" || it.section === "Branding Cost"}
                     >
                       ×
                     </button>
@@ -573,7 +489,7 @@ export default function AddExpenseModal({ expense, onClose }) {
                 ))}
               </div>
             ))}
-          </>
+          </div>
         )}
 
         <div className="flex justify-end mt-6 space-x-2">

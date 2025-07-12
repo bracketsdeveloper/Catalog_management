@@ -3,6 +3,16 @@ const router = express.Router();
 const Expense = require("../models/Expense");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
+// Helper to validate no duplicate sections
+const validateNoDuplicateSections = (items, type) => {
+  const sections = items.map(item => item.section);
+  const duplicates = sections.filter((item, index) => sections.indexOf(item) !== index);
+  if (duplicates.length > 0) {
+    return `Duplicate ${type} sections found: ${duplicates.join(", ")}`;
+  }
+  return null;
+};
+
 // CREATE
 router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -23,6 +33,8 @@ router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
           return res.status(400).json({ message: "Invalid expense: section, amount, and expenseDate are required" });
         }
       }
+      const duplicateError = validateNoDuplicateSections(expenses, "expense");
+      if (duplicateError) return res.status(400).json({ message: duplicateError });
     }
 
     // Validate jobSheets subdocuments
@@ -37,6 +49,8 @@ router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
               return res.status(400).json({ message: "Invalid orderExpense: section, amount, and expenseDate are required" });
             }
           }
+          const duplicateError = validateNoDuplicateSections(js.orderExpenses, "orderExpense");
+          if (duplicateError) return res.status(400).json({ message: duplicateError });
         }
       }
     }
@@ -49,7 +63,7 @@ router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
       crmName,
       expenses,
       orderConfirmed,
-      jobSheets: orderConfirmed ? jobSheets : [], // Clear jobSheets if not orderConfirmed
+      jobSheets: orderConfirmed ? jobSheets : [],
       createdBy: req.user._id
     });
 
@@ -79,12 +93,7 @@ router.get("/expenses", authenticate, authorizeAdmin, async (req, res) => {
       ];
     }
 
-    if (!isSuperAdmin && permissions.includes("manage-expenses")) {
-      filter.$or = [
-        { createdBy: userId },
-        { crmName: userName }
-      ];
-    }
+   
 
     const list = await Expense.find(filter).sort({ createdAt: -1 });
     res.json(list);
@@ -106,12 +115,11 @@ router.get("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     if (!isSuperAdmin && permissions.includes("manage-expenses")) {
       filter.$or = [
-        { createdBy: userId },
-        { crmName: userName }
+        
       ];
     }
 
-    const exp = await Expense.findOne(filter);
+    const exp = await Expense.findAll();
     if (!exp) return res.status(404).json({ message: "Expense not found" });
 
     res.json(exp);
@@ -141,6 +149,8 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
           return res.status(400).json({ message: "Invalid expense: section, amount, and expenseDate are required" });
         }
       }
+      const duplicateError = validateNoDuplicateSections(expenses, "expense");
+      if (duplicateError) return res.status(400).json({ message: duplicateError });
     }
 
     // Validate jobSheets subdocuments
@@ -155,6 +165,8 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
               return res.status(400).json({ message: "Invalid orderExpense: section, amount, and expenseDate are required" });
             }
           }
+          const duplicateError = validateNoDuplicateSections(js.orderExpenses, "orderExpense");
+          if (duplicateError) return res.status(400).json({ message: duplicateError });
         }
       }
     }
@@ -162,7 +174,7 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
     const filter = { _id: req.params.id };
     const exp = await Expense.findOneAndUpdate(
       filter,
-      { ...req.body, jobSheets: orderConfirmed ? jobSheets : [] }, // Clear jobSheets if not orderConfirmed
+      { ...req.body, jobSheets: orderConfirmed ? jobSheets : [] },
       { new: true }
     );
     if (!exp) return res.status(404).json({ message: "Expense not found" });

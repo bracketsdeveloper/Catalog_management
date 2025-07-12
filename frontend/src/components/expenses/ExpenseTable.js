@@ -35,7 +35,7 @@ export default function ExpenseTable({ data, onEdit }) {
   const [filters, setFilters] = useState({});
 
   const sumBy = (list, section) =>
-    (list || []).filter(i => i.section === section).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    (list || []).filter(i => i?.section === section).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
