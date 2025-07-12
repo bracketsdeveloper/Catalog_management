@@ -3,15 +3,15 @@ const router = express.Router();
 const Expense = require("../models/Expense");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// Helper to validate no duplicate sections
-const validateNoDuplicateSections = (items, type) => {
-  const sections = items.map(item => item.section);
-  const duplicates = sections.filter((item, index) => sections.indexOf(item) !== index);
-  if (duplicates.length > 0) {
-    return `Duplicate ${type} sections found: ${duplicates.join(", ")}`;
-  }
-  return null;
-};
+// Helper to validate no duplicate sections - REMOVED since we now allow duplicates
+// const validateNoDuplicateSections = (items, type) => {
+//   const sections = items.map(item => item.section);
+//   const duplicates = sections.filter((item, index) => sections.indexOf(item) !== index);
+//   if (duplicates.length > 0) {
+//     return `Duplicate ${type} sections found: ${duplicates.join(", ")}`;
+//   }
+//   return null;
+// };
 
 // CREATE
 router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
@@ -33,8 +33,7 @@ router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
           return res.status(400).json({ message: "Invalid expense: section, amount, and expenseDate are required" });
         }
       }
-      const duplicateError = validateNoDuplicateSections(expenses, "expense");
-      if (duplicateError) return res.status(400).json({ message: duplicateError });
+      // Removed duplicate validation - now allows multiple entries of same section
     }
 
     // Validate jobSheets subdocuments
@@ -49,8 +48,7 @@ router.post("/expenses", authenticate, authorizeAdmin, async (req, res) => {
               return res.status(400).json({ message: "Invalid orderExpense: section, amount, and expenseDate are required" });
             }
           }
-          const duplicateError = validateNoDuplicateSections(js.orderExpenses, "orderExpense");
-          if (duplicateError) return res.status(400).json({ message: duplicateError });
+          // Removed duplicate validation - now allows multiple entries of same section
         }
       }
     }
@@ -149,8 +147,7 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
           return res.status(400).json({ message: "Invalid expense: section, amount, and expenseDate are required" });
         }
       }
-      const duplicateError = validateNoDuplicateSections(expenses, "expense");
-      if (duplicateError) return res.status(400).json({ message: duplicateError });
+      // Removed duplicate validation - now allows multiple entries of same section
     }
 
     // Validate jobSheets subdocuments
@@ -165,8 +162,7 @@ router.put("/expenses/:id", authenticate, authorizeAdmin, async (req, res) => {
               return res.status(400).json({ message: "Invalid orderExpense: section, amount, and expenseDate are required" });
             }
           }
-          const duplicateError = validateNoDuplicateSections(js.orderExpenses, "orderExpense");
-          if (duplicateError) return res.status(400).json({ message: duplicateError });
+          // Removed duplicate validation - now allows multiple entries of same section
         }
       }
     }
