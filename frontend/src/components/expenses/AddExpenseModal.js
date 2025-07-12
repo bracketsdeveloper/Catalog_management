@@ -160,16 +160,10 @@ export default function AddExpenseModal({ expense, onClose }) {
     ? ORDER_SECTIONS
     : ORDER_SECTIONS.filter(s => s !== "Product Cost" && s !== "Branding Cost");
 
-  // Get available sections for dropdowns, excluding already selected ones
-  const getAvailableSections = (list, currentIdx) =>
-    list[currentIdx].section
-      ? SAMPLE_SECTIONS.filter(s => s === list[currentIdx].section || !list.some((item, i) => i !== currentIdx && item.section === s))
-      : SAMPLE_SECTIONS.filter(s => !list.some((item, i) => i !== currentIdx && item.section === s));
+  // Get available sections for dropdowns - allow all sections to be selected multiple times
+  const getAvailableSections = (list, currentIdx) => SAMPLE_SECTIONS;
 
-  const getAvailableOrderSections = (list, currentIdx) =>
-    list[currentIdx].section
-      ? filteredOrderSections.filter(s => s === list[currentIdx].section || !list.some((item, i) => i !== currentIdx && item.section === s))
-      : filteredOrderSections.filter(s => !list.some((item, i) => i !== currentIdx && item.section === s));
+  const getAvailableOrderSections = (list, currentIdx) => filteredOrderSections;
 
   // Submit handler with validation
   const handleSubmit = async () => {
