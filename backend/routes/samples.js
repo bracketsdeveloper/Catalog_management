@@ -16,11 +16,10 @@ async function attachProductPicture(body) {
   }
 }
 
-// OPPORTUNITY SUGGESTIONS (Moved before /:id)
+// OPPORTUNITY SUGGESTIONS
 router.get("/opportunity-suggestions", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { search = "" } = req.query;
-    // Sanitize search input to prevent regex errors
     const sanitizedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const query = sanitizedSearch
       ? {
@@ -30,7 +29,6 @@ router.get("/opportunity-suggestions", authenticate, authorizeAdmin, async (req,
           ],
         }
       : {};
-    // Verify Opportunity model exists
     if (!Opportunity) {
       throw new Error("Opportunity model not found");
     }
@@ -43,6 +41,8 @@ router.get("/opportunity-suggestions", authenticate, authorizeAdmin, async (req,
     console.error("Error fetching opportunity suggestions:", {
       message: err.message,
       stack: err.stack,
+      query: req.query,
+      timestamp: new Date().toISOString(),
     });
     res.status(500).json({ message: "Server error fetching opportunity suggestions", error: err.message });
   }
@@ -56,8 +56,13 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     await sample.save();
     res.status(201).json({ message: "Sample created", sample });
   } catch (err) {
-    console.error("Error creating sample:", err);
-    res.status(500).json({ message: "Server error creating sample" });
+    console.error("Error creating sample:", {
+      message: err.message,
+      stack: err.stack,
+      requestBody: req.body,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(500).json({ message: "Server error creating sample", error: err.message });
   }
 });
 
@@ -78,32 +83,54 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     const samples = await Sample.find(q).sort({ createdAt: -1 }).lean();
     res.json(samples);
   } catch (err) {
-    console.error("Error fetching samples:", err);
-    res.status(500).json({ message: "Server error fetching samples" });
+    console.error("Error fetching samples:", {
+      message: err.message,
+      stack: err.stack,
+      query: req.query,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(500).json({ message: "Server error fetching samples", error: err.message });
   }
 });
 
 // READ ONE
 router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Validate that id is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.error("Invalid sample ID:", {
+        params: req.params,
+        timestamp: new Date().toISOString(),
+      });
       return res.status(400).json({ message: "Invalid sample ID" });
     }
     const sample = await Sample.findById(req.params.id).lean();
-    if (!sample) return res.status(404).json({ message: "Not found" });
+    if (!sample) {
+      console.error("Sample not found:", {
+        params: req.params,
+        timestamp: new Date().toISOString(),
+      });
+      return res.status(404).json({ message: "Not found" });
+    }
     res.json(sample);
   } catch (err) {
-    console.error("Error fetching sample:", err);
-    res.status(500).json({ message: "Server error fetching sample" });
+    console.error("Error fetching sample:", {
+      message: err.message,
+      stack: err.stack,
+      params: req.params,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(500).json({ message: "Server error fetching sample", error: err.message });
   }
 });
 
 // UPDATE
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Validate that id is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.error("Invalid sample ID:", {
+        params: req.params,
+        timestamp: new Date().toISOString(),
+      });
       return res.status(400).json({ message: "Invalid sample ID" });
     }
     await attachProductPicture(req.body);
@@ -112,27 +139,53 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     );
-    if (!updated) return res.status(404).json({ message: "Not found" });
+    if (!updated) {
+      console.error("Sample not found:", {
+        params: req.params,
+        timestamp: new Date().toISOString(),
+      });
+      return res.status(404).json({ message: "Not found" });
+    }
     res.json({ message: "Sample updated", sample: updated });
   } catch (err) {
-    console.error("Error updating sample:", err);
-    res.status(500).json({ message: "Server error updating sample" });
+    console.error("Error updating sample:", {
+      message: err.message,
+      stack: err.stack,
+      requestBody: req.body,
+      params: req.params,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(400).json({ message: "Server error updating sample", error: err.message });
   }
 });
 
 // DELETE
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    // Validate that id is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.error("Invalid sample ID:", {
+        params: req.params,
+        timestamp: new Date().toISOString(),
+      });
       return res.status(400).json({ message: "Invalid sample ID" });
     }
     const deleted = await Sample.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Not found" });
+    if (!deleted) {
+      console.error("Sample not found:", {
+        params: req.params,
+        timestamp: new Date().toISOString(),
+      });
+      return res.status(404).json({ message: "Not found" });
+    }
     res.json({ message: "Sample deleted" });
   } catch (err) {
-    console.error("Error deleting sample:", err);
-    res.status(500).json({ message: "Server error deleting sample" });
+    console.error("Error deleting sample:", {
+      message: err.message,
+      stack: err.stack,
+      params: req.params,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(500).json({ message: "Server error deleting sample", error: err.message });
   }
 });
 

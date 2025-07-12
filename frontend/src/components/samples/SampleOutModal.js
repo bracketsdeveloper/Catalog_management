@@ -1,4 +1,3 @@
-// client/src/components/samples/SampleOutModal.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -11,25 +10,25 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
 
   // form state
   const [form, setForm] = useState({
-    sampleOutDate:       new Date(),
-    clientCompanyName:   "",
-    clientName:          "",
-    contactNumber:       "",
-    sentBy:              "",
+    sampleOutDate: new Date(),
+    clientCompanyName: "",
+    clientName: "",
+    contactNumber: "",
+    sentBy: "",
     sampleReferenceCode: "",
-    productCode:         "",
-    productPicture:      "",
-    productName:         "",
-    brand:               "",
-    qty:                 "",
-    color:               "",
-    sentThrough:         "",
-    sampleDCNumber:      "",
-    sampleOutStatus:     "",
-    qtyReceivedBack:     "",
-    receivedBack:        false,
-    sampleBackDate:      null,
-    sampleQty:           0,
+    productCode: "",
+    productPicture: "",
+    productName: "",
+    brand: "",
+    qty: "",
+    color: "",
+    sentThrough: "",
+    sampleDCNumber: "",
+    sampleOutStatus: "",
+    qtyReceivedBack: "",
+    receivedBack: false,
+    sampleBackDate: null,
+    sampleQty: 0,
   });
 
   // suggestions & lists
@@ -49,27 +48,26 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     if (!initialData) return;
     setForm(f => ({
       ...f,
-      sampleOutDate:       new Date(initialData.sampleOutDate),
-      clientCompanyName:   initialData.clientCompanyName,
-      clientName:          initialData.clientName,
-      contactNumber:       initialData.contactNumber,
-      sentBy:              initialData.sentByName,
+      sampleOutDate: new Date(initialData.sampleOutDate),
+      clientCompanyName: initialData.clientCompanyName,
+      clientName: initialData.clientName,
+      contactNumber: initialData.contactNumber,
+      sentBy: initialData.sentByName,
       sampleReferenceCode: initialData.sampleReferenceCode,
-      productCode:         initialData.productCode,
-      productPicture:      initialData.productPicture,
-      productName:         initialData.productName,
-      brand:               initialData.brand,
-      qty:                 initialData.qty,
-      color:               initialData.color,
-      sentThrough:         initialData.sentThrough,
-      sampleDCNumber:      initialData.sampleDCNumber,
-      sampleOutStatus:     initialData.sampleOutStatus,
-      qtyReceivedBack:     initialData.qtyReceivedBack,
-      receivedBack:        initialData.receivedBack,
-      sampleBackDate:      initialData.sampleBackDate
+      productCode: initialData.productCode,
+      productPicture: initialData.productPicture,
+      productName: initialData.productName,
+      brand: initialData.brand,
+      qty: initialData.qty,
+      color: initialData.color,
+      sentThrough: initialData.sentThrough,
+      sampleDCNumber: initialData.sampleDCNumber,
+      sampleOutStatus: initialData.sampleOutStatus,
+      qtyReceivedBack: initialData.qtyReceivedBack,
+      receivedBack: initialData.receivedBack,
+      sampleBackDate: initialData.sampleBackDate
         ? new Date(initialData.sampleBackDate)
         : null,
-      // leave sampleQty at 0; we'll fetch it next
     }));
   }, [initialData]);
 
@@ -83,10 +81,20 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         initialData.clientCompanyName
       )}`,
       { headers: { Authorization: `Bearer ${token}` } }
-    ).then(r => {
-      const c = r.data.find(x => x.companyName === initialData.clientCompanyName);
-      if (c) setClientList(c.clients || []);
-    }).catch(console.error);
+    )
+      .then(r => {
+        const c = r.data.find(x => x.companyName === initialData.clientCompanyName);
+        if (c) setClientList(c.clients || []);
+      })
+      .catch(err => {
+        console.error("Error fetching client list:", {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          companyName: initialData.clientCompanyName,
+          timestamp: new Date().toISOString(),
+        });
+      });
 
     // fetch this sample's details to get sampleQty
     axios.get(
@@ -94,11 +102,21 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         initialData.sampleReferenceCode
       )}`,
       { headers: { Authorization: `Bearer ${token}` } }
-    ).then(r => {
-      const list = r.data.products ?? r.data;
-      const s = list.find(x => x.sampleReferenceCode === initialData.sampleReferenceCode);
-      if (s) setForm(f => ({ ...f, sampleQty: s.qty }));
-    }).catch(console.error);
+    )
+      .then(r => {
+        const list = r.data.products ?? r.data;
+        const s = list.find(x => x.sampleReferenceCode === initialData.sampleReferenceCode);
+        if (s) setForm(f => ({ ...f, sampleQty: s.qty }));
+      })
+      .catch(err => {
+        console.error("Error fetching sample details:", {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          sampleReferenceCode: initialData.sampleReferenceCode,
+          timestamp: new Date().toISOString(),
+        });
+      });
 
     // fetch existing outs for availability
     axios.get(
@@ -106,15 +124,23 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         initialData.sampleReferenceCode
       )}`,
       { headers: { Authorization: `Bearer ${token}` } }
-    ).then(r => setExistingOuts(r.data))
-     .catch(console.error);
-
+    )
+      .then(r => setExistingOuts(r.data))
+      .catch(err => {
+        console.error("Error fetching existing sample-outs:", {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          sampleReferenceCode: initialData.sampleReferenceCode,
+          timestamp: new Date().toISOString(),
+        });
+      });
   }, [initialData]);
 
   // 3) recalc availableQty whenever sampleQty or existingOuts change
   useEffect(() => {
     const totalSent = existingOuts.reduce((sum, o) => sum + Number(o.qty), 0);
-    const totalRet  = existingOuts.reduce((sum, o) => sum + Number(o.qtyReceivedBack), 0);
+    const totalRet = existingOuts.reduce((sum, o) => sum + Number(o.qtyReceivedBack), 0);
     setAvailableQty(form.sampleQty - totalSent + totalRet);
   }, [form.sampleQty, existingOuts]);
 
@@ -129,16 +155,25 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         form.clientCompanyName
       )}`,
       { headers: { Authorization: `Bearer ${token}` } }
-    ).then(r => setCompanySug(r.data))
-     .catch(console.error);
+    )
+      .then(r => setCompanySug(r.data))
+      .catch(err => {
+        console.error("Error fetching company suggestions:", {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          companyName: form.clientCompanyName,
+          timestamp: new Date().toISOString(),
+        });
+      });
   }, [form.clientCompanyName]);
 
   const selectCompany = c => {
     setForm(f => ({
       ...f,
       clientCompanyName: c.companyName,
-      clientName:        "",
-      contactNumber:     "",
+      clientName: "",
+      contactNumber: "",
     }));
     setClientList(c.clients || []);
     setCompanySug([]);
@@ -153,8 +188,17 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     axios.get(
       `${BACKEND_URL}/api/admin/users?search=${encodeURIComponent(form.sentBy)}`,
       { headers: { Authorization: `Bearer ${token}` } }
-    ).then(r => setUserSug(r.data))
-     .catch(console.error);
+    )
+      .then(r => setUserSug(r.data))
+      .catch(err => {
+        console.error("Error fetching user suggestions:", {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          sentBy: form.sentBy,
+          timestamp: new Date().toISOString(),
+        });
+      });
   }, [form.sentBy]);
 
   // 6) sample suggestions
@@ -168,22 +212,31 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         form.sampleReferenceCode
       )}`,
       { headers: { Authorization: `Bearer ${token}` } }
-    ).then(r => setSampleSug(r.data.products ?? r.data))
-     .catch(console.error);
+    )
+      .then(r => setSampleSug(r.data.products ?? r.data))
+      .catch(err => {
+        console.error("Error fetching sample suggestions:", {
+          message: err.message,
+          stack: err.stack,
+          response: err.response?.data,
+          sampleReferenceCode: form.sampleReferenceCode,
+          timestamp: new Date().toISOString(),
+        });
+      });
   }, [form.sampleReferenceCode]);
 
   const selectSample = s => {
     setForm(f => ({
       ...f,
       sampleReferenceCode: s.sampleReferenceCode,
-      productCode:         s.productId,
-      productPicture:      s.productPicture,
-      productName:         s.productName,
-      brand:               s.brandName,
-      color:               s.color,
-      sampleQty:           s.qty,
-      qty:                 "",
-      qtyReceivedBack:     "",
+      productCode: s.productId,
+      productPicture: s.productPicture,
+      productName: s.productName,
+      brand: s.brandName,
+      color: s.color,
+      sampleQty: s.qty,
+      qty: "",
+      qtyReceivedBack: "",
     }));
     setSampleSug([]);
     setQtyError("");
@@ -246,8 +299,18 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       }
       onSave();
     } catch (err) {
-      console.error(err);
-      alert("Error saving Sample Out");
+      console.error("Error saving sample-out:", {
+        message: err.message,
+        stack: err.stack,
+        response: err.response?.data,
+        payload: form,
+        endpoint: isEdit
+          ? `${BACKEND_URL}/api/admin/sample-outs/${initialData._id}`
+          : `${BACKEND_URL}/api/admin/sample-outs`,
+        method: isEdit ? "PUT" : "POST",
+        timestamp: new Date().toISOString(),
+      });
+      alert(err.response?.data?.message || "Error saving Sample Out");
     }
   };
 
