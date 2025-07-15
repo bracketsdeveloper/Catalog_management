@@ -112,6 +112,7 @@ export default function CreateManualCatalog() {
 
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailsProdId, setDetailsProdId] = useState(null);
+  const [detailsProduct, setDetailsProduct] = useState(null);
 
   const [filterDependencies, setFilterDependencies] = useState({
     subCategories: ["categories"],
@@ -126,9 +127,19 @@ export default function CreateManualCatalog() {
     variationHinges: {}
   });
 
-  const openDetails = (prodId) => {
+  const openDetails = async (prodId) => {
     setDetailsProdId(prodId);
     setDetailsModalOpen(true);
+    setDetailsProduct(null); // reset before fetching
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get(`${BACKEND_URL}/api/admin/products/${prodId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDetailsProduct(data);
+    } catch (e) {
+      setDetailsProduct(null);
+    }
   };
   const closeDetails = () => {
     setDetailsModalOpen(false);
@@ -1377,7 +1388,11 @@ useEffect(() => {
             >
               &times;
             </button>
-            <AdminProductDetails prodId={detailsProdId} /> {/* <-- render details */}
+            {detailsProduct ? (
+              <AdminProductDetails product={detailsProduct} />
+            ) : (
+              <div className="p-8 text-center text-gray-500">Loading...</div>
+            )}
           </div>
         </div>
       )}
