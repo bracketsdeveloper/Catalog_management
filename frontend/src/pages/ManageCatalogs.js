@@ -595,7 +595,7 @@ useEffect(() => {
         const total = parseFloat((amount + gstVal).toFixed(2));
         return {
           slNo: i + 1,
-          productId: typeof p.productId === "object" ? p.productId._id : p.productId,
+          productId: (p.productId && typeof p.productId === "object") ? p.productId._id : p.productId,
           product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
           hsnCode: p.hsnCode || "",
           quantity: qty,
@@ -650,7 +650,7 @@ useEffect(() => {
         const total = parseFloat((amount + gstVal).toFixed(2));
         return {
           slNo: i + 1,
-          productId: typeof p.productId === "object" ? p.productId._id : p.productId,
+          productId: (p.productId && typeof p.productId === "object" && "_id" in p.productId) ? p.productId._id : p.productId,
           product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
           hsnCode: p.hsnCode || "",
           quantity: qty,
