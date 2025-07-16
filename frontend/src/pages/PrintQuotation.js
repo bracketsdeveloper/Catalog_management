@@ -393,7 +393,7 @@ export default function PrintQuotation() {
             </div>
           </div>
           <div className="text-right">
-            <div className="gstin-text font-bold">GSTIN: 29ABCFA9924A1ZL</div>
+            <div className="gstin-text font-bold">GSTIN:29ABCFA9924A1ZL</div>
           </div>
         </div>
 
