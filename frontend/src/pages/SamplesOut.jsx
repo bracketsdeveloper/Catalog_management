@@ -1,4 +1,3 @@
-// client/src/pages/SamplesOut.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -11,7 +10,7 @@ export default function SamplesOut() {
   /* STATE */
   const [list, setList] = useState([]);
   const [search, setSearch] = useState("");
-  const [viewFilter, setViewFilter] = useState("sent"); // sent | received
+  const [viewFilter, setViewFilter] = useState("sent");
   const [modalOpen, setModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
 
@@ -31,7 +30,7 @@ export default function SamplesOut() {
     dateTo: "",
     company: "",
     sentBy: "",
-    status: "" // sent | not sent | blank = all
+    status: ""
   });
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -117,7 +116,8 @@ export default function SamplesOut() {
       Qty: r.qty,
       Color: r.color,
       Status: r.sampleOutStatus || "",
-      "Received Back": r.receivedBack ? "Yes" : "No"
+      "Received Back": r.receivedBack ? "Yes" : "No",
+      Returned: r.returned ? "Yes" : "No" // Added returned field
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();

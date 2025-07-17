@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const SampleOut = require("../models/SampleOut");
-const Company   = require("../models/Company");
-const Sample    = require("../models/Sample");
-const User      = require("../models/User");
+const Company = require("../models/Company");
+const Sample = require("../models/Sample");
+const User = require("../models/User");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 // ─── READ SINGLE ─────────────────────────────────────────────────────
@@ -59,6 +59,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       sampleOutStatus:     b.sampleOutStatus,
       qtyReceivedBack:     b.qtyReceivedBack,
       receivedBack:        b.receivedBack,
+      returned:            b.returned, // Added returned field
       sampleBackDate:      b.sampleBackDate,
     });
 
@@ -101,18 +102,17 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       const client = comp.clients.find(c => c.name === b.clientName);
       if (!client) return res.status(400).json({ message: "Invalid client" });
 
-      // ✏️ **FIX HERE**: comp._id (not comp._1)
-      so.clientCompanyId   = comp._id;
+      so.clientCompanyId = comp._id;
       so.clientCompanyName = comp.companyName;
-      so.clientName        = client.name;
-      so.contactNumber     = client.contactNumber;
+      so.clientName = client.name;
+      so.contactNumber = client.contactNumber;
     }
 
     // sentBy if changed
     if (b.sentBy) {
       const usr = await User.findOne({ name: b.sentBy });
       if (!usr) return res.status(400).json({ message: "Invalid sentBy user" });
-      so.sentById   = usr._id;
+      so.sentById = usr._id;
       so.sentByName = usr.name;
     }
 
@@ -120,19 +120,19 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     if (b.sampleReferenceCode) {
       const samp = await Sample.findOne({ sampleReferenceCode: b.sampleReferenceCode });
       if (!samp) return res.status(400).json({ message: "Invalid sample reference" });
-      so.sampleRefId         = samp._id;
+      so.sampleRefId = samp._id;
       so.sampleReferenceCode = samp.sampleReferenceCode;
-      so.productCode         = samp.productId;
-      so.productPicture      = samp.productPicture;
-      so.productName         = samp.productName;
-      so.brand               = samp.brandName;
-      so.color               = samp.color;
+      so.productCode = samp.productId;
+      so.productPicture = samp.productPicture;
+      so.productName = samp.productName;
+      so.brand = samp.brandName;
+      so.color = samp.color;
     }
 
     // Other updatable fields
     [
-      "sampleOutDate","qty","sentThrough","sampleDCNumber",
-      "sampleOutStatus","qtyReceivedBack","receivedBack","sampleBackDate"
+      "sampleOutDate", "qty", "sentThrough", "sampleDCNumber",
+      "sampleOutStatus", "qtyReceivedBack", "receivedBack", "returned", "sampleBackDate"
     ].forEach(field => {
       if (typeof b[field] !== "undefined") so[field] = b[field];
     });

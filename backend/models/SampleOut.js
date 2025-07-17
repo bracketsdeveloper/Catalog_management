@@ -9,7 +9,7 @@ const sampleOutSchema = new mongoose.Schema({
   sentById:           { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   sentByName:         { type: String, required: true },
   sampleRefId:        { type: mongoose.Schema.Types.ObjectId, ref: "Sample", required: true },
-  sampleReferenceCode:{ type: String, required: true },
+  sampleReferenceCode:{ type: String, required: true }, 
   productCode:        { type: String },
   productPicture:     { type: String },
   productName:        { type: String },
@@ -20,12 +20,13 @@ const sampleOutSchema = new mongoose.Schema({
   sampleDCNumber:     { type: String },
   sampleOutStatus:    { 
     type: String, 
-    enum: ["sent","not sent",""], 
+    enum: ["sent", "not sent", ""], 
     default: "" 
   },
   qtyReceivedBack:    { type: Number, default: 0 },
   receivedBack:       { type: Boolean, default: false },
-  outSince:           { type: Number, default: 0 }, // days out
+  returned:           { type: Boolean, default: false }, // Added returned field
+  outSince:           { type: Number, default: 0 },
   sampleBackDate:     { type: Date },
   createdAt:          { type: Date, default: Date.now },
   updatedAt:          { type: Date, default: Date.now },

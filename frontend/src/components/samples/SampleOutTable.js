@@ -1,4 +1,3 @@
-// client/src/components/samples/SampleOutTable.jsx
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -27,6 +26,7 @@ export default function SampleOutTable({
     { label: "Color", field: "color" },
     { label: "Status", field: "sampleOutStatus" },
     { label: "Received Back", field: "receivedBack" },
+    { label: "Returned To Vendor", field: "returned" }, // Added returned field
     { label: "Out Since (d)", field: "outSince" },
     { label: "Actions", field: null }
   ];
@@ -55,6 +55,8 @@ export default function SampleOutTable({
           cell = format(new Date(r.sampleOutDate), "dd/MM/yyyy");
         } else if (field === "receivedBack") {
           cell = r.receivedBack ? "Yes" : "No";
+        } else if (field === "returned") {
+          cell = r.returned ? "Yes" : "No"; // Added returned filter
         } else if (field === "outSince") {
           cell = computeOutSince(r).toString();
         } else {
@@ -77,6 +79,10 @@ export default function SampleOutTable({
           break;
         case "receivedBack":
           av = a.receivedBack ? 1 : 0;
+          bv = b.receivedBack ? 1 : 0;
+          break;
+        case "returned":
+          av = a.returned ? 1 : 0; // Added returned sort
           bv = b.receivedBack ? 1 : 0;
           break;
         case "outSince":
@@ -183,6 +189,13 @@ export default function SampleOutTable({
                       </td>
                     );
                   }
+                  if (col.field === "returned") {
+                    return (
+                      <td key="rt" className="px-3 py-2">
+                        {r.returned ? "Yes" : "No"} 
+                      </td>
+                    );
+                  }
                   if (col.field === "outSince") {
                     return (
                       <td key="os" className="px-3 py-2">
@@ -221,7 +234,7 @@ export default function SampleOutTable({
               onClick={() => setPreview(null)}
               className="absolute top-2 right-2 text-white text-xl"
             >
-              &times;
+              ×
             </button>
             <img
               src={preview}

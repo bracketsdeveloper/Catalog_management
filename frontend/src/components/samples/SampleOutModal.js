@@ -27,6 +27,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     sampleOutStatus: "",
     qtyReceivedBack: "",
     receivedBack: false,
+    returned: false, // Added returned field
     sampleBackDate: null,
     sampleQty: 0,
   });
@@ -65,6 +66,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       sampleOutStatus: initialData.sampleOutStatus,
       qtyReceivedBack: initialData.qtyReceivedBack,
       receivedBack: initialData.receivedBack,
+      returned: initialData.returned ?? false, // Added returned field
       sampleBackDate: initialData.sampleBackDate
         ? new Date(initialData.sampleBackDate)
         : null,
@@ -601,6 +603,21 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
               value={form.receivedBack}
               onChange={e =>
                 handleChange("receivedBack", e.target.value === "true")
+              }
+            >
+              <option value={false}>No</option>
+              <option value={true}>Yes</option>
+            </select>
+          </div>
+
+          {/* Returned */}
+          <div>
+            <label className="block mb-1">Returned to vendor</label>
+            <select
+              className="border rounded p-2 w-full"
+              value={form.returned}
+              onChange={e =>
+                handleChange("returned", e.target.value === "true")
               }
             >
               <option value={false}>No</option>
