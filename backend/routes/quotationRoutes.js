@@ -1,3 +1,4 @@
+// backend/routes/quotations.js
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
@@ -8,8 +9,22 @@ const Docxtemplater = require("docxtemplater");
 const ImageModule = require("docxtemplater-image-module-free");
 const Quotation = require("../models/Quotation");
 const Log = require("../models/Log");
+const EInvoice = require("../models/EInvoice");
+const Company = require("../models/Company");
+const axios = require("axios");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
-const mongoose = require("mongoose");
+
+// Load environment variables
+const WHITEBOOKS_API_URL = process.env.WHITEBOOKS_API_URL;
+const WHITEBOOKS_CREDENTIALS = {
+  email: process.env.WHITEBOOKS_EMAIL,
+  ipAddress: process.env.WHITEBOOKS_IP_ADDRESS,
+  clientId: process.env.WHITEBOOKS_CLIENT_ID,
+  clientSecret: process.env.WHITEBOOKS_CLIENT_SECRET,
+  username: process.env.WHITEBOOKS_USERNAME,
+  password: process.env.WHITEBOOKS_PASSWORD,
+  gstin: process.env.WHITEBOOKS_GSTIN,
+};
 
 async function createLog(action, oldValue, newValue, user, ip) {
   try {
@@ -578,6 +593,435 @@ router.post("/logs/:id/latest", authenticate, async (req, res) => {
   } catch (err) {
     console.error("Error fetching latest logs:", err);
     res.status(400).json({ message: "Server error fetching latest logs" });
+  }
+});
+
+// E-Invoice Routes
+router.post("/quotations/:id/einvoice/authenticate", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const response = await axios.get(`${WHITEBOOKS_API_URL}/einvoice/authenticate`, {
+      params: { email: WHITEBOOKS_CREDENTIALS.email },
+      headers: {
+        ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
+        client_id: WHITEBOOKS_CREDENTIALS.clientId,
+        client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
+        username: WHITEBOOKS_CREDENTIALS.username,
+        password: WHITEBOOKS_CREDENTIALS.password,
+        gstin: WHITEBOOKS_CREDENTIALS.gstin,
+      },
+    });
+
+    const { data, status_cd, status_desc } = response.data;
+    if (status_cd !== "Sucess") {
+      return res.status(400).json({ message: "Authentication failed", status_desc });
+    }
+
+    const eInvoice = await EInvoice.findOneAndUpdate(
+      { quotationId: req.params.id, cancelled: false },
+      {
+        authToken: data.AuthToken,
+        tokenExpiry: new Date(data.TokenExpiry),
+        sek: data.Sek,
+        clientId: data.ClientId,
+        createdBy: req.user.email,
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ message: "Authenticated", eInvoice });
+  } catch (err) {
+    console.error("Authentication error:", err);
+    res.status(500).json({ message: "Authentication failed" });
+  }
+});
+
+// backend/routes/quotations.js (relevant route only)
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+router.get(
+  '/quotations/:id/einvoice/customer',
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      console.log(
+        `Fetching quotation with ID: ${req.params.id} at ${new Date().toISOString()}`
+      );
+      const quotation = await Quotation.findById(req.params.id);
+      if (!quotation) {
+        console.error('Quotation not found');
+        return res.status(404).json({ message: 'Quotation not found' });
+      }
+
+      // Trim and escape regex chars before searching
+      const rawName = quotation.customerCompany.trim();
+      const safePattern = escapeRegex(rawName);
+      console.log(`Searching for company with name (escaped): ${safePattern}`);
+
+      const companies = await Company.find({
+        companyName: { $regex: safePattern, $options: 'i' }
+      }).sort({ companyName: 1 });
+
+      if (companies.length === 0) {
+        console.error(`No company found for name: ${rawName}`);
+        return res
+          .status(404)
+          .json({ message: 'No company found matching the provided name' });
+      }
+      const company = companies[0];
+      console.log(
+        `Company found: ${company.companyName}, GSTIN: ${company.GSTIN}`
+      );
+
+      if (!company.GSTIN) {
+        console.error('GSTIN missing in company document');
+        return res
+          .status(400)
+          .json({ message: 'Company GSTIN not provided' });
+      }
+
+      console.log(
+        `Fetching e-invoice for quotation ID: ${req.params.id}`
+      );
+      const eInvoice = await EInvoice.findOne({
+        quotationId: req.params.id,
+        cancelled: false
+      });
+      if (!eInvoice) {
+        console.error('E-Invoice not initiated');
+        return res
+          .status(400)
+          .json({ message: 'E-Invoice not initiated' });
+      }
+
+      console.log(
+        `Making Whitebooks API request with GSTIN: ${company.GSTIN}`
+      );
+      const response = await axios.get(
+        `${WHITEBOOKS_API_URL}/einvoice/type/GSTNDETAILS/version/V1_03`,
+        {
+          params: {
+            param1: company.GSTIN,
+            email: WHITEBOOKS_CREDENTIALS.email
+          },
+          headers: {
+            ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
+            client_id: WHITEBOOKS_CREDENTIALS.clientId,
+            client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
+            username: WHITEBOOKS_CREDENTIALS.username,
+            'auth-token': eInvoice.authToken,
+            gstin: WHITEBOOKS_CREDENTIALS.gstin
+          }
+        }
+      );
+
+      console.log(
+        `Whitebooks API response: status_cd = ${response.data.status_cd}`
+      );
+      const { data, status_cd, status_desc } = response.data;
+      if (status_cd !== '1') {
+        console.error(`Whitebooks API error: ${status_desc}`);
+        return res.status(400).json({
+          message: 'Failed to fetch customer details',
+          status_desc
+        });
+      }
+
+      const customerDetails = {
+        gstin: data.Gstin,
+        legalName: data.LegalName,
+        tradeName: data.TradeName,
+        address1: `${data.AddrBno || ''} ${data.AddrBnm || ''} ${
+          data.AddrFlno || ''
+        }`.trim(),
+        address2: data.AddrSt || '',
+        location: data.AddrLoc,
+        pincode: data.AddrPncd.toString(),
+        stateCode: data.StateCode.toString(),
+        phone: company.clients[0]?.contactNumber || '',
+        email: company.clients[0]?.email || ''
+      };
+
+      console.log('Updating EInvoice with customer details');
+      const updatedEInvoice = await EInvoice.findOneAndUpdate(
+        { quotationId: req.params.id, cancelled: false },
+        { customerDetails, createdBy: req.user.email },
+        { upsert: true, new: true }
+      );
+
+      res.json({
+        message: 'Customer details fetched',
+        customerDetails,
+        eInvoice: updatedEInvoice
+      });
+    } catch (err) {
+      console.error('Customer details error:', err.message, err.stack);
+      res
+        .status(500)
+        .json({ message: 'Failed to fetch customer details', error: err.message });
+    }
+  }
+);
+
+router.post("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    console.log(`Generating reference JSON for quotation ID: ${req.params.id} at ${new Date().toISOString()}`);
+    const quotation = await Quotation.findById(req.params.id);
+    if (!quotation) {
+      console.error("Quotation not found");
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    console.log(`Fetching e-invoice for quotation ID: ${req.params.id}`);
+    const eInvoice = await EInvoice.findOne({ quotationId: req.params.id, cancelled: false });
+    if (!eInvoice) {
+      console.error("E-Invoice not initiated");
+      return res.status(400).json({ message: "E-Invoice not initiated" });
+    }
+
+    if (!eInvoice.customerDetails) {
+      console.error("Customer details not fetched");
+      return res.status(400).json({ message: "Customer details not fetched yet" });
+    }
+
+    const { customerDetails } = eInvoice;
+    const referenceJson = {
+      Version: "1.1",
+      TranDtls: {
+        TaxSch: "GST",
+        SupTyp: "B2B",
+        RegRev: "N",
+        IgstOnIntra: "N",
+      },
+      DocDtls: {
+        Typ: "INV",
+        No: quotation.opportunityNumber || `INV-${req.params.id}`,
+        Dt: new Date().toISOString().split("T")[0],
+      },
+      SellerDtls: {
+        Gstin: "29ABCFA9924A1ZL",
+        LglNm: "ACE PRINT PACK",
+        TrdNm: "ACE PRINT PACK",
+        Addr1: "NO. 2, 2ND FLOOR, R.R.CHAMBERS",
+        Addr2: "11TH MAIN, VASANTHNAGAR, BENGALURU",
+        Loc: "VASANTHNAGAR, BENGALURU",
+        Pin: 560052,
+        Stcd: "29",
+        Ph: WHITEBOOKS_CREDENTIALS.phone || "1234567890",
+        Em: WHITEBOOKS_CREDENTIALS.email || "email@example.com",
+      },
+      BuyerDtls: {
+        Gstin: customerDetails.gstin,
+        LglNm: customerDetails.legalName,
+        TrdNm: customerDetails.tradeName,
+        Addr1: customerDetails.address1,
+        Addr2: customerDetails.address2,
+        Loc: customerDetails.location,
+        Pin: customerDetails.pincode,
+        Stcd: customerDetails.stateCode,
+        Ph: customerDetails.phone,
+        Em: customerDetails.email,
+      },
+      ItemList: quotation.items.map((item, index) => ({
+        SlNo: item.slNo || index + 1,
+        PrdDesc: item.product,
+        IsServc: "N",
+        HsnCd: item.hsnCode || "999999", // Default HSN if not provided
+        Qty: item.quantity || 1,
+        Unit: "NOS", // Adjust unit as per your data
+        UnitPrice: item.rate || 0,
+        TotAmt: (item.rate || 0) * (item.quantity || 1),
+        Discount: 0,
+        AssAmt: (item.rate || 0) * (item.quantity || 1),
+        GstRt: item.productGST || quotation.gst || 18,
+        IgstAmt: 0,
+        CgstAmt: 0,
+        SgstAmt: 0,
+        CesRt: 0,
+        CesAmt: 0,
+        CesNonAdvlAmt: 0,
+        StateCesRt: 0,
+        StateCesAmt: 0,
+        StateCesNonAdvlAmt: 0,
+        OthChrg: 0,
+      })),
+      ValDtls: {
+        AssVal: quotation.items.reduce((sum, item) => sum + (item.rate || 0) * (item.quantity || 1), 0),
+        CgstVal: 0,
+        SgstVal: 0,
+        IgstVal: 0,
+        CesVal: 0,
+        StCesVal: 0,
+        Discount: 0,
+        OthChrg: 0,
+        TotInvVal: quotation.items.reduce((sum, item) => {
+          const amount = (item.rate || 0) * (item.quantity || 1);
+          const gst = (amount * (item.productGST || quotation.gst || 18)) / 100;
+          return sum + amount + gst;
+        }, 0),
+        TotInvValFc: 0,
+        TennDisc: 0,
+      },
+    };
+
+    console.log("Generated reference JSON:", JSON.stringify(referenceJson, null, 2));
+    const updatedEInvoice = await EInvoice.findOneAndUpdate(
+      { quotationId: req.params.id, cancelled: false },
+      { referenceJson, createdBy: req.user.email },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      message: "Reference JSON generated",
+      referenceJson,
+      eInvoice: updatedEInvoice,
+    });
+  } catch (err) {
+    console.error("Reference JSON generation error:", err.message, err.stack);
+    res.status(500).json({ message: "Failed to generate reference JSON", error: err.message });
+  }
+});
+
+router.put("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { referenceJson } = req.body;
+    const eInvoice = await EInvoice.findOneAndUpdate(
+      { quotationId: req.params.id, cancelled: false },
+      { referenceJson, createdBy: req.user.email },
+      { new: true }
+    );
+    if (!eInvoice) return res.status(404).json({ message: "E-Invoice not found" });
+    res.json({ message: "Reference JSON updated", eInvoice });
+  } catch (err) {
+    console.error("Update reference JSON error:", err);
+    res.status(500).json({ message: "Failed to update reference JSON" });
+  }
+});
+
+router.post(
+  "/quotations/:id/einvoice/generate",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      console.log(
+        `[Step 1] Starting IRN generation for quotation ID: ${req.params.id} at ${new Date().toISOString()}`
+      );
+
+      // Step 1: load quotation
+      const quotation = await Quotation.findById(req.params.id);
+      if (!quotation) {
+        console.error("[Step 1] Quotation not found");
+        return res.status(404).json({ message: "Quotation not found" });
+      }
+
+      // Step 2: load e‑invoice record
+      console.log(`[Step 2] Fetching e‑invoice for quotation ID: ${req.params.id}`);
+      const eInvoice = await EInvoice.findOne({
+        quotationId: req.params.id,
+        cancelled: false,
+      });
+      if (!eInvoice) {
+        console.error("[Step 2] E‑Invoice not initiated");
+        return res.status(400).json({ message: "E‑Invoice not initiated" });
+      }
+
+      // Step 3: verify we have both referenceJson and customerDetails
+      if (!eInvoice.referenceJson) {
+        console.error("[Step 3] Reference JSON not generated");
+        return res
+          .status(400)
+          .json({ message: "Reference JSON not generated yet" });
+      }
+      if (!eInvoice.customerDetails) {
+        console.error("[Step 3] Customer details not fetched");
+        return res
+          .status(400)
+          .json({ message: "Customer details not fetched yet" });
+      }
+
+      console.log("[Step 3] Reference JSON and customer details validated");
+
+      // Step 4: prepare headers and payload
+      const payload = eInvoice.referenceJson; // raw JSON object
+
+      const headers = {
+        ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
+        client_id: WHITEBOOKS_CREDENTIALS.clientId,
+        client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
+        username: WHITEBOOKS_CREDENTIALS.username,
+        "auth-token": eInvoice.authToken,
+        gstin: WHITEBOOKS_CREDENTIALS.gstin,
+        "Content-Type": "application/json",
+      };
+
+      console.log("[Step 4] Sending IRN generation request to Whitebooks…");
+      const response = await axios.post(
+        `${WHITEBOOKS_API_URL}/einvoice/type/GENERATE/version/V1_03`,
+        payload,
+        { headers }
+      );
+
+      console.log(
+        `[Step 5] Whitebooks API response data:`,
+        JSON.stringify(response.data, null, 2)
+      );
+
+      // Step 6: check status_cd in the JSON body
+      const { data, status_cd, status_desc } = response.data || {};
+      if (status_cd !== "1") {
+        console.error(`[Step 6] IRN generation failed: ${status_cd} / ${status_desc}`);
+        return res
+          .status(400)
+          .json({ message: "IRN generation failed", status_cd, status_desc });
+      }
+
+      // Step 7: persist IRN, AckNo, etc.
+      console.log("[Step 7] IRN generation successful, updating EInvoice…");
+      const updatedEInvoice = await EInvoice.findOneAndUpdate(
+        { quotationId: req.params.id, cancelled: false },
+        {
+          irn: data.Irn,
+          ackNo: data.AckNo,
+          ackDt: data.AckDt,
+          signedInvoice: data.SignedInvoice || "",
+          signedQRCode: data.SignedQRCode || "",
+          status: "GENERATED",
+          createdBy: req.user.email,
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(`[Step 7] EInvoice updated with IRN: ${data.Irn}`);
+      return res.json({
+        message: "IRN generated successfully",
+        irn: data.Irn,
+        eInvoice: updatedEInvoice,
+      });
+    } catch (err) {
+      console.error("[Step 8] Unexpected error during IRN generation:", err);
+      return res
+        .status(500)
+        .json({ message: "Failed to generate IRN", error: err.message });
+    }
+  }
+);
+
+router.put("/quotations/:id/einvoice/cancel", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const eInvoice = await EInvoice.findOneAndUpdate(
+      { quotationId: req.params.id, cancelled: false },
+      { cancelled: true, createdBy: req.user.email },
+      { new: true }
+    );
+    if (!eInvoice) return res.status(404).json({ message: "E-Invoice not found" });
+    res.json({ message: "E-Invoice cancelled", eInvoice });
+  } catch (err) {
+    console.error("Cancel e-invoice error:", err);
+    res.status(500).json({ message: "Failed to cancel e-invoice" });
   }
 });
 
