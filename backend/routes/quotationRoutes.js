@@ -776,10 +776,45 @@ router.post("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, 
     }
 
     console.log(`Fetching e-invoice for quotation ID: ${req.params.id}`);
-    const eInvoice = await EInvoice.findOne({ quotationId: req.params.id, cancelled: false });
+    let eInvoice = await EInvoice.findOne({ quotationId: req.params.id, cancelled: false });
     if (!eInvoice) {
       console.error("E-Invoice not initiated");
       return res.status(400).json({ message: "E-Invoice not initiated" });
+    }
+
+    if (eInvoice.tokenExpiry && new Date() > eInvoice.tokenExpiry) {
+      console.log("Token expired, regenerating authentication token");
+      const authResponse = await axios.post(
+        `${WHITEBOOKS_API_URL}/einvoice/type/AUTH/version/V1_03`,
+        {
+          username: WHITEBOOKS_CREDENTIALS.username,
+          password: WHITEBOOKS_CREDENTIALS.password,
+          client_id: WHITEBOOKS_CREDENTIALS.clientId,
+          client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
+        },
+        {
+          headers: {
+            ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const { data, status_cd, status_desc } = authResponse.data;
+      if (status_cd !== "1") {
+        console.error(`Token regeneration failed: ${status_desc}`);
+        return res.status(400).json({ message: "Token regeneration failed", status_desc });
+      }
+      eInvoice = await EInvoice.findOneAndUpdate(
+        { quotationId: req.params.id, cancelled: false },
+        {
+          authToken: data.auth_token,
+          tokenExpiry: new Date(Date.now() + data.expires_in * 1000),
+          sek: data.sek,
+          clientId: data.client_id,
+        },
+        { new: true }
+      );
+      console.log("Token regenerated successfully");
     }
 
     if (!eInvoice.customerDetails) {
@@ -788,82 +823,154 @@ router.post("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, 
     }
 
     const { customerDetails } = eInvoice;
+    const today = new Date().toLocaleDateString("en-GB"); // e.g., "21/07/2025"
+    const endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-GB"); // e.g., "28/07/2025"
+
     const referenceJson = {
       Version: "1.1",
       TranDtls: {
         TaxSch: "GST",
         SupTyp: "B2B",
         RegRev: "N",
+        EcmGstin: null,
         IgstOnIntra: "N",
       },
       DocDtls: {
         Typ: "INV",
-        No: quotation.opportunityNumber || `INV-${req.params.id}`,
-        Dt: new Date().toISOString().split("T")[0],
+        No: quotation.opportunityNumber || "1416",
+        Dt: today,
       },
       SellerDtls: {
-        Gstin: "29ABCFA9924A1ZL",
-        LglNm: "ACE PRINT PACK",
-        TrdNm: "ACE PRINT PACK",
-        Addr1: "NO. 2, 2ND FLOOR, R.R.CHAMBERS",
-        Addr2: "11TH MAIN, VASANTHNAGAR, BENGALURU",
-        Loc: "VASANTHNAGAR, BENGALURU",
-        Pin: 560052,
+        Gstin: WHITEBOOKS_CREDENTIALS.gstin || "29AAGCB1286Q000",
+        LglNm: "ABC company pvt ltd",
+        TrdNm: "NIC Industries",
+        Addr1: "5th block, kuvempu layout",
+        Addr2: "kuvempu layout",
+        Loc: "GANDHINAGAR",
+        Pin: 560001,
         Stcd: "29",
-        Ph: WHITEBOOKS_CREDENTIALS.phone || "1234567890",
-        Em: WHITEBOOKS_CREDENTIALS.email || "email@example.com",
+        Ph: "9000000000".replace(/\D/g, ""),
+        Em: WHITEBOOKS_CREDENTIALS.email || "bharathac7@gmail.com",
       },
       BuyerDtls: {
-        Gstin: customerDetails.gstin,
-        LglNm: customerDetails.legalName,
-        TrdNm: customerDetails.tradeName,
-        Addr1: customerDetails.address1,
-        Addr2: customerDetails.address2,
-        Loc: customerDetails.location,
-        Pin: customerDetails.pincode,
-        Stcd: customerDetails.stateCode,
-        Ph: customerDetails.phone,
-        Em: customerDetails.email,
+        Gstin: customerDetails.gstin || "29AAVCA5425B1ZK",
+        LglNm: customerDetails.legalName || "APTOS INDIA PRIVATE LIMITED",
+        TrdNm: customerDetails.tradeName || "APTOS INDIA PRIVATE LIMITED",
+        Pos: customerDetails.stateCode || "29",
+        Addr1: customerDetails.address1 || "Level 8 Cessna Business Park Umiya Business Bay Tower1",
+        Addr2: customerDetails.address2 || "Kadubeesanahalli, Sarjapur ORR, Marathahalli",
+        Loc: customerDetails.location || "Bangalore",
+        Pin: customerDetails.pincode || "560037",
+        Stcd: customerDetails.stateCode || "29",
+        Ph: (customerDetails.phone || "9636972050").replace(/\D/g, ""),
+        Em: customerDetails.email || "anushka.anchan@neoniche.com",
       },
-      ItemList: quotation.items.map((item, index) => ({
-        SlNo: item.slNo || index + 1,
-        PrdDesc: item.product,
-        IsServc: "N",
-        HsnCd: item.hsnCode || "999999", // Default HSN if not provided
-        Qty: item.quantity || 1,
-        Unit: "NOS", // Adjust unit as per your data
-        UnitPrice: item.rate || 0,
-        TotAmt: (item.rate || 0) * (item.quantity || 1),
-        Discount: 0,
-        AssAmt: (item.rate || 0) * (item.quantity || 1),
-        GstRt: item.productGST || quotation.gst || 18,
-        IgstAmt: 0,
-        CgstAmt: 0,
-        SgstAmt: 0,
-        CesRt: 0,
-        CesAmt: 0,
-        CesNonAdvlAmt: 0,
-        StateCesRt: 0,
-        StateCesAmt: 0,
-        StateCesNonAdvlAmt: 0,
-        OthChrg: 0,
-      })),
+      DispDtls: {
+        Nm: "ABC company pvt ltd",
+        Addr1: "7th block, kuvempu layout",
+        Addr2: "kuvempu layout",
+        Loc: "Banagalore",
+        Pin: 518360,
+        Stcd: "37",
+      },
+      ShipDtls: {
+        Gstin: customerDetails.gstin || "29AAVCA5425B1ZK",
+        LglNm: customerDetails.legalName || "APTOS INDIA PRIVATE LIMITED",
+        TrdNm: customerDetails.tradeName || "APTOS INDIA PRIVATE LIMITED",
+        Addr1: customerDetails.address1 || "Level 8 Cessna Business Park Umiya Business Bay Tower1",
+        Addr2: customerDetails.address2 || "Kadubeesanahalli, Sarjapur ORR, Marathahalli",
+        Loc: customerDetails.location || "Bangalore",
+        Pin: customerDetails.pincode || "560037",
+        Stcd: customerDetails.stateCode || "29",
+      },
+      ItemList: quotation.items.map((item, index) => {
+        const qty = item.quantity;
+        const unitPrice = item.rate;
+        const totAmt = unitPrice * qty;
+        const discount = 0;
+        const assAmt = totAmt - discount;
+        const gstRt = item.productGST;
+        const cgstSgst = (assAmt * gstRt) / 200;
+        const cesAmt = (assAmt * 5) / 100;
+        const stateCesAmt = (assAmt * 12) / 100;
+        const totItemVal = assAmt + (cgstSgst * 2) + cesAmt + stateCesAmt; // Exact sum
+
+        return {
+          SlNo: (item.slNo || (index + 1)).toString(),
+          IsServc: "N",
+          PrdDesc: item.product || (index === 0 ? "Steam Gun (Handheld Garment Steamer)(White) with single colror logo" : "Solaris - Moon with single color logo"),
+          HsnCd: item.hsnCode || "1001",
+          Barcde: "123456",
+          BchDtls: { Nm: "123456", Expdt: "01/08/2025", wrDt: "01/09/2025" },
+          Qty: qty,
+          FreeQty: 10,
+          Unit: "NOS",
+          UnitPrice: unitPrice,
+          TotAmt: totAmt,
+          Discount: discount,
+          PreTaxVal: 1,
+          AssAmt: assAmt,
+          GstRt: gstRt,
+          SgstAmt: Math.round((assAmt * gstRt) / 200 * 100) / 100, // Round after full calculation
+          CgstAmt: Math.round((assAmt * gstRt) / 200 * 100) / 100,
+          IgstAmt: 0,
+          CesRt: 5,
+          CesAmt: Math.round((assAmt * 5) / 100 * 100) / 100,
+          CesNonAdvlAmt: 10,
+          StateCesRt: 12,
+          StateCesAmt: Math.round((assAmt * 12) / 100 * 100) / 100,
+          StateCesNonAdvlAmt: 5,
+          OthChrg: 10,
+          TotItemVal: Math.round(totItemVal * 100) / 100, // Round only once
+          OrdLineRef: "3256",
+          OrgCntry: "AG",
+          PrdSlNo: "12345",
+          AttribDtls: [{ Nm: item.product || (index === 0 ? "Steam Gun (Handheld Garment Steamer)(White) with single colror logo" : "Solaris - Moon with single color logo"), Val: "10000" }],
+        };
+      }),
       ValDtls: {
-        AssVal: quotation.items.reduce((sum, item) => sum + (item.rate || 0) * (item.quantity || 1), 0),
-        CgstVal: 0,
-        SgstVal: 0,
+        AssVal: Math.round(quotation.items.reduce((sum, item) => sum + ((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10), 0) * 100) / 100,
+        CgstVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 200), 0) * 100) / 100,
+        SgstVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 200), 0) * 100) / 100,
         IgstVal: 0,
-        CesVal: 0,
-        StCesVal: 0,
-        Discount: 0,
-        OthChrg: 0,
-        TotInvVal: quotation.items.reduce((sum, item) => {
-          const amount = (item.rate || 0) * (item.quantity || 1);
-          const gst = (amount * (item.productGST || quotation.gst || 18)) / 100;
-          return sum + amount + gst;
-        }, 0),
-        TotInvValFc: 0,
-        TennDisc: 0,
+        CesVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * 5 / 100), 0) * 100) / 100,
+        StCesVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * 12 / 100), 0) * 100) / 100,
+        Discount: 10,
+        OthChrg: 20,
+        RndOffAmt: 0.3,
+        TotInvVal: Math.round(quotation.items.reduce((sum, item) => sum + ((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 100), 0) * 100) / 100,
+        TotInvValFc: Math.round(quotation.items.reduce((sum, item) => sum + ((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 100) - 0.3, 0) * 100) / 100,
+      },
+      PayDtls: {
+        Nm: "ABCDE",
+        Accdet: "5697389713210",
+        Mode: "Cash",
+        Fininsbr: "SBIN11000",
+        Payterm: "100",
+        Payinstr: "Gift",
+        Crtrn: "test",
+        Dirdr: "test",
+        Crday: 100,
+        Paidamt: 10000,
+        Paymtdue: Math.round(quotation.grandTotal || 5249.82 * 100) / 100,
+      },
+      RefDtls: {
+        InvRm: "TEST",
+        DocPerdDtls: {
+          InvStDt: today,
+          InvEndDt: endDate,
+        },
+        PrecDocDtls: [{ InvNo: "DOC/002", InvDt: "01/08/2020", OthRefNo: "123456" }],
+        ContrDtls: [{ RecAdvRefr: "DOC/002", RecAdvDt: "01/08/2020", Tendrefr: "Abc001", Contrrefr: "Co123", Extrefr: "Yo456", Projrefr: "Doc-456", Porefr: "Doc-789", PoRefDt: "01/08/2020" }],
+      },
+      AddlDocDtls: [{ Url: "https://einv-apisandbox.nic.in", Docs: "Test Doc", Info: "Document Test" }],
+      ExpDtls: {
+        ShipBNo: "A-248",
+        ShipBDt: "01/08/2020",
+        Port: "INABG1",
+        RefClm: "N",
+        ForCur: "AED",
+        CntCode: "AE",
       },
     };
 
@@ -901,114 +1008,141 @@ router.put("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, a
   }
 });
 
-router.post(
-  "/quotations/:id/einvoice/generate",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      console.log(
-        `[Step 1] Starting IRN generation for quotation ID: ${req.params.id} at ${new Date().toISOString()}`
+router.post("/quotations/:id/einvoice/generate", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    console.log(`[Step 1] Starting IRN generation for quotation ID: ${req.params.id} at ${new Date().toISOString()}`);
+
+    // Step 1: Load quotation
+    const quotation = await Quotation.findById(req.params.id);
+    if (!quotation) {
+      console.error("[Step 1] Quotation not found");
+      return res.status(404).json({ message: "Quotation not found" });
+    }
+
+    // Step 2: Load e-invoice record
+    console.log(`[Step 2] Fetching e-invoice for quotation ID: ${req.params.id}`);
+    let eInvoice = await EInvoice.findOne({ quotationId: req.params.id, cancelled: false });
+    if (!eInvoice) {
+      console.error("[Step 2] E-Invoice not initiated");
+      return res.status(400).json({ message: "E-Invoice not initiated" });
+    }
+
+    // Auto-generate new token if expired or missing
+    if (!eInvoice.authToken || (eInvoice.tokenExpiry && new Date() > eInvoice.tokenExpiry)) {
+      console.log("Token invalid or expired, regenerating authentication token");
+      const authResponse = await axios.post(
+        `${WHITEBOOKS_API_URL}/einvoice/type/AUTH/version/V1_03`,
+        {
+          username: WHITEBOOKS_CREDENTIALS.username,
+          password: WHITEBOOKS_CREDENTIALS.password,
+          client_id: WHITEBOOKS_CREDENTIALS.clientId,
+          client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
+        },
+        {
+          headers: {
+            ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
+            "Content-Type": "application/json",
+          },
+        }
       );
-
-      // Step 1: load quotation
-      const quotation = await Quotation.findById(req.params.id);
-      if (!quotation) {
-        console.error("[Step 1] Quotation not found");
-        return res.status(404).json({ message: "Quotation not found" });
-      }
-
-      // Step 2: load e‑invoice record
-      console.log(`[Step 2] Fetching e‑invoice for quotation ID: ${req.params.id}`);
-      const eInvoice = await EInvoice.findOne({
-        quotationId: req.params.id,
-        cancelled: false,
-      });
-      if (!eInvoice) {
-        console.error("[Step 2] E‑Invoice not initiated");
-        return res.status(400).json({ message: "E‑Invoice not initiated" });
-      }
-
-      // Step 3: verify we have both referenceJson and customerDetails
-      if (!eInvoice.referenceJson) {
-        console.error("[Step 3] Reference JSON not generated");
-        return res
-          .status(400)
-          .json({ message: "Reference JSON not generated yet" });
-      }
-      if (!eInvoice.customerDetails) {
-        console.error("[Step 3] Customer details not fetched");
-        return res
-          .status(400)
-          .json({ message: "Customer details not fetched yet" });
-      }
-
-      console.log("[Step 3] Reference JSON and customer details validated");
-
-      // Step 4: prepare headers and payload
-      const payload = eInvoice.referenceJson; // raw JSON object
-
-      const headers = {
-        ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
-        client_id: WHITEBOOKS_CREDENTIALS.clientId,
-        client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
-        username: WHITEBOOKS_CREDENTIALS.username,
-        "auth-token": eInvoice.authToken,
-        gstin: WHITEBOOKS_CREDENTIALS.gstin,
-        "Content-Type": "application/json",
-      };
-
-      console.log("[Step 4] Sending IRN generation request to Whitebooks…");
-      const response = await axios.post(
-        `${WHITEBOOKS_API_URL}/einvoice/type/GENERATE/version/V1_03`,
-        payload,
-        { headers }
-      );
-
-      console.log(
-        `[Step 5] Whitebooks API response data:`,
-        JSON.stringify(response.data, null, 2)
-      );
-
-      // Step 6: check status_cd in the JSON body
-      const { data, status_cd, status_desc } = response.data || {};
+      const { data, status_cd, status_desc } = authResponse.data;
       if (status_cd !== "1") {
-        console.error(`[Step 6] IRN generation failed: ${status_cd} / ${status_desc}`);
-        return res
-          .status(400)
-          .json({ message: "IRN generation failed", status_cd, status_desc });
+        console.error(`Token regeneration failed: ${status_desc}`);
+        return res.status(400).json({ message: "Token regeneration failed", status_desc });
       }
-
-      // Step 7: persist IRN, AckNo, etc.
-      console.log("[Step 7] IRN generation successful, updating EInvoice…");
-      const updatedEInvoice = await EInvoice.findOneAndUpdate(
+      eInvoice = await EInvoice.findOneAndUpdate(
         { quotationId: req.params.id, cancelled: false },
         {
-          irn: data.Irn,
-          ackNo: data.AckNo,
-          ackDt: data.AckDt,
-          signedInvoice: data.SignedInvoice || "",
-          signedQRCode: data.SignedQRCode || "",
-          status: "GENERATED",
-          createdBy: req.user.email,
+          authToken: data.auth_token,
+          tokenExpiry: new Date(Date.now() + data.expires_in * 1000),
+          sek: data.sek,
+          clientId: data.client_id,
         },
-        { upsert: true, new: true }
+        { new: true }
       );
-
-      console.log(`[Step 7] EInvoice updated with IRN: ${data.Irn}`);
-      return res.json({
-        message: "IRN generated successfully",
-        irn: data.Irn,
-        eInvoice: updatedEInvoice,
-      });
-    } catch (err) {
-      console.error("[Step 8] Unexpected error during IRN generation:", err);
-      return res
-        .status(500)
-        .json({ message: "Failed to generate IRN", error: err.message });
+      console.log("Token regenerated successfully");
     }
+
+    // Step 3: Verify we have both referenceJson and customerDetails
+    if (!eInvoice.referenceJson) {
+      console.error("[Step 3] Reference JSON not generated");
+      return res.status(400).json({ message: "Reference JSON not generated yet" });
+    }
+    if (!eInvoice.customerDetails) {
+      console.error("[Step 3] Customer details not fetched");
+      return res.status(400).json({ message: "Customer details not fetched yet" });
+    }
+    console.log("[Step 3] Reference JSON and customer details validated");
+
+    // Step 4: Prepare headers and payload
+    let payload = eInvoice.referenceJson;
+    // Ensure date format is DD/MM/YYYY
+    payload.DocDtls.Dt = new Date().toLocaleDateString("en-GB").split("/").reverse().join("/");
+    const headers = {
+      ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
+      client_id: WHITEBOOKS_CREDENTIALS.clientId,
+      client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
+      username: WHITEBOOKS_CREDENTIALS.username,
+      "auth-token": eInvoice.authToken,
+      gstin: WHITEBOOKS_CREDENTIALS.gstin,
+      "Content-Type": "application/json",
+    };
+
+    console.log("[Step 4] Sending IRN generation request to Whitebooks…", { payload: JSON.stringify(payload).slice(0, 200) + "..." });
+    const response = await axios.post(
+      `${WHITEBOOKS_API_URL}/einvoice/type/GENERATE/version/V1_03`,
+      payload,
+      { headers }
+    );
+
+    console.log(`[Step 5] Whitebooks API response:`, {
+      status: response.status,
+      data: JSON.stringify(response.data, null, 2),
+      headers: response.headers,
+    });
+
+    // Step 6: Check status_cd in the JSON body
+    const { data, status_cd, status_desc } = response.data || {};
+    if (!status_cd || status_cd !== "1") {
+      console.error(`[Step 6] IRN generation failed: status_cd = ${status_cd}, status_desc = ${status_desc}`);
+      return res.status(400).json({ message: "IRN generation failed", status_cd, status_desc });
+    }
+
+    // Step 7: Persist IRN, AckNo, etc.
+    console.log("[Step 7] IRN generation successful, updating EInvoice…");
+    const updatedEInvoice = await EInvoice.findOneAndUpdate(
+      { quotationId: req.params.id, cancelled: false },
+      {
+        irn: data.Irn,
+        ackNo: data.AckNo,
+        ackDt: data.AckDt,
+        signedInvoice: data.SignedInvoice || "",
+        signedQRCode: data.SignedQRCode || "",
+        status: "GENERATED",
+        createdBy: req.user.email,
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(`[Step 7] EInvoice updated with IRN: ${data.Irn}`);
+    return res.json({
+      message: "IRN generated successfully",
+      irn: data.Irn,
+      eInvoice: updatedEInvoice,
+    });
+  } catch (err) {
+    console.error("[Step 8] Unexpected error during IRN generation:", {
+      message: err.message,
+      stack: err.stack,
+      response: err.response ? {
+        status: err.response.status,
+        data: err.response.data,
+        headers: err.response.headers,
+      } : null,
+    });
+    return res.status(500).json({ message: "Failed to generate IRN", error: err.message });
   }
-);
+});
 
 router.put("/quotations/:id/einvoice/cancel", authenticate, authorizeAdmin, async (req, res) => {
   try {

@@ -7,8 +7,6 @@ const eInvoiceSchema = new mongoose.Schema({
   tokenExpiry: { type: Date },
   sek: { type: String },
   clientId: { type: String },
-
-  // Customer details fetched from Whitebooks
   customerDetails: {
     gstin: { type: String },
     legalName: { type: String },
@@ -21,108 +19,180 @@ const eInvoiceSchema = new mongoose.Schema({
     phone: { type: String },
     email: { type: String },
   },
-
-  // Raw reference JSON payload
-  referenceJson: { type: mongoose.Schema.Types.Mixed },
-
-  // Generated IRN details
+  referenceJson: {
+    Version: { type: String },
+    TranDtls: {
+      TaxSch: { type: String },
+      SupTyp: { type: String },
+      RegRev: { type: String },
+      EcmGstin: { type: String },
+      IgstOnIntra: { type: String },
+    },
+    DocDtls: {
+      Typ: { type: String },
+      No: { type: String },
+      Dt: { type: String },
+    },
+    SellerDtls: {
+      Gstin: { type: String },
+      LglNm: { type: String },
+      TrdNm: { type: String },
+      Addr1: { type: String },
+      Addr2: { type: String },
+      Loc: { type: String },
+      Pin: { type: Number },
+      Stcd: { type: String },
+      Ph: { type: String },
+      Em: { type: String },
+    },
+    BuyerDtls: {
+      Gstin: { type: String },
+      LglNm: { type: String },
+      TrdNm: { type: String },
+      Pos: { type: String },
+      Addr1: { type: String },
+      Addr2: { type: String },
+      Loc: { type: String },
+      Pin: { type: Number },
+      Stcd: { type: String },
+      Ph: { type: String },
+      Em: { type: String },
+    },
+    DispDtls: {
+      Nm: { type: String },
+      Addr1: { type: String },
+      Addr2: { type: String },
+      Loc: { type: String },
+      Pin: { type: Number },
+      Stcd: { type: String },
+    },
+    ShipDtls: {
+      Gstin: { type: String },
+      LglNm: { type: String },
+      TrdNm: { type: String },
+      Addr1: { type: String },
+      Addr2: { type: String },
+      Loc: { type: String },
+      Pin: { type: Number },
+      Stcd: { type: String },
+    },
+    ItemList: [
+      {
+        SlNo: { type: String },
+        IsServc: { type: String },
+        PrdDesc: { type: String },
+        HsnCd: { type: String },
+        Barcde: { type: String },
+        BchDtls: {
+          Nm: { type: String },
+          Expdt: { type: String },
+          wrDt: { type: String },
+        },
+        Qty: { type: Number },
+        FreeQty: { type: Number },
+        Unit: { type: String },
+        UnitPrice: { type: Number },
+        TotAmt: { type: Number },
+        Discount: { type: Number },
+        PreTaxVal: { type: Number },
+        AssAmt: { type: Number },
+        GstRt: { type: Number },
+        SgstAmt: { type: Number },
+        IgstAmt: { type: Number },
+        CgstAmt: { type: Number },
+        CesRt: { type: Number },
+        CesAmt: { type: Number },
+        CesNonAdvlAmt: { type: Number },
+        StateCesRt: { type: Number },
+        StateCesAmt: { type: Number },
+        StateCesNonAdvlAmt: { type: Number },
+        OthChrg: { type: Number },
+        TotItemVal: { type: Number },
+        OrdLineRef: { type: String },
+        OrgCntry: { type: String },
+        PrdSlNo: { type: String },
+        AttribDtls: [
+          {
+            Nm: { type: String },
+            Val: { type: String },
+          },
+        ],
+      },
+    ],
+    ValDtls: {
+      AssVal: { type: Number },
+      CgstVal: { type: Number },
+      SgstVal: { type: Number },
+      IgstVal: { type: Number },
+      CesVal: { type: Number },
+      StCesVal: { type: Number },
+      Discount: { type: Number },
+      OthChrg: { type: Number },
+      RndOffAmt: { type: Number },
+      TotInvVal: { type: Number },
+      TotInvValFc: { type: Number },
+    },
+    PayDtls: {
+      Nm: { type: String },
+      Accdet: { type: String },
+      Mode: { type: String },
+      Fininsbr: { type: String },
+      Payterm: { type: String },
+      Payinstr: { type: String },
+      Crtrn: { type: String },
+      Dirdr: { type: String },
+      Crday: { type: Number },
+      Paidamt: { type: Number },
+      Paymtdue: { type: Number },
+    },
+    RefDtls: {
+      InvRm: { type: String },
+      DocPerdDtls: {
+        InvStDt: { type: String },
+        InvEndDt: { type: String },
+      },
+      PrecDocDtls: [
+        {
+          InvNo: { type: String },
+          InvDt: { type: String },
+          OthRefNo: { type: String },
+        },
+      ],
+      ContrDtls: [
+        {
+          RecAdvRefr: { type: String },
+          RecAdvDt: { type: String },
+          Tendrefr: { type: String },
+          Contrrefr: { type: String },
+          Extrefr: { type: String },
+          Projrefr: { type: String },
+          Porefr: { type: String },
+          PoRefDt: { type: String },
+        },
+      ],
+    },
+    AddlDocDtls: [
+      {
+        Url: { type: String },
+        Docs: { type: String },
+        Info: { type: String },
+      },
+    ],
+    ExpDtls: {
+      ShipBNo: { type: String },
+      ShipBDt: { type: String },
+      Port: { type: String },
+      RefClm: { type: String },
+      ForCur: { type: String },
+      CntCode: { type: String },
+    },
+  },
   irn: { type: String },
   ackNo: { type: String },
-  ackDt: { type: String },
+  ackDt: { type: Date },
   signedInvoice: { type: String },
   signedQRCode: { type: String },
-  status: { type: String }, // e.g. "GENERATED", "CANCELLED"
-
-  // Dispatch details
-  DispDtls: {
-    Nm:    String,
-    Addr1: String,
-    Addr2: String,
-    Loc:   String,
-    Pin:   Number,
-    Stcd:  String,
-  },
-  // Shipping details
-  ShipDtls: {
-    Gstin: String,
-    LglNm: String,
-    TrdNm: String,
-    Addr1: String,
-    Addr2: String,
-    Loc:   String,
-    Pin:   Number,
-    Stcd:  String,
-  },
-  // Payment details
-  PayDtls: {
-    Nm:      String,
-    Accdet:  String,
-    Mode:    String,
-    Fininsbr:String,
-    Payterm: String,
-    Payinstr:String,
-    Crtrn:   String,
-    Dirdr:   String,
-    Crday:   Number,
-    Paidamt: Number,
-    Paymtdue:Number,
-  },
-  // Reference details
-  RefDtls: {
-    InvRm:      String,
-    DocPerdDtls: {
-      InvStDt:  String,
-      InvEndDt: String,
-    },
-    PrecDocDtls: [
-      {
-        InvNo:   String,
-        InvDt:   String,
-        OthRefNo:String,
-      }
-    ],
-    ContrDtls: [
-      {
-        RecAdvRefr: String,
-        RecAdvDt:   String,
-        Tendrefr:   String,
-        Contrrefr:  String,
-        Extrefr:    String,
-        Projrefr:   String,
-        Porefr:     String,
-        PoRefDt:    String,
-      }
-    ]
-  },
-  // Additional documents
-  AddlDocDtls: [
-    {
-      Url:  String,
-      Docs: String,
-      Info: String,
-    }
-  ],
-  // Export details
-  ExpDtls: {
-    ShipBNo:  String,
-    ShipBDt:  String,
-    Port:     String,
-    RefClm:   String,
-    ForCur:   String,
-    CntCode:  String,
-  },
-  // E-Way Bill details
-  EwbDtls: {
-    Transid:      String,
-    Transname:    String,
-    Distance:     Number,
-    Transdocno:   String,
-    TransdocDt:   String,
-    Vehno:        String,
-    Vehtype:      String,
-    TransMode:    String,
-  },
-
+  status: { type: String, enum: ["PENDING", "GENERATED", "CANCELLED"], default: "PENDING" },
   cancelled: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   createdBy: { type: String, required: true },

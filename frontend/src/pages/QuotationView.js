@@ -540,8 +540,7 @@ export default function QuotationView() {
           <button
             onClick={() => setEInvoiceModalOpen(true)}
             className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-xs"
-            // disabled={eInvoiceData?.irn && !eInvoiceData?.cancelled}
-            disabled = {true}
+            disabled={true}
           >
             Generate E-Invoice
           </button>
@@ -889,6 +888,15 @@ export default function QuotationView() {
                 >
                   {referenceJson ? "Reference JSON Generated" : "Generate Reference JSON"}
                 </button>
+                {/* Regenerate button appears only if referenceJson exists */}
+                {referenceJson && (
+                  <button
+                    onClick={handleGenerateReferenceJson}
+                    className="ml-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-xs"
+                  >
+                    Regenerate
+                  </button>
+                )}
                 {referenceJson && (
                   <div className="mt-2">
                     <textarea

@@ -327,7 +327,7 @@ const adminPages = [
     name: "Expense Recording",
     defaultPath: "/admin-dashboard/manage-expenses",
     icon: (
-      <img src="/Sample.png" className="h-8 w-8" alt="Samples" />
+      <img src="/expenses.png" className="h-8 w-8" alt="Samples" />
     ),
     subItems: [
       {
