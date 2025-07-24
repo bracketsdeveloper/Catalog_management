@@ -428,14 +428,17 @@ useEffect(() => {
       setCustomerName("");
     }
     // Fetch company details
+    console.log("Fetching company with name:", opp.account);
     axios
       .get(`${BACKEND_URL}/api/admin/companies`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        params: { companyName: opp.account },
+        params: { companyName: opp.account.trim() },
       })
       .then((res) => {
+        console.log("Company fetch response:", res.data);
         const comp = Array.isArray(res.data) ? res.data[0] : res.data;
         if (comp) {
+          console.log("Fetched company details:", comp);
           setSelectedCompanyData(comp);
           setCustomerAddress(comp.companyAddress || "");
           setClients(comp.clients || []);
@@ -444,6 +447,8 @@ useEffect(() => {
             (c) => c.name?.toLowerCase() === opp.contact?.toLowerCase()
           );
           setCustomerEmail(matchingClient?.email || comp.companyEmail || "");
+        } else {
+          console.warn("No company found for:", opp.account, res.data);
         }
       })
       .catch(() => {
@@ -1342,37 +1347,43 @@ useEffect(() => {
 
       {/* Variation Modal */}
       {variationModalOpen && variationModalProduct && (
-        <VariationModal
-          product={variationModalProduct}
-          onClose={closeVariationModal}
-          onSave={handleAddVariations}
-          companySegment={selectedCompanyData?.segment}
-          companyPincode={
-            selectedCompanyData?.pincode ||
-            selectedCompanyData?.companyAddress?.pincode
-          }
-          brandingTypesList={brandingTypesList}
-          segmentsList={segmentsList}
-        />
+        <>
+          {console.log(
+            "VariationModal companyPincode:",
+            selectedCompanyData?.pincode
+          )}
+          <VariationModal
+            product={variationModalProduct}
+            onClose={closeVariationModal}
+            onSave={handleAddVariations}
+            companySegment={selectedCompanyData?.segment}
+            companyPincode={selectedCompanyData?.pincode}
+            brandingTypesList={brandingTypesList}
+            segmentsList={segmentsList}
+          />
+        </>
       )}
 
       {/* Edit Modal */}
       {editModalOpen && editIndex !== null && (
-        <VariationEditModal
-          item={selectedProducts[editIndex]}
-          brandingTypesList={brandingTypesList}
-          segmentsList={segmentsList}
-          segmentName={selectedCompanyData?.segment}
-          companyPincode={
-            selectedCompanyData?.pincode ||
-            selectedCompanyData?.companyAddress?.pincode
-          }
-          onClose={() => setEditModalOpen(false)}
-          onUpdate={(upd) => {
-            handleUpdateItem(upd);
-            setEditModalOpen(false);
-          }}
-        />
+        <>
+          {console.log(
+            "VariationEditModal companyPincode:",
+            selectedCompanyData?.pincode
+          )}
+          <VariationEditModal
+            item={selectedProducts[editIndex]}
+            brandingTypesList={brandingTypesList}
+            segmentsList={segmentsList}
+            segmentName={selectedCompanyData?.segment}
+            companyPincode={selectedCompanyData?.pincode}
+            onClose={() => setEditModalOpen(false)}
+            onUpdate={(upd) => {
+              handleUpdateItem(upd);
+              setEditModalOpen(false);
+            }}
+          />
+        </>
       )}
 
       {/* Company Creation Modal */}

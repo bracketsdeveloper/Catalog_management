@@ -766,231 +766,193 @@ router.get(
   }
 );
 
-router.post("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    console.log(`Generating reference JSON for quotation ID: ${req.params.id} at ${new Date().toISOString()}`);
-    const quotation = await Quotation.findById(req.params.id);
-    if (!quotation) {
-      console.error("Quotation not found");
-      return res.status(404).json({ message: "Quotation not found" });
-    }
+function pad(n) { return n.toString().padStart(2, "0"); }
+function round(n) { return Math.round(n * 100) / 100; }
 
-    console.log(`Fetching e-invoice for quotation ID: ${req.params.id}`);
-    let eInvoice = await EInvoice.findOne({ quotationId: req.params.id, cancelled: false });
-    if (!eInvoice) {
-      console.error("E-Invoice not initiated");
-      return res.status(400).json({ message: "E-Invoice not initiated" });
-    }
 
-    if (eInvoice.tokenExpiry && new Date() > eInvoice.tokenExpiry) {
-      console.log("Token expired, regenerating authentication token");
-      const authResponse = await axios.post(
-        `${WHITEBOOKS_API_URL}/einvoice/type/AUTH/version/V1_03`,
-        {
-          username: WHITEBOOKS_CREDENTIALS.username,
-          password: WHITEBOOKS_CREDENTIALS.password,
-          client_id: WHITEBOOKS_CREDENTIALS.clientId,
-          client_secret: WHITEBOOKS_CREDENTIALS.clientSecret,
-        },
-        {
-          headers: {
-            ip_address: WHITEBOOKS_CREDENTIALS.ipAddress,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const { data, status_cd, status_desc } = authResponse.data;
-      if (status_cd !== "1") {
-        console.error(`Token regeneration failed: ${status_desc}`);
-        return res.status(400).json({ message: "Token regeneration failed", status_desc });
-      }
-      eInvoice = await EInvoice.findOneAndUpdate(
-        { quotationId: req.params.id, cancelled: false },
-        {
-          authToken: data.auth_token,
-          tokenExpiry: new Date(Date.now() + data.expires_in * 1000),
-          sek: data.sek,
-          clientId: data.client_id,
-        },
-        { new: true }
-      );
-      console.log("Token regenerated successfully");
-    }
+function padDigits(n, len = 3) {
+  return n.toString().padStart(len, "0");
+}
+function round(n) {
+  return Math.round(n * 100) / 100;
+}
+function formatDate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const yyyy = dt.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+function validatePhone(raw, who) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length < 6 || digits.length > 12) {
+    throw new Error(`${who} Phone Number must be 6 to 12 digits`);
+  }
+  return digits;
+}
+function validateEmail(email, who) {
+  if (typeof email !== "string") {
+    throw new Error(`${who} e-Mail must be a string`);
+  }
+  if (email.length < 6 || email.length > 100) {
+    throw new Error(`${who} e-Mail length must be between 6 and 100`);
+  }
+  return email;
+}
 
-    if (!eInvoice.customerDetails) {
-      console.error("Customer details not fetched");
-      return res.status(400).json({ message: "Customer details not fetched yet" });
-    }
 
-    const { customerDetails } = eInvoice;
-    const today = new Date().toLocaleDateString("en-GB"); // e.g., "21/07/2025"
-    const endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-GB"); // e.g., "28/07/2025"
+router.post(
+  "/quotations/:id/einvoice/reference",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      // 1) Load quotation & e‑invoice
+      const { id } = req.params;
+      const quotation = await Quotation.findById(id);
+      if (!quotation) return res.status(404).json({ message: "Quotation not found" });
 
-    const referenceJson = {
-      Version: "1.1",
-      TranDtls: {
-        TaxSch: "GST",
-        SupTyp: "B2B",
-        RegRev: "N",
-        EcmGstin: null,
-        IgstOnIntra: "N",
-      },
-      DocDtls: {
-        Typ: "INV",
-        No: quotation.opportunityNumber || "1416",
-        Dt: today,
-      },
-      SellerDtls: {
-        Gstin: WHITEBOOKS_CREDENTIALS.gstin || "29AAGCB1286Q000",
-        LglNm: "ABC company pvt ltd",
-        TrdNm: "NIC Industries",
-        Addr1: "5th block, kuvempu layout",
-        Addr2: "kuvempu layout",
-        Loc: "GANDHINAGAR",
-        Pin: 560001,
+      const eInvoice = await EInvoice.findOne({ quotationId: id, cancelled: false });
+      if (!eInvoice) return res.status(400).json({ message: "E‑Invoice not initiated" });
+
+      // 2) Prepare dates
+      const invDate = formatDate(quotation.createdAt);
+
+      // 3) Seller (ACE PRINT PACK) — hard‑coded
+      const seller = {
+        Gstin: WHITEBOOKS_CREDENTIALS.gstin,
+        LglNm: "ACE PRINT PACK",
+        TrdNm: "ACE PRINT PACK",
+        Addr1: "R.R.CHAMBERS, NO. 2, 2ND FLOOR",
+        Addr2: "11TH MAIN",
+        Loc: "VASANTHNAGAR, BENGALURU",
+        Pin: 560052,
         Stcd: "29",
-        Ph: "9000000000".replace(/\D/g, ""),
-        Em: WHITEBOOKS_CREDENTIALS.email || "bharathac7@gmail.com",
-      },
-      BuyerDtls: {
-        Gstin: customerDetails.gstin || "29AAVCA5425B1ZK",
-        LglNm: customerDetails.legalName || "APTOS INDIA PRIVATE LIMITED",
-        TrdNm: customerDetails.tradeName || "APTOS INDIA PRIVATE LIMITED",
-        Pos: customerDetails.stateCode || "29",
-        Addr1: customerDetails.address1 || "Level 8 Cessna Business Park Umiya Business Bay Tower1",
-        Addr2: customerDetails.address2 || "Kadubeesanahalli, Sarjapur ORR, Marathahalli",
-        Loc: customerDetails.location || "Bangalore",
-        Pin: customerDetails.pincode || "560037",
-        Stcd: customerDetails.stateCode || "29",
-        Ph: (customerDetails.phone || "9636972050").replace(/\D/g, ""),
-        Em: customerDetails.email || "anushka.anchan@neoniche.com",
-      },
-      DispDtls: {
-        Nm: "ABC company pvt ltd",
-        Addr1: "7th block, kuvempu layout",
-        Addr2: "kuvempu layout",
-        Loc: "Banagalore",
-        Pin: 518360,
-        Stcd: "37",
-      },
-      ShipDtls: {
-        Gstin: customerDetails.gstin || "29AAVCA5425B1ZK",
-        LglNm: customerDetails.legalName || "APTOS INDIA PRIVATE LIMITED",
-        TrdNm: customerDetails.tradeName || "APTOS INDIA PRIVATE LIMITED",
-        Addr1: customerDetails.address1 || "Level 8 Cessna Business Park Umiya Business Bay Tower1",
-        Addr2: customerDetails.address2 || "Kadubeesanahalli, Sarjapur ORR, Marathahalli",
-        Loc: customerDetails.location || "Bangalore",
-        Pin: customerDetails.pincode || "560037",
-        Stcd: customerDetails.stateCode || "29",
-      },
-      ItemList: quotation.items.map((item, index) => {
-        const qty = item.quantity;
-        const unitPrice = item.rate;
-        const totAmt = unitPrice * qty;
-        const discount = 0;
-        const assAmt = totAmt - discount;
-        const gstRt = item.productGST;
-        const cgstSgst = (assAmt * gstRt) / 200;
-        const cesAmt = (assAmt * 5) / 100;
-        const stateCesAmt = (assAmt * 12) / 100;
-        const totItemVal = assAmt + (cgstSgst * 2) + cesAmt + stateCesAmt; // Exact sum
+        Ph: "9886672192",
+        Em: "neeraj@aceprintpack.com"
+      };
+
+      // 4) Buyer details — must have been fetched already
+      const b = eInvoice.customerDetails;
+      if (!b) return res.status(400).json({ message: "Customer details not fetched" });
+      const buyer = {
+        Gstin: b.gstin,
+        LglNm: b.legalName,
+        TrdNm: b.tradeName,
+        Pos:   String(b.stateCode),
+        Addr1: b.address1,
+        Addr2: b.address2,
+        Loc:   b.location,
+        Pin:   Number(b.pincode),
+        Stcd:  String(b.stateCode),
+        Ph:    validatePhone(b.phone, "Buyer"),
+        Em:    validateEmail(b.email, "Buyer")
+      };
+
+      // 5) Build items with validations
+      let batchCounter = 1;
+      const items = quotation.items.map((it, idx) => {
+        // HSN code validations
+        const hsn = it.hsnCode || (it.productId && it.productId.hsnCode) || "";
+        if (!hsn) {
+          throw new Error(`HSN Code is required for item #${idx+1}`);
+        }
+        if (hsn.length < 4 || hsn.length > 8) {
+          throw new Error(`HSN Code for item #${idx+1} must be 4–8 chars`);
+        }
+
+        // Batch name validation
+        const batchName = padDigits(batchCounter++, 3);
+        if (batchName.length < 3 || batchName.length > 20) {
+          throw new Error(`Batch Name for item #${idx+1} must be 3–20 chars`);
+        }
+
+        const qty       = Number(it.quantity)    || 0;
+        const unitPrice = Number(it.rate)        || 0;
+        const totAmt    = round(qty * unitPrice);
+        const discount  = 0;
+        const assAmt    = round(totAmt - discount);
+        const gstRt     = Number(it.productGST)  || Number(quotation.gst) || 0;
+        const sameState = seller.Stcd === buyer.Stcd;
+        const cgstAmt   = sameState ? round(assAmt * gstRt / 200) : 0;
+        const sgstAmt   = sameState ? round(assAmt * gstRt / 200) : 0;
+        const igstAmt   = sameState ? 0 : round(assAmt * gstRt / 100);
+        const totItemVal= round(assAmt + cgstAmt + sgstAmt + igstAmt);
 
         return {
-          SlNo: (item.slNo || (index + 1)).toString(),
-          IsServc: "N",
-          PrdDesc: item.product || (index === 0 ? "Steam Gun (Handheld Garment Steamer)(White) with single colror logo" : "Solaris - Moon with single color logo"),
-          HsnCd: item.hsnCode || "1001",
-          Barcde: "123456",
-          BchDtls: { Nm: "123456", Expdt: "01/08/2025", wrDt: "01/09/2025" },
-          Qty: qty,
-          FreeQty: 10,
-          Unit: "NOS",
-          UnitPrice: unitPrice,
-          TotAmt: totAmt,
-          Discount: discount,
-          PreTaxVal: 1,
-          AssAmt: assAmt,
-          GstRt: gstRt,
-          SgstAmt: Math.round((assAmt * gstRt) / 200 * 100) / 100, // Round after full calculation
-          CgstAmt: Math.round((assAmt * gstRt) / 200 * 100) / 100,
-          IgstAmt: 0,
-          CesRt: 5,
-          CesAmt: Math.round((assAmt * 5) / 100 * 100) / 100,
-          CesNonAdvlAmt: 10,
-          StateCesRt: 12,
-          StateCesAmt: Math.round((assAmt * 12) / 100 * 100) / 100,
-          StateCesNonAdvlAmt: 5,
-          OthChrg: 10,
-          TotItemVal: Math.round(totItemVal * 100) / 100, // Round only once
-          OrdLineRef: "3256",
-          OrgCntry: "AG",
-          PrdSlNo: "12345",
-          AttribDtls: [{ Nm: item.product || (index === 0 ? "Steam Gun (Handheld Garment Steamer)(White) with single colror logo" : "Solaris - Moon with single color logo"), Val: "10000" }],
+          SlNo:        String(it.slNo || idx+1),
+          IsServc:     "N",
+          PrdDesc:     it.product,
+          HsnCd:       hsn,
+          BchDtls:     { Nm: batchName },
+          Qty:         qty,
+          Unit:        "NOS",
+          UnitPrice:   unitPrice,
+          TotAmt:      totAmt,
+          Discount:    discount,
+          AssAmt:      assAmt,
+          GstRt:       gstRt,
+          SgstAmt:     sgstAmt,
+          IgstAmt:     igstAmt,
+          CgstAmt:     cgstAmt,
+          TotItemVal:  totItemVal
         };
-      }),
-      ValDtls: {
-        AssVal: Math.round(quotation.items.reduce((sum, item) => sum + ((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10), 0) * 100) / 100,
-        CgstVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 200), 0) * 100) / 100,
-        SgstVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 200), 0) * 100) / 100,
-        IgstVal: 0,
-        CesVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * 5 / 100), 0) * 100) / 100,
-        StCesVal: Math.round(quotation.items.reduce((sum, item) => sum + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * 12 / 100), 0) * 100) / 100,
-        Discount: 10,
-        OthChrg: 20,
-        RndOffAmt: 0.3,
-        TotInvVal: Math.round(quotation.items.reduce((sum, item) => sum + ((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 100), 0) * 100) / 100,
-        TotInvValFc: Math.round(quotation.items.reduce((sum, item) => sum + ((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) + (((item.rate || (item.slNo === 1 ? 2281 : 2188)) * (item.quantity || 1) - 10) * (item.productGST || quotation.gst || 18) / 100) - 0.3, 0) * 100) / 100,
-      },
-      PayDtls: {
-        Nm: "ABCDE",
-        Accdet: "5697389713210",
-        Mode: "Cash",
-        Fininsbr: "SBIN11000",
-        Payterm: "100",
-        Payinstr: "Gift",
-        Crtrn: "test",
-        Dirdr: "test",
-        Crday: 100,
-        Paidamt: 10000,
-        Paymtdue: Math.round(quotation.grandTotal || 5249.82 * 100) / 100,
-      },
-      RefDtls: {
-        InvRm: "TEST",
-        DocPerdDtls: {
-          InvStDt: today,
-          InvEndDt: endDate,
+      });
+
+      // 6) Totals
+      const AssVal    = round(items.reduce((s,i)=>s + i.AssAmt, 0));
+      const CgstVal   = round(items.reduce((s,i)=>s + i.CgstAmt, 0));
+      const SgstVal   = round(items.reduce((s,i)=>s + i.SgstAmt, 0));
+      const IgstVal   = round(items.reduce((s,i)=>s + i.IgstAmt, 0));
+      const TotInvVal = round(items.reduce((s,i)=>s + i.TotItemVal, 0));
+
+      // 7) Assemble JSON
+      const referenceJson = {
+        Version: "1.1",
+        TranDtls: {
+          TaxSch:      "GST",
+          SupTyp:      "B2B",
+          RegRev:      "N",
+          EcmGstin:    null,
+          IgstOnIntra: "N"
         },
-        PrecDocDtls: [{ InvNo: "DOC/002", InvDt: "01/08/2020", OthRefNo: "123456" }],
-        ContrDtls: [{ RecAdvRefr: "DOC/002", RecAdvDt: "01/08/2020", Tendrefr: "Abc001", Contrrefr: "Co123", Extrefr: "Yo456", Projrefr: "Doc-456", Porefr: "Doc-789", PoRefDt: "01/08/2020" }],
-      },
-      AddlDocDtls: [{ Url: "https://einv-apisandbox.nic.in", Docs: "Test Doc", Info: "Document Test" }],
-      ExpDtls: {
-        ShipBNo: "A-248",
-        ShipBDt: "01/08/2020",
-        Port: "INABG1",
-        RefClm: "N",
-        ForCur: "AED",
-        CntCode: "AE",
-      },
-    };
+        DocDtls: {
+          Typ: "INV",
+          No:  quotation.quotationNumber,
+          Dt:  invDate
+        },
+        SellerDtls: seller,
+        BuyerDtls:  buyer,
+        ItemList:   items,
+        ValDtls: {
+          AssVal,
+          CgstVal,
+          SgstVal,
+          IgstVal,
+          TotInvVal
+        }
+      };
 
-    console.log("Generated reference JSON:", JSON.stringify(referenceJson, null, 2));
-    const updatedEInvoice = await EInvoice.findOneAndUpdate(
-      { quotationId: req.params.id, cancelled: false },
-      { referenceJson, createdBy: req.user.email },
-      { upsert: true, new: true }
-    );
+      // 8) Persist and respond
+      const updated = await EInvoice.findOneAndUpdate(
+        { quotationId: id, cancelled: false },
+        { referenceJson, createdBy: req.user.email },
+        { new: true }
+      );
 
-    res.json({
-      message: "Reference JSON generated",
-      referenceJson,
-      eInvoice: updatedEInvoice,
-    });
-  } catch (err) {
-    console.error("Reference JSON generation error:", err.message, err.stack);
-    res.status(500).json({ message: "Failed to generate reference JSON", error: err.message });
+      return res.json({
+        message: "Reference JSON generated",
+        referenceJson,
+        eInvoice: updated
+      });
+    } catch (err) {
+      console.error("Reference JSON generation error:", err);
+      return res
+        .status(400)
+        .json({ message: "Validation failed", error: err.message });
+    }
   }
-});
+);
 
 router.put("/quotations/:id/einvoice/reference", authenticate, authorizeAdmin, async (req, res) => {
   try {
