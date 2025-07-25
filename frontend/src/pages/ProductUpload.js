@@ -716,12 +716,13 @@ export default function ProductManagementPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={loading}
             />
             <div
               {...advRoot()}
-              className="flex items-center px-3 py-2 bg-[#Ff8045] text-white rounded cursor-pointer hover:opacity-90"
+              className={`flex items-center px-3 py-2 bg-[#Ff8045] text-white rounded cursor-pointer hover:opacity-90 ${loading ? "opacity-50 pointer-events-none" : ""}`}
             >
-              <input {...advInput()} />
+              <input {...advInput()} disabled={loading} />
               {advancedSearchLoading ? (
                 <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
@@ -732,6 +733,7 @@ export default function ProductManagementPage() {
               <button
                 onClick={clearAdvancedSearch}
                 className="text-sm px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                disabled={loading}
               >
                 Clear Image Search
               </button>
@@ -741,12 +743,14 @@ export default function ProductManagementPage() {
             <button
               onClick={() => openSingleProductModal()}
               className="px-4 py-2 bg-[#Ff8045] text-white rounded hover:opacity-90"
+              disabled={loading}
             >
               Upload Single Product
             </button>
             <button
               onClick={() => setBulkUploadOpen(true)}
               className="px-4 py-2 bg-[#66C3D0] text-white rounded hover:opacity-90"
+              disabled={loading}
             >
               Bulk Upload
             </button>
@@ -766,7 +770,7 @@ export default function ProductManagementPage() {
           selectedPriceRanges.length ||
           selectedVariationHinges.length) && (
           <div className="mb-4">
-            <button onClick={clearFilters} className="px-4 py-2 bg-red-500 text-white text-xs rounded">
+            <button onClick={clearFilters} className="px-4 py-2 bg-red-500 text-white text-xs rounded" disabled={loading}>
               Clear Filters
             </button>
           </div>
@@ -782,6 +786,7 @@ export default function ProductManagementPage() {
             selectedOptions={selectedCategories}
             toggleOption={(v) => toggleFilter(v, selectedCategories, setSelectedCategories)}
             filterCounts={filterCounts.categories}
+            disabled={loading}
           />
           <DropdownFilter
             label={`SubCats (${selectedSubCategories.length})`}
@@ -791,6 +796,7 @@ export default function ProductManagementPage() {
             selectedOptions={selectedSubCategories}
             toggleOption={(v) => toggleFilter(v, selectedSubCategories, setSelectedSubCategories)}
             filterCounts={filterCounts.subCategories}
+            disabled={loading}
           />
           <DropdownFilter
             label={`Brands (${selectedBrands.length})`}
@@ -800,6 +806,7 @@ export default function ProductManagementPage() {
             selectedOptions={selectedBrands}
             toggleOption={(v) => toggleFilter(v, selectedBrands, setSelectedBrands)}
             filterCounts={filterCounts.brands}
+            disabled={loading}
           />
           <DropdownFilter
             label={`Price Range (${selectedPriceRanges.length})`}
@@ -809,6 +816,7 @@ export default function ProductManagementPage() {
             selectedOptions={selectedPriceRanges}
             toggleOption={(v) => toggleFilter(v, selectedPriceRanges, setSelectedPriceRanges)}
             filterCounts={filterCounts.priceRanges}
+            disabled={loading}
           />
           <DropdownFilter
             label={`Variation Hinge (${selectedVariationHinges.length})`}
@@ -818,6 +826,7 @@ export default function ProductManagementPage() {
             selectedOptions={selectedVariationHinges}
             toggleOption={(v) => toggleFilter(v, selectedVariationHinges, setSelectedVariationHinges)}
             filterCounts={filterCounts.variationHinges}
+            disabled={loading}
           />
         </div>
 
@@ -860,7 +869,7 @@ export default function ProductManagementPage() {
         <div className="flex justify-center items-center mt-6 space-x-4">
           <button
             onClick={prevPage}
-            disabled={currentPage <= 1}
+            disabled={currentPage <= 1 || loading}
             className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
           >
             Previous
@@ -870,7 +879,7 @@ export default function ProductManagementPage() {
           </span>
           <button
             onClick={nextPage}
-            disabled={currentPage >= totalPages}
+            disabled={currentPage >= totalPages || loading}
             className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
           >
             Next
