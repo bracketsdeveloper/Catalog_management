@@ -74,6 +74,62 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
 
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const { filter, searchTerm, userName } = req.query;
+    const currentUserName = req.user.name;
+
+    const andConditions = [];
+
+    if (userName && req.user.isSuperAdmin) {
+      andConditions.push({ opportunityOwner: userName });
+    } else {
+      switch (filter) {
+        case "my":
+          andConditions.push({ opportunityOwner: currentUserName });
+          break;
+        case "team":
+          andConditions.push(
+            { "teamMembers.userName": currentUserName },
+            { opportunityOwner: { $ne: currentUserName } }
+          );
+          break;
+      }
+    }
+
+    if (searchTerm) {
+      const regex = new RegExp(searchTerm, "i");
+      andConditions.push({
+        $or: [
+          { opportunityCode: regex },
+          { opportunityName: regex },
+          { account: regex },
+          { contact: regex },
+          { opportunityStage: regex },
+          { opportunityStatus: regex },
+          { opportunityDetail: regex },
+          { opportunityOwner: regex },
+          { createdBy: regex },
+          { dealRegistrationNumber: regex },
+          { freeTextField: regex },
+        ],
+      });
+    }
+
+    const query = andConditions.length ? { $and: andConditions } : {};
+
+    const opportunities = await Opportunity.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(opportunities);
+  } catch (error) {
+    console.error("Error fetching opportunities:", error);
+    res.status(500).json({ message: "Server error fetching opportunities" });
+  }
+});
+
+
+router.get("/opportunities-pages", authenticate, authorizeAdmin, async (req, res) => {
+  try {
     const {
       filter,
       searchTerm,

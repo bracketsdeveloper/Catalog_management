@@ -132,7 +132,7 @@ function ManageOpportunity() {
           closureToDate: filterCriteria.closureToDate || undefined,
           createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
         };
-        const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+        const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities-pages`, {
           headers: getAuthHeaders(),
           params,
           timeout: 30000, // Added to prevent 504
@@ -248,7 +248,7 @@ function ManageOpportunity() {
         closureToDate: filterCriteria.closureToDate || undefined,
         createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
       };
-      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities-pages`, {
         headers: getAuthHeaders(),
         params,
         timeout: 30000,

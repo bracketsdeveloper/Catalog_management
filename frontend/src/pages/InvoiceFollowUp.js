@@ -41,7 +41,7 @@ export default function ManageInvoiceFollowUp() {
   async function fetchRows() {
     if (!token) {
       toast.error("No authentication token found. Please log in.");
-      window.location.href = "/login"; // Adjust to your login route
+      window.location.href = "/login";
       return;
     }
     setLoading(true);
@@ -59,9 +59,9 @@ export default function ManageInvoiceFollowUp() {
           }),
         ]);
         const inv = invRes.data || [];
-        const disp = dispRes.data || [];
-        const jobs = jobsRes.data || [];
-        console.log("Fetched data (old):", { inv, disp, jobs }); // Debug: Log fetched data
+        const disp = Array.isArray(dispRes.data) ? dispRes.data : []; // Ensure disp is an array
+        const jobs = Array.isArray(jobsRes.data) ? jobsRes.data : []; // Ensure jobs is an array
+        console.log("Fetched data (old):", { inv, disp, jobs });
         const dispMap = disp.reduce((m, d) => {
           m[d.jobSheetNumber] = d.dispatchQty;
           return m;
@@ -96,8 +96,8 @@ export default function ManageInvoiceFollowUp() {
           }),
         ]);
         const inv = invRes.data || [];
-        const jobs = jobsRes.data || [];
-        console.log("Fetched data (new/closed):", { inv, jobs }); // Debug: Log fetched data
+        const jobs = Array.isArray(jobsRes.data) ? jobsRes.data : []; // Ensure jobs is an array
+        console.log("Fetched data (new/closed):", { inv, jobs });
         const jsMap = jobs.reduce((acc, curr) => {
           acc[curr.jobSheetNumber] = curr.clientName;
           return acc;
@@ -115,7 +115,7 @@ export default function ManageInvoiceFollowUp() {
       if (err.response?.status === 401) {
         toast.error("Session expired. Please log in again.");
         localStorage.removeItem("token");
-        window.location.href = "/login"; // Adjust to your login route
+        window.location.href = "/login";
       } else {
         toast.error("Failed to fetch data rows");
       }
@@ -162,7 +162,8 @@ export default function ManageInvoiceFollowUp() {
     setSort(
       sort.field === field
         ? { field, dir: sort.dir === "asc" ? "desc" : "asc" }
-      : { field, dir: "asc" });
+        : { field, dir: "asc" }
+    );
 
   const handleFilterChange = (field, subField, value) => {
     setFilters(prev => ({

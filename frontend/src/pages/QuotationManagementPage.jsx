@@ -194,7 +194,7 @@ export default function QuotationManagementPage() {
         company: companyFilter.length > 0 ? companyFilter : undefined,
         opportunityOwner: opportunityOwnerFilter.length > 0 ? opportunityOwnerFilter : undefined,
       };
-      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotationspages`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
         timeout: 30000, // Added timeout to avoid 504
@@ -706,7 +706,7 @@ export default function QuotationManagementPage() {
     try {
       const token = localStorage.getItem("token");
       // Fetch all quotations for export (no pagination)
-      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotationspages`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           search: searchTerm || undefined,

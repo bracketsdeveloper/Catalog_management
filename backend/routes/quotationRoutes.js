@@ -237,6 +237,73 @@ router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+router.get("/quotationspages", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 100, search, approvalFilter, fromDate, toDate, company, opportunityOwner } = req.query;
+    const query = {};
+
+    // Apply search across multiple fields
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      query.$or = [
+        { quotationNumber: searchRegex },
+        { customerCompany: searchRegex },
+        { customerName: searchRegex },
+        { catalogName: searchRegex },
+        { opportunityNumber: searchRegex },
+      ];
+    }
+
+    // Approval filter
+    if (approvalFilter === "approved") query.approveStatus = true;
+    else if (approvalFilter === "notApproved") query.approveStatus = false;
+
+    // Date filters
+    if (fromDate) query.createdAt = { $gte: new Date(fromDate) };
+    if (toDate) query.createdAt = { ...query.createdAt, $lte: new Date(toDate) };
+
+    // Company filter
+    if (company) {
+      const companies = Array.isArray(company) ? company : [company];
+      query.customerCompany = { $in: companies };
+    }
+
+    // Opportunity owner filter (requires joining with opportunities collection)
+    if (opportunityOwner) {
+      const owners = Array.isArray(opportunityOwner) ? opportunityOwner : [opportunityOwner];
+      const opportunities = await Opportunity.find({ opportunityOwner: { $in: owners } }).select("opportunityCode");
+      const opportunityCodes = opportunities.map((opp) => opp.opportunityCode);
+      query.opportunityNumber = { $in: opportunityCodes };
+    }
+
+    // Pagination
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Fetch paginated data and total count
+    const [quotations, total] = await Promise.all([
+      Quotation.find(query)
+        .populate("items.productId", "images name productCost category subCategory hsnCode")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Quotation.countDocuments(query),
+    ]);
+
+    res.json({
+      quotations,
+      totalPages: Math.ceil(total / limitNum),
+      currentPage: pageNum,
+      totalQuotations: total,
+    });
+  } catch (err) {
+    console.error("Error fetching quotations:", err);
+    res.status(500).json({ message: "Server error fetching quotations" });
+  }
+});
+
 router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const quote = await Quotation.findById(req.params.id)
