@@ -60,7 +60,7 @@ function TaskManagementPage() {
         params.filter = "my";
         params.userName = users.find((u) => u._id === selectedUser)?.name;
       }
-      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunitiess`, {
         headers: getAuthHeaders(),
         params,
       });

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 
 function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], initialData = {}, isSuperAdmin, currentUser, isEditing = false }) {
+  // Log opportunities to debug
+  console.log("CreateTicketModal received opportunities:", opportunities);
+
   const [formData, setFormData] = useState({
     _id: initialData._id || null,
     ticketName: initialData.ticketName || "",
@@ -25,17 +28,19 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
   const [showOpportunitySuggestions, setShowOpportunitySuggestions] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
 
-  const filteredOpportunities = opportunities.length
-    ? opportunities.filter((opp) =>
-        `${opp.opportunityCode} - ${opp.opportunityName}`
+  // Ensure opportunities is an array
+  const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
+  const filteredOpportunities = safeOpportunities.length
+    ? safeOpportunities.filter((opp) =>
+        `${opp.opportunityCode || ""} - ${opp.opportunityName || ""}`
           .toLowerCase()
           .includes(formData.opportunitySearch.toLowerCase())
       )
     : [];
 
-  const filteredUsers = users.length
+  const filteredUsers = Array.isArray(users)
     ? users.filter((user) =>
-        `${user.name} (${user.email})`.toLowerCase().includes(formData.assignedToSearch.toLowerCase())
+        `${user.name || ""} (${user.email || ""})`.toLowerCase().includes(formData.assignedToSearch.toLowerCase())
       )
     : [];
 
@@ -102,7 +107,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
       return newFormData;
     });
     if (name === "opportunitySearch") {
-      setShowOpportunitySuggestions(value.length > 0 && opportunities.length > 0);
+      setShowOpportunitySuggestions(value.length > 0 && safeOpportunities.length > 0);
     } else if (name === "assignedToSearch") {
       setShowUserSuggestions(value.length > 0 && users.length > 0);
     }
@@ -112,7 +117,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
     setFormData((prev) => ({
       ...prev,
       opportunityId: opp._id,
-      opportunitySearch: `${opp.opportunityCode} - ${opp.opportunityName}`,
+      opportunitySearch: `${opp.opportunityCode || ""} - ${opp.opportunityName || ""}`,
     }));
     setShowOpportunitySuggestions(false);
   };
@@ -121,7 +126,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
     setFormData((prev) => ({
       ...prev,
       assignedTo: user._id,
-      assignedToSearch: `${user.name} (${user.email})`,
+      assignedToSearch: `${user.name || ""} (${user.email || ""})`,
     }));
     setShowUserSuggestions(false);
   };
@@ -201,7 +206,7 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               name="opportunitySearch"
               value={formData.opportunitySearch}
               onChange={handleChange}
-              onFocus={() => setShowOpportunitySuggestions(formData.opportunitySearch.length > 0 && opportunities.length > 0)}
+              onFocus={() => setShowOpportunitySuggestions(formData.opportunitySearch.length > 0 && safeOpportunities.length > 0)}
               onBlur={() => setTimeout(() => setShowOpportunitySuggestions(false), 200)}
               placeholder="Type to search opportunities..."
               className="w-full border p-2 rounded h-10"
@@ -214,9 +219,14 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
                     onMouseDown={() => handleOpportunitySuggestionClick(opp)}
                     className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
                   >
-                    {opp.opportunityCode} - {opp.opportunityName}
+                    {opp.opportunityCode || "N/A"} - {opp.opportunityName || "N/A"}
                   </div>
                 ))}
+              </div>
+            )}
+            {showOpportunitySuggestions && !filteredOpportunities.length && (
+              <div className="absolute z-10 w-full bg-white border rounded mt-1 p-2 text-sm text-gray-500">
+                No opportunities found
               </div>
             )}
           </div>
@@ -241,9 +251,14 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
                     onMouseDown={() => handleUserSuggestionClick(user)}
                     className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
                   >
-                    {user.name} ({user.email})
+                    {user.name || "N/A"} ({user.email || "N/A"})
                   </div>
                 ))}
+              </div>
+            )}
+            {showUserSuggestions && !filteredUsers.length && (
+              <div className="absolute z-10 w-full bg-white border rounded mt-1 p-2 text-sm text-gray-500">
+                No users found
               </div>
             )}
           </div>

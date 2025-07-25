@@ -71,35 +71,13 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
     res.status(500).json({ message: "Server error creating opportunity" });
   }
 });
-
-router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
+router.get("/opportunitiess", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const {
-      filter,
-      searchTerm,
-      userName,
-      page = 1,
-      limit = 100,
-      opportunityStage,
-      closureFromDate,
-      closureToDate,
-      createdFilter,
-    } = req.query;
+    const { filter, searchTerm, userName } = req.query;
     const currentUserName = req.user.name;
-
-    // Validate query parameters
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    if (isNaN(pageNum) || pageNum < 1) {
-      return res.status(400).json({ message: "Invalid page number" });
-    }
-    if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
-      return res.status(400).json({ message: "Invalid limit value" });
-    }
 
     const andConditions = [];
 
-    // User-based filtering
     if (userName && req.user.isSuperAdmin) {
       andConditions.push({ opportunityOwner: userName });
     } else {
@@ -113,24 +91,11 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
             { opportunityOwner: { $ne: currentUserName } }
           );
           break;
-        default:
-          if (!req.user.isSuperAdmin) {
-            // Restrict non-super admins to their own or team opportunities
-            andConditions.push({
-              $or: [
-                { opportunityOwner: currentUserName },
-                { "teamMembers.userName": currentUserName },
-              ],
-            });
-          }
-          break;
       }
     }
 
-    // Search term filtering
     if (searchTerm) {
-      const sanitizedSearchTerm = escapeRegex(searchTerm);
-      const regex = new RegExp(sanitizedSearchTerm, "i");
+      const regex = new RegExp(searchTerm, "i");
       andConditions.push({
         $or: [
           { opportunityCode: regex },
@@ -148,29 +113,84 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
       });
     }
 
-    // Opportunity stage filtering
+    const query = andConditions.length ? { $and: andConditions } : {};
+
+    const opportunities = await Opportunity.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(opportunities);
+  } catch (error) {
+    console.error("Error fetching opportunities:", error);
+    res.status(500).json({ message: "Server error fetching opportunities" });
+  }
+});
+
+
+router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const {
+      filter,
+      searchTerm,
+      userName,
+      page = 1,
+      limit = 100,
+      opportunityStage,
+      closureFromDate,
+      closureToDate,
+      createdFilter,
+    } = req.query;
+    const currentUserName = req.user.name;
+
+    const andConditions = [];
+
+    if (userName && req.user.isSuperAdmin) {
+      andConditions.push({ opportunityOwner: userName });
+    } else {
+      switch (filter) {
+        case "my":
+          andConditions.push({ opportunityOwner: currentUserName });
+          break;
+        case "team":
+          andConditions.push(
+            { "teamMembers.userName": currentUserName },
+            { opportunityOwner: { $ne: currentUserName } }
+          );
+          break;
+      }
+    }
+
+    if (searchTerm) {
+      const regex = new RegExp(escapeRegex(searchTerm), "i");
+      andConditions.push({
+        $or: [
+          { opportunityCode: regex },
+          { opportunityName: regex },
+          { account: regex },
+          { contact: regex },
+          { opportunityStage: regex },
+          { opportunityStatus: regex },
+          { opportunityDetail: regex },
+          { opportunityOwner: regex },
+          { createdBy: regex },
+          { dealRegistrationNumber: regex },
+          { freeTextField: regex },
+        ],
+      });
+    }
+
     if (opportunityStage && opportunityStage !== "All") {
       andConditions.push({ opportunityStage });
     }
 
-    // Closure date filtering
     if (closureFromDate) {
-      const fromDate = new Date(closureFromDate);
-      if (isNaN(fromDate.getTime())) {
-        return res.status(400).json({ message: "Invalid closureFromDate format" });
-      }
-      andConditions.push({ closureDate: { $gte: fromDate } });
+      andConditions.push({ closureDate: { $gte: new Date(closureFromDate) } });
     }
 
     if (closureToDate) {
-      const toDate = new Date(closureToDate);
-      if (isNaN(toDate.getTime())) {
-        return res.status(400).json({ message: "Invalid closureToDate format" });
-      }
-      andConditions.push({ closureDate: { $lte: toDate } });
+      andConditions.push({ closureDate: { $lte: new Date(closureToDate) } });
     }
 
-    // Created date filtering
     if (createdFilter && createdFilter !== "All") {
       const now = new Date();
       let start, end;
@@ -213,22 +233,18 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
           start = new Date(now.getFullYear() - 1, 0, 1);
           end = new Date(now.getFullYear(), 0, 1);
           break;
-        default:
-          return res.status(400).json({ message: "Invalid createdFilter value" });
       }
       if (start && end) {
         andConditions.push({ createdAt: { $gte: start, $lt: end } });
       }
     }
 
-    // Build query
     const query = andConditions.length ? { $and: andConditions } : {};
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    // Log query for debugging
-    console.log("Executing query:", JSON.stringify(query, null, 2));
-
-    // Execute query
     const [opportunities, total] = await Promise.all([
       Opportunity.find(query)
         .sort({ createdAt: -1 })
@@ -238,32 +254,17 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
       Opportunity.countDocuments(query),
     ]);
 
-    // Log results for debugging
-    console.log(`Found ${opportunities.length} opportunities, total: ${total}`);
-
     res.json({
       opportunities,
-      totalPages: Math.ceil(total / limitNum) || 1,
+      totalPages: Math.ceil(total / limitNum),
       currentPage: pageNum,
       totalOpportunities: total,
     });
   } catch (error) {
-    console.error("Error fetching opportunities:", {
-      message: error.message,
-      stack: error.stack,
-      query: req.query,
-    });
-    res.status(500).json({
-      message: "Server error fetching opportunities",
-      error: error.message,
-    });
+    console.error("Error fetching opportunities:", error);
+    res.status(500).json({ message: "Server error fetching opportunities" });
   }
 });
-
-// Helper function to escape special regex characters
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 router.get("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {

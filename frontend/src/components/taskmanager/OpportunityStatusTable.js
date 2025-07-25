@@ -1,14 +1,18 @@
 import React from "react";
 
-function OpportunityStatusTable({ opportunities, formatDate, handleSort, sortConfig, isSuperAdmin, setOpportunityFilter, setSelectedUser, users }) {
+function OpportunityStatusTable({ opportunities = [], formatDate, handleSort, sortConfig, isSuperAdmin, setOpportunityFilter, setSelectedUser, users = [] }) {
+  // Log opportunities to debug
+  console.log("OpportunityStatusTable received opportunities:", opportunities);
+
   const getSortIndicator = (key) => {
     if (sortConfig.key !== key) return "";
     return sortConfig.direction === "asc" ? " ↑" : sortConfig.direction === "desc" ? " ↓" : "";
   };
 
-  // Filter out opportunities with stage "Won", "Lost", or "Discontinued"
-  const filteredOpportunities = opportunities.filter(
-    (opp) => !["Won", "Lost", "Discontinued","Won/Lost/Discontinued"].includes(opp.opportunityStage)
+  // Ensure opportunities is an array before filtering
+  const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
+  const filteredOpportunities = safeOpportunities.filter(
+    (opp) => !["Won", "Lost", "Discontinued", "Won/Lost/Discontinued"].includes(opp.opportunityStage)
   );
 
   return (
