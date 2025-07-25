@@ -1,154 +1,154 @@
-// Dependencies
-const express = require("express");
-const mongoose = require("mongoose");
-const dotenv = require("dotenv");
-const cors = require("cors");
-const axios = require("axios");
+// index.js
+// -------------
+// Master/Worker clustering + gzip compression for faster front‑end performance
 
-// Load environment variables
-dotenv.config();
+const cluster = require('cluster');
+const os = require('os');
 
-// Initialize app
-const app = express();
-app.use(express.json());
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-
-// Configure CORS for frontend (localhost:3000)
-const allowedOrigins = ['http://localhost:3000', 'http://69.62.73.158:3001','https://catalog-management.vercel.app', "https://pacer2gift.in"];
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+if (cluster.isMaster) {
+  // Master process: fork workers equal to CPU count
+  const cpuCount = os.cpus().length;
+  console.log(`Master ${process.pid} is running — spawning ${cpuCount} workers`);
+  for (let i = 0; i < cpuCount; i++) {
+    cluster.fork();
   }
-  res.header('Access-Control-Allow-Credentials', true);
-  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS,PUT,PATCH,POST,DELETE');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+  // If a worker dies, log and respawn
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`Worker ${worker.process.pid} died (code ${code}, signal ${signal}). Spawning a new one.`);
+    cluster.fork();
+  });
+} else {
+  // Worker process: set up the Express app
+  require('dotenv').config();
+  const express = require('express');
+  const mongoose = require('mongoose');
+  const compression = require('compression');
+  const cors = require('cors');
+  const axios = require('axios');
 
-const syncRoutes = require("./routes/syncRoutes");
-app.use("/api", syncRoutes);
+  const app = express();
 
-// MongoDB connection
-mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  // 1) Enable gzip/deflate compression for all responses
+  app.use(compression());
 
-// Import routes
-const authRoutes = require("./routes/authRoutes");
-const userRoutes = require("./routes/userRoutes");
-const adminRoutes = require("./routes/adminRoutes");
-const emailVerificationRoutes = require("./routes/emailVerification");
+  // 2) Body parsers with generous limits
+  app.use(express.json({ limit: '20mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/auth", emailVerificationRoutes);
+  // 3) CORS configuration
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://69.62.73.158:3001',
+    'https://catalog-management.vercel.app',
+    'https://pacer2gift.in'
+  ];
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,OPTIONS,PUT,PATCH,POST,DELETE');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
 
-const subAdminRoutes = require('./routes/subAdminRoutes');
-app.use('/api', subAdminRoutes);
+  // 4) Initial routes
+  const syncRoutes = require('./routes/syncRoutes');
+  app.use('/api', syncRoutes);
 
-//update 
-const catalogRoutes = require("./routes/catalogRoutes");
-app.use("/api/admin", catalogRoutes);
+  // 5) MongoDB connection
+  mongoose
+    .connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    })
+    .then(() => console.log('MongoDB connected'))
+    .catch(err => console.error('MongoDB connection error:', err.message));
 
-const advancedSearchRoutes = require("./routes/advancedSearchRoutes.js");
-app.use("/api/products", advancedSearchRoutes);
+  // 6) Import and mount all your existing routes
+  const authRoutes = require('./routes/authRoutes');
+  const userRoutes = require('./routes/userRoutes');
+  const adminRoutes = require('./routes/adminRoutes');
+  const emailVerificationRoutes = require('./routes/emailVerification');
+  const subAdminRoutes = require('./routes/subAdminRoutes');
+  const catalogRoutes = require('./routes/catalogRoutes');
+  const advancedSearchRoutes = require('./routes/advancedSearchRoutes.js');
 
-app.use("/api/viewer", require("./routes/viewersRoutes.js"));
-app.use("/api/admin", require("./routes/viewersRoutes.js"));
-app.use("/api/admin", require("./routes/quotationRoutes.js"));
+  app.use('/api/auth', authRoutes);
+  app.use('/api/auth', emailVerificationRoutes);
+  app.use('/api/user', userRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api', subAdminRoutes);
+  app.use('/api/admin', catalogRoutes);
+  app.use('/api/products', advancedSearchRoutes);
 
-const adminMeRoutes = require("./routes/adminMe");
-app.use("/api/admin", adminMeRoutes);
+  // Viewer & Quotation
+  app.use('/api/viewer', require('./routes/viewersRoutes.js'));
+  app.use('/api/admin', require('./routes/viewersRoutes.js'));
+  app.use('/api/admin', require('./routes/quotationRoutes.js'));
 
-app.use("/api/admin", require("./routes/jobsheetRoutes.js"));
-app.use("/api/admin", require("./routes/companyRoutes.js"));
+  // Admin-me, jobsheets, company
+  app.use('/api/admin', require('./routes/adminMe'));
+  app.use('/api/admin', require('./routes/jobsheetRoutes.js'));
+  app.use('/api/admin', require('./routes/companyRoutes.js'));
 
-app.use("/api", require("./routes/erpRoutes.js"));
+  // ERP
+  app.use('/api', require('./routes/erpRoutes.js'));
 
-//manage vendor
-const vendorRoutes = require("./routes/vendorRoutes");
-app.use("/api/admin", vendorRoutes);
+  // Vendor & opportunity
+  app.use('/api/admin', require('./routes/vendorRoutes'));
+  app.use('/api/admin', require('./routes/opportunityRoutes'));
+  app.use('/api/admin/openPurchases', require('./routes/openPurchases.js'));
+  app.use('/api/admin/purchaseInvoice', require('./routes/purchaseInvoice'));
+  app.use('/api/admin/productionjobsheets', require('./routes/productionJobsheetRoutes.js'));
+  app.use('/api/admin', require('./routes/productionInvoice.js'));
+  app.use('/api/admin/closedPurchases', require('./routes/closedPurchasesRoutes.js'));
+  app.use('/api/admin/productionjobsheetinvoice', require('./routes/productionjobsheetinvoice'));
 
-const opportunityRoutes = require("./routes/opportunityRoutes");
-app.use("/api/admin", opportunityRoutes);
-app.use("/api/admin/openPurchases", require("./routes/openPurchases.js"));
-app.use("/api/admin/purchaseInvoice", require("./routes/purchaseInvoice")); 
-app.use("/api/admin/productionjobsheets", require("./routes/productionJobsheetRoutes.js"));
-app.use("/api/admin", require('./routes/productionInvoice.js'));
-app.use("/api/admin/closedPurchases", require("./routes/closedPurchasesRoutes.js"));
+  // Packing, dispatch, delivery
+  app.use('/api/admin/packing-pending', require('./routes/pendingpacking'));
+  app.use('/api/admin/dispatch-schedule', require('./routes/dispatchschedule'));
+  app.use('/api/admin/delivery-reports', require('./routes/deliveryreports'));
+  app.use('/api/admin/delivery-completed', require('./routes/deliveryCompleted'));
 
-app.use("/api/admin/productionjobsheetinvoice", require("./routes/productionjobsheetinvoice"));
+  // Jobsheet export, invoice follow‑up, summaries
+  app.use('/api/admin/jobsheets', require('./routes/jobsheetExport.js'));
+  app.use('/api/admin/invoice-followup', require('./routes/invoiceFollowUp'));
+  app.use('/api/admin/invoices-summary', require('./routes/invoiceSummary.js'));
+  app.use('/api/admin/payment-followup', require('./routes/paymentfollowup'));
 
-const pendingPackingRoutes = require("./routes/pendingpacking");
-app.use("/api/admin/packing-pending", pendingPackingRoutes);
+  // Samples, sample‑outs, expenses, potential clients, events, segments, branding, logistics, logs
+  app.use('/api/admin/samples', require('./routes/samples'));
+  app.use('/api/admin/sample-outs', require('./routes/sampleOutRoutes'));
+  app.use('/api/admin', require('./routes/expenseRoutes'));
+  app.use('/api/admin', require('./routes/potentialClientRoutes'));
+  app.use('/api/admin', require('./routes/eventRoutes'));
+  app.use('/api/admin', require('./routes/segmentRoutes.js'));
+  app.use('/api/admin/branding-charges', require('./routes/brandingChargeRoutes'));
+  app.use('/api/logistics', require('./routes/logisticsRoutes'));
+  app.use('/api/admin/logs', require('./routes/logs'));
 
-const dispatchRoutes = require("./routes/dispatchschedule");
-app.use("/api/admin/dispatch-schedule", dispatchRoutes);
+  // Delivery challan & tasks
+  app.use('/api/admin', require('./routes/deliveryChallan.js'));
+  app.use('/api/admin', require('./routes/taskRoutes.js'));
 
-const deliveryRoutes = require("./routes/deliveryreports");
-app.use("/api/admin/delivery-reports", deliveryRoutes);
+  // E‑Invoices
+  const eInvoiceRoutes = require('./routes/eInvoiceRoutes');
+  app.use('/api/admin/einvoices', eInvoiceRoutes);
 
-const deliveryCompletedRoutes = require("./routes/deliveryCompleted");
-app.use("/api/admin/delivery-completed", deliveryCompletedRoutes);
+  // 7) Health check
+  app.get('/health', (req, res) => res.send('OK'));
 
-const jobSheetExportRouter = require("./routes/jobsheetExport.js");
-app.use("/api/admin/jobsheets", jobSheetExportRouter);
+  // 8) Start the server in each worker
+  const PORT = process.env.PORT || 5000;
+  const server = app.listen(PORT, () => {
+    console.log(`Worker ${process.pid} listening on port ${PORT}`);
+  });
 
-const invoiceFollowUpRoutes = require("./routes/invoiceFollowUp");
-app.use("/api/admin/invoice-followup", invoiceFollowUpRoutes);
-
-const invoicesSummaryRoutes = require("./routes/invoiceSummary.js");
-app.use("/api/admin/invoices-summary", invoicesSummaryRoutes);
-
-const paymentFollowUpRoutes = require("./routes/paymentfollowup");
-app.use("/api/admin/payment-followup", paymentFollowUpRoutes);
-
-const samplesRouter = require("./routes/samples");
-app.use("/api/admin/samples", samplesRouter);
-
-const sampleOutRoutes = require("./routes/sampleOutRoutes");
-app.use("/api/admin/sample-outs", sampleOutRoutes);
-
-const expenseRoutes = require("./routes/expenseRoutes");
-app.use("/api/admin", expenseRoutes);
-
-const potentialClientRoutes = require("./routes/potentialClientRoutes");
-app.use("/api/admin", potentialClientRoutes);
-
-const eventRoutes = require("./routes/eventRoutes");
-app.use("/api/admin", eventRoutes);
-
-const segmentRoutes = require("./routes/segmentRoutes.js");
-app.use("/api/admin", segmentRoutes);
-
-const brandingChargeRoutes = require("./routes/brandingChargeRoutes");
-app.use("/api/admin/branding-charges", brandingChargeRoutes);
-
-const logisticsRoutes = require("./routes/logisticsRoutes");
-app.use("/api/logistics", logisticsRoutes);
-
-const logRoutes = require("./routes/logs");
-app.use("/api/admin/logs", logRoutes);
-
-app.use("/api/admin/",require("./routes/deliveryChallan.js"))
-
-
-app.use("/api/admin/",require("./routes/taskRoutes.js"))
-
-
-app.get("/health", (req, res) => res.send("OK"));
-
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  // Bump keep‑alive timeout for idle connections
+  server.keepAliveTimeout = 60_000;
+}

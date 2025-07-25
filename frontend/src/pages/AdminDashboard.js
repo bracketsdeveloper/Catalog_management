@@ -56,6 +56,11 @@ const adminPages = [
         path: "/admin-dashboard/manage-dc",
         permission: "manage-dc",
       },
+      {
+        name : "Manage E-Invoice",
+        path:"/admin-dashboard/e-invoice",
+        permission : "manage-einvoice"
+      }
       
     ],
   },

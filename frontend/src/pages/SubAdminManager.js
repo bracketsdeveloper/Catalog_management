@@ -85,7 +85,8 @@ const groupedPermissions = {
       "manage-task"
     ],
     "Sales" : [
-      "manage-dc"
+      "manage-dc",
+      "manage-einvoice"
     ]
   
 };

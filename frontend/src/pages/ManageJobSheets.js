@@ -38,6 +38,9 @@ export default function ManageJobSheets() {
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [latestActions, setLatestActions] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalJobSheets, setTotalJobSheets] = useState(0);
 
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("crm-export");
@@ -69,11 +72,13 @@ export default function ManageJobSheets() {
   useEffect(() => {
     fetchJobSheets(false);
     fetchUserEmail();
-  }, []);
+  }, [currentPage, searchQuery, orderFromDate, orderToDate, deliveryFromDate, deliveryToDate]);
 
   useEffect(() => {
     if (jobSheets.length > 0) {
-      fetchLatestActions(jobSheets.map(js => js._id));
+      fetchLatestActions(jobSheets.map((js) => js._id));
+    } else {
+      setLatestActions({});
     }
   }, [jobSheets]);
 
@@ -89,22 +94,61 @@ export default function ManageJobSheets() {
     }
   }
 
-  async function fetchJobSheets(draftOnly = false) {
+  async function fetchJobSheets(draftOnly = false, retries = 3) {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      let url = `${BACKEND_URL}/api/admin/jobsheets`;
-      if (draftOnly) {
-        url += "?draftOnly=true";
-      }
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setJobSheets(res.data);
       setError(null);
-    } catch (err) {
-      console.error("Error fetching job sheets:", err);
-      setError("Failed to fetch job sheets");
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const token = localStorage.getItem("token");
+          const params = {
+            draftOnly: draftOnly ? "true" : undefined,
+            searchQuery: searchQuery || undefined,
+            orderFromDate: orderFromDate ? format(orderFromDate, "yyyy-MM-dd") : undefined,
+            orderToDate: orderToDate ? format(orderToDate, "yyyy-MM-dd") : undefined,
+            deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
+            deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
+            page: currentPage,
+            limit: 100,
+          };
+
+          console.log(`Attempt ${attempt}: Fetching job sheets with params:`, params);
+
+          const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+            headers: { Authorization: `Bearer ${token}` },
+            params,
+            timeout: 30000,
+          });
+
+          if (!res.data.jobSheets) {
+            throw new Error("No job sheets data received");
+          }
+
+          setJobSheets(res.data.jobSheets);
+          setTotalPages(res.data.totalPages || 1);
+          setTotalJobSheets(res.data.totalJobSheets || 0);
+          setError(null);
+          return;
+        } catch (err) {
+          console.error(`Attempt ${attempt} failed:`, {
+            message: err.message,
+            status: err.response?.status,
+            data: err.response?.data,
+          });
+          if (attempt === retries) {
+            setError(
+              err.response?.status === 401
+                ? "Unauthorized: Please log in again"
+                : err.response?.status === 404
+                ? "No job sheets found"
+                : err.response?.status === 400
+                ? err.response.data.message
+                : "Failed to fetch job sheets. Please try again."
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -115,11 +159,10 @@ export default function ManageJobSheets() {
       setDraftLoading(true);
       setDraftError(null);
       const token = localStorage.getItem("token");
-      const url = `${BACKEND_URL}/api/admin/jobsheets?draftOnly=true`;
-      const res = await axios.get(url, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets?draftOnly=true`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setDraftSheets(res.data);
+      setDraftSheets(res.data.jobSheets || []);
     } catch (err) {
       console.error("Error fetching user drafts:", err);
       setDraftError("Failed to fetch your draft job sheets");
@@ -165,92 +208,79 @@ export default function ManageJobSheets() {
       order = "desc";
     }
     setSortConfig({ field, order });
-
-    const sortedJobSheets = [...jobSheets].sort((a, b) => {
-      let valA = a[field] || "";
-      let valB = b[field] || "";
-
-      if (isDate) {
-        valA = valA && isValid(new Date(valA)) ? new Date(valA) : new Date(0);
-        valB = valB && isValid(new Date(valB)) ? new Date(valB) : new Date(0);
-      } else {
-        valA = valA.toString().toLowerCase();
-        valB = valB.toString().toLowerCase();
-      }
-
-      if (valA < valB) return order === "asc" ? -1 : 1;
-      if (valA > valB) return order === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    setJobSheets(sortedJobSheets);
   };
 
-  const filteredJobSheets = jobSheets
-    .filter((js) => {
-      if (!searchQuery) return true;
+  const exportToExcel = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const params = {
+        draftOnly: false,
+        searchQuery: searchQuery || undefined,
+        orderFromDate: orderFromDate ? format(orderFromDate, "yyyy-MM-dd") : undefined,
+        orderToDate: orderToDate ? format(orderToDate, "yyyy-MM-dd") : undefined,
+        deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
+        deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
+      };
 
-      const query = searchQuery.toLowerCase();
-      return (
-        (js.clientCompanyName?.toLowerCase().includes(query)) ||
-        (js.eventName?.toLowerCase().includes(query)) ||
-        (js.referenceQuotation?.toLowerCase().includes(query)) ||
-        (js.clientName?.toLowerCase().includes(query)) ||
-        (js.jobSheetNumber?.toLowerCase().includes(query))
-      );
-    })
-    .filter((js) => {
-      let orderDatePass = true;
-      if (orderFromDate || orderToDate) {
-        const orderDate = js.orderDate && isValid(new Date(js.orderDate)) ? new Date(js.orderDate) : null;
-        if (orderDate) {
-          const start = orderFromDate || new Date("1900-01-01");
-          const end = orderToDate || new Date("9999-12-31");
-          orderDatePass = isWithinInterval(orderDate, { start, end });
-        } else {
-          orderDatePass = false;
-        }
-      }
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
 
-      let deliveryDatePass = true;
-      if (deliveryFromDate || deliveryToDate) {
-        const deliveryDate = js.deliveryDate && isValid(new Date(js.deliveryDate)) ? new Date(js.deliveryDate) : null;
-        if (deliveryDate) {
-          const start = deliveryFromDate || new Date("1900-01-01");
-          const end = deliveryToDate || new Date("9999-12-31");
-          deliveryDatePass = isWithinInterval(deliveryDate, { start, end });
-        } else {
-          deliveryDatePass = false;
-        }
-      }
+      const exportData = [];
+      let serial = 1;
 
-      return orderDatePass && deliveryDatePass;
-    });
-
-  const exportToExcel = () => {
-    const exportData = [];
-    let serial = 1;
-
-    filteredJobSheets.forEach((js) => {
-      const createdAtFormatted =
-        js.createdAt && isValidDate(new Date(js.createdAt))
+      res.data.jobSheets.forEach((js) => {
+        const createdAtFormatted = js.createdAt && isValid(new Date(js.createdAt))
           ? format(new Date(js.createdAt), "dd/MM/yyyy")
           : "Invalid date";
 
-      const orderDateFormatted =
-        js.orderDate && isValidDate(new Date(js.orderDate))
+        const orderDateFormatted = js.orderDate && isValid(new Date(js.orderDate))
           ? format(new Date(js.orderDate), "dd/MM/yyyy")
           : "Invalid date";
 
-      const deliveryDateFormatted =
-        js.deliveryDate && isValidDate(new Date(js.deliveryDate))
+        const deliveryDateFormatted = js.deliveryDate && isValid(new Date(js.deliveryDate))
           ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
           : "Invalid date";
 
-      const latestAction = latestActions[js._id] || {};
+        const latestAction = latestActions[js._id] || {};
 
-      if (js.items && js.items.length > 0) {
-        js.items.forEach((item) => {
+        if (js.items && js.items.length > 0) {
+          js.items.forEach((item) => {
+            exportData.push({
+              "Sl. No": serial++,
+              "Created At": createdAtFormatted,
+              "Order Date": orderDateFormatted,
+              "Quotation Number": js.referenceQuotation || "",
+              "Job Sheet Number": js.jobSheetNumber || "",
+              "Opportunity Name": js.eventName || "",
+              "Client Company Name": js.clientCompanyName || "",
+              "Client Name": js.clientName || "",
+              "Client Delivery Date": deliveryDateFormatted,
+              "CRM": js.crmIncharge || "",
+              "Material Particulars": item.product || "",
+              "Quantity": item.quantity || "",
+              "Sourcing Vendor": item.sourcingFrom || "",
+              "Sourcing Vendor Contact": "",
+              "Product Follow Up": "",
+              "Product Expected @ Ace": "",
+              "Product Procured By": "",
+              "Branding Target Date": "",
+              "Branding Vendor": item.brandingVendor || "",
+              "Branding Type": item.brandingType?.join(", ") || "",
+              "Branding Vendor Contact": "",
+              "Delivery Status": "",
+              "QC Done By": "",
+              "Delivered By": "",
+              "Delivered On": "",
+              "PO Status": js.poStatus || "",
+              "Invoice Submission": "",
+              "Latest Action": latestAction.action
+                ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+                : "No action recorded",
+            });
+          });
+        } else {
           exportData.push({
             "Sl. No": serial++,
             "Created At": createdAtFormatted,
@@ -262,16 +292,16 @@ export default function ManageJobSheets() {
             "Client Name": js.clientName || "",
             "Client Delivery Date": deliveryDateFormatted,
             "CRM": js.crmIncharge || "",
-            "Material Particulars": item.product || "",
-            "Quantity": item.quantity || "",
-            "Sourcing Vendor": item.sourcingFrom || "",
+            "Material Particulars": "",
+            "Quantity": "",
+            "Sourcing Vendor": "",
             "Sourcing Vendor Contact": "",
             "Product Follow Up": "",
             "Product Expected @ Ace": "",
             "Product Procured By": "",
             "Branding Target Date": "",
-            "Branding Vendor": item.brandingVendor || "",
-            "Branding Type": item.brandingType?.join(", ") || "",
+            "Branding Vendor": "",
+            "Branding Type": "",
             "Branding Vendor Contact": "",
             "Delivery Status": "",
             "QC Done By": "",
@@ -283,52 +313,80 @@ export default function ManageJobSheets() {
               ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
               : "No action recorded",
           });
-        });
-      } else {
-        exportData.push({
-          "Sl. No": serial++,
-          "Created At": createdAtFormatted,
-          "Order Date": orderDateFormatted,
-          "Quotation Number": js.referenceQuotation || "",
-          "Job Sheet Number": js.jobSheetNumber || "",
-          "Opportunity Name": js.eventName || "",
-          "Client Company Name": js.clientCompanyName || "",
-          "Client Name": js.clientName || "",
-          "Client Delivery Date": deliveryDateFormatted,
-          "CRM": js.crmIncharge || "",
-          "Material Particulars": "",
-          "Quantity": "",
-          "Sourcing Vendor": "",
-          "Sourcing Vendor Contact": "",
-          "Product Follow Up": "",
-          "Product Expected @ Ace": "",
-          "Product Procured By": "",
-          "Branding Target Date": "",
-          "Branding Vendor": "",
-          "Branding Type": "",
-          "Branding Vendor Contact": "",
-          "Delivery Status": "",
-          "QC Done By": "",
-          "Delivered By": "",
-          "Delivered On": "",
-          "PO Status": js.poStatus || "",
-          "Invoice Submission": "",
-          "Latest Action": latestAction.action
-            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
-            : "No action recorded",
-        });
-      }
-    });
+        }
+      });
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
-    XLSX.writeFile(workbook, "JobSheets.xlsx");
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
+      XLSX.writeFile(workbook, "JobSheets.xlsx");
+    } catch (error) {
+      console.error("Excel export error:", error);
+      alert("Excel export failed");
+    }
   };
 
   const isValidDate = (date) => {
     return date instanceof Date && !isNaN(date);
   };
+
+  const SkeletonLoader = () => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm text-gray-700 border-b border-gray-200">
+        <thead className="bg-gray-50 border-b text-gray-500 uppercase sticky top-0 z-10">
+          <tr>
+            {[
+              "JobSheet No.",
+              "Event Name",
+              "Client Name",
+              "Company",
+              "Order Date",
+              "Delivery Date",
+              "Latest Action",
+              "Actions",
+            ].map((header) => (
+              <th key={header} className="py-2 px-3 text-left">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[...Array(5)].map((_, index) => (
+            <tr key={index} className="border-b">
+              {[...Array(8)].map((_, cellIndex) => (
+                <td key={cellIndex} className="py-2 px-3">
+                  <div className="animate-pulse bg-gray-200 h-4 w-full rounded"></div>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderPagination = () => (
+    <div className="flex justify-center items-center mt-4 space-x-2">
+      <button
+        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+        disabled={currentPage === 1 || loading}
+        className="px-3 py-1 border rounded disabled:opacity-50"
+      >
+        Previous
+      </button>
+      <span>
+        Page {currentPage} of {totalPages} (Total: {totalJobSheets})
+      </span>
+      <button
+        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+        disabled={currentPage === totalPages || loading}
+        className="px-3 py-1 border rounded disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  );
 
   return (
     <div className="p-6">
@@ -367,7 +425,10 @@ export default function ManageJobSheets() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Search by Company, Event, Quotation, etc."
             className="border p-2 rounded w-full md:w-1/2 mb-2 md:mb-0"
           />
@@ -399,7 +460,10 @@ export default function ManageJobSheets() {
                 <div className="flex space-x-2">
                   <DatePicker
                     selected={orderFromDate}
-                    onChange={(date) => setOrderFromDate(date)}
+                    onChange={(date) => {
+                      setOrderFromDate(date);
+                      setCurrentPage(1);
+                    }}
                     selectsStart
                     startDate={orderFromDate}
                     endDate={orderToDate}
@@ -409,7 +473,10 @@ export default function ManageJobSheets() {
                   />
                   <DatePicker
                     selected={orderToDate}
-                    onChange={(date) => setOrderToDate(date)}
+                    onChange={(date) => {
+                      setOrderToDate(date);
+                      setCurrentPage(1);
+                    }}
                     selectsEnd
                     startDate={orderFromDate}
                     endDate={orderToDate}
@@ -425,7 +492,10 @@ export default function ManageJobSheets() {
                 <div className="flex space-x-2">
                   <DatePicker
                     selected={deliveryFromDate}
-                    onChange={(date) => setDeliveryFromDate(date)}
+                    onChange={(date) => {
+                      setDeliveryFromDate(date);
+                      setCurrentPage(1);
+                    }}
                     selectsStart
                     startDate={deliveryFromDate}
                     endDate={deliveryToDate}
@@ -435,7 +505,10 @@ export default function ManageJobSheets() {
                   />
                   <DatePicker
                     selected={deliveryToDate}
-                    onChange={(date) => setDeliveryToDate(date)}
+                    onChange={(date) => {
+                      setDeliveryToDate(date);
+                      setCurrentPage(1);
+                    }}
                     selectsEnd
                     startDate={deliveryFromDate}
                     endDate={deliveryToDate}
@@ -477,135 +550,146 @@ export default function ManageJobSheets() {
       </div>
 
       {loading ? (
-        <div>Loading job sheets...</div>
+        <SkeletonLoader />
       ) : error ? (
-        <div className="text-red-500">{error}</div>
+        <div className="p-4 text-red-600 bg-red-100 border border-red-400 rounded">
+          {error}
+          <button
+            onClick={() => fetchJobSheets(false)}
+            className="ml-4 text-blue-600 underline"
+          >
+            Retry
+          </button>
+        </div>
       ) : (
-        <table className="min-w-full border-collapse">
-          <thead>
-            <tr className="border-b">
-              <th
-                className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("jobSheetNumber")}
-              >
-                JobSheet No.
-                {sortConfig.field === "jobSheetNumber" && (
-                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                )}
-              </th>
-              <th
-                className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("eventName")}
-              >
-                Event Name
-                {sortConfig.field === "eventName" && (
-                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                )}
-              </th>
-              <th
-                className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("clientName")}
-              >
-                Client Name
-                {sortConfig.field === "clientName" && (
-                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                )}
-              </th>
-              <th
-                className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("clientCompanyName")}
-              >
-                Company
-                {sortConfig.field === "clientCompanyName" && (
-                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                )}
-              </th>
-              <th
-                className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("orderDate", true)}
-              >
-                Order Date
-                {sortConfig.field === "orderDate" && (
-                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                )}
-              </th>
-              <th
-                className="p-2 text-left cursor-pointer"
-                onClick={() => handleSort("deliveryDate", true)}
-              >
-                Delivery Date
-                {sortConfig.field === "deliveryDate" && (
-                  <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                )}
-              </th>
-              <th className="p-2 text-left">Latest Action</th>
-              <th className="p-2 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredJobSheets.map((js) => {
-              const latestAction = latestActions[js._id] || {};
-              return (
-                <tr key={js._id} className="border-b">
-                  <td className="p-2 border">
-                    <button
-                      className="border-b text-blue-500 hover:text-blue-700"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleOpenModal(js.jobSheetNumber);
-                      }}
-                    >
-                      {js.jobSheetNumber || "(No Number)"}
-                    </button>
-                  </td>
-                  <td className="p-2">{js.eventName || "N/A"}</td>
-                  <td className="p-2">{js.clientName || "N/A"}</td>
-                  <td className="p-2">{js.clientCompanyName || "N/A"}</td>
-                  <td className="p-2">
-                    {js.orderDate && isValidDate(new Date(js.orderDate))
-                      ? format(new Date(js.orderDate), "dd/MM/yyyy")
-                      : "Invalid date"}
-                  </td>
-                  <td className="p-2">
-                    {js.deliveryDate && isValidDate(new Date(js.deliveryDate))
-                      ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
-                      : "Invalid date"}
-                  </td>
-                  <td className="p-2">
-                    {latestAction.action
-                      ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
-                      : "No action recorded"}
-                  </td>
-                  <td className="p-2">
-                    <Dropdown autoClose="outside">
-                      <Dropdown.Toggle
-                        variant="link"
-                        id={`dropdown-actions-${js._id}`}
-                        className="text-gray-500 hover:text-gray-800"
+        <>
+          <table className="min-w-full border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th
+                  className="p-2 text-left cursor-pointer"
+                  onClick={() => handleSort("jobSheetNumber")}
+                >
+                  JobSheet No.
+                  {sortConfig.field === "jobSheetNumber" && (
+                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                  )}
+                </th>
+                <th
+                  className="p-2 text-left cursor-pointer"
+                  onClick={() => handleSort("eventName")}
+                >
+                  Event Name
+                  {sortConfig.field === "eventName" && (
+                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                  )}
+                </th>
+                <th
+                  className="p-2 text-left cursor-pointer"
+                  onClick={() => handleSort("clientName")}
+                >
+                  Client Name
+                  {sortConfig.field === "clientName" && (
+                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                  )}
+                </th>
+                <th
+                  className="p-2 text-left cursor-pointer"
+                  onClick={() => handleSort("clientCompanyName")}
+                >
+                  Company
+                  {sortConfig.field === "clientCompanyName" && (
+                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                  )}
+                </th>
+                <th
+                  className="p-2 text-left cursor-pointer"
+                  onClick={() => handleSort("orderDate", true)}
+                >
+                  Order Date
+                  {sortConfig.field === "orderDate" && (
+                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                  )}
+                </th>
+                <th
+                  className="p-2 text-left cursor-pointer"
+                  onClick={() => handleSort("deliveryDate", true)}
+                >
+                  Delivery Date
+                  {sortConfig.field === "deliveryDate" && (
+                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                  )}
+                </th>
+                <th className="p-2 text-left">Latest Action</th>
+                <th className="p-2 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobSheets.map((js) => {
+                const latestAction = latestActions[js._id] || {};
+                return (
+                  <tr key={js._id} className="border-b">
+                    <td className="p-2 border">
+                      <button
+                        className="border-b text-blue-500 hover:text-blue-700"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleOpenModal(js.jobSheetNumber);
+                        }}
                       >
-                        <FaEllipsisV />
-                      </Dropdown.Toggle>
-                      <Dropdown.Menu className="bg-white shadow-lg rounded border border-gray-200">
-                        <Dropdown.Item
-                          onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
-                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                        {js.jobSheetNumber || "(No Number)"}
+                      </button>
+                    </td>
+                    <td className="p-2">{js.eventName || "N/A"}</td>
+                    <td className="p-2">{js.clientName || "N/A"}</td>
+                    <td className="p-2">{js.clientCompanyName || "N/A"}</td>
+                    <td className="p-2">
+                      {js.orderDate && isValidDate(new Date(js.orderDate))
+                        ? format(new Date(js.orderDate), "dd/MM/yyyy")
+                        : "Invalid date"}
+                    </td>
+                    <td className="p-2">
+                      {js.deliveryDate && isValidDate(new Date(js.deliveryDate))
+                        ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
+                        : "Invalid date"}
+                    </td>
+                    <td className="p-2">
+                      {latestAction.action
+                        ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
+                        : "No action recorded"}
+                    </td>
+                    <td className="p-2">
+                      <Dropdown autoClose="outside">
+                        <Dropdown.Toggle
+                          variant="link"
+                          id={`dropdown-actions-${js._id}`}
+                          className="text-gray-500 hover:text-gray-800"
                         >
-                          View
-                        </Dropdown.Item>
-                        <Dropdown.Item
-                          onClick={() => navigate(`/admin-dashboard/create-jobsheet/${js._id}`)}
-                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                        >
-                          Edit
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </Dropdown>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                          <FaEllipsisV />
+                        </Dropdown.Toggle>
+                        <Dropdown.Menu className="bg-white shadow-lg rounded border border-gray-200">
+                          <Dropdown.Item
+                            onClick={() => navigate(`/admin-dashboard/jobsheet/${js._id}`)}
+                            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                          >
+                            View
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            onClick={() => navigate(`/admin-dashboard/create-jobsheet/${js._id}`)}
+                            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                          >
+                            Edit
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {renderPagination()}
+        </>
       )}
 
       <JobSheetGlobal

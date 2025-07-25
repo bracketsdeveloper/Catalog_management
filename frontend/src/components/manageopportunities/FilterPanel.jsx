@@ -1,19 +1,66 @@
 import React from "react";
 
 export default function FilterPanel({ filterCriteria, handleFilterChange, setShowFilter, stages }) {
+  const handleResetFilters = () => {
+    handleFilterChange({
+      target: {
+        name: "opportunityStage",
+        value: "All",
+      },
+    });
+    handleFilterChange({
+      target: {
+        name: "closureFromDate",
+        value: "",
+      },
+    });
+    handleFilterChange({
+      target: {
+        name: "closureToDate",
+        value: "",
+      },
+    });
+    handleFilterChange({
+      target: {
+        name: "createdFilter",
+        value: "All",
+      },
+    });
+    setShowFilter(false);
+  };
+
+  // Validate date inputs to ensure closureToDate is not before closureFromDate
+  const handleDateChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "closureToDate" && filterCriteria.closureFromDate) {
+      const fromDate = new Date(filterCriteria.closureFromDate);
+      const toDate = new Date(value);
+      if (toDate < fromDate) {
+        alert("Closure To Date cannot be before Closure From Date");
+        return;
+      }
+    }
+    handleFilterChange(e);
+  };
+
   return (
     <div className="bg-white border border-gray-300 rounded p-4 mb-4 shadow-md">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Opportunity Stage Filter */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
+          <label
+            htmlFor="opportunityStage"
+            className="block text-sm font-semibold text-gray-700 mb-1"
+          >
             Opportunity Stage
           </label>
           <select
+            id="opportunityStage"
             name="opportunityStage"
             value={filterCriteria.opportunityStage}
             onChange={handleFilterChange}
-            className="border rounded w-full px-2 py-1 text-sm"
+            className="border rounded w-full px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Select opportunity stage"
           >
             <option value="All">All</option>
             {stages.map((stage) => (
@@ -25,40 +72,55 @@ export default function FilterPanel({ filterCriteria, handleFilterChange, setSho
         </div>
         {/* Closure Date From */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
+          <label
+            htmlFor="closureFromDate"
+            className="block text-sm font-semibold text-gray-700 mb-1"
+          >
             Closure Date From
           </label>
           <input
+            id="closureFromDate"
             type="date"
             name="closureFromDate"
             value={filterCriteria.closureFromDate}
-            onChange={handleFilterChange}
-            className="border rounded w-full px-2 py-1 text-sm"
+            onChange={handleDateChange}
+            className="border rounded w-full px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Select closure date from"
           />
         </div>
         {/* Closure Date To */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
+          <label
+            htmlFor="closureToDate"
+            className="block text-sm font-semibold text-gray-700 mb-1"
+          >
             Closure Date To
           </label>
           <input
+            id="closureToDate"
             type="date"
             name="closureToDate"
             value={filterCriteria.closureToDate}
-            onChange={handleFilterChange}
-            className="border rounded w-full px-2 py-1 text-sm"
+            onChange={handleDateChange}
+            className="border rounded w-full px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Select closure date to"
           />
         </div>
         {/* Created Filter */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
+          <label
+            htmlFor="createdFilter"
+            className="block text-sm font-semibold text-gray-700 mb-1"
+          >
             Created Filter
           </label>
           <select
+            id="createdFilter"
             name="createdFilter"
             value={filterCriteria.createdFilter}
             onChange={handleFilterChange}
-            className="border rounded w-full px-2 py-1 text-sm"
+            className="border rounded w-full px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Select created filter"
           >
             <option value="All">All</option>
             <option value="Today">Today</option>
@@ -72,7 +134,13 @@ export default function FilterPanel({ filterCriteria, handleFilterChange, setSho
           </select>
         </div>
       </div>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex justify-end space-x-2">
+        <button
+          onClick={handleResetFilters}
+          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm"
+        >
+          Reset Filters
+        </button>
         <button
           onClick={() => setShowFilter(false)}
           className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm"

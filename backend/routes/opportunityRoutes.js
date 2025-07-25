@@ -74,11 +74,32 @@ router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => 
 
 router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { filter, searchTerm, userName } = req.query;
+    const {
+      filter,
+      searchTerm,
+      userName,
+      page = 1,
+      limit = 100,
+      opportunityStage,
+      closureFromDate,
+      closureToDate,
+      createdFilter,
+    } = req.query;
     const currentUserName = req.user.name;
+
+    // Validate query parameters
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(pageNum) || pageNum < 1) {
+      return res.status(400).json({ message: "Invalid page number" });
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
+      return res.status(400).json({ message: "Invalid limit value" });
+    }
 
     const andConditions = [];
 
+    // User-based filtering
     if (userName && req.user.isSuperAdmin) {
       andConditions.push({ opportunityOwner: userName });
     } else {
@@ -92,11 +113,24 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
             { opportunityOwner: { $ne: currentUserName } }
           );
           break;
+        default:
+          if (!req.user.isSuperAdmin) {
+            // Restrict non-super admins to their own or team opportunities
+            andConditions.push({
+              $or: [
+                { opportunityOwner: currentUserName },
+                { "teamMembers.userName": currentUserName },
+              ],
+            });
+          }
+          break;
       }
     }
 
+    // Search term filtering
     if (searchTerm) {
-      const regex = new RegExp(searchTerm, "i");
+      const sanitizedSearchTerm = escapeRegex(searchTerm);
+      const regex = new RegExp(sanitizedSearchTerm, "i");
       andConditions.push({
         $or: [
           { opportunityCode: regex },
@@ -114,18 +148,122 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
       });
     }
 
+    // Opportunity stage filtering
+    if (opportunityStage && opportunityStage !== "All") {
+      andConditions.push({ opportunityStage });
+    }
+
+    // Closure date filtering
+    if (closureFromDate) {
+      const fromDate = new Date(closureFromDate);
+      if (isNaN(fromDate.getTime())) {
+        return res.status(400).json({ message: "Invalid closureFromDate format" });
+      }
+      andConditions.push({ closureDate: { $gte: fromDate } });
+    }
+
+    if (closureToDate) {
+      const toDate = new Date(closureToDate);
+      if (isNaN(toDate.getTime())) {
+        return res.status(400).json({ message: "Invalid closureToDate format" });
+      }
+      andConditions.push({ closureDate: { $lte: toDate } });
+    }
+
+    // Created date filtering
+    if (createdFilter && createdFilter !== "All") {
+      const now = new Date();
+      let start, end;
+      switch (createdFilter) {
+        case "Today":
+          start = new Date(now.setHours(0, 0, 0, 0));
+          end = new Date(start);
+          end.setDate(end.getDate() + 1);
+          break;
+        case "Yesterday":
+          end = new Date(now.setHours(0, 0, 0, 0));
+          start = new Date(end);
+          start.setDate(start.getDate() - 1);
+          break;
+        case "This Week":
+          start = new Date(now.setDate(now.getDate() - now.getDay()));
+          start.setHours(0, 0, 0, 0);
+          end = new Date(start);
+          end.setDate(start.getDate() + 7);
+          break;
+        case "Last Week":
+          end = new Date(now.setDate(now.getDate() - now.getDay()));
+          end.setHours(0, 0, 0, 0);
+          start = new Date(end);
+          start.setDate(start.getDate() - 7);
+          break;
+        case "This Month":
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          break;
+        case "Last Month":
+          start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          end = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case "This Year":
+          start = new Date(now.getFullYear(), 0, 1);
+          end = new Date(now.getFullYear() + 1, 0, 1);
+          break;
+        case "Last Year":
+          start = new Date(now.getFullYear() - 1, 0, 1);
+          end = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          return res.status(400).json({ message: "Invalid createdFilter value" });
+      }
+      if (start && end) {
+        andConditions.push({ createdAt: { $gte: start, $lt: end } });
+      }
+    }
+
+    // Build query
     const query = andConditions.length ? { $and: andConditions } : {};
+    const skip = (pageNum - 1) * limitNum;
 
-    const opportunities = await Opportunity.find(query)
-      .sort({ createdAt: -1 })
-      .lean();
+    // Log query for debugging
+    console.log("Executing query:", JSON.stringify(query, null, 2));
 
-    res.json(opportunities);
+    // Execute query
+    const [opportunities, total] = await Promise.all([
+      Opportunity.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Opportunity.countDocuments(query),
+    ]);
+
+    // Log results for debugging
+    console.log(`Found ${opportunities.length} opportunities, total: ${total}`);
+
+    res.json({
+      opportunities,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      currentPage: pageNum,
+      totalOpportunities: total,
+    });
   } catch (error) {
-    console.error("Error fetching opportunities:", error);
-    res.status(500).json({ message: "Server error fetching opportunities" });
+    console.error("Error fetching opportunities:", {
+      message: error.message,
+      stack: error.stack,
+      query: req.query,
+    });
+    res.status(500).json({
+      message: "Server error fetching opportunities",
+      error: error.message,
+    });
   }
 });
+
+// Helper function to escape special regex characters
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 router.get("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {

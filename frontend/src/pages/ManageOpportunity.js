@@ -23,6 +23,48 @@ function formatClosureDate(dateStr) {
   return d.toLocaleDateString("en-GB");
 }
 
+function SkeletonLoader() {
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm text-gray-700 border-b border-gray-200">
+        <thead className="bg-gray-50 border-b text-gray-500 uppercase sticky top-0 z-10">
+          <tr>
+            {[
+              "Opportunity Code",
+              "Created Date",
+              "Account",
+              "Company Contact",
+              "Opportunity Name",
+              "Owner",
+              "Value",
+              "Closure Date",
+              "Stage",
+              "Status",
+              "Latest Action",
+              "Action",
+            ].map((header) => (
+              <th key={header} className="py-2 px-3 text-left">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[...Array(5)].map((_, index) => (
+            <tr key={index} className="border-b">
+              {[...Array(12)].map((_, cellIndex) => (
+                <td key={cellIndex} className="py-2 px-3">
+                  <div className="animate-pulse bg-gray-200 h-4 w-full rounded"></div>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ManageOpportunity() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
@@ -31,7 +73,9 @@ function ManageOpportunity() {
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin || canViewAllOpp ? "all-opportunities" : "my-opportunities"
   );
-  const [opportunities, setOpportunities] = useState({ my: [], team: [], all: [] });
+  const [opportunities, setOpportunities] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [filterCriteria, setFilterCriteria] = useState({
@@ -44,6 +88,9 @@ function ManageOpportunity() {
   const [logs, setLogs] = useState({ show: false, data: [], loading: false });
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
   const [latestActions, setLatestActions] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalOpportunities, setTotalOpportunities] = useState(0);
 
   const stages = [
     "Lead",
@@ -72,52 +119,44 @@ function ManageOpportunity() {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const requests = [
-          axios.get(
-            `${BACKEND_URL}/api/admin/opportunities?filter=my${
-              searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""
-            }`,
-            { headers: getAuthHeaders() }
-          ),
-          axios.get(
-            `${BACKEND_URL}/api/admin/opportunities?filter=team${
-              searchTerm ? `&searchTerm=${encodeURIComponent(searchTerm)}` : ""
-            }`,
-            { headers: getAuthHeaders() }
-          ),
-        ];
-        if (isSuperAdmin || canViewAllOpp) {
-          requests.push(
-            axios.get(
-              `${BACKEND_URL}/api/admin/opportunities${
-                searchTerm ? `?searchTerm=${encodeURIComponent(searchTerm)}` : ""
-              }`,
-              { headers: getAuthHeaders() }
-            )
-          );
-        }
-        const [myRes, teamRes, allRes] = await Promise.all(requests);
-        setOpportunities({
-          my: myRes.data || [],
-          team: teamRes.data || [],
-          all: isSuperAdmin || canViewAllOpp ? allRes?.data || [] : [],
+        const params = {
+          filter: activeTab === "my-opportunities" ? "my" : activeTab === "team-opportunities" ? "team" : undefined,
+          searchTerm: searchTerm || undefined,
+          page: currentPage,
+          limit: 100,
+          opportunityStage: filterCriteria.opportunityStage !== "All" ? filterCriteria.opportunityStage : undefined,
+          closureFromDate: filterCriteria.closureFromDate || undefined,
+          closureToDate: filterCriteria.closureToDate || undefined,
+          createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
+        };
+        const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+          headers: getAuthHeaders(),
+          params,
+          timeout: 30000, // Added to prevent 504
         });
+        setOpportunities(res.data.opportunities);
+        setTotalPages(res.data.totalPages);
+        setTotalOpportunities(res.data.totalOpportunities);
       } catch (error) {
         console.error("Error fetching opportunities:", error);
+        setError("Failed to fetch opportunities");
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
-  }, [activeTab, isSuperAdmin, canViewAllOpp, searchTerm]);
+  }, [activeTab, searchTerm, filterCriteria, currentPage, isSuperAdmin, canViewAllOpp]);
 
   useEffect(() => {
-    const activeData = getActiveData();
-    if (activeData.length > 0) {
-      fetchLatestActions(activeData.map((op) => op._id));
+    if (opportunities.length > 0) {
+      fetchLatestActions(opportunities.map((op) => op._id));
     } else {
       setLatestActions({});
     }
-  }, [opportunities, activeTab]);
+  }, [opportunities]);
 
   const fetchLatestActions = async (opportunityIds) => {
     try {
@@ -152,91 +191,9 @@ function ManageOpportunity() {
     if (show) fetchAllLogs();
   };
 
-  const getActiveData = () => {
-    switch (activeTab) {
-      case "my-opportunities":
-        return opportunities.my;
-      case "team-opportunities":
-        return opportunities.team;
-      case "all-opportunities":
-        return opportunities.all;
-      default:
-        return [];
-    }
-  };
-
-  const getFilteredData = () => {
-    let data = [...getActiveData()];
-    if (filterCriteria.opportunityStage !== "All") {
-      data = data.filter((op) => op.opportunityStage === filterCriteria.opportunityStage);
-    }
-    if (filterCriteria.closureFromDate) {
-      const from = new Date(filterCriteria.closureFromDate);
-      data = data.filter((op) => new Date(op.closureDate) >= from);
-    }
-    if (filterCriteria.closureToDate) {
-      const to = new Date(filterCriteria.closureToDate);
-      data = data.filter((op) => new Date(op.closureDate) <= to);
-    }
-    if (filterCriteria.createdFilter !== "All") {
-      const now = new Date();
-      let start, end;
-      switch (filterCriteria.createdFilter) {
-        case "Today":
-          start = new Date(now.setHours(0, 0, 0, 0));
-          end = new Date(start);
-          end.setDate(end.getDate() + 1);
-          break;
-        case "Yesterday":
-          end = new Date(now.setHours(0, 0, 0, 0));
-          start = new Date(end);
-          start.setDate(start.getDate() - 1);
-          break;
-        case "This Week":
-          start = new Date(now.setDate(now.getDate() - now.getDay()));
-          start.setHours(0, 0, 0, 0);
-          end = new Date(start);
-          end.setDate(start.getDate() + 7);
-          break;
-        case "Last Week":
-          end = new Date(now.setDate(now.getDate() - now.getDay()));
-          end.setHours(0, 0, 0, 0);
-          start = new Date(end);
-          start.setDate(start.getDate() - 7);
-          break;
-        case "This Month":
-          start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-          break;
-        case "Last Month":
-          start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          end = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-        case "This Year":
-          start = new Date(now.getFullYear(), 0, 1);
-          end = new Date(now.getFullYear() + 1, 0, 1);
-          break;
-        case "Last Year":
-          start = new Date(now.getFullYear() - 1, 0, 1);
-          end = new Date(now.getFullYear(), 0, 1);
-          break;
-        default:
-          break;
-      }
-      if (start && end) {
-        data = data.filter((op) => {
-          const created = new Date(op.createdAt);
-          return created >= start && created < end;
-        });
-      }
-    }
-    return data;
-  };
-
-  const filteredData = getFilteredData();
   const sortedData = useMemo(() => {
-    if (!sortConfig.key || !sortConfig.direction) return filteredData;
-    const sorted = [...filteredData].sort((a, b) => {
+    if (!sortConfig.key || !sortConfig.direction) return opportunities;
+    const sorted = [...opportunities].sort((a, b) => {
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
       if (sortConfig.key === "closureDate" || sortConfig.key === "createdAt") {
@@ -252,7 +209,7 @@ function ManageOpportunity() {
       return 0;
     });
     return sortConfig.direction === "desc" ? sorted.reverse() : sorted;
-  }, [filteredData, sortConfig]);
+  }, [opportunities, sortConfig]);
 
   const handleDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
@@ -273,50 +230,84 @@ function ManageOpportunity() {
         { headers: getAuthHeaders() }
       );
       const updatedOpportunity = response.data.opportunity;
-      setOpportunities((prev) => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach((key) => {
-          updated[key] = updated[key].map((op) =>
-            op._id === draggableId ? { ...op, ...updatedOpportunity } : op
-          );
-        });
-        return updated;
-      });
+      setOpportunities((prev) =>
+        prev.map((op) => (op._id === draggableId ? { ...op, ...updatedOpportunity } : op))
+      );
     } catch (err) {
       console.error("Error updating stage/status:", err);
     }
   };
 
-  const exportToExcel = (data, fileName = "OpportunitiesData.xlsx") => {
-    const exportData = data.map((op) => {
-      const latestAction = latestActions[op._id] || {};
-      return {
-        opportunityCode: op.opportunityCode,
-        createdDate: formatCreatedDate(op.createdAt),
-        account: op.account,
-        opportunityName: op.opportunityName,
-        OpportunityDetails : op.opportunityDetail,
-        opportunityOwner: op.opportunityOwner,
-        opportunityValue: op.opportunityValue,
-        closureDate: formatClosureDate(op.closureDate),
-        opportunityStage: op.opportunityStage,
-        opportunityStatus: op.opportunityStatus,
-        latestAction: latestAction.action
-          ? `${latestAction.action}${latestAction.field ? ` (${latestAction.field})` : ""} by ${
-              latestAction.performedBy?.name || "N/A"
-            } at ${
-              latestAction.performedAt
-                ? new Date(latestAction.performedAt).toLocaleString()
-                : "Unknown date"
-            }`
-          : "No action recorded",
+  const exportToExcel = async () => {
+    try {
+      const params = {
+        filter: activeTab === "my-opportunities" ? "my" : activeTab === "team-opportunities" ? "team" : undefined,
+        searchTerm: searchTerm || undefined,
+        opportunityStage: filterCriteria.opportunityStage !== "All" ? filterCriteria.opportunityStage : undefined,
+        closureFromDate: filterCriteria.closureFromDate || undefined,
+        closureToDate: filterCriteria.closureToDate || undefined,
+        createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
       };
-    });
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
-    XLSX.writeFile(wb, fileName);
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
+        headers: getAuthHeaders(),
+        params,
+        timeout: 30000,
+      });
+      const exportData = res.data.opportunities.map((op) => {
+        const latestAction = latestActions[op._id] || {};
+        return {
+          opportunityCode: op.opportunityCode,
+          createdDate: formatCreatedDate(op.createdAt),
+          account: op.account,
+          opportunityName: op.opportunityName,
+          OpportunityDetails: op.opportunityDetail,
+          opportunityOwner: op.opportunityOwner,
+          opportunityValue: op.opportunityValue,
+          closureDate: formatClosureDate(op.closureDate),
+          opportunityStage: op.opportunityStage,
+          opportunityStatus: op.opportunityStatus,
+          latestAction: latestAction.action
+            ? `${latestAction.action}${latestAction.field ? ` (${latestAction.field})` : ""} by ${
+                latestAction.performedBy?.name || "N/A"
+              } at ${
+                latestAction.performedAt
+                  ? new Date(latestAction.performedAt).toLocaleString()
+                  : "Unknown date"
+              }`
+            : "No action recorded",
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
+      XLSX.writeFile(wb, "OpportunitiesData.xlsx");
+    } catch (error) {
+      console.error("Excel export error:", error);
+      alert("Excel export failed");
+    }
   };
+
+  const renderPagination = () => (
+    <div className="flex justify-center items-center mt-4 space-x-2">
+      <button
+        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+        disabled={currentPage === 1 || loading}
+        className="px-3 py-1 border rounded disabled:opacity-50"
+      >
+        Previous
+      </button>
+      <span>
+        Page {currentPage} of {totalPages} (Total: {totalOpportunities})
+      </span>
+      <button
+        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+        disabled={currentPage === totalPages || loading}
+        className="px-3 py-1 border rounded disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-white text-gray-800 p-4">
@@ -324,7 +315,10 @@ function ManageOpportunity() {
       <div className="flex items-center justify-between mb-4">
         <OpportunityTabs
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+            setCurrentPage(1); // Reset to first page on tab change
+          }}
           isSuperAdmin={isSuperAdmin}
           canViewAllOpp={canViewAllOpp}
         />
@@ -392,7 +386,13 @@ function ManageOpportunity() {
               </div>
             )}
           </div>
-          <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+          <SearchBar
+            searchTerm={searchTerm}
+            setSearchTerm={(term) => {
+              setSearchTerm(term);
+              setCurrentPage(1); // Reset to first page on search
+            }}
+          />
           <button
             onClick={() => setShowFilter(!showFilter)}
             className="border border-gray-300 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-gray-100"
@@ -402,7 +402,7 @@ function ManageOpportunity() {
           <ToggleButtons viewMode={viewMode} setViewMode={setViewMode} />
           {(isSuperAdmin || canExportCRM) && (
             <button
-              onClick={() => exportToExcel(sortedData)}
+              onClick={exportToExcel}
               className="border border-green-500 text-green-700 bg-white rounded px-3 py-1 text-sm font-medium hover:bg-green-50"
             >
               Export to Excel
@@ -431,28 +431,39 @@ function ManageOpportunity() {
           handleFilterChange={(e) => {
             const { name, value } = e.target;
             setFilterCriteria((prev) => ({ ...prev, [name]: value }));
+            setCurrentPage(1); // Reset to first page on filter change
           }}
           setShowFilter={setShowFilter}
           stages={stages}
         />
       )}
       <div className="border-t border-gray-200 mt-4">
-        {viewMode === "list" ? (
-          <OpportunityTable
-            data={sortedData}
-            formatClosureDate={formatClosureDate}
-            formatCreatedDate={formatCreatedDate}
-            handleSort={handleSort}
-            sortConfig={sortConfig}
-            latestActions={latestActions}
-          />
+        {loading ? (
+          <SkeletonLoader />
+        ) : error ? (
+          <div className="p-4 text-red-600">{error}</div>
+        ) : viewMode === "list" ? (
+          <>
+            <OpportunityTable
+              data={sortedData}
+              formatClosureDate={formatClosureDate}
+              formatCreatedDate={formatCreatedDate}
+              handleSort={handleSort}
+              sortConfig={sortConfig}
+              latestActions={latestActions}
+            />
+            {renderPagination()}
+          </>
         ) : (
-          <KanbanView
-            data={sortedData}
-            stages={stages}
-            formatClosureDate={formatClosureDate}
-            handleDragEnd={handleDragEnd}
-          />
+          <>
+            <KanbanView
+              data={sortedData}
+              stages={stages}
+              formatClosureDate={formatClosureDate}
+              handleDragEnd={handleDragEnd}
+            />
+            {renderPagination()}
+          </>
         )}
       </div>
     </div>
