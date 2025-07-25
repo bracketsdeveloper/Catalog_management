@@ -774,33 +774,8 @@
       setOperationModalOpen(true);
     }
 
-    const handleExportPDF = async () => {
-      try {
-        const element = document.getElementById("quotation-content");
-        if (!element) {
-          alert("Content not found for PDF export");
-          return;
-        }
-        const canvas = await html2canvas(element, {
-          scale: 2,
-          useCORS: true,
-          logging: true,
-        });
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF({
-          orientation: "portrait",
-          unit: "mm",
-          format: "a4",
-        });
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`Quotation-${editableQuotation.quotationNumber || "NoNumber"}.pdf`);
-      } catch (error) {
-        console.error("Error exporting PDF:", error);
-        alert("Failed to export PDF");
-      }
+    const handleExportPDF = () => {
+      navigate(`/admin-dashboard/print-quotation/${id}`);
     };
 
     const marginFactor = 1 + (parseFloat(editableQuotation?.margin) || 0) / 100;

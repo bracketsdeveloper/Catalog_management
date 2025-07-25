@@ -71,14 +71,44 @@ router.get(
 );
 
 /** GET all catalogs */
+/** GET all catalogs with pagination and search */
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const catalogs = await Catalog.find()
+    const { page = 1, limit = 100, searchTerm = "" } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build search query
+    const searchQuery = searchTerm
+      ? {
+          $or: [
+            { catalogNumber: { $regex: searchTerm, $options: "i" } },
+            { customerCompany: { $regex: searchTerm, $options: "i" } },
+            { customerName: { $regex: searchTerm, $options: "i" } },
+            { catalogName: { $regex: searchTerm, $options: "i" } },
+            { opportunityNumber: { $regex: searchTerm, $options: "i" } },
+          ],
+        }
+      : {};
+
+    // Fetch catalogs with pagination
+    const catalogs = await Catalog.find(searchQuery)
       .populate("products.productId")
       .populate("products.brandingTypes")
       .sort({ createdAt: -1 })
-      .exec();
-    res.json(catalogs);
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Get total count for pagination metadata
+    const total = await Catalog.countDocuments(searchQuery);
+
+    res.json({
+      catalogs,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     console.error("Error fetching catalogs:", err);
     res.status(500).json({ message: "Server error fetching catalogs" });

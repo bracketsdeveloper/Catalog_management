@@ -11,7 +11,6 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const defaultMaterialTerms = [
   "Material received in good condition and correct quantity.",
-  // Changed Material Terms to correct typo in default values
   "No physical damage or shortage observed at the time of delivery.",
   "Accepted after preliminary inspection and validation with delivery documents.",
   "optional term edit or remove this",
@@ -24,8 +23,9 @@ export default function DeliveryChallanManagementPage() {
   const navigate = useNavigate();
   const [deliveryChallans, setDeliveryChallans] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
-  const [latestActions, setLatestActions] = useState([]);
+  const [latestActions, setLatestActions] = useState({});
   const [loading, setLoading] = useState(true);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sortField, setSortField] = useState("dcNumber");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -57,14 +57,25 @@ export default function DeliveryChallanManagementPage() {
   }, []);
 
   async function fetchOpportunities() {
+    setOpportunitiesLoading(true);
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setOpportunities(res.data);
+      console.log("Fetched opportunities:", res.data);
+      // Normalize response to array
+      const data = Array.isArray(res.data) ? res.data : res.data.opportunities || [];
+      setOpportunities(data);
     } catch (err) {
-      console.error("Error fetching opportunities:", err);
+      console.error("Error fetching opportunities:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
+      setOpportunities([]); // Fallback to empty array
+    } finally {
+      setOpportunitiesLoading(false);
     }
   }
 
@@ -76,6 +87,7 @@ export default function DeliveryChallanManagementPage() {
         { quotationIds: challanIds },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      console.log("Fetched latest actions:", res.data);
       setLatestActions(res.data);
     } catch (err) {
       console.error("Error fetching latest actions:", err);
@@ -90,15 +102,21 @@ export default function DeliveryChallanManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/delivery-challans`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setDeliveryChallans(res.data);
-      const challanIds = res.data.map((q) => q._id);
+      console.log("Fetched delivery challans:", res.data);
+      setDeliveryChallans(Array.isArray(res.data) ? res.data : res.data.deliveryChallans || []);
+      const challanIds = (Array.isArray(res.data) ? res.data : res.data.deliveryChallans || []).map((q) => q._id);
       if (challanIds.length > 0) {
         await fetchLatestActions(challanIds);
       }
       setError(null);
     } catch (err) {
-      console.error("Error fetching delivery challans:", err);
+      console.error("Error fetching delivery challans:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
       setError("Failed to fetch delivery challans");
+      setDeliveryChallans([]);
     } finally {
       setLoading(false);
     }
@@ -106,8 +124,11 @@ export default function DeliveryChallanManagementPage() {
 
   // Prepare base rows with computed fields
   const baseRows = useMemo(() => {
+    console.log("Computing baseRows, opportunities:", opportunities);
+    // Ensure opportunities is an array
+    const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
     return deliveryChallans.map((challan) => {
-      const opp = opportunities.find((o) => o.opportunityCode === challan.opportunityNumber);
+      const opp = safeOpportunities.find((o) => o.opportunityCode === challan.opportunityNumber);
       const latestAction = latestActions[challan._id] || {};
       return {
         ...challan,
@@ -249,7 +270,7 @@ export default function DeliveryChallanManagementPage() {
       terms: challan.terms || [],
       poNumber: challan.poNumber || "",
       poDate: challan.poDate ? format(new Date(challan.poDate), "yyyy-MM-dd") : "",
-      otherReferences: challan.otherReferences || "", // Add new field
+      otherReferences: challan.otherReferences || "",
       materialTerms: challan.materialTerms || [
         "Material received in good condition and correct quantity.",
         "No physical damage or shortage noticed at the time of delivery.",
@@ -511,7 +532,7 @@ export default function DeliveryChallanManagementPage() {
     );
   };
 
-  if (loading) return <div className="p-6 text-gray-500">Loading...</div>;
+  if (loading || opportunitiesLoading) return <div className="p-6 text-gray-500">Loading...</div>;
   if (error) return <div className="p-6 text-red-400">{error}</div>;
 
   return (

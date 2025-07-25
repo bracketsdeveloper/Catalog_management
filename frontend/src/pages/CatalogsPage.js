@@ -1,4 +1,3 @@
-// frontend/src/pages/CatalogManagementPage.js
 "use client";
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
@@ -52,6 +51,9 @@ export default function CatalogManagementPage() {
   const [suggestions, setSuggestions] = useState([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [searchValues, setSearchValues] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("crm-export");
 
@@ -70,9 +72,10 @@ export default function CatalogManagementPage() {
       if (!dropdownButtonRef.current) return;
       const rect = dropdownButtonRef.current.getBoundingClientRect();
       const dropdownHeight = 200;
-      let top = window.innerHeight - rect.bottom < dropdownHeight
-        ? rect.top + window.pageYOffset - dropdownHeight
-        : rect.bottom + window.pageYOffset;
+      let top =
+        window.innerHeight - rect.bottom < dropdownHeight
+          ? rect.top + window.pageYOffset - dropdownHeight
+          : rect.bottom + window.pageYOffset;
       setDropdownPosition({
         top,
         left: rect.left + window.pageXOffset,
@@ -91,7 +94,7 @@ export default function CatalogManagementPage() {
     fetchData();
     fetchUserEmail();
     fetchOpportunities();
-  }, [approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter]);
+  }, [currentPage, approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchTerm]);
 
   async function fetchUserEmail() {
     try {
@@ -112,7 +115,8 @@ export default function CatalogManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setOpportunities(res.data);
+      // Ensure opportunities is always an array
+      setOpportunities(Array.isArray(res.data) ? res.data : res.data.opportunities || []);
     } catch (err) {
       console.error("Error fetching opportunities:", err);
     }
@@ -122,36 +126,33 @@ export default function CatalogManagementPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      let data = approvalFilter === "all"
-        ? res.data
-        : res.data.filter((cat) =>
-            approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
-          );
-      if (fromDateFilter) {
-        const from = new Date(fromDateFilter);
-        data = data.filter((item) => new Date(item.createdAt) >= from);
+      const params = {
+        page: currentPage,
+        limit: 100,
+        searchTerm,
+      };
+      if (approvalFilter !== "all") {
+        params.approveStatus = approvalFilter === "approved";
       }
-      if (toDateFilter) {
-        const to = new Date(toDateFilter);
-        data = data.filter((item) => new Date(item.createdAt) <= to);
-      }
-      if (companyFilter.length > 0) {
-        data = data.filter((item) =>
-          companyFilter.includes(item.customerCompany)
-        );
-      }
+      if (fromDateFilter) params.fromDate = fromDateFilter;
+      if (toDateFilter) params.toDate = toDateFilter;
+      if (companyFilter.length > 0) params.companyFilter = companyFilter.join(",");
       if (opportunityOwnerFilter.length > 0) {
         const filteredOpportunities = opportunities.filter((opp) =>
           opportunityOwnerFilter.includes(opp.opportunityOwner)
         );
-        const opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode);
-        data = data.filter((cat) => opportunityCodes.includes(cat.opportunityNumber));
+        params.opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode).join(",");
       }
-      setCatalogs(data);
-      setOriginalCatalogs(data);
+
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+
+      setCatalogs(res.data.catalogs);
+      setOriginalCatalogs(res.data.catalogs);
+      setTotalPages(res.data.totalPages);
+      setTotalItems(res.data.total);
       setError(null);
     } catch (err) {
       console.error("Error fetching catalogs:", err);
@@ -166,7 +167,6 @@ export default function CatalogManagementPage() {
     setSortConfig({ key, direction });
 
     const sortedCatalogs = [...catalogs].sort((a, b) => {
-      // Add null checks and default values
       let valA = a?.[key] ?? "";
       let valB = b?.[key] ?? "";
 
@@ -682,59 +682,34 @@ export default function CatalogManagementPage() {
   };
   const companyNames = getUniqueCompanyNames();
 
-  const filterSuggestions = (input) => {
+  const filterSuggestions = async (input) => {
     if (!input) {
       setSuggestions([]);
       return;
     }
-    const filtered = companyNames.filter((name) =>
-      name.toLowerCase().includes(input.toLowerCase())
-    );
-    setSuggestions(filtered);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { searchTerm: input, limit: 10 },
+      });
+      const suggestions = res.data.catalogs.map((cat) => cat.customerCompany).filter(Boolean);
+      setSuggestions([...new Set(suggestions)]);
+    } catch (err) {
+      console.error("Error fetching suggestions:", err);
+    }
   };
 
   const handleSearch = () => {
-    if (!searchTerm && Object.keys(searchValues).length === 0) {
-      setCatalogs(originalCatalogs);
-      return;
-    }
-
-    const filtered = originalCatalogs.filter((cat) => {
-      const opp = opportunities.find((o) => o.opportunityCode === cat?.opportunityNumber);
-      const matchesGlobalSearch = searchTerm
-        ? String(cat?.catalogNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.customerCompany ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.customerName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.catalogName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.opportunityNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(opp?.opportunityOwner ?? "").toLowerCase().includes(searchTerm.toLowerCase())
-        : true;
-
-      const matchesHeaderSearch = Object.entries(searchValues).every(([field, value]) => {
-        if (!value) return true;
-        let rowValue;
-        if (field === "opportunityOwner") {
-          const opp = opportunities.find((o) => o.opportunityCode === cat?.opportunityNumber);
-          rowValue = opp?.opportunityOwner ?? "";
-        } else if (field === "products.length") {
-          rowValue = String((cat?.products || []).length);
-        } else if (field === "createdAt") {
-          rowValue = new Date(cat?.[field] || 0).toLocaleDateString();
-        } else {
-          rowValue = String(cat?.[field] ?? "");
-        }
-        return String(rowValue).toLowerCase().includes(value.toLowerCase());
-      });
-
-      return matchesGlobalSearch && matchesHeaderSearch;
-    });
-
-    setCatalogs(filtered);
+    setCurrentPage(1); // Reset to first page on new search
+    fetchData();
   };
 
-  useEffect(() => {
-    handleSearch();
-  }, [searchValues, searchTerm]);
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   const renderFilterButtons = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
@@ -873,6 +848,7 @@ export default function CatalogManagementPage() {
               </button>
               <button
                 onClick={() => {
+                  setCurrentPage(1); // Reset to first page on filter apply
                   fetchData();
                   setShowFilterWindow(false);
                 }}
@@ -899,7 +875,6 @@ export default function CatalogManagementPage() {
             onChange={(e) => {
               setSearchTerm(e.target.value);
               filterSuggestions(e.target.value);
-              handleSearch();
             }}
             className="border p-2"
             placeholder="Search all fields"
@@ -927,6 +902,28 @@ export default function CatalogManagementPage() {
           ))}
         </div>
       </div>
+    </div>
+  );
+
+  const renderPagination = () => (
+    <div className="flex justify-center items-center mt-4 space-x-2">
+      <button
+        onClick={() => handlePageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-4 py-2 bg-[#Ff8045] text-white rounded disabled:bg-gray-300"
+      >
+        Previous
+      </button>
+      <span>
+        Page {currentPage} of {totalPages} (Total: {totalItems})
+      </span>
+      <button
+        onClick={() => handlePageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-4 py-2 bg-[#Ff8045] text-white rounded disabled:bg-gray-300"
+      >
+        Next
+      </button>
     </div>
   );
 
@@ -1099,12 +1096,20 @@ export default function CatalogManagementPage() {
             </div>
           ) : null
         )}
+        {renderPagination()}
       </div>
     );
   };
 
   async function handleExportAllToExcel() {
     try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { limit: 0 }, // Fetch all records for export
+      });
+      const allCatalogs = res.data.catalogs;
+
       const wb = XLSX.utils.book_new();
       const header = [
         "Catalog Number",
@@ -1119,7 +1124,7 @@ export default function CatalogManagementPage() {
         "Approve Status",
       ];
       const data = [header];
-      catalogs.forEach((cat) => {
+      allCatalogs.forEach((cat) => {
         const opp = opportunities.find((o) => o.opportunityCode === cat.opportunityNumber);
         const row = [
           cat.catalogNumber,
