@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-// Adjust the URL as per your backend setup
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const QUOTATION_API_URL = `${BACKEND_URL}/api/admin/quotations`;
 
@@ -16,9 +15,11 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
       const res = await axios.get(QUOTATION_API_URL, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setQuotations(res.data || []);
+      // Extract quotations array, default to empty array
+      setQuotations(Array.isArray(res.data.quotations) ? res.data.quotations : []);
     } catch (error) {
       console.error("Error fetching quotations:", error);
+      setQuotations([]); // Set empty array on error
     }
   };
 
@@ -32,16 +33,16 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
   useEffect(() => {
     if (value) {
       const filtered = quotations.filter((q) =>
-        q.quotationNumber.toLowerCase().includes(value.toLowerCase())
+        q.quotationNumber?.toLowerCase().includes(value.toLowerCase())
       );
-      setSuggestions(filtered);
+      setSuggestions(Array.isArray(filtered) ? filtered : []);
     } else {
-      setSuggestions(quotations);
+      setSuggestions(Array.isArray(quotations) ? quotations : []);
     }
   }, [value, quotations]);
 
   const handleSelect = (quotation) => {
-    onChange(quotation.quotationNumber);
+    onChange(quotation.quotationNumber || "");
     setShowSuggestions(false);
     if (onSelect) {
       onSelect(quotation);
@@ -67,7 +68,7 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
               className="p-2 cursor-pointer hover:bg-gray-100"
               onClick={() => handleSelect(q)}
             >
-              {q.quotationNumber} - {q.customerName}
+              {(q.quotationNumber || "Unknown")} - {(q.customerName || "Unknown")}
             </div>
           ))}
         </div>
