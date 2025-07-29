@@ -170,6 +170,62 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+
+router.get("/quotations-export", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { search, approvalFilter, fromDate, toDate, company, opportunityOwner } = req.query;
+    const query = {};
+
+    // Apply search across multiple fields
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      query.$or = [
+        { quotationNumber: searchRegex },
+        { customerCompany: searchRegex },
+        { customerName: searchRegex },
+        { catalogName: searchRegex },
+        { opportunityNumber: searchRegex },
+      ];
+    }
+
+    // Approval filter
+    if (approvalFilter === "approved") query.approveStatus = true;
+    else if (approvalFilter === "notApproved") query.approveStatus = false;
+
+    // Date filters
+    if (fromDate) query.createdAt = { $gte: new Date(fromDate) };
+    if (toDate) query.createdAt = { ...query.createdAt, $lte: new Date(toDate) };
+
+    // Company filter
+    if (company) {
+      const companies = Array.isArray(company) ? company : [company];
+      query.customerCompany = { $in: companies };
+    }
+
+    // Opportunity owner filter
+    if (opportunityOwner) {
+      const owners = Array.isArray(opportunityOwner) ? opportunityOwner : [opportunityOwner];
+      const opportunities = await Opportunity.find({ opportunityOwner: { $in: owners } }).select("opportunityCode");
+      const opportunityCodes = opportunities.map((opp) => opp.opportunityCode);
+      query.opportunityNumber = { $in: opportunityCodes };
+    }
+
+    // Fetch all quotations (no pagination for export)
+    const quotations = await Quotation.find(query)
+      .select(
+        "quotationNumber opportunityNumber customerCompany customerName catalogName items createdAt remarks approveStatus"
+      ) // Select only needed fields
+      .populate("items.productId", "name productCost hsnCode")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ quotations });
+  } catch (err) {
+    console.error("Error fetching quotations:", err);
+    res.status(500).json({ message: "Server error fetching quotations" });
+  }
+});
+
 router.get("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 100, search, approvalFilter, fromDate, toDate, company, opportunityOwner } = req.query;

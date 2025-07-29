@@ -71,8 +71,62 @@ router.get(
 );
 
 /** GET all catalogs */
-/** GET all catalogs with pagination and search */
+
+/** GET all catalogs */
+router.get("/catalogs-export", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { searchTerm } = req.query;
+
+    // Build search query
+    const searchQuery = searchTerm
+      ? {
+          $or: [
+            { catalogNumber: { $regex: escapeRegex(searchTerm), $options: "i" } },
+            { customerCompany: { $regex: escapeRegex(searchTerm), $options: "i" } },
+            { customerName: { $regex: escapeRegex(searchTerm), $options: "i" } },
+            { catalogName: { $regex: escapeRegex(searchTerm), $options: "i" } },
+            { opportunityNumber: { $regex: escapeRegex(searchTerm), $options: "i" } },
+          ],
+        }
+      : {};
+
+    const catalogs = await Catalog.find(searchQuery)
+      .select(
+        "catalogNumber opportunityNumber customerCompany customerName catalogName products createdAt remarks approveStatus"
+      ) // Select only needed fields
+      .populate("products.productId", "name ProductBrand ProductDescription productCost productGST")
+      .populate("products.brandingTypes", "brandingName cost")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ catalogs });
+  } catch (err) {
+    console.error("Error fetching catalogs:", err);
+    res.status(500).json({ message: "Server error fetching catalogs" });
+  }
+});
+
+// Helper function to escape special regex characters
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const catalogs = await Catalog.find()
+      .populate("products.productId")
+      .populate("products.brandingTypes")
+      .sort({ createdAt: -1 })
+      .exec();
+    res.json(catalogs);
+  } catch (err) {
+    console.error("Error fetching catalogs:", err);
+    res.status(500).json({ message: "Server error fetching catalogs" });
+  }
+});
+
+/** GET all catalogs with pagination and search */
+router.get("/catalogs-page", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 100, searchTerm = "" } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);

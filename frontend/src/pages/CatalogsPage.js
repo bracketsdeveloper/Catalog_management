@@ -144,7 +144,7 @@ export default function CatalogManagementPage() {
         params.opportunityCodes = filteredOpportunities.map((opp) => opp.opportunityCode).join(",");
       }
 
-      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs-page`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
       });
@@ -658,7 +658,7 @@ export default function CatalogManagementPage() {
       delete duplicatedCatalog.createdAt;
       duplicatedCatalog.catalogNumber = `${duplicatedCatalog.catalogNumber}-copy-${Date.now()}`;
 
-      const res = await axios.post(`${BACKEND_URL}/api/admin/catalogs`, duplicatedCatalog, {
+      const res = await axios.post(`${BACKEND_URL}/api/admin/catalogs-page`, duplicatedCatalog, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 201) {
@@ -689,7 +689,7 @@ export default function CatalogManagementPage() {
     }
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs-page`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { searchTerm: input, limit: 10 },
       });
@@ -1104,7 +1104,7 @@ export default function CatalogManagementPage() {
   async function handleExportAllToExcel() {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs-export`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 0 }, // Fetch all records for export
       });

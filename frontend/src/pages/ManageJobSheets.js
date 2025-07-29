@@ -221,32 +221,42 @@ export default function ManageJobSheets() {
         deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
         deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
       };
-
-      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+  
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets-export`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
+        timeout: 60000,
       });
-
+  
       const exportData = [];
       let serial = 1;
-
-      res.data.jobSheets.forEach((js) => {
+  
+      const allJobSheets = Array.isArray(res.data) ? res.data : res.data.jobSheets || [];
+  
+      allJobSheets.forEach((js) => {
         const createdAtFormatted = js.createdAt && isValid(new Date(js.createdAt))
           ? format(new Date(js.createdAt), "dd/MM/yyyy")
           : "Invalid date";
-
+  
         const orderDateFormatted = js.orderDate && isValid(new Date(js.orderDate))
           ? format(new Date(js.orderDate), "dd/MM/yyyy")
           : "Invalid date";
-
+  
         const deliveryDateFormatted = js.deliveryDate && isValid(new Date(js.deliveryDate))
           ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
           : "Invalid date";
-
+  
         const latestAction = latestActions[js._id] || {};
-
+  
         if (js.items && js.items.length > 0) {
           js.items.forEach((item) => {
+            // Handle brandingType as string or array
+            const brandingType = Array.isArray(item.brandingType)
+              ? item.brandingType.join(", ")
+              : typeof item.brandingType === "string"
+              ? item.brandingType
+              : "";
+  
             exportData.push({
               "Sl. No": serial++,
               "Created At": createdAtFormatted,
@@ -267,7 +277,7 @@ export default function ManageJobSheets() {
               "Product Procured By": "",
               "Branding Target Date": "",
               "Branding Vendor": item.brandingVendor || "",
-              "Branding Type": item.brandingType?.join(", ") || "",
+              "Branding Type": brandingType,
               "Branding Vendor Contact": "",
               "Delivery Status": "",
               "QC Done By": "",
@@ -315,7 +325,7 @@ export default function ManageJobSheets() {
           });
         }
       });
-
+  
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
@@ -325,7 +335,6 @@ export default function ManageJobSheets() {
       alert("Excel export failed");
     }
   };
-
   const isValidDate = (date) => {
     return date instanceof Date && !isNaN(date);
   };

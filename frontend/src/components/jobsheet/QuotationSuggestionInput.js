@@ -77,4 +77,4 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
   );
 };
 
-export default QuotationSuggestionInput;
+export default QuotationSuggestionInput; 

@@ -705,8 +705,7 @@ export default function QuotationManagementPage() {
   async function handleExportAllToExcel() {
     try {
       const token = localStorage.getItem("token");
-      // Fetch all quotations for export (no pagination)
-      const res = await axios.get(`${BACKEND_URL}/api/admin/quotationspages`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations-export`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           search: searchTerm || undefined,
@@ -716,8 +715,10 @@ export default function QuotationManagementPage() {
           company: companyFilter.length > 0 ? companyFilter : undefined,
           opportunityOwner: opportunityOwnerFilter.length > 0 ? opportunityOwnerFilter : undefined,
         },
-        timeout: 30000,
+        timeout: 60000, // Increased timeout for larger data
       });
+      const allQuotations = Array.isArray(res.data) ? res.data : res.data.quotations || [];
+  
       const wb = utils.book_new();
       const header = [
         "Quotation Number",
@@ -733,7 +734,7 @@ export default function QuotationManagementPage() {
         "Latest Action",
       ];
       const data = [header];
-      res.data.quotations.forEach((q) => {
+      allQuotations.forEach((q) => {
         const opp = opportunities.find((o) => o.opportunityCode === q.opportunityNumber);
         const latestAction = latestActions[q._id] || {};
         const row = [

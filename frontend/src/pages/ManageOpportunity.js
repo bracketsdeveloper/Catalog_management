@@ -248,10 +248,10 @@ function ManageOpportunity() {
         closureToDate: filterCriteria.closureToDate || undefined,
         createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
       };
-      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities-pages`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities-export`, {
         headers: getAuthHeaders(),
         params,
-        timeout: 30000,
+        timeout: 60000, // Increased timeout for larger data
       });
       const exportData = res.data.opportunities.map((op) => {
         const latestAction = latestActions[op._id] || {};

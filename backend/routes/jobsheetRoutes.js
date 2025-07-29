@@ -106,6 +106,142 @@ router.post("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+
+// GET /jobsheets with pagination, search, and filters
+router.get("/jobsheets-export", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const {
+      draftOnly,
+      searchQuery,
+      orderFromDate,
+      orderToDate,
+      deliveryFromDate,
+      deliveryToDate,
+      page,
+      limit,
+    } = req.query;
+
+    const andConditions = [];
+
+    // Draft filter
+    if (draftOnly === "true") {
+      andConditions.push({ isDraft: true, createdBy: req.user.email });
+    } else {
+      andConditions.push({
+        $or: [{ isDraft: false }, { isDraft: { $exists: false } }],
+      });
+    }
+
+    // Search filter
+    if (searchQuery) {
+      const regex = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      andConditions.push({
+        $or: [
+          { clientCompanyName: regex },
+          { eventName: regex },
+          { referenceQuotation: regex },
+          { clientName: regex },
+          { jobSheetNumber: regex },
+        ],
+      });
+    }
+
+    // Order date filter
+    if (orderFromDate) {
+      const fromDate = new Date(orderFromDate);
+      if (isNaN(fromDate.getTime())) {
+        return res.status(400).json({ message: "Invalid orderFromDate format" });
+      }
+      andConditions.push({ orderDate: { $gte: fromDate } });
+    }
+    if (orderToDate) {
+      const toDate = new Date(orderToDate);
+      if (isNaN(toDate.getTime())) {
+        return res.status(400).json({ message: "Invalid orderToDate format" });
+      }
+      andConditions.push({ orderDate: { $lte: toDate } });
+    }
+
+    // Delivery date filter
+    if (deliveryFromDate) {
+      const fromDate = new Date(deliveryFromDate);
+      if (isNaN(fromDate.getTime())) {
+        return res.status(400).json({ message: "Invalid deliveryFromDate format" });
+      }
+      andConditions.push({ deliveryDate: { $gte: fromDate } });
+    }
+    if (deliveryToDate) {
+      const toDate = new Date(deliveryToDate);
+      if (isNaN(toDate.getTime())) {
+        return res.status(400).json({ message: "Invalid deliveryToDate format" });
+      }
+      andConditions.push({ deliveryDate: { $lte: toDate } });
+    }
+
+    const query = andConditions.length ? { $and: andConditions } : {};
+
+    // Check if pagination is requested
+    if (page && limit) {
+      const pageNum = parseInt(page, 10);
+      const limitNum = parseInt(limit, 10);
+      if (isNaN(pageNum) || pageNum < 1) {
+        return res.status(400).json({ message: "Invalid page number" });
+      }
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
+        return res.status(400).json({ message: "Invalid limit value" });
+      }
+
+      const skip = (pageNum - 1) * limitNum;
+
+      console.log("Executing job sheets query with pagination:", JSON.stringify(query, null, 2));
+
+      const [jobSheets, total] = await Promise.all([
+        JobSheet.find(query)
+          .select(
+            "jobSheetNumber eventName clientName clientCompanyName orderDate deliveryDate referenceQuotation crmIncharge items poStatus createdAt"
+          )
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        JobSheet.countDocuments(query),
+      ]);
+
+      console.log(`Found ${jobSheets.length} job sheets, total: ${total}`);
+
+      res.json({
+        jobSheets,
+        totalPages: Math.ceil(total / limitNum) || 1,
+        currentPage: pageNum,
+        totalJobSheets: total,
+      });
+    } else {
+      // Fetch all job sheets for export
+      console.log("Executing job sheets query without pagination:", JSON.stringify(query, null, 2));
+
+      const jobSheets = await JobSheet.find(query)
+        .select(
+          "jobSheetNumber eventName clientName clientCompanyName orderDate deliveryDate referenceQuotation crmIncharge items poStatus createdAt"
+        )
+        .sort({ createdAt: -1 })
+        .lean();
+
+      console.log(`Found ${jobSheets.length} job sheets`);
+
+      res.json({ jobSheets });
+    }
+  } catch (error) {
+    console.error("Error fetching job sheets:", {
+      message: error.message,
+      stack: error.stack,
+      query: req.query,
+    });
+    res.status(500).json({
+      message: "Server error fetching job sheets",
+      error: error.message,
+    });
+  }
+});
 // GET /jobsheets with pagination, search, and filters
 router.get("/jobsheets", authenticate, authorizeAdmin, async (req, res) => {
   try {
