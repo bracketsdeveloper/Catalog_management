@@ -1,14 +1,34 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { debounce } from "lodash"; // Ensure lodash is installed: npm install lodash
 
 const ACTIONS = ["Call", "Mail", "Meet", "Msg", "Assign to"];
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
 const MINUTES = Array.from({ length: 6 }, (_, i) => String(i * 10).padStart(2, "0"));
 const AMPM = ["AM", "PM"];
 
+// Define debounced search outside component to avoid re-creation
+const debouncedSearch = debounce((txt, setCompanySugs, setIsLoadingSugs, token) => {
+  setIsLoadingSugs(true);
+  axios
+    .get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/search-companies?query=${encodeURIComponent(txt)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    .then((res) => {
+      setCompanySugs(res.data);
+      setIsLoadingSugs(false);
+    })
+    .catch((err) => {
+      console.error("Error fetching companies:", err);
+      setCompanySugs([]);
+      setIsLoadingSugs(false);
+    });
+}, 300);
+
 export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
   const isEdit = Boolean(ev?._id);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingSugs, setIsLoadingSugs] = useState(false); // New loading state
 
   const [companies, setCompanies] = useState([]);
   const [companySugs, setCompanySugs] = useState([]);
@@ -25,10 +45,12 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
     axios
       .get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/search-companies`, { headers })
-      .then((r) => setCompanies(r.data));
+      .then((r) => setCompanies(r.data))
+      .catch((err) => console.error("Error fetching companies:", err));
     axios
       .get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users?all=true`, { headers })
-      .then((r) => setUsers(r.data));
+      .then((r) => setUsers(r.data))
+      .catch((err) => console.error("Error fetching users:", err));
   }, []);
 
   // Initialize schedules
@@ -169,14 +191,18 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
     setCompany({ id: "", type: "" });
     setClientName("");
     setClientNameSuggestions([]);
-    if (txt === "") {
+    if (txt.trim() === "") {
       setCompanySugs(companies);
+      setIsLoadingSugs(false);
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (token) {
+      debouncedSearch(txt, setCompanySugs, setIsLoadingSugs, token);
     } else {
-      axios
-        .get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/search-companies?query=${encodeURIComponent(txt)}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        })
-        .then((res) => setCompanySugs(res.data));
+      setCompanySugs([]);
+      setIsLoadingSugs(false);
+      console.error("No token found");
     }
   };
 
@@ -191,6 +217,7 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
       })) || [];
     setClientNameSuggestions(clients);
     setCompanySugs([]);
+    setIsLoadingSugs(false);
   };
 
   const onClientNameChange = (txt) => {
@@ -305,7 +332,12 @@ export default function AddEventModal({ ev, onClose, isSuperAdmin }) {
             className="border rounded w-full p-2 text-sm bg-white"
             placeholder="Type to search companies..."
           />
-          {companySugs.length > 0 && (
+          {isLoadingSugs && (
+            <div className="absolute bg-white border mt-1 max-h-32 overflow-auto w-full text-sm z-50 p-2">
+              Loading...
+            </div>
+          )}
+          {companySugs.length > 0 && !isLoadingSugs && (
             <ul className="absolute bg-white border mt-1 max-h-32 overflow-auto w-full text-sm z-50">
               {companySugs.map((sug) => (
                 <li
