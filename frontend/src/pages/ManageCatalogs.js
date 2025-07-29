@@ -628,12 +628,11 @@ useEffect(() => {
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
     }
-
+  
     // Ensure customerName is empty if not entered
     const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
-
+  
     const payload = {
-      _id: quotationId,
       opportunityNumber,
       catalogId: isCatalogEditMode ? id : undefined,
       catalogName,
@@ -676,18 +675,14 @@ useEffect(() => {
       displayTotals: true,
       displayHSNCodes: true,
     };
-
+  
     try {
       const token = localStorage.getItem("token");
-      const method = isQuotationEditMode && quotationId ? "put" : "post";
-      const url = isQuotationEditMode && quotationId
-        ? `${BACKEND_URL}/api/admin/quotations/${quotationId}`
-        : `${BACKEND_URL}/api/admin/quotations`;
-      const { data } = await axios[method](url, payload, {
+      const { data } = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setQuotationId(data.quotation._id);
-      alert(isQuotationEditMode && quotationId ? "Quotation updated!" : "Quotation created!");
+      alert("Quotation created!");
     } catch {
       alert("Error saving quotation");
     }
