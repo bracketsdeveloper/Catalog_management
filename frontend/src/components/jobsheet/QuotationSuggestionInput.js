@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const QUOTATION_API_URL = `${BACKEND_URL}/api/admin/quotations`;
+const QUOTATION_API_URL = `${BACKEND_URL}/api/admin/quotations-export`;
 
 const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelect }) => {
   const [quotations, setQuotations] = useState([]);
@@ -15,11 +15,10 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
       const res = await axios.get(QUOTATION_API_URL, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Extract quotations array, default to empty array
       setQuotations(Array.isArray(res.data.quotations) ? res.data.quotations : []);
     } catch (error) {
       console.error("Error fetching quotations:", error);
-      setQuotations([]); // Set empty array on error
+      setQuotations([]);
     }
   };
 
@@ -61,7 +60,7 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
         className="border border-purple-300 rounded w-full p-2"
       />
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute bg-white border border-gray-300 rounded shadow-lg mt-1 w-full z-10">
+        <div className="absolute bg-white border border-gray-300 rounded shadow-lg mt-1 w-full z-10 max-h-40 overflow-y-auto">
           {suggestions.map((q) => (
             <div
               key={q._id}
@@ -77,4 +76,4 @@ const QuotationSuggestionInput = ({ value, onChange, placeholder, label, onSelec
   );
 };
 
-export default QuotationSuggestionInput; 
+export default QuotationSuggestionInput;
