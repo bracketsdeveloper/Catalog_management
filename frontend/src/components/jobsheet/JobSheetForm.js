@@ -237,13 +237,13 @@ const JobSheetForm = ({
               placeholder="Enter Reference Quotation"
               onSelect={handleQuotationSelect}
             />
-            <button
+            {/* <button
               type="button"
               onClick={fetchQuotation}
               className="bg-blue-500 text-white px-3 py-2 rounded"
             >
               Fetch
-            </button>
+            </button> */}
           </div>
         </div>
       </div>

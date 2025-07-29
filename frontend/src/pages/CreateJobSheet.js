@@ -409,12 +409,16 @@ export default function CreateJobSheet() {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(
-          `${BACKEND_URL}/api/admin/quotations?quotationNumber=${referenceQuotation.trim()}`,
+          `${BACKEND_URL}/api/admin/quotations?search=${referenceQuotation.trim()}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         let fetchedQuotation;
         if (Array.isArray(res.data)) {
           fetchedQuotation = res.data.find(
+            (q) => q.quotationNumber === referenceQuotation.trim()
+          );
+        } else if (res.data.quotations) {
+          fetchedQuotation = res.data.quotations.find(
             (q) => q.quotationNumber === referenceQuotation.trim()
           );
         } else {
