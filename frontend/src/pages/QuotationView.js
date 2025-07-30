@@ -495,7 +495,7 @@
 
     async function handleSaveQuotation() {
       if (!editableQuotation) return;
-
+    
       try {
         const updatedMargin = parseFloat(editableQuotation.margin) || 0;
         const {
@@ -515,7 +515,7 @@
           operations,
           priceRange,
         } = editableQuotation;
-
+    
         const updatedItems = items.map((item) => {
           const baseRate = parseFloat(item.rate) || 0;
           const quantity = parseFloat(item.quantity) || 1;
@@ -526,7 +526,7 @@
             item.productGST != null ? parseFloat(item.productGST) : parseFloat(gst) || 18;
           const gstAmount = parseFloat((amount * (gstRate / 100)).toFixed(2));
           const total = parseFloat((amount + gstAmount).toFixed(2));
-
+    
           return {
             ...item,
             rate: baseRate,
@@ -539,7 +539,7 @@
             hsnCode: item.hsnCode || item.productId?.hsnCode || "",
           };
         });
-
+    
         const body = {
           opportunityNumber,
           catalogName,
@@ -558,32 +558,33 @@
           operations,
           priceRange,
         };
-
-        const updateRes = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
-          method: "PUT",
+    
+        // Send POST request to create a new quotation
+        const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(body),
         });
-
-        if (!updateRes.ok) {
-          const errorData = await updateRes.json();
-          throw new Error(errorData.message || "Failed to update quotation");
+    
+        if (!createRes.ok) {
+          const errorData = await createRes.json();
+          throw new Error(errorData.message || "Failed to create new quotation");
         }
-
-        const data = await updateRes.json();
+    
+        const data = await createRes.json();
         if (!data || !data.quotation || !data.quotation._id) {
           throw new Error("Invalid response from server: Missing quotation data");
         }
-
-        alert("Quotation updated successfully!");
-        setQuotation(data.quotation);
-        setEditableQuotation(data.quotation);
+    
+        alert("New quotation created successfully!");
+        // Navigate to the newly created quotation
+        navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
       } catch (error) {
-        console.error("Save error:", error);
-        alert(`Failed to save quotation: ${error.message}`);
+        console.error("Create error:", error);
+        alert(`Failed to create new quotation: ${error.message}`);
       }
     }
 
