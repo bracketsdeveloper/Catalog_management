@@ -625,7 +625,7 @@
           const parsedValue = parseFloat(newValue);
           newItems[index] = {
             ...newItems[index],
-            [field]: isNaN(parsedValue) ? (field === "productGST" ? 18 : 1) : parsedValue,
+            [field]: newValue === "" || isNaN(parsedValue) ? (field === "quantity" ? 1 : 0) : parsedValue,
           };
         } else {
           newItems[index] = { ...newItems[index], [field]: newValue };

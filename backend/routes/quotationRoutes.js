@@ -88,7 +88,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       const marginFactor = 1 + (parseFloat(margin) || 0) / 100;
       const effRate = rate * marginFactor;
       const amount = parseFloat((effRate * qty).toFixed(2));
-      const gstRate = it.productGST != null ? parseFloat(it.productGST) : parseFloat(gst) || 18;
+      const gstRate = it.productGST != null ? parseFloat(it.productGST) : parseFloat(gst);
       const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
@@ -404,7 +404,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           const marginFactor = 1 + (parseFloat(margin) || 0) / 100;
           const effRate = rate * marginFactor;
           const amount = parseFloat((effRate * qty).toFixed(2));
-          const gstRate = it.productGST != null ? parseFloat(it.productGST) : parseFloat(gst) || 18;
+          const gstRate = it.productGST != null ? parseFloat(it.productGST) : parseFloat(gst);
           const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
           const total = parseFloat((amount + gstVal).toFixed(2));
 
