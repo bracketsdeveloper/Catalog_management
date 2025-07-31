@@ -363,16 +363,16 @@ const adminPages = [
         path: "/admin-dashboard/events-calender",
         permission: "events-calender",
       },
-      {
-        name: "Pacer Tracker",
-        path: "/admin-dashboard/location-tracker",
+      // {
+      //   name: "Pacer Tracker",
+      //   path: "/admin-dashboard/location-tracker",
         
-      },
-      {
-        name: "Set destinations",
-        path: "/admin-dashboard/set-destination",
+      // },
+      // {
+      //   name: "Set destinations",
+      //   path: "/admin-dashboard/set-destination",
         
-      }
+      // }
 
 
       
