@@ -140,6 +140,23 @@ if (cluster.isMaster) {
   const eInvoiceRoutes = require('./routes/eInvoiceRoutes');
   app.use('/api/admin/einvoices', eInvoiceRoutes);
 
+  app.use("/api", require("./routes/adminLocationRoutes"));
+
+  app.use('/api/admin/tracking', require('./routes/userTrackingRoutes'));
+
+  const adminMapRoutes = require('./routes/adminMapRoutes');
+app.use('/api', adminMapRoutes);
+
+
+app.use('/api', require('./routes/adminDestinations'));
+app.use('/api', require('./routes/adminPlaces'));
+
+const adminTracking = require('./routes/adminTracking');
+
+// after your other `app.use` calls:
+app.use('/api/admin', adminTracking);
+
+
   // 7) Health check
   app.get('/health', (req, res) => res.send('OK'));
 

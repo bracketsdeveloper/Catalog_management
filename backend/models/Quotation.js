@@ -59,7 +59,7 @@ const quotationSchema = new mongoose.Schema({
   customerCompany: { type: String, default: "" },
   customerAddress: { type: String, default: "" },
   margin: { type: Number, default: 0 },
-  gst: { type: Number, default: 18 },
+  gst: { type: Number, default: 0 },
   items: [quotationItemSchema],
   totalAmount: { type: Number, default: 0 },
   grandTotal: { type: Number, default: 0 },

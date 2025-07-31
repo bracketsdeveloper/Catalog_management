@@ -68,6 +68,8 @@ import DeliveryChallanManagementPage from "../pages/DeliveryChallanManagementPag
 import DeliveryChallan from "../components/examples/dc";
 import ManageTicketsPage from "../pages/ManageTickets";
 import EInvoiceTable from "../pages/EInvoiceTable";
+import MapDashboard from "../pages/MapDashboard";
+import ManageDestinations from "../pages/ManageDestinations";
 
 
 const router = createBrowserRouter([
@@ -370,6 +372,14 @@ const router = createBrowserRouter([
                     {
                         path : "e-invoice",
                         element : <EInvoiceTable/>
+                    },
+                    {
+                        path:"location-tracker",
+                        element:<MapDashboard/>
+                    },
+                    {
+                        path: "set-destination",
+                        element:<ManageDestinations/>
                     }
 
                 ]

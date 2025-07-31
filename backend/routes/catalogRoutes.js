@@ -71,46 +71,6 @@ router.get(
 );
 
 /** GET all catalogs */
-
-/** GET all catalogs */
-router.get("/catalogs-export", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const { searchTerm } = req.query;
-
-    // Build search query
-    const searchQuery = searchTerm
-      ? {
-          $or: [
-            { catalogNumber: { $regex: escapeRegex(searchTerm), $options: "i" } },
-            { customerCompany: { $regex: escapeRegex(searchTerm), $options: "i" } },
-            { customerName: { $regex: escapeRegex(searchTerm), $options: "i" } },
-            { catalogName: { $regex: escapeRegex(searchTerm), $options: "i" } },
-            { opportunityNumber: { $regex: escapeRegex(searchTerm), $options: "i" } },
-          ],
-        }
-      : {};
-
-    const catalogs = await Catalog.find(searchQuery)
-      .select(
-        "catalogNumber opportunityNumber customerCompany customerName catalogName products createdAt remarks approveStatus"
-      ) // Select only needed fields
-      .populate("products.productId", "name ProductBrand ProductDescription productCost productGST")
-      .populate("products.brandingTypes", "brandingName cost")
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({ catalogs });
-  } catch (err) {
-    console.error("Error fetching catalogs:", err);
-    res.status(500).json({ message: "Server error fetching catalogs" });
-  }
-});
-
-// Helper function to escape special regex characters
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const catalogs = await Catalog.find()
@@ -119,50 +79,6 @@ router.get("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       .sort({ createdAt: -1 })
       .exec();
     res.json(catalogs);
-  } catch (err) {
-    console.error("Error fetching catalogs:", err);
-    res.status(500).json({ message: "Server error fetching catalogs" });
-  }
-});
-
-/** GET all catalogs with pagination and search */
-router.get("/catalogs-page", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const { page = 1, limit = 100, searchTerm = "" } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Build search query
-    const searchQuery = searchTerm
-      ? {
-          $or: [
-            { catalogNumber: { $regex: searchTerm, $options: "i" } },
-            { customerCompany: { $regex: searchTerm, $options: "i" } },
-            { customerName: { $regex: searchTerm, $options: "i" } },
-            { catalogName: { $regex: searchTerm, $options: "i" } },
-            { opportunityNumber: { $regex: searchTerm, $options: "i" } },
-          ],
-        }
-      : {};
-
-    // Fetch catalogs with pagination
-    const catalogs = await Catalog.find(searchQuery)
-      .populate("products.productId")
-      .populate("products.brandingTypes")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
-
-    // Get total count for pagination metadata
-    const total = await Catalog.countDocuments(searchQuery);
-
-    res.json({
-      catalogs,
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(total / limit),
-    });
   } catch (err) {
     console.error("Error fetching catalogs:", err);
     res.status(500).json({ message: "Server error fetching catalogs" });
