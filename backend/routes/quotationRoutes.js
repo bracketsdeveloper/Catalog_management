@@ -1056,7 +1056,7 @@ router.post(
         const totAmt = round(qty * unitPrice);
         const discount = 0;
         const assAmt = round(totAmt - discount);
-        const gstRt = Number(it.productGST) || Number(quotation.gst) || 0;
+        const gstRt = Number(quotation.gst) || 0;
         const sameState = seller.Stcd === buyer.Stcd;
         const cgstAmt = sameState ? round(assAmt * gstRt / 200) : 0;
         const sgstAmt = sameState ? round(assAmt * gstRt / 200) : 0;

@@ -21,7 +21,7 @@ const quotationItemSchema = new mongoose.Schema({
   rate: { type: Number, default: 0 },
   productprice: { type: Number, default: 0 },
   amount: { type: Number, default: 0 },
-  productGST: { type: Number, default: 18 },
+  productGST: { type: Number },
   total: { type: Number, default: 0 },
   baseCost: { type: Number, default: 0 },
   material: { type: String, default: "" },
