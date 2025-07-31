@@ -436,32 +436,7 @@ export default function QuotationManagementPage() {
             placeholder="Search by Company, Event, Quotation, etc."
             className="border p-2 rounded w-full md:w-1/2 mb-2 md:mb-0"
           />
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setApprovalFilter("all")}
-              className={`px-3 py-1 rounded ${approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-gray-200"}`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setApprovalFilter("approved")}
-              className={`px-3 py-1 rounded ${approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-gray-200"}`}
-            >
-              Approved
-            </button>
-            <button
-              onClick={() => setApprovalFilter("notApproved")}
-              className={`px-3 py-1 rounded ${approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-gray-200"}`}
-            >
-              Not Approved
-            </button>
-            <button
-              onClick={() => setShowFilterWindow(!showFilterWindow)}
-              className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
-            >
-              {showFilterWindow ? "Hide Filters" : "Show Filters"}
-            </button>
-          </div>
+          
         </div>
 
         {showFilterWindow && (
