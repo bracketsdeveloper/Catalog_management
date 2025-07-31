@@ -529,7 +529,7 @@ export default function QuotationView() {
           productId: item.productId?._id || item.productId || null,
           hsnCode: item.hsnCode || item.productId?.hsnCode || "",
         };
-      });
+      })
   
       const body = {
         opportunityNumber,
