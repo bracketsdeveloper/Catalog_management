@@ -70,6 +70,8 @@ import ManageTicketsPage from "../pages/ManageTickets";
 import EInvoiceTable from "../pages/EInvoiceTable";
 import MapDashboard from "../pages/MapDashboard";
 import ManageDestinations from "../pages/ManageDestinations";
+import UserTrackingMap from "../pages/UserTrackingMap";
+import AssignDestinations from "../pages/AssignDestinations";
 
 
 const router = createBrowserRouter([
@@ -375,11 +377,11 @@ const router = createBrowserRouter([
                     },
                     {
                         path:"location-tracker",
-                        element:<MapDashboard/>
+                        element:<UserTrackingMap/>
                     },
                     {
                         path: "set-destination",
-                        element:<ManageDestinations/>
+                        element:<AssignDestinations/>
                     }
 
                 ]

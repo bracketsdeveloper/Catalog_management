@@ -140,21 +140,25 @@ if (cluster.isMaster) {
   const eInvoiceRoutes = require('./routes/eInvoiceRoutes');
   app.use('/api/admin/einvoices', eInvoiceRoutes);
 
-  app.use("/api", require("./routes/adminLocationRoutes"));
 
-  app.use('/api/admin/tracking', require('./routes/userTrackingRoutes'));
-
-  const adminMapRoutes = require('./routes/adminMapRoutes');
-app.use('/api', adminMapRoutes);
+  const androidActivityRoutes = require('./routes/androidActivityRoutes.js');
+  app.use('/api/android/activity', androidActivityRoutes);
 
 
-app.use('/api', require('./routes/adminDestinations'));
-app.use('/api', require('./routes/adminPlaces'));
+// after your other app.use(…)
+app.use('/api/android/location', require('./routes/androidLocationRoutes.js'));
 
-const adminTracking = require('./routes/adminTracking');
+app.use('/api/android/battery', require('./routes/androidBatteryRoutes.js'));
 
-// after your other `app.use` calls:
-app.use('/api/admin', adminTracking);
+
+// after your other app.use(...)
+app.use('/api/admin/destinations', require('./routes/destinationRoutes.js'));
+app.use('/api', require('./routes/destinationRoutes.js'));
+
+
+app.use('/api', require('./routes/destinationArrivalRoutes.js'));
+app.use('/api/admin', require('./routes/userTrackingRoutes'));
+
 
 
   // 7) Health check

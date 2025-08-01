@@ -716,7 +716,7 @@ export default function ProductManagementPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={loading}
+              
             />
             <div
               {...advRoot()}
