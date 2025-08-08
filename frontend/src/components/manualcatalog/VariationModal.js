@@ -37,8 +37,8 @@ export default function VariationModal({
     setVariations((prev) => [
       ...prev,
       {
-        color: pickedColor || "N/A",
-        size: pickedSize || "N/A",
+        color: pickedColor || "",
+        size: pickedSize || "",
         quantity: parseInt(pickedQuantity, 10) || 1,
         suggestedBreakdown: null,
       },

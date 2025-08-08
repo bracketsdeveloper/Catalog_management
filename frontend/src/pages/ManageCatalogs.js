@@ -92,6 +92,7 @@ export default function CreateManualCatalog() {
 
   const [cartOpen, setCartOpen] = useState(false);
   const [quotationId, setQuotationId] = useState(null);
+  const [quotationNumber, setQuotationNumber] = useState(null); // New state for quotation number
 
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
@@ -365,6 +366,7 @@ export default function CreateManualCatalog() {
         });
         if (Array.isArray(quotationData) && quotationData.length > 0) {
           setQuotationId(quotationData[0]._id);
+          setQuotationNumber(quotationData[0].quotationNumber || null); // Set quotation number
         }
       } catch (err) {
         console.error("Error fetching catalog:", err);
@@ -377,6 +379,7 @@ export default function CreateManualCatalog() {
           headers: { Authorization: `Bearer ${token}` },
         });
         setQuotationId(data._id);
+        setQuotationNumber(data.quotationNumber || null); // Set quotation number
         setOpportunityNumber(data.opportunityNumber || "");
         setCatalogName(data.catalogName || "");
         setCustomerName(data.customerName || "");
@@ -413,8 +416,8 @@ export default function CreateManualCatalog() {
                 productName: item.product || "Unknown",
                 ProductDescription: "",
                 ProductBrand: "",
-                color: item.product.match(/\((\w+)\)/)?.[1] || "",
-                size: item.product.match(/\[(\w+)\]/)?.[1] || "",
+                color: item.color || "",
+                size: item.size || "",
                 quantity: item.quantity || 1,
                 productCost: item.productprice || 0,
                 productGST: item.productGST || 0,
@@ -621,7 +624,7 @@ export default function CreateManualCatalog() {
   // ─── Build Quotation Payload ──────────────────────────────────────────────
   function buildQuotationPayload() {
     return {
-      _id: quotationId,
+      _id: isQuotationEditMode ? undefined : quotationId, // Clear _id for new quotation
       opportunityNumber,
       catalogId: isCatalogEditMode ? id : undefined,
       catalogName,
@@ -641,10 +644,15 @@ export default function CreateManualCatalog() {
         const gst = p.productGST ?? selectedGst;
         const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
         const total = parseFloat((amount + gstVal).toFixed(2));
+        // Ensure product name is clean and only includes color/size if specified
+        const cleanProductName = p.productName
+          .replace(/\s*\(\w+\)\s*/g, "") // Remove existing (color)
+          .replace(/\s*\[\w+\]\s*/g, ""); // Remove existing [size]
+        const productDisplayName = `${cleanProductName}${p.color ? ` (${p.color})` : ""}${p.size ? ` [${p.size}]` : ""}`;
         return {
           slNo: i + 1,
           productId: (p.productId && typeof p.productId === "object") ? p.productId._id : p.productId,
-          product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
+          product: productDisplayName,
           hsnCode: p.hsnCode || "",
           quantity: qty,
           rate,
@@ -678,24 +686,13 @@ export default function CreateManualCatalog() {
     try {
       const token = localStorage.getItem("token");
       let response;
-      if (isQuotationEditMode && quotationId) {
-        // Update existing quotation
-        response = await axios.put(
-          `${BACKEND_URL}/api/admin/quotations/${quotationId}`,
-          payload,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        alert("Quotation updated!");
-      } else {
-        // Create new quotation
-        response = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setQuotationId(response.data.quotation._id);
-        alert("Quotation created!");
-      }
+      // Always create a new quotation, even in edit mode
+      response = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setQuotationId(response.data.quotation._id);
+      setQuotationNumber(response.data.quotation.quotationNumber || null); // Update with new quotation number
+      alert("New quotation created!");
     } catch (error) {
       console.error("Error saving quotation:", error);
       alert("Error saving quotation");
@@ -906,7 +903,7 @@ export default function CreateManualCatalog() {
             onClick={handleSaveQuotation}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
-            {isQuotationEditMode && quotationId ? "Update Quotation" : "Create Quotation"}
+            {isQuotationEditMode && quotationId ? "Create New Quotation" : "Create Quotation"}
           </button>
         </div>
       </div>
