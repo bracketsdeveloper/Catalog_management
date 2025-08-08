@@ -8,7 +8,7 @@ import SearchBar from "../components/taskmanager/SearchBar";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-function ManageTicketsPage() {
+export default function ManageTicketsPage() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const [searchTerm, setSearchTerm] = useState("");
   const [tasks, setTasks] = useState([]);
@@ -36,21 +36,26 @@ function ManageTicketsPage() {
     Authorization: `Bearer ${localStorage.getItem("token")}`,
   });
 
+  // Fetch current user
   useEffect(() => {
     axios
-      .get(`${BACKEND_URL}/users`, { headers: getAuthHeaders() })
+      .get(`${BACKEND_URL}/api/admin/users`, { headers: getAuthHeaders() })
       .then((res) => setCurrentUser(res.data))
       .catch((err) => console.error("Error fetching current user:", err));
   }, []);
 
+  // Fetch users list (all if super admin, otherwise just self)
   useEffect(() => {
-    const endpoint = isSuperAdmin ? `${BACKEND_URL}/users?all=true` : `${BACKEND_URL}/users`;
+    const endpoint = isSuperAdmin
+      ? `${BACKEND_URL}/api/admin/users?all=true`
+      : `${BACKEND_URL}/api/admin/users`;
     axios
       .get(endpoint, { headers: getAuthHeaders() })
       .then((res) => setUsers(isSuperAdmin ? res.data : [res.data]))
       .catch((err) => console.error("Error fetching users:", err));
   }, [isSuperAdmin]);
 
+  // Fetch tasks whenever searchTerm changes
   const fetchTasks = async () => {
     try {
       const res = await axios.get(`${BACKEND_URL}/api/admin/tasks`, {
@@ -68,6 +73,7 @@ function ManageTicketsPage() {
     fetchTasks();
   }, [searchTerm]);
 
+  // Sorting logic
   const handleSort = (key) => {
     let direction = "asc";
     if (sortConfig.key === key && sortConfig.direction === "asc") {
@@ -98,6 +104,7 @@ function ManageTicketsPage() {
     return sortConfig.direction === "desc" ? sorted.reverse() : sorted;
   }, [tasks, sortConfig]);
 
+  // Create or update a ticket
   const handleCreateTicket = async (ticketData, isEditing) => {
     try {
       if (isEditing && ticketData._id) {
@@ -130,6 +137,7 @@ function ManageTicketsPage() {
     }
   };
 
+  // Delete a ticket
   const handleDeleteTicket = async (taskId) => {
     if (!window.confirm("Are you sure you want to delete this ticket?")) return;
     try {
@@ -143,6 +151,7 @@ function ManageTicketsPage() {
     }
   };
 
+  // Reopen a ticket
   const handleReopen = async (taskId, newClosingDate) => {
     try {
       const task = tasks.find((t) => t._id === taskId);
@@ -164,24 +173,25 @@ function ManageTicketsPage() {
     }
   };
 
+  // Update user role/handles
   const handleUpdateUser = async (userId) => {
     try {
       await axios.put(
-        `${BACKEND_URL}/users/${userId}/role`,
+        `${BACKEND_URL}/api/admin/users/${userId}/role`,
         { role: updatedRole },
         { headers: getAuthHeaders() }
       );
 
       if (isSuperAdmin) {
         await axios.put(
-          `${BACKEND_URL}/users/${userId}/superadmin`,
+          `${BACKEND_URL}/api/admin/users/${userId}/superadmin`,
           { isSuperAdmin: updatedSuperAdmin },
           { headers: getAuthHeaders() }
         );
       }
 
       await axios.put(
-        `${BACKEND_URL}/users/${userId}/handles`,
+        `${BACKEND_URL}/api/admin/users/${userId}/handles`,
         { handles: updatedHandles },
         { headers: getAuthHeaders() }
       );
@@ -256,9 +266,6 @@ function ManageTicketsPage() {
             users={users}
           />
         </div>
-
-        {/* New User Management Section */}
-        
       </div>
 
       {/* Create Ticket Modal */}
@@ -296,7 +303,7 @@ function ManageTicketsPage() {
                 <select
                   value={updatedSuperAdmin}
                   onChange={(e) => setUpdatedSuperAdmin(e.target.value === "true")}
-                  className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+                  className="w-full bg-white	border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
                 >
                   <option value={false}>No</option>
                   <option value={true}>Yes</option>
@@ -309,15 +316,13 @@ function ManageTicketsPage() {
                 multiple
                 value={updatedHandles}
                 onChange={(e) =>
-                  setUpdatedHandles(
-                    Array.from(e.target.selectedOptions, (option) => option.value)
-                  )
+                  setUpdatedHandles(Array.from(e.target.selectedOptions, (o) => o.value))
                 }
                 className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1 max-h-32"
               >
-                {handleOptions.map((handle) => (
-                  <option key={handle} value={handle}>
-                    {handle}
+                {handleOptions.map((h) => (
+                  <option key={h} value={h}>
+                    {h}
                   </option>
                 ))}
               </select>
@@ -345,5 +350,3 @@ function ManageTicketsPage() {
     </div>
   );
 }
-
-export default ManageTicketsPage;

@@ -1,15 +1,31 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 
-function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], initialData = {}, isSuperAdmin, currentUser, isEditing = false }) {
-  // Log opportunities to debug
-  console.log("CreateTicketModal received opportunities:", opportunities);
-
+export default function CreateTicketModal({
+  onClose,
+  onSubmit,
+  opportunities = [],
+  users = [],
+  initialData = {},
+  isSuperAdmin,
+  currentUser,
+  isEditing = false,
+}) {
+  // --- Form state initialization ---
   const [formData, setFormData] = useState({
     _id: initialData._id || null,
     ticketName: initialData.ticketName || "",
-    opportunityId: initialData.opportunityId?._id || initialData.opportunityId || null,
-    opportunitySearch: initialData.opportunityCode || (initialData.opportunityId ? `${initialData.opportunityId.opportunityCode} - ${initialData.opportunityId.opportunityName}` : ""),
-    assignedTo: initialData.assignedTo?._id || (isSuperAdmin ? "" : currentUser?._id || ""),
+    opportunityId:
+      initialData.opportunityId?._id || initialData.opportunityId || null,
+    opportunitySearch:
+      initialData.opportunityCode ||
+      (initialData.opportunityId
+        ? `${initialData.opportunityId.opportunityCode} - ${initialData.opportunityId.opportunityName}`
+        : ""),
+    assignedTo:
+      initialData.assignedTo?._id ||
+      (isSuperAdmin ? "" : currentUser?._id || ""),
     assignedToSearch: initialData.assignedTo
       ? `${initialData.assignedTo.name} (${initialData.assignedTo.email})`
       : isSuperAdmin
@@ -17,64 +33,92 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
       : currentUser
       ? `${currentUser.name} (${currentUser.email})`
       : "",
-    fromDate: initialData.fromDate ? new Date(new Date(initialData.fromDate).getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-    toDate: initialData.toDate ? new Date(new Date(initialData.toDate).getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-    toBeClosedBy: initialData.toBeClosedBy ? new Date(new Date(initialData.toBeClosedBy).getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-    completedOn: initialData.completedOn || "Not Done",
     schedule: initialData.schedule || "None",
-    selectedDates: initialData.selectedDates ? [...new Set(initialData.selectedDates.map((d) => new Date(new Date(d).getTime() + 5.5 * 60 * 60 * 1000).toISOString().split("T")[0]))] : [],
+    fromDate: initialData.fromDate
+      ? new Date(new Date(initialData.fromDate).getTime() + 5.5 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
+    toDate: initialData.toDate
+      ? new Date(new Date(initialData.toDate).getTime() + 5.5 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
+    toBeClosedBy: initialData.toBeClosedBy
+      ? new Date(
+          new Date(initialData.toBeClosedBy).getTime() + 5.5 * 3600 * 1000
+        )
+          .toISOString()
+          .slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
+    completedOn: initialData.completedOn || "Not Done",
+    selectedDates: initialData.selectedDates
+      ? [
+          ...new Set(
+            initialData.selectedDates.map((d) =>
+              new Date(new Date(d).getTime() + 5.5 * 3600 * 1000)
+                .toISOString()
+                .split("T")[0]
+            )
+          ),
+        ]
+      : [],
     reopened: initialData.reopened || false,
   });
-  const [showOpportunitySuggestions, setShowOpportunitySuggestions] = useState(false);
+
+  // --- Dropdown visibility state ---
+  const [showOpportunitySuggestions, setShowOpportunitySuggestions] =
+    useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
 
-  // Ensure opportunities is an array
-  const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
-  const filteredOpportunities = safeOpportunities.length
-    ? safeOpportunities.filter((opp) =>
-        `${opp.opportunityCode || ""} - ${opp.opportunityName || ""}`
-          .toLowerCase()
-          .includes(formData.opportunitySearch.toLowerCase())
-      )
+  // --- Filtered lists ---
+  const safeOpportunities = Array.isArray(opportunities)
+    ? opportunities
     : [];
+  const filteredOpportunities = safeOpportunities.filter((opp) =>
+    `${opp.opportunityCode || ""} - ${opp.opportunityName || ""}`
+      .toLowerCase()
+      .includes(formData.opportunitySearch.toLowerCase())
+  );
 
   const filteredUsers = Array.isArray(users)
     ? users.filter((user) =>
-        `${user.name || ""} (${user.email || ""})`.toLowerCase().includes(formData.assignedToSearch.toLowerCase())
+        `${user.name || ""} (${user.email || ""})`
+          .toLowerCase()
+          .includes(formData.assignedToSearch.toLowerCase())
       )
     : [];
 
+  // --- Generate dates based on schedule ---
   const generateDates = (schedule, fromDate, toDate) => {
-    if (!schedule || !fromDate || !toDate || schedule === "None") return [];
+    if (!schedule || schedule === "None") return [];
     const dates = [];
     let current = new Date(fromDate);
-    const endDate = new Date(toDate);
+    const end = new Date(toDate);
     current.setHours(0, 0, 0, 0);
-    endDate.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
 
     switch (schedule) {
       case "Daily":
-        while (current <= endDate) {
+        while (current <= end) {
           dates.push(current.toISOString().split("T")[0]);
           current.setDate(current.getDate() + 1);
         }
         break;
       case "Weekly":
-        while (current <= endDate) {
+        while (current <= end) {
           dates.push(current.toISOString().split("T")[0]);
           current.setDate(current.getDate() + 7);
         }
         break;
       case "Monthly":
-        const yearEnd = new Date(current.getFullYear(), 11, 31);
-        const maxDate = endDate < yearEnd ? endDate : yearEnd;
-        while (current <= maxDate) {
+        while (current <= end) {
           dates.push(current.toISOString().split("T")[0]);
           current.setMonth(current.getMonth() + 1);
         }
         break;
       case "AlternateDays":
-        while (current <= endDate) {
+        while (current <= end) {
           dates.push(current.toISOString().split("T")[0]);
           current.setDate(current.getDate() + 2);
         }
@@ -84,110 +128,160 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
       default:
         return [];
     }
+
     return [...new Set(dates)];
   };
 
+  // --- Re-generate dates when schedule, fromDate, toDate change ---
   useEffect(() => {
     if (formData.schedule !== "SelectedDates" && !isEditing) {
-      const newDates = generateDates(formData.schedule, formData.fromDate, formData.toDate);
-      setFormData((prev) => ({ ...prev, selectedDates: [...new Set(newDates)] }));
+      const newDates = generateDates(
+        formData.schedule,
+        formData.fromDate,
+        formData.toDate
+      );
+      setFormData((prev) => ({ ...prev, selectedDates: newDates }));
     }
   }, [formData.schedule, formData.fromDate, formData.toDate, isEditing]);
 
+  // --- Handle any input change ---
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => {
-      const newFormData = { ...prev, [name]: type === "checkbox" ? checked : value };
+      const updated = {
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      };
       if (name === "schedule" && !isEditing) {
-        newFormData.selectedDates = generateDates(value, prev.fromDate, prev.toDate);
+        updated.selectedDates = generateDates(
+          value,
+          prev.fromDate,
+          prev.toDate
+        );
       }
       if (name === "opportunitySearch" && !value) {
-        newFormData.opportunityId = null;
+        updated.opportunityId = null;
       }
-      return newFormData;
+      return updated;
     });
+
     if (name === "opportunitySearch") {
-      setShowOpportunitySuggestions(value.length > 0 && safeOpportunities.length > 0);
-    } else if (name === "assignedToSearch") {
-      setShowUserSuggestions(value.length > 0 && users.length > 0);
+      setShowOpportunitySuggestions(!!value && safeOpportunities.length > 0);
+    }
+    if (name === "assignedToSearch") {
+      setShowUserSuggestions(true);
     }
   };
 
+  // --- Pick an opportunity ---
   const handleOpportunitySuggestionClick = (opp) => {
     setFormData((prev) => ({
       ...prev,
       opportunityId: opp._id,
-      opportunitySearch: `${opp.opportunityCode || ""} - ${opp.opportunityName || ""}`,
+      opportunitySearch: `${opp.opportunityCode} - ${opp.opportunityName}`,
     }));
     setShowOpportunitySuggestions(false);
   };
 
+  // --- Pick a user ---
   const handleUserSuggestionClick = (user) => {
     setFormData((prev) => ({
       ...prev,
       assignedTo: user._id,
-      assignedToSearch: `${user.name || ""} (${user.email || ""})`,
+      assignedToSearch: `${user.name} (${user.email})`,
     }));
     setShowUserSuggestions(false);
   };
 
+  // --- Submit form ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const baseData = {
-        ticketName: formData.ticketName,
-        opportunityId: formData.opportunityId || null,
-        assignedTo: formData.assignedTo || null,
-        completedOn: formData.completedOn,
-        schedule: formData.schedule,
-        fromDate: formData.fromDate && formData.schedule !== "None" ? new Date(new Date(formData.fromDate).getTime() - 5.5 * 60 * 60 * 1000).toISOString() : null,
-        toDate: formData.toDate && formData.schedule !== "None" ? new Date(new Date(formData.toDate).getTime() - 5.5 * 60 * 60 * 1000).toISOString() : null,
-        reopened: formData.reopened || false,
-      };
 
-      if (isEditing && formData._id) {
-        await onSubmit({
-          ...baseData,
+    // Prepare base payload
+    const base = {
+      ticketName: formData.ticketName,
+      opportunityId: formData.opportunityId || null,
+      assignedTo: formData.assignedTo || null,
+      schedule: formData.schedule,
+      fromDate:
+        formData.schedule !== "None"
+          ? new Date(new Date(formData.fromDate).getTime() - 5.5 * 3600 * 1000).toISOString()
+          : null,
+      toDate:
+        formData.schedule !== "None"
+          ? new Date(new Date(formData.toDate).getTime() - 5.5 * 3600 * 1000).toISOString()
+          : null,
+      completedOn: formData.completedOn,
+      reopened: formData.reopened,
+    };
+
+    if (isEditing && formData._id) {
+      // Single-update for existing ticket
+      await onSubmit(
+        {
+          ...base,
           _id: formData._id,
-          toBeClosedBy: new Date(new Date(formData.toBeClosedBy).getTime() - 5.5 * 60 * 60 * 1000).toISOString(),
-          selectedDates: formData.selectedDates.map((d) => new Date(new Date(d).getTime() - 5.5 * 60 * 60 * 1000).toISOString()),
-          reopened: formData.reopened,
-        }, true);
-      } else if (formData.schedule === "None") {
-        await onSubmit({
-          ...baseData,
-          toBeClosedBy: new Date(new Date(formData.toBeClosedBy).getTime() - 5.5 * 60 * 60 * 1000).toISOString(),
+          toBeClosedBy: new Date(
+            new Date(formData.toBeClosedBy).getTime() - 5.5 * 3600 * 1000
+          ).toISOString(),
+          selectedDates: formData.selectedDates.map((d) =>
+            new Date(new Date(d).getTime() - 5.5 * 3600 * 1000).toISOString()
+          ),
+        },
+        true
+      );
+    } else if (formData.schedule === "None") {
+      // Single ticket if no schedule
+      await onSubmit(
+        {
+          ...base,
+          toBeClosedBy: new Date(
+            new Date(formData.toBeClosedBy).getTime() - 5.5 * 3600 * 1000
+          ).toISOString(),
           selectedDates: [],
-        }, false);
-      } else {
-        const uniqueDates = [...new Set(formData.selectedDates)];
-        const tasks = uniqueDates.map((date) => ({
-          ...baseData,
-          toBeClosedBy: new Date(new Date(date).getTime() - 5.5 * 60 * 60 * 1000).toISOString(),
-          selectedDates: [new Date(new Date(date).getTime() - 5.5 * 60 * 60 * 1000).toISOString()],
-        }));
-        await onSubmit(tasks, false);
-      }
-      onClose();
-    } catch (error) {
-      console.error("Error submitting ticket:", error);
-      alert(`Error: ${error.response?.data?.message || "Failed to save ticket"}`);
+        },
+        false
+      );
+    } else {
+      // Multi-ticket creation
+      const uniqueDates = [...new Set(formData.selectedDates)];
+      const tasks = uniqueDates.map((date) => ({
+        ...base,
+        toBeClosedBy: new Date(new Date(date).getTime() - 5.5 * 3600 * 1000).toISOString(),
+        selectedDates: [new Date(new Date(date).getTime() - 5.5 * 3600 * 1000).toISOString()],
+      }));
+      await onSubmit(tasks, false);
     }
+
+    onClose();
   };
 
+  // --- Human‐readable schedule summary ---
   const getScheduleSummary = () => {
-    if (formData.schedule === "None" || formData.selectedDates.length === 0) return "No dates generated.";
-    const startDate = new Date(formData.selectedDates[0]).toLocaleDateString();
-    const endDate = new Date(formData.selectedDates[formData.selectedDates.length - 1]).toLocaleDateString();
-    const repeatPattern = formData.schedule === "SelectedDates" ? "on selected dates" : `repeats ${formData.schedule.toLowerCase()}`;
-    return `From ${startDate} to ${endDate} ${repeatPattern}`;
+    if (formData.schedule === "None" || formData.selectedDates.length === 0) {
+      return "No dates generated.";
+    }
+    const start = new Date(formData.selectedDates[0]).toLocaleDateString();
+    const end = new Date(
+      formData.selectedDates[formData.selectedDates.length - 1]
+    ).toLocaleDateString();
+    const pattern =
+      formData.schedule === "SelectedDates"
+        ? "on selected dates"
+        : `repeats ${formData.schedule.toLowerCase()}`;
+
+    return `From ${start} to ${end} ${pattern}.`;
   };
 
+  // --- Render ---
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg w-full max-w-md">
-        <h2 className="text-lg font-bold mb-4">{isEditing ? "Edit Ticket" : "Create Ticket"}</h2>
+        <h2 className="text-lg font-bold mb-4">
+          {isEditing ? "Edit Ticket" : "Create Ticket"}
+        </h2>
         <form onSubmit={handleSubmit}>
+          {/* Ticket Name */}
           <div className="mb-4">
             <label className="block text-sm font-medium">Ticket Name</label>
             <input
@@ -199,6 +293,8 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               className="w-full border p-2 rounded h-10"
             />
           </div>
+
+          {/* Opportunity Search */}
           <div className="mb-4 relative">
             <label className="block text-sm font-medium">OPP #</label>
             <input
@@ -206,8 +302,15 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               name="opportunitySearch"
               value={formData.opportunitySearch}
               onChange={handleChange}
-              onFocus={() => setShowOpportunitySuggestions(formData.opportunitySearch.length > 0 && safeOpportunities.length > 0)}
-              onBlur={() => setTimeout(() => setShowOpportunitySuggestions(false), 200)}
+              onFocus={() =>
+                setShowOpportunitySuggestions(
+                  formData.opportunitySearch.length > 0 &&
+                    safeOpportunities.length > 0
+                )
+              }
+              onBlur={() =>
+                setTimeout(() => setShowOpportunitySuggestions(false), 200)
+              }
               placeholder="Type to search opportunities..."
               className="w-full border p-2 rounded h-10"
             />
@@ -219,17 +322,20 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
                     onMouseDown={() => handleOpportunitySuggestionClick(opp)}
                     className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
                   >
-                    {opp.opportunityCode || "N/A"} - {opp.opportunityName || "N/A"}
+                    {opp.opportunityCode} - {opp.opportunityName}
                   </div>
                 ))}
               </div>
             )}
-            {showOpportunitySuggestions && !filteredOpportunities.length && (
-              <div className="absolute z-10 w-full bg-white border rounded mt-1 p-2 text-sm text-gray-500">
-                No opportunities found
-              </div>
-            )}
+            {showOpportunitySuggestions &&
+              filteredOpportunities.length === 0 && (
+                <div className="absolute z-10 w-full bg-white border rounded mt-1 p-2 text-sm text-gray-500">
+                  No opportunities found
+                </div>
+              )}
           </div>
+
+          {/* Assign To */}
           <div className="mb-4 relative">
             <label className="block text-sm font-medium">Assign To</label>
             <input
@@ -237,11 +343,15 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               name="assignedToSearch"
               value={formData.assignedToSearch}
               onChange={handleChange}
-              onFocus={() => setShowUserSuggestions(formData.assignedToSearch.length > 0 && users.length > 0)}
-              onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+              onFocus={() => users.length > 0 && setShowUserSuggestions(true)}
+              onBlur={() =>
+                setTimeout(() => setShowUserSuggestions(false), 200)
+              }
               placeholder="Type to search users..."
               className="w-full border p-2 rounded h-10"
-              disabled={!isSuperAdmin && formData.assignedTo === currentUser?._id}
+              disabled={
+                !isSuperAdmin && formData.assignedTo === currentUser?._id
+              }
             />
             {showUserSuggestions && filteredUsers.length > 0 && (
               <div className="absolute z-10 w-full bg-white border rounded mt-1 max-h-40 overflow-y-auto">
@@ -251,17 +361,19 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
                     onMouseDown={() => handleUserSuggestionClick(user)}
                     className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
                   >
-                    {user.name || "N/A"} ({user.email || "N/A"})
+                    {user.name} ({user.email})
                   </div>
                 ))}
               </div>
             )}
-            {showUserSuggestions && !filteredUsers.length && (
+            {showUserSuggestions && filteredUsers.length === 0 && (
               <div className="absolute z-10 w-full bg-white border rounded mt-1 p-2 text-sm text-gray-500">
                 No users found
               </div>
             )}
           </div>
+
+          {/* Schedule */}
           <div className="mb-4">
             <label className="block text-sm font-medium">Schedule</label>
             <select
@@ -278,6 +390,8 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               <option value="SelectedDates">Selected Dates</option>
             </select>
           </div>
+
+          {/* From & To for repeating schedules */}
           {formData.schedule !== "None" && (
             <>
               <div className="mb-4">
@@ -302,6 +416,8 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               </div>
             </>
           )}
+
+          {/* Single due date if no schedule */}
           {formData.schedule === "None" && (
             <div className="mb-4">
               <label className="block text-sm font-medium">To Be Closed By</label>
@@ -315,6 +431,8 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               />
             </div>
           )}
+
+          {/* Completed status */}
           <div className="mb-4">
             <label className="block text-sm font-medium">Completed On</label>
             <select
@@ -327,30 +445,35 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               <option value="Done">Done</option>
             </select>
           </div>
+
+          {/* Reopened toggle for super-admins */}
           {isSuperAdmin && isEditing && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium">Reopened Status</label>
+            <div className="mb-4 flex items-center">
               <input
                 type="checkbox"
                 name="reopened"
                 checked={formData.reopened}
                 onChange={handleChange}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                className="h-4 w-4 mr-2"
               />
-              <span className="ml-2 text-sm text-gray-700">Mark as Reopened</span>
+              <label className="text-sm">Mark as Reopened</label>
             </div>
           )}
+
+          {/* Selected Dates picker */}
           {formData.schedule === "SelectedDates" && (
             <div className="mb-4">
-              <label className="block text-sm font-medium">Select Dates</label>
+              <label className="block text-sm font-medium">
+                Select Dates
+              </label>
               <input
                 type="date"
                 onChange={(e) => {
-                  const newDate = e.target.value;
-                  if (!formData.selectedDates.includes(newDate)) {
+                  const d = e.target.value;
+                  if (!formData.selectedDates.includes(d)) {
                     setFormData((prev) => ({
                       ...prev,
-                      selectedDates: [...new Set([...prev.selectedDates, newDate])].sort(),
+                      selectedDates: [...new Set([...prev.selectedDates, d])].sort(),
                     }));
                   }
                   e.target.value = "";
@@ -359,16 +482,16 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               />
               <div className="mt-2 max-h-20 overflow-y-auto">
                 {formData.selectedDates.length > 0 ? (
-                  formData.selectedDates.map((date, index) => (
-                    <div key={index} className="flex items-center gap-2 text-sm mt-1">
-                      <span>{new Date(date).toLocaleDateString()}</span>
+                  formData.selectedDates.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm py-1">
+                      <span>{new Date(d).toLocaleDateString()}</span>
                       <button
                         type="button"
                         onClick={() =>
                           setFormData((prev) => {
-                            const newDates = [...prev.selectedDates];
-                            newDates.splice(index, 1);
-                            return { ...prev, selectedDates: newDates };
+                            const arr = [...prev.selectedDates];
+                            arr.splice(i, 1);
+                            return { ...prev, selectedDates: arr };
                           })
                         }
                         className="text-red-500 hover:text-red-700"
@@ -383,19 +506,30 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
               </div>
             </div>
           )}
+
+          {/* Summary of generated dates */}
           {formData.schedule !== "None" && (
             <div className="mb-4">
-              <h4 className="block text-sm font-medium">Generated Dates</h4>
-              <div id="generated-dates" className="max-h-20 overflow-y-auto border p-2 rounded">
-                <div className="text-sm">{getScheduleSummary()}</div>
+              <h4 className="text-sm font-medium">Generated Dates</h4>
+              <div className="border p-2 rounded max-h-20 overflow-y-auto text-sm">
+                {getScheduleSummary()}
               </div>
             </div>
           )}
-          <div className="flex gap-2">
-            <button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded">
+
+          {/* Action buttons */}
+          <div className="flex justify-end gap-2">
+            <button
+              type="submit"
+              className="bg-purple-600 text-white px-4 py-2 rounded"
+            >
               {isEditing ? "Update" : "Create"}
             </button>
-            <button type="button" onClick={onClose} className="bg-gray-400 text-white px-4 py-2 rounded">
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-gray-400 text-white px-4 py-2 rounded"
+            >
               Cancel
             </button>
           </div>
@@ -404,5 +538,3 @@ function CreateTicketModal({ onClose, onSubmit, opportunities = [], users = [], 
     </div>
   );
 }
-
-export default CreateTicketModal;
