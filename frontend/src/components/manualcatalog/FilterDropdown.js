@@ -11,6 +11,8 @@ export default function FilterDropdown({
   dependsOn = {},
   allSelections = {},
   parentChildMap = {},
+  allSelectedFilters = [],
+  removeFilter,
 }) {
   const dropdownRef = useRef();
   const [searchTerm, setSearchTerm] = useState("");
@@ -23,6 +25,7 @@ export default function FilterDropdown({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setOpen(false);
         setTempSelected([...selected]);
+        setSearchTerm("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -77,6 +80,7 @@ export default function FilterDropdown({
   const applyFilters = () => {
     stableToggle(tempSelected);
     setOpen(false);
+    setSearchTerm("");
   };
 
   return (

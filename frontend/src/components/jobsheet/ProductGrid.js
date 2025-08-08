@@ -1,7 +1,5 @@
-// import React, { useState } from "react";
-import ProductCard from "./ProductCard";
-
 import React, { useState, useEffect, useRef } from "react";
+import ProductCard from "./ProductCard";
 
 const FilterPanel = ({
   fullCategories,
@@ -33,6 +31,13 @@ const FilterPanel = ({
   const [tempSelectedPriceRanges, setTempSelectedPriceRanges] = useState([...selectedPriceRanges]);
   const [tempSelectedVariationHinges, setTempSelectedVariationHinges] = useState([...selectedVariationHinges]);
 
+  // Search term states for each dropdown
+  const [categorySearch, setCategorySearch] = useState("");
+  const [subCategorySearch, setSubCategorySearch] = useState("");
+  const [brandSearch, setBrandSearch] = useState("");
+  const [priceRangeSearch, setPriceRangeSearch] = useState("");
+  const [variationHingeSearch, setVariationHingeSearch] = useState("");
+
   // Refs for each dropdown
   const categoryRef = useRef();
   const subCategoryRef = useRef();
@@ -40,14 +45,22 @@ const FilterPanel = ({
   const priceRangeRef = useRef();
   const variationHingeRef = useRef();
 
-  // Debug filter props
-  console.log("FilterPanel props:", {
-    fullCategories,
-    fullSubCategories,
-    fullBrands,
-    fullPriceRanges,
-    fullVariationHinges,
-  });
+  // Filtered options based on search terms
+  const filteredCategories = fullCategories.filter((cat) =>
+    cat.name.toLowerCase().includes(categorySearch.toLowerCase())
+  );
+  const filteredSubCategories = fullSubCategories.filter((subCat) =>
+    subCat.name.toLowerCase().includes(subCategorySearch.toLowerCase())
+  );
+  const filteredBrands = fullBrands.filter((brand) =>
+    brand.name.toLowerCase().includes(brandSearch.toLowerCase())
+  );
+  const filteredPriceRanges = fullPriceRanges.filter((range) =>
+    range.name.toLowerCase().includes(priceRangeSearch.toLowerCase())
+  );
+  const filteredVariationHinges = fullVariationHinges.filter((hinge) =>
+    hinge.name.toLowerCase().includes(variationHingeSearch.toLowerCase())
+  );
 
   // Toggle temporary selections
   const toggleTempFilter = (value, list, setList) => {
@@ -60,30 +73,64 @@ const FilterPanel = ({
   const applyFilters = (setList, tempList, setTempList, setOpen) => {
     setList(tempList);
     setOpen(false);
+    // Reset search term when closing dropdown
+    if (setOpen === setCategoryOpen) setCategorySearch("");
+    if (setOpen === setSubCategoryOpen) setSubCategorySearch("");
+    if (setOpen === setBrandOpen) setBrandSearch("");
+    if (setOpen === setPriceRangeOpen) setPriceRangeSearch("");
+    if (setOpen === setVariationHingeOpen) setVariationHingeSearch("");
   };
 
-  // Close dropdown on outside click and reset temp selections
+  // Remove a specific filter and reapply
+  const removeFilter = (filterType, value) => {
+    switch (filterType) {
+      case "category":
+        setSelectedCategories((prev) => prev.filter((x) => x !== value));
+        break;
+      case "subCategory":
+        setSelectedSubCategories((prev) => prev.filter((x) => x !== value));
+        break;
+      case "brand":
+        setSelectedBrands((prev) => prev.filter((x) => x !== value));
+        break;
+      case "priceRange":
+        setSelectedPriceRanges((prev) => prev.filter((x) => x !== value));
+        break;
+      case "variationHinge":
+        setSelectedVariationHinges((prev) => prev.filter((x) => x !== value));
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Close dropdown on outside click and reset temp selections and search terms
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (categoryRef.current && !categoryRef.current.contains(event.target)) {
         setCategoryOpen(false);
         setTempSelectedCategories([...selectedCategories]);
+        setCategorySearch("");
       }
       if (subCategoryRef.current && !subCategoryRef.current.contains(event.target)) {
         setSubCategoryOpen(false);
         setTempSelectedSubCategories([...selectedSubCategories]);
+        setSubCategorySearch("");
       }
       if (brandRef.current && !brandRef.current.contains(event.target)) {
         setBrandOpen(false);
         setTempSelectedBrands([...selectedBrands]);
+        setBrandSearch("");
       }
       if (priceRangeRef.current && !priceRangeRef.current.contains(event.target)) {
         setPriceRangeOpen(false);
         setTempSelectedPriceRanges([...selectedPriceRanges]);
+        setPriceRangeSearch("");
       }
       if (variationHingeRef.current && !variationHingeRef.current.contains(event.target)) {
         setVariationHingeOpen(false);
         setTempSelectedVariationHinges([...selectedVariationHinges]);
+        setVariationHingeSearch("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -98,6 +145,15 @@ const FilterPanel = ({
     selectedVariationHinges,
   ]);
 
+  // Combine all selected filters for display as tags
+  const allSelectedFilters = [
+    ...selectedCategories.map((item) => ({ type: "category", value: item, label: `Category: ${item}` })),
+    ...selectedSubCategories.map((item) => ({ type: "subCategory", value: item, label: `SubCategory: ${item}` })),
+    ...selectedBrands.map((item) => ({ type: "brand", value: item, label: `Brand: ${item}` })),
+    ...selectedPriceRanges.map((item) => ({ type: "priceRange", value: item, label: `Price: ${item}` })),
+    ...selectedVariationHinges.map((item) => ({ type: "variationHinge", value: item, label: `Hinge: ${item}` })),
+  ];
+
   return (
     <div className="flex flex-wrap gap-2 mb-6">
       {/* Category Filter */}
@@ -111,27 +167,40 @@ const FilterPanel = ({
         {categoryOpen && (
           <div
             className="absolute mt-2 w-48 bg-white border border-purple-200 rounded z-20 flex flex-col"
-            style={{ maxHeight: "150px" }}
+            style={{ maxHeight: "300px" }}
           >
+            <div className="p-2">
+              <input
+                type="text"
+                placeholder="Search categories..."
+                value={categorySearch}
+                onChange={(e) => setCategorySearch(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {fullCategories.map((cat) => (
-                <label
-                  key={cat.name}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={tempSelectedCategories.includes(cat.name)}
-                    onChange={() =>
-                      toggleTempFilter(cat.name, tempSelectedCategories, setTempSelectedCategories)
-                    }
-                  />
-                  <span className="truncate">
-                    {cat.name} ({cat.count})
-                  </span>
-                </label>
-              ))}
+              {filteredCategories.length > 0 ? (
+                filteredCategories.map((cat) => (
+                  <label
+                    key={cat.name}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={tempSelectedCategories.includes(cat.name)}
+                      onChange={() =>
+                        toggleTempFilter(cat.name, tempSelectedCategories, setTempSelectedCategories)
+                      }
+                    />
+                    <span className="truncate">
+                      {cat.name} ({cat.count})
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 p-2">No categories found</div>
+              )}
             </div>
             <div className="p-2 border-t border-gray-200 sticky bottom-0 bg-white">
               <button
@@ -162,31 +231,44 @@ const FilterPanel = ({
         {subCategoryOpen && (
           <div
             className="absolute mt-2 w-48 bg-white border border-purple-200 rounded z-20 flex flex-col"
-            style={{ maxHeight: "150px" }}
+            style={{ maxHeight: "300px" }}
           >
+            <div className="p-2">
+              <input
+                type="text"
+                placeholder="Search subcategories..."
+                value={subCategorySearch}
+                onChange={(e) => setSubCategorySearch(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {fullSubCategories.map((subCat) => (
-                <label
-                  key={subCat.name}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={tempSelectedSubCategories.includes(subCat.name)}
-                    onChange={() =>
-                      toggleTempFilter(
-                        subCat.name,
-                        tempSelectedSubCategories,
-                        setTempSelectedSubCategories
-                      )
-                    }
-                  />
-                  <span className="truncate">
-                    {subCat.name} ({subCat.count})
-                  </span>
-                </label>
-              ))}
+              {filteredSubCategories.length > 0 ? (
+                filteredSubCategories.map((subCat) => (
+                  <label
+                    key={subCat.name}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={tempSelectedSubCategories.includes(subCat.name)}
+                      onChange={() =>
+                        toggleTempFilter(
+                          subCat.name,
+                          tempSelectedSubCategories,
+                          setTempSelectedSubCategories
+                        )
+                      }
+                    />
+                    <span className="truncate">
+                      {subCat.name} ({subCat.count})
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 p-2">No subcategories found</div>
+              )}
             </div>
             <div className="p-2 border-t border-gray-200 sticky bottom-0 bg-white">
               <button
@@ -217,27 +299,40 @@ const FilterPanel = ({
         {brandOpen && (
           <div
             className="absolute mt-2 w-48 bg-white border border-purple-200 rounded z-20 flex flex-col"
-            style={{ maxHeight: "150px" }}
+            style={{ maxHeight: "300px" }}
           >
+            <div className="p-2">
+              <input
+                type="text"
+                placeholder="Search brands..."
+                value={brandSearch}
+                onChange={(e) => setBrandSearch(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {fullBrands.map((brand) => (
-                <label
-                  key={brand.name}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-        className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={tempSelectedBrands.includes(brand.name)}
-                    onChange={() =>
-                      toggleTempFilter(brand.name, tempSelectedBrands, setTempSelectedBrands)
-                    }
-                  />
-                  <span className="truncate">
-                    {brand.name} ({brand.count})
-                  </span>
-                </label>
-              ))}
+              {filteredBrands.length > 0 ? (
+                filteredBrands.map((brand) => (
+                  <label
+                    key={brand.name}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={tempSelectedBrands.includes(brand.name)}
+                      onChange={() =>
+                        toggleTempFilter(brand.name, tempSelectedBrands, setTempSelectedBrands)
+                      }
+                    />
+                    <span className="truncate">
+                      {brand.name} ({brand.count})
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 p-2">No brands found</div>
+              )}
             </div>
             <div className="p-2 border-t border-gray-200 sticky bottom-0 bg-white">
               <button
@@ -263,31 +358,44 @@ const FilterPanel = ({
         {priceRangeOpen && (
           <div
             className="absolute mt-2 w-48 bg-white border border-purple-200 rounded z-20 flex flex-col"
-            style={{ maxHeight: "150px" }}
+            style={{ maxHeight: "300px" }}
           >
+            <div className="p-2">
+              <input
+                type="text"
+                placeholder="Search price ranges..."
+                value={priceRangeSearch}
+                onChange={(e) => setPriceRangeSearch(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {fullPriceRanges.map((range) => (
-                <label
-                  key={range.name}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={tempSelectedPriceRanges.includes(range.name)}
-                    onChange={() =>
-                      toggleTempFilter(
-                        range.name,
-                        tempSelectedPriceRanges,
-                        setTempSelectedPriceRanges
-                      )
-                    }
-                  />
-                  <span className="truncate">
-                    {range.name} ({range.count})
-                  </span>
-                </label>
-              ))}
+              {filteredPriceRanges.length > 0 ? (
+                filteredPriceRanges.map((range) => (
+                  <label
+                    key={range.name}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={tempSelectedPriceRanges.includes(range.name)}
+                      onChange={() =>
+                        toggleTempFilter(
+                          range.name,
+                          tempSelectedPriceRanges,
+                          setTempSelectedPriceRanges
+                        )
+                      }
+                    />
+                    <span className="truncate">
+                      {range.name} ({range.count})
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 p-2">No price ranges found</div>
+              )}
             </div>
             <div className="p-2 border-t border-gray-200 sticky bottom-0 bg-white">
               <button
@@ -318,31 +426,44 @@ const FilterPanel = ({
         {variationHingeOpen && (
           <div
             className="absolute mt-2 w-48 bg-white border border-purple-200 rounded z-20 flex flex-col"
-            style={{ maxHeight: "150px" }}
+            style={{ maxHeight: "300px" }}
           >
+            <div className="p-2">
+              <input
+                type="text"
+                placeholder="Search variation hinges..."
+                value={variationHingeSearch}
+                onChange={(e) => setVariationHingeSearch(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {fullVariationHinges.map((hinge) => (
-                <label
-                  key={hinge.name}
-                  className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-purple-500"
-                    checked={tempSelectedVariationHinges.includes(hinge.name)}
-                    onChange={() =>
-                      toggleTempFilter(
-                        hinge.name,
-                        tempSelectedVariationHinges,
-                        setTempSelectedVariationHinges
-                      )
-                    }
-                  />
-                  <span className="truncate">
-                    {hinge.name} ({hinge.count})
-                  </span>
-                </label>
-              ))}
+              {filteredVariationHinges.length > 0 ? (
+                filteredVariationHinges.map((hinge) => (
+                  <label
+                    key={hinge.name}
+                    className="flex items-center space-x-2 mb-1 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-purple-500"
+                      checked={tempSelectedVariationHinges.includes(hinge.name)}
+                      onChange={() =>
+                        toggleTempFilter(
+                          hinge.name,
+                          tempSelectedVariationHinges,
+                          setTempSelectedVariationHinges
+                        )
+                      }
+                    />
+                    <span className="truncate">
+                      {hinge.name} ({hinge.count})
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500 p-2">No variation hinges found</div>
+              )}
             </div>
             <div className="p-2 border-t border-gray-200 sticky bottom-0 bg-white">
               <button
@@ -362,11 +483,28 @@ const FilterPanel = ({
           </div>
         )}
       </div>
+      {/* Selected Filters as Tags */}
+      {allSelectedFilters.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {allSelectedFilters.map((filter) => (
+            <div
+              key={`${filter.type}-${filter.value}`}
+              className="flex items-center px-2 py-1 bg-purple-100 text-purple-800 text-sm rounded"
+            >
+              <span>{filter.label}</span>
+              <button
+                onClick={() => removeFilter(filter.type, filter.value)}
+                className="ml-2 text-purple-600 hover:text-purple-800"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
-
-// export default FilterPanel;
 
 const ProductGrid = ({
   products,
@@ -404,9 +542,9 @@ const ProductGrid = ({
   selectedVariationHinges,
   setSelectedVariationHinges,
 }) => {
-  // Filter out duplicate products based on a unique key (e.g., product._id or product.name + product.size)
+  // Filter out duplicate products based on a unique key
   const uniqueProducts = finalProducts.reduce((acc, product) => {
-    const key = `${product.name}_${product.size}`; // Adjust this key as needed
+    const key = `${product.name}_${product.size}`;
     if (!acc[key]) {
       acc[key] = product;
     }

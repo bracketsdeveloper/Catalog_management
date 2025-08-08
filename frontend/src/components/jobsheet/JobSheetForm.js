@@ -84,14 +84,15 @@ const JobSheetForm = ({
   setOtherDetails,
   referenceQuotation,
   setReferenceQuotation,
-  handleQuotationSelect,
   fetchQuotation,
+  quotationSuggestions,
+  handleQuotationSelect,
   eventName,
   setEventName,
-  opportunityNumber, // Added
-  setOpportunityNumber, // Added
-  opportunitySuggestions, // Added
-  handleOpportunitySelect, // Added
+  opportunityNumber,
+  setOpportunityNumber,
+  opportunitySuggestions,
+  handleOpportunitySelect,
   companies,
   dropdownOpen,
   setDropdownOpen,
@@ -161,8 +162,7 @@ const JobSheetForm = ({
 
   const syncWithParent = (newArray) => {
     setAddresses(newArray);
-    const filtered = newArray.filter((addr) => addr.trim() !== "");
-    setDeliveryAddress(filtered.length > 0 ? filtered : [""]);
+    setDeliveryAddress(newArray);
   };
 
   const handleOrderDateChange = (date) => {
@@ -202,11 +202,10 @@ const JobSheetForm = ({
     />
   ));
 
-  // Get clients for the currently selected company
   const getCurrentCompanyClients = () => {
     if (!clientCompanyName) return [];
     const selectedCompany = companies.find(
-      company => company.companyName === clientCompanyName
+      (company) => company.companyName === clientCompanyName
     );
     return selectedCompany?.clients || [];
   };
@@ -225,7 +224,7 @@ const JobSheetForm = ({
             onSelect={handleOpportunitySelect}
             placeholder="Enter Opportunity Number"
             suggestions={opportunitySuggestions}
-            required = 'true'
+            required
           />
         </div>
         <div className="w-1/2">
@@ -235,15 +234,16 @@ const JobSheetForm = ({
               value={referenceQuotation}
               onChange={setReferenceQuotation}
               placeholder="Enter Reference Quotation"
+              suggestions={quotationSuggestions}
               onSelect={handleQuotationSelect}
             />
-            {/* <button
+            <button
               type="button"
               onClick={fetchQuotation}
-              className="bg-blue-500 text-white px-3 py-2 rounded"
+              className="bg-gray-200 hover:bg-gray-300 px-4 rounded"
             >
               Fetch
-            </button> */}
+            </button>
           </div>
         </div>
       </div>
@@ -347,7 +347,7 @@ const JobSheetForm = ({
           {clientDropdownOpen && currentCompanyClients.length > 0 && (
             <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
               {currentCompanyClients
-                .filter(client => 
+                .filter((client) =>
                   client.name.toLowerCase().includes(clientName.toLowerCase())
                 )
                 .map((client, index) => (
@@ -459,7 +459,9 @@ const JobSheetForm = ({
                         min="1"
                         className="w-16 border rounded p-1"
                         value={item.quantity}
-                        onChange={(e) => handleInlineUpdate(idx, "quantity", e.target.value)}
+                        onChange={(e) =>
+                          handleInlineUpdate(idx, "quantity", e.target.value)
+                        }
                       />
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -512,7 +514,9 @@ const JobSheetForm = ({
                       <select
                         className="border rounded p-1 w-full"
                         value={item.brandingType || ""}
-                        onChange={(e) => handleInlineUpdate(idx, "brandingType", e.target.value)}
+                        onChange={(e) =>
+                          handleInlineUpdate(idx, "brandingType", e.target.value)
+                        }
                       >
                         <option value="">Select Branding Type</option>
                         {brandingTypeOptions.map((option, optionIdx) => (
@@ -602,7 +606,7 @@ const JobSheetForm = ({
           >
             <option value="">Select Delivery Type</option>
             {deliveryTypeOptions.map((option, index) => (
-              <option key={`type-${index}`} value={option}>
+              <option key={index} value={option}>
                 {option}
               </option>
             ))}
@@ -627,7 +631,7 @@ const JobSheetForm = ({
           >
             <option value="">Select Delivery Mode</option>
             {deliveryModeOptions.map((option, index) => (
-              <option key={`mode-${index}`} value={option}>
+              <option key={index} value={option}>
                 {option}
               </option>
             ))}
@@ -652,7 +656,7 @@ const JobSheetForm = ({
           >
             <option value="">Select Delivery Charges</option>
             {deliveryChargesOptions.map((option, index) => (
-              <option key={`charges-${index}`} value={option}>
+              <option key={index} value={option}>
                 {option}
               </option>
             ))}
@@ -689,7 +693,7 @@ const JobSheetForm = ({
       <div>
         <label className="block mb-1 font-medium text-purple-700">Delivery Addresses</label>
         {addresses.map((address, index) => (
-          <div key={index} className="flex items-center mb-2">
+          <div key={index} className="flex items-start mb-2">
             <textarea
               className="border border-purple-300 rounded w-full p-2"
               value={address}

@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
@@ -637,7 +635,7 @@ export default function CreateJobSheet() {
         setReferenceQuotation={setReferenceQuotation}
         fetchQuotation={handleFetchQuotation}
         quotationSuggestions={quotationSuggestions}
-        handleQuotationSelect={handleQuotationSelect}
+        handleQuotationSelect={handleQuotationSelect} // Added this prop
         companies={companies}
         dropdownOpen={dropdownOpen}
         setDropdownOpen={setDropdownOpen}

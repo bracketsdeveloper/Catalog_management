@@ -1,4 +1,5 @@
 // models/Destination.js
+
 const mongoose = require('mongoose');
 
 const destinationSchema = new mongoose.Schema({
@@ -6,7 +7,8 @@ const destinationSchema = new mongoose.Schema({
   name:      { type: String, required: true },
   latitude:  { type: Number, required: true },
   longitude: { type: Number, required: true },
-  priority:  { type: Number, required: true },      // ← new
+  priority:  { type: Number, required: true },      // ← unchanged
+  date:      { type: Date,   required: true },      // ← add this line
   reached:   { type: Boolean, default: false },
   reachedAt: Date
 });

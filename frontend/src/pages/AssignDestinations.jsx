@@ -4,53 +4,57 @@ import axios from "axios";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import {
-  DragDropContext,
-  Droppable,
-  Draggable
-} from "react-beautiful-dnd";
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  isWithinInterval,
+} from "date-fns";
 
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-  iconUrl:
-    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-  shadowUrl:
-    "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png"
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
 
-const BACKEND_URL =
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
-// Color palette for priorities
 const priorityColors = {
-  1: "#FF2D55",
-  2: "#FFA500",
-  3: "#00FF00",
-  4: "#007AFF",
-  5: "#800080",
-  6: "#FF69B4"
+  1: "#EF4444", // Red
+  2: "#F59E0B", // Amber
+  3: "#10B981", // Green
+  4: "#3B82F6", // Blue
+  5: "#8B5CF6", // Purple
+  6: "#EC4899", // Pink
 };
 
 const createCustomIcon = (priority) =>
   L.divIcon({
     html: `<div style="
       background-color: ${priorityColors[priority] || "#000"};
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       border: 2px solid white;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:12px;
-      color:white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     ">${priority}</div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10]
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
   });
 
 export default function AssignDestinations() {
@@ -61,22 +65,41 @@ export default function AssignDestinations() {
     name: "",
     latitude: "",
     longitude: "",
-    priority: 1
+    priority: 1,
+    date: new Date(),
   });
+  const [filterType, setFilterType] = useState("all");
+  const [filterFromDate, setFilterFromDate] = useState(null);
+  const [filterToDate, setFilterToDate] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mapCenter, setMapCenter] = useState([12.9716, 77.5946]);
   const [editingIndex, setEditingIndex] = useState(null);
 
-  const activeDestinations = useMemo(
-    () => destinations.filter((d) => !d.reached),
-    [destinations]
-  );
-  const completedDestinations = useMemo(
-    () => destinations.filter((d) => d.reached),
-    [destinations]
-  );
+  const activeDestinations = useMemo(() => destinations.filter((d) => !d.reached), [destinations]);
+  const completedDestinations = useMemo(() => destinations.filter((d) => d.reached), [destinations]);
+
+  const filteredActiveDestinations = useMemo(() => {
+    return activeDestinations.filter((dest) => {
+      const d = new Date(dest.date);
+      switch (filterType) {
+        case "today":
+          return isWithinInterval(d, { start: startOfDay(new Date()), end: endOfDay(new Date()) });
+        case "thisWeek":
+          return isWithinInterval(d, { start: startOfWeek(new Date()), end: endOfWeek(new Date()) });
+        case "thisMonth":
+          return isWithinInterval(d, { start: startOfMonth(new Date()), end: endOfMonth(new Date()) });
+        case "range":
+          if (filterFromDate && filterToDate) {
+            return isWithinInterval(d, { start: startOfDay(filterFromDate), end: endOfDay(filterToDate) });
+          }
+          return true;
+        default:
+          return true;
+      }
+    });
+  }, [activeDestinations, filterType, filterFromDate, filterToDate]);
 
   // Fetch users
   useEffect(() => {
@@ -84,10 +107,9 @@ export default function AssignDestinations() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const { data } = await axios.get(
-          `${BACKEND_URL}/api/admin/users`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const { data } = await axios.get(`${BACKEND_URL}/api/admin/users`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setUsers(data);
         if (data.length) setSelectedUser(data[0]._id);
       } catch (e) {
@@ -98,7 +120,7 @@ export default function AssignDestinations() {
     })();
   }, []);
 
-  // Fetch destinations when user changes
+  // Fetch destinations
   useEffect(() => {
     if (!selectedUser) return;
     (async () => {
@@ -109,15 +131,14 @@ export default function AssignDestinations() {
         if (selectedUser === "all") {
           const reqs = users.map((u) =>
             axios
-              .get(
-                `${BACKEND_URL}/api/admin/destinations/users/${u._id}/destinations`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              )
+              .get(`${BACKEND_URL}/api/admin/destinations/users/${u._id}/destinations`, {
+                headers: { Authorization: `Bearer ${token}` },
+              })
               .then((r) =>
                 r.data.destinations.map((d) => ({
                   ...d,
                   userId: u._id,
-                  userName: u.name
+                  userName: u.name,
                 }))
               )
           );
@@ -127,24 +148,18 @@ export default function AssignDestinations() {
             `${BACKEND_URL}/api/admin/destinations/users/${selectedUser}/destinations`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          const userName =
-            users.find((u) => u._id === selectedUser)?.name || "";
+          const userName = users.find((u) => u._id === selectedUser)?.name || "";
           fetched = data.destinations.map((d) => ({
             ...d,
             userId: selectedUser,
-            userName
+            userName,
           }));
         }
         setDestinations(fetched);
-        if (fetched.length)
-          setMapCenter([fetched[0].latitude, fetched[0].longitude]);
+        if (fetched.length) setMapCenter([fetched[0].latitude, fetched[0].longitude]);
         setError(null);
       } catch (e) {
-        setError(
-          e.response?.status === 404
-            ? "No destinations found."
-            : `Failed to fetch destinations: ${e.message}`
-        );
+        setError(e.response?.status === 404 ? "No destinations found." : `Failed to fetch destinations: ${e.message}`);
         setDestinations([]);
       } finally {
         setLoading(false);
@@ -161,13 +176,10 @@ export default function AssignDestinations() {
     const handler = setTimeout(async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `${BACKEND_URL}/api/admin/destinations/places/autocomplete`,
-          {
-            params: { input: newDestination.name },
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
+        const res = await axios.get(`${BACKEND_URL}/api/admin/destinations/places/autocomplete`, {
+          params: { input: newDestination.name },
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setSuggestions(res.data.suggestions || []);
       } catch (err) {
         console.error("Suggestion fetch error:", err);
@@ -177,23 +189,19 @@ export default function AssignDestinations() {
     return () => clearTimeout(handler);
   }, [newDestination.name]);
 
-  // When user clicks a suggestion, fetch details
   const handleSuggestionClick = async (sug) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/destinations/places/details`,
-        {
-          params: { placeId: sug.placeId },
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      const res = await axios.get(`${BACKEND_URL}/api/admin/destinations/places/details`, {
+        params: { placeId: sug.placeId },
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const { coords } = res.data;
       setNewDestination({
+        ...newDestination,
         name: sug.description,
         latitude: coords.latitude,
         longitude: coords.longitude,
-        priority: newDestination.priority
       });
       setSuggestions([]);
     } catch (err) {
@@ -205,34 +213,28 @@ export default function AssignDestinations() {
     const { name, value } = e.target;
     setNewDestination((p) => ({
       ...p,
-      [name]: name === "priority" ? parseInt(value) : value
+      [name]: name === "priority" ? parseInt(value) : value,
     }));
   };
 
   const handleAddOrUpdateDestination = () => {
-    if (
-      !newDestination.name ||
-      !newDestination.latitude ||
-      !newDestination.longitude
-    ) {
-      setError("Name and coordinates are required");
+    if (!newDestination.name || !newDestination.latitude || !newDestination.longitude || !newDestination.date) {
+      setError("Name, coordinates, and date are required");
       return;
     }
     const parsed = {
       ...newDestination,
       latitude: parseFloat(newDestination.latitude),
       longitude: parseFloat(newDestination.longitude),
-      reached: false
+      reached: false,
     };
     if (editingIndex !== null) {
-      setDestinations((d) =>
-        d.map((item, i) => (i === editingIndex ? { ...item, ...parsed } : item))
-      );
+      setDestinations((d) => d.map((item, i) => (i === editingIndex ? { ...item, ...parsed } : item)));
       setEditingIndex(null);
     } else {
       setDestinations((d) => [...d, parsed]);
     }
-    setNewDestination({ name: "", latitude: "", longitude: "", priority: 1 });
+    setNewDestination({ name: "", latitude: "", longitude: "", priority: 1, date: new Date() });
     setError(null);
   };
 
@@ -242,15 +244,11 @@ export default function AssignDestinations() {
       name: dest.name,
       latitude: dest.latitude,
       longitude: dest.longitude,
-      priority: dest.priority
+      priority: dest.priority,
+      date: new Date(dest.date),
     });
     const fullIdx = destinations.findIndex(
-      (d) =>
-        d.name === dest.name &&
-        d.latitude === dest.latitude &&
-        d.longitude === dest.longitude &&
-        d.priority === dest.priority &&
-        !d.reached
+      (d) => d.name === dest.name && d.latitude === dest.latitude && d.longitude === dest.longitude && d.priority === dest.priority && !d.reached
     );
     setEditingIndex(fullIdx);
   };
@@ -276,13 +274,12 @@ export default function AssignDestinations() {
         name: d.name,
         latitude: d.latitude,
         longitude: d.longitude,
-        priority: d.priority
+        priority: d.priority,
+        date: d.date,
       }));
-      await axios.post(
-        `${BACKEND_URL}/api/admin/users/${selectedUser}/destinations`,
-        { destinations: payload },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.post(`${BACKEND_URL}/api/admin/destinations/users/${selectedUser}/destinations`, { destinations: payload }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setError(null);
       alert("Saved successfully");
     } catch (e) {
@@ -293,234 +290,255 @@ export default function AssignDestinations() {
   };
 
   const center = useMemo(() => {
-    return destinations.length
-      ? [destinations[0].latitude, destinations[0].longitude]
-      : mapCenter;
+    return destinations.length ? [destinations[0].latitude, destinations[0].longitude] : mapCenter;
   }, [destinations, mapCenter]);
 
   return (
-    <div className="flex h-screen p-6 flex-col gap-4">
-      <div className="flex gap-4 flex-1">
-        {/* Assign Destinations (left) */}
-        <div className="w-1/2 bg-white p-4 rounded shadow flex flex-col">
-          <h2 className="text-xl font-bold mb-4">Assign Destinations</h2>
-          <select
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-            className="p-2 border rounded mb-4"
-            disabled={loading}
-          >
-            <option value="">Select User</option>
-            <option value="all">All Users</option>
-            {users.map((u) => (
-              <option key={u._id} value={u._id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-
-          <div className="flex gap-2 mb-4">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                name="name"
-                value={newDestination.name}
-                onChange={handleInputChange}
-                placeholder="Search address..."
-                className="p-2 border rounded w-full"
-                disabled={loading}
-              />
-              {suggestions.length > 0 && (
-                <ul className="absolute z-50 bg-white border rounded w-full mt-1 max-h-40 overflow-y-auto">
-                  {suggestions.map((sug, idx) => (
-                    <li
-                      key={idx}
-                      className="p-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => handleSuggestionClick(sug)}
-                    >
-                      {sug.description}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <input
-              type="number"
-              name="latitude"
-              value={newDestination.latitude}
-              onChange={handleInputChange}
-              placeholder="Lat"
-              className="p-2 border rounded w-24"
-              disabled={loading}
-            />
-            <input
-              type="number"
-              name="longitude"
-              value={newDestination.longitude}
-              onChange={handleInputChange}
-              placeholder="Lng"
-              className="p-2 border rounded w-24"
-              disabled={loading}
-            />
-            <select
-              name="priority"
-              value={newDestination.priority}
-              onChange={handleInputChange}
-              className="p-2 border rounded w-20"
-              disabled={loading}
-            >
-              {[1, 2, 3, 4, 5, 6].map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleAddOrUpdateDestination}
-              className="p-2 bg-blue-600 text-white rounded"
-              disabled={loading}
-            >
-              {editingIndex !== null ? "Update" : "Add"}
-            </button>
-          </div>
-
-          <div className="overflow-y-auto max-h-56 mb-4">
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="destinations">
-                {(prov) => (
-                  <table
-                    className="w-full border-collapse"
-                    {...prov.droppableProps}
-                    ref={prov.innerRef}
-                  >
-                    <thead className="bg-gray-100 sticky top-0 z-10">
-                      <tr>
-                        <th className="border p-2">☰</th>
-                        <th className="border p-2">Pri</th>
-                        <th className="border p-2">Name</th>
-                        <th className="border p-2">Coords</th>
-                        <th className="border p-2">Edit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeDestinations.map((dest, idx) => (
-                        <Draggable
-                          key={`${dest.name}-${idx}`}
-                          draggableId={`dest-${idx}`}
-                          index={idx}
-                        >
-                          {(p) => (
-                            <tr
-                              ref={p.innerRef}
-                              {...p.draggableProps}
-                              {...p.dragHandleProps}
-                            >
-                              <td className="border p-2">☰</td>
-                              <td className="border p-2">{dest.priority}</td>
-                              <td className="border p-2">{dest.name}</td>
-                              <td className="border p-2">
-                                {dest.latitude.toFixed(4)},{" "}
-                                {dest.longitude.toFixed(4)}
-                              </td>
-                              <td className="border p-2">
-                                <button
-                                  onClick={() => handleEditDestination(idx)}
-                                  className="px-2 py-1 bg-yellow-500 text-white rounded"
-                                  disabled={loading}
-                                >
-                                  Edit
-                                </button>
-                              </td>
-                            </tr>
-                          )}
-                        </Draggable>
-                      ))}
-                      {prov.placeholder}
-                    </tbody>
-                  </table>
-                )}
-              </Droppable>
-            </DragDropContext>
-          </div>
-
+    <div className="min-h-screen bg-gray-100 p-4 md:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Destination Dashboard</h1>
           <button
             onClick={handleSubmit}
-            className="px-4 py-2 bg-green-600 text-white rounded self-start"
-            disabled={
-              loading || activeDestinations.length === 0 || !selectedUser
-            }
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+            disabled={loading || activeDestinations.length === 0 || !selectedUser}
           >
-            Save
+            {loading ? "Saving..." : "Save Destinations"}
           </button>
-          {error && <p className="text-red-600 mt-2">{error}</p>}
         </div>
 
-        {/* Completed Destinations (right) */}
-        {completedDestinations.length > 0 && (
-          <div className="w-1/2 bg-white p-4 rounded shadow flex flex-col">
-            <h2 className="text-xl font-bold mb-4">
-              Completed Destinations
-            </h2>
-            <div className="overflow-y-auto max-h-56">
-              <table className="w-full border-collapse">
-                <thead className="bg-gray-100 sticky top-0 z-10">
-                  <tr>
-                    <th className="border p-2">User</th>
-                    <th className="border p-2">Name</th>
-                    <th className="border p-2">Pri</th>
-                    <th className="border p-2">Coords</th>
-                    <th className="border p-2">Reached at</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {completedDestinations.map((dest, idx) => (
-                    <tr key={`${dest.name}-${idx}`} className="border-b">
-                      <td className="p-2 border">{dest.userName}</td>
-                      <td className="p-2 border">{dest.name}</td>
-                      <td className="p-2 border">{dest.priority}</td>
-                      <td className="p-2 border">
-                        {dest.latitude.toFixed(4)}, {dest.longitude.toFixed(4)}
-                      </td>
-                      <td className="p-2 border">
-                        {new Date(dest.reachedAt).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Assign Destinations Card */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Assign Destinations</h2>
 
-      {/* Map below */}
-      <div className="flex-1">
-        <MapContainer
-          center={center}
-          zoom={13}
-          style={{ height: "100%", width: "100%" }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          />
-          {destinations.map((dest, i) => (
-            <Marker
-              key={i}
-              position={[dest.latitude, dest.longitude]}
-              icon={createCustomIcon(dest.priority)}
+            {/* User Selection */}
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="p-2 border rounded-md w-full mb-4 bg-white text-gray-800 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
             >
-              <Popup>
-                {dest.userName && <p><b>{dest.userName}</b></p>}
-                <p><b>{dest.name}</b> (Pri: {dest.priority})</p>
-                <p>Status: {dest.reached ? "Reached" : "Active"}</p>
-                {dest.reached && (
-                  <p>Reached at: {new Date(dest.reachedAt).toLocaleString()}</p>
+              <option value="">Select User</option>
+              <option value="all">All Users</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>{u.name}</option>
+              ))}
+            </select>
+
+            {/* Destination Input */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  name="name"
+                  value={newDestination.name}
+                  onChange={handleInputChange}
+                  placeholder="Search address..."
+                  className="p-2 border rounded-md w-full bg-white text-gray-800 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+                {suggestions.length > 0 && (
+                  <ul className="absolute z-50 bg-white border rounded-md w-full mt-1 max-h-40 overflow-y-auto shadow-lg">
+                    {suggestions.map((sug, idx) => (
+                      <li
+                        key={idx}
+                        className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => handleSuggestionClick(sug)}
+                      >
+                        {sug.description}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  name="latitude"
+                  value={newDestination.latitude}
+                  onChange={handleInputChange}
+                  placeholder="Latitude"
+                  className="p-2 border rounded-md bg-white text-gray-800 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+                <input
+                  type="number"
+                  name="longitude"
+                  value={newDestination.longitude}
+                  onChange={handleInputChange}
+                  placeholder="Longitude"
+                  className="p-2 border rounded-md bg-white text-gray-800 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+              </div>
+              <select
+                name="priority"
+                value={newDestination.priority}
+                onChange={handleInputChange}
+                className="p-2 border rounded-md bg-white text-gray-800 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+              >
+                {[1, 2, 3, 4, 5, 6].map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <DatePicker
+                selected={newDestination.date}
+                onChange={(date) => setNewDestination((p) => ({ ...p, date }))}
+                className="p-2 border rounded-md w-full bg-white text-gray-800 disabled:opacity-50 focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+                dateFormat="yyyy-MM-dd"
+              />
+              <button
+                onClick={handleAddOrUpdateDestination}
+                className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                disabled={loading}
+              >
+                {editingIndex !== null ? "Update" : "Add"}
+              </button>
+            </div>
+
+            {/* Filters */}
+            <div className="flex gap-4 mb-4 items-center">
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="p-2 border rounded-md w-40 bg-white text-gray-800 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="today">Today</option>
+                <option value="thisWeek">This Week</option>
+                <option value="thisMonth">This Month</option>
+                <option value="range">From-To</option>
+              </select>
+              {filterType === "range" && (
+                <div className="flex gap-2">
+                  <DatePicker
+                    selected={filterFromDate}
+                    onChange={(date) => setFilterFromDate(date)}
+                    placeholderText="From Date"
+                    className="p-2 border rounded-md w-40 bg-white text-gray-800 focus:ring-2 focus:ring-blue-500"
+                    dateFormat="yyyy-MM-dd"
+                  />
+                  <DatePicker
+                    selected={filterToDate}
+                    onChange={(date) => setFilterToDate(date)}
+                    placeholderText="To Date"
+                    className="p-2 border rounded-md w-40 bg-white text-gray-800 focus:ring-2 focus:ring-blue-500"
+                    dateFormat="yyyy-MM-dd"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Active Destinations Table */}
+            <div className="max-h-80 overflow-y-auto">
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="destinations">
+                  {(prov) => (
+                    <table className="w-full border-collapse" {...prov.droppableProps} ref={prov.innerRef}>
+                      <thead className="bg-gray-50 sticky top-0 z-10">
+                        <tr>
+                          <th className="p-2 border text-left text-sm font-semibold text-gray-700">☰</th>
+                          <th className="p-2 border text-left text-sm font-semibold text-gray-700">Priority</th>
+                          <th className="p-2 border text-left text-sm font-semibold text-gray-700">Name</th>
+                          <th className="p-2 border text-left text-sm font-semibold text-gray-700">Date</th>
+                          <th className="p-2 border text-left text-sm font-semibold text-gray-700">Coordinates</th>
+                          <th className="p-2 border text-left text-sm font-semibold text-gray-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredActiveDestinations.map((dest, idx) => (
+                          <Draggable key={`${dest.name}-${dest.date}-${idx}`} draggableId={`dest-${idx}`} index={idx}>
+                            {(p) => (
+                              <tr ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps}>
+                                <td className="p-2 border text-gray-600">☰</td>
+                                <td className="p-2 border">
+                                  <span
+                                    className="inline-block w-6 h-6 rounded-full text-center text-white font-bold"
+                                    style={{ backgroundColor: priorityColors[dest.priority] }}
+                                  >
+                                    {dest.priority}
+                                  </span>
+                                </td>
+                                <td className="p-2 border text-gray-600">{dest.name}</td>
+                                <td className="p-2 border text-gray-600">{new Date(dest.date).toLocaleDateString()}</td>
+                                <td className="p-2 border text-gray-600">
+                                  {dest.latitude.toFixed(4)}, {dest.longitude.toFixed(4)}
+                                </td>
+                                <td className="p-2 border">
+                                  <button
+                                    onClick={() =>
+                                      handleEditDestination(
+                                        activeDestinations.findIndex((d) => d.name === dest.name && d.date === dest.date)
+                                      )
+                                    }
+                                    className="px-2 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50 transition-colors"
+                                    disabled={loading}
+                                  >
+                                    Edit
+                                  </button>
+                                </td>
+                              </tr>
+                            )}
+                          </Draggable>
+                        ))}
+                        {prov.placeholder}
+                      </tbody>
+                    </table>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            </div>
+
+            {error && <p className="text-red-600 mt-2 text-sm">{error}</p>}
+          </div>
+
+          {/* Completed Destinations Card */}
+          {completedDestinations.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Completed Destinations</h2>
+              <div className="max-h-80 overflow-y-auto">
+                <table className="w-full border-collapse">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="p-2 border text-left text-sm font-semibold text-gray-700">User</th>
+                      <th className="p-2 border text-left text-sm font-semibold text-gray-700">Name</th>
+                      <th className="p-2 border text-left text-sm font-semibold text-gray-700">Date</th>
+                      <th className="p-2 border text-left text-sm font-semibold text-gray-700">Priority</th>
+                      <th className="p-2 border text-left text-sm font-semibold text-gray-700">Coordinates</th>
+                      <th className="p-2 border text-left text-sm font-semibold text-gray-700">Reached At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {completedDestinations.map((dest, idx) => (
+                      <tr key={`${dest.name}-${dest.date}-${idx}`}>
+                        <td className="p-2 border text-gray-600">{dest.userName}</td>
+                        <td className="p-2 border text-gray-600">{dest.name}</td>
+                        <td className="p-2 border text-gray-600">{new Date(dest.date).toLocaleDateString()}</td>
+                        <td className="p-2 border">
+                          <span
+                            className="inline-block w-6 h-6 rounded-full text-center text-white font-bold"
+                            style={{ backgroundColor: priorityColors[dest.priority] }}
+                          >
+                            {dest.priority}
+                          </span>
+                        </td>
+                        <td className="p-2 border text-gray-600">
+                          {dest.latitude.toFixed(4)}, {dest.longitude.toFixed(4)}
+                        </td>
+                        <td className="p-2 border text-gray-600">{new Date(dest.reachedAt).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

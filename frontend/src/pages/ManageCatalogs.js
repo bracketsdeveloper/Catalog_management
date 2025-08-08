@@ -10,8 +10,7 @@ import VariationModal from "../components/manualcatalog/VariationModal.js";
 import VariationEditModal from "../components/manualcatalog/VariationEditModal.js";
 import SuggestedPriceCalculator from "../components/SuggestedPriceCalculator.jsx";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import AdminProductDetails from "../pages/AdminProductDetails"; // <-- import
-
+import AdminProductDetails from "../pages/AdminProductDetails";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const limit = 100;
@@ -51,6 +50,13 @@ export default function CreateManualCatalog() {
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
   const [selectedVariationHinges, setSelectedVariationHinges] = useState([]);
+
+  // Add state for filter dropdowns
+  const [catsOpen, setCatsOpen] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
+  const [brandsOpen, setBrandsOpen] = useState(false);
+  const [prOpen, setPrOpen] = useState(false);
+  const [vhOpen, setVhOpen] = useState(false);
 
   const [filterCounts, setFilterCounts] = useState({
     categories: {},
@@ -101,22 +107,13 @@ export default function CreateManualCatalog() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
 
-  // ─── Dropdown‐open state for each filter ─────────────────────────────────
-  const [catsOpen, setCatsOpen] = useState(false);
-  const [subOpen, setSubOpen] = useState(false);
-  const [brandsOpen, setBrandsOpen] = useState(false);
-  const [prOpen, setPrOpen] = useState(false);
-  const [vhOpen, setVhOpen] = useState(false);
-
-  const finalProducts = advancedSearchActive ? advancedSearchResults : products;
-
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailsProdId, setDetailsProdId] = useState(null);
   const [detailsProduct, setDetailsProduct] = useState(null);
 
   const [filterDependencies, setFilterDependencies] = useState({
     subCategories: ["categories"],
-    variationHinges: ["categories", "subCategories"]
+    variationHinges: ["categories", "subCategories"],
   });
 
   const [parentChildMap, setParentChildMap] = useState({
@@ -124,8 +121,56 @@ export default function CreateManualCatalog() {
     subCategories: {},
     brands: {},
     priceRanges: {},
-    variationHinges: {}
+    variationHinges: {},
   });
+
+  // Combine all selected filters for display as tags
+  const allSelectedFilters = [
+    ...selectedCategories.map((item) => ({
+      type: "category",
+      value: item,
+      label: `Category: ${item}`,
+    })),
+    ...selectedSubCategories.map((item) => ({
+      type: "subCategory",
+      value: item,
+      label: `SubCategory: ${item}`,
+    })),
+    ...selectedBrands.map((item) => ({ type: "brand", value: item, label: `Brand: ${item}` })),
+    ...selectedPriceRanges.map((item) => ({
+      type: "priceRange",
+      value: item,
+      label: `Price: ${item}`,
+    })),
+    ...selectedVariationHinges.map((item) => ({
+      type: "variationHinge",
+      value: item,
+      label: `Hinge: ${item}`,
+    })),
+  ];
+
+  // Remove a specific filter and reapply
+  const removeFilter = (filterType, value) => {
+    switch (filterType) {
+      case "category":
+        setSelectedCategories((prev) => prev.filter((x) => x !== value));
+        break;
+      case "subCategory":
+        setSelectedSubCategories((prev) => prev.filter((x) => x !== value));
+        break;
+      case "brand":
+        setSelectedBrands((prev) => prev.filter((x) => x !== value));
+        break;
+      case "priceRange":
+        setSelectedPriceRanges((prev) => prev.filter((x) => x !== value));
+        break;
+      case "variationHinge":
+        setSelectedVariationHinges((prev) => prev.filter((x) => x !== value));
+        break;
+      default:
+        break;
+    }
+  };
 
   const openDetails = async (prodId) => {
     setDetailsProdId(prodId);
@@ -154,7 +199,8 @@ export default function CreateManualCatalog() {
     if (selectedSubCategories.length) p.append("subCategories", selectedSubCategories.join(","));
     if (selectedBrands.length) p.append("brands", selectedBrands.join(","));
     if (selectedPriceRanges.length) p.append("priceRanges", selectedPriceRanges.join(","));
-    if (selectedVariationHinges.length) p.append("variationHinges", selectedVariationHinges.join(","));
+    if (selectedVariationHinges.length)
+      p.append("variationHinges", selectedVariationHinges.join(","));
     return p;
   };
 
@@ -164,14 +210,14 @@ export default function CreateManualCatalog() {
       const { data } = await axios.get(`${BACKEND_URL}/api/admin/products/filters${extraQS}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       // Set the options
       setFullCategories(data.categories.map((x) => x.name));
       setFullSubCategories(data.subCategories.map((x) => x.name));
       setFullBrands(data.brands.map((x) => x.name));
       setFullPriceRanges(data.priceRanges.map((x) => x.name));
       setFullVariationHinges(data.variationHinges.map((x) => x.name));
-      
+
       // Set the counts
       setFilterCounts({
         categories: obj(data.categories),
@@ -225,7 +271,9 @@ export default function CreateManualCatalog() {
       .catch(console.error);
 
     axios
-      .get(`${BACKEND_URL}/api/admin/catalogs/branding-types`, { headers: { Authorization: `Bearer ${token}` } })
+      .get(`${BACKEND_URL}/api/admin/catalogs/branding-types`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       .then((r) => setBrandingTypesList(Array.isArray(r.data) ? r.data : []))
       .catch(console.error);
 
@@ -287,8 +335,8 @@ export default function CreateManualCatalog() {
                 productName: item.productName || item.name || "Unknown",
                 ProductDescription: item.ProductDescription || item.productDetails || "",
                 ProductBrand: item.ProductBrand || item.brandName || "",
-                color: item.color || "N/A",
-                size: item.size || "N/A",
+                color: item.color || "",
+                size: item.size || "",
                 quantity: item.quantity || 1,
                 productCost: item.productCost || 0,
                 productGST: item.productGST || 0,
@@ -365,8 +413,8 @@ export default function CreateManualCatalog() {
                 productName: item.product || "Unknown",
                 ProductDescription: "",
                 ProductBrand: "",
-                color: item.product.match(/\((\w+)\)/)?.[1] || "N/A",
-                size: item.product.match(/\[(\w+)\]/)?.[1] || "N/A",
+                color: item.product.match(/\((\w+)\)/)?.[1] || "",
+                size: item.product.match(/\[(\w+)\]/)?.[1] || "",
                 quantity: item.quantity || 1,
                 productCost: item.productprice || 0,
                 productGST: item.productGST || 0,
@@ -402,80 +450,75 @@ export default function CreateManualCatalog() {
     setLoading(false);
   }, [id, isCatalogEditMode, isQuotationEditMode]);
 
- // ─── Auto‐populate Company and Customer Details on Opportunity change ──────
-useEffect(() => {
-  if (!opportunityNumber) {
-    setCustomerCompany("");
-    setSelectedCompanyData(null);
-    setCustomerAddress("");
-    setClients([]);
-    setCustomerName("");
-    setSalutation("Mr.");
-    setCustomerEmail("");
-    return;
-  }
-  const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
-  if (opp && opp.account) {
-    setCustomerCompany(opp.account);
-    // Set customer name and salutation from opportunity contact
-    if (opp.contact) {
-      const contactParts = opp.contact.split(" ");
-      const sal = contactParts[0].toLowerCase().includes("ms.") ? "Ms." : "Mr.";
-      setSalutation(sal);
-      setCustomerName(opp.contact);
+  // ─── Auto‐populate Company and Customer Details on Opportunity change ──────
+  useEffect(() => {
+    if (!opportunityNumber) {
+      setCustomerCompany("");
+      setSelectedCompanyData(null);
+      setCustomerAddress("");
+      setClients([]);
+      setCustomerName("");
+      setSalutation("Mr.");
+      setCustomerEmail("");
+      return;
+    }
+    const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
+    if (opp && opp.account) {
+      setCustomerCompany(opp.account);
+      // Set customer name and salutation from opportunity contact
+      if (opp.contact) {
+        const contactParts = opp.contact.split(" ");
+        const sal = contactParts[0].toLowerCase().includes("ms.") ? "Ms." : "Mr.";
+        setSalutation(sal);
+        setCustomerName(opp.contact);
+      } else {
+        setSalutation("Mr.");
+        setCustomerName("");
+      }
+      // Fetch company details
+      console.log("Fetching company with name:", opp.account);
+      axios
+        .get(`${BACKEND_URL}/api/admin/companies`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          params: { companyName: opp.account.trim() },
+        })
+        .then((res) => {
+          console.log("Company fetch response:", res.data);
+          const comp = Array.isArray(res.data) ? res.data[0] : res.data;
+          if (comp) {
+            console.log("Fetched company details:", comp);
+            setSelectedCompanyData(comp);
+            setCustomerAddress(comp.companyAddress || "");
+            setClients(comp.clients || []);
+            // Set email from client matching opportunity contact
+            const matchingClient = comp.clients?.find(
+              (c) => c.name?.toLowerCase() === opp.contact?.toLowerCase()
+            );
+            setCustomerEmail(matchingClient?.email || comp.companyEmail || "");
+          } else {
+            console.warn("No company found for:", opp.account, res.data);
+          }
+        })
+        .catch(() => {
+          setSelectedCompanyData(null);
+          setCustomerAddress("");
+          setClients([]);
+          setCustomerEmail("");
+        });
     } else {
+      setCustomerCompany("");
+      setSelectedCompanyData(null);
+      setCustomerAddress("");
+      setClients([]);
       setSalutation("Mr.");
       setCustomerName("");
+      setCustomerEmail("");
     }
-    // Fetch company details
-    console.log("Fetching company with name:", opp.account);
-    axios
-      .get(`${BACKEND_URL}/api/admin/companies`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        params: { companyName: opp.account.trim() },
-      })
-      .then((res) => {
-        console.log("Company fetch response:", res.data);
-        const comp = Array.isArray(res.data) ? res.data[0] : res.data;
-        if (comp) {
-          console.log("Fetched company details:", comp);
-          setSelectedCompanyData(comp);
-          setCustomerAddress(comp.companyAddress || "");
-          setClients(comp.clients || []);
-          // Set email from client matching opportunity contact
-          const matchingClient = comp.clients?.find(
-            (c) => c.name?.toLowerCase() === opp.contact?.toLowerCase()
-          );
-          setCustomerEmail(matchingClient?.email || comp.companyEmail || "");
-        } else {
-          console.warn("No company found for:", opp.account, res.data);
-        }
-      })
-      .catch(() => {
-        setSelectedCompanyData(null);
-        setCustomerAddress("");
-        setClients([]);
-        setCustomerEmail("");
-      });
-  } else {
-    setCustomerCompany("");
-    setSelectedCompanyData(null);
-    setCustomerAddress("");
-    setClients([]);
-    setSalutation("Mr.");
-    setCustomerName("");
-    setCustomerEmail("");
-  }
-}, [opportunityNumber, opportunityCodes]);
+  }, [opportunityNumber, opportunityCodes]);
 
   // ─── Re‐fetch on searchTerm or filter change ──────────────────────────────
   useEffect(() => {
     fetchProducts(1);
-    setCatsOpen(false);
-    setSubOpen(false);
-    setBrandsOpen(false);
-    setPrOpen(false);
-    setVhOpen(false);
   }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges, selectedVariationHinges]);
 
   // ─── Action Handlers ─────────────────────────────────────────────────────
@@ -498,7 +541,7 @@ useEffect(() => {
   const isDuplicate = (pid, c, s, productName) => {
     // Skip duplication check for products with "voucher", "giftcard", or "e-vouchers" in their name (case-insensitive)
     const skipKeywords = ["voucher", "giftcard", "e-vouchers"];
-    const shouldSkip = skipKeywords.some(keyword => 
+    const shouldSkip = skipKeywords.some((keyword) =>
       productName?.toLowerCase().includes(keyword.toLowerCase())
     );
     if (shouldSkip) return false;
@@ -533,8 +576,8 @@ useEffect(() => {
       productName: variationModalProduct.productName || variationModalProduct.name,
       productCost: cost,
       productGST: variationModalProduct.productGST || 0,
-      color: v.color?.trim() || "N/A",
-      size: v.size?.trim() || "N/A",
+      color: v.color?.trim() || "",
+      size: v.size?.trim() || "",
       quantity: v.quantity || 1,
       material: variationModalProduct.material || "",
       weight: variationModalProduct.weight || "",
@@ -628,62 +671,33 @@ useEffect(() => {
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
     }
-  
-    // Ensure customerName is empty if not entered
+
     const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
-  
-    const payload = {
-      opportunityNumber,
-      catalogId: isCatalogEditMode ? id : undefined,
-      catalogName,
-      salutation,
-      customerName: sanitizedCustomerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      margin: selectedMargin,
-      gst: selectedGst,
-      fieldsToDisplay,
-      items: selectedProducts.map((p, i) => {
-        const qty = p.quantity || 1;
-        const base = p.productCost || 0;
-        const rate = parseFloat(base.toFixed(2));
-        const amount = rate * qty;
-        const gst = p.productGST ?? selectedGst;
-        const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
-        const total = parseFloat((amount + gstVal).toFixed(2));
-        return {
-          slNo: i + 1,
-          productId: (p.productId && typeof p.productId === "object" && "_id" in p.productId) ? p.productId._id : p.productId,
-          product: `${p.productName || p.name}${p.color ? `(${p.color})` : ""}${p.size ? `[${p.size}]` : ""}`,
-          hsnCode: p.hsnCode || "",
-          quantity: qty,
-          rate,
-          productprice: base,
-          amount,
-          productGST: gst,
-          total,
-          baseCost: p.baseCost || 0,
-          material: p.material || "",
-          weight: p.weight || "",
-          brandingTypes: p.brandingTypes || [],
-          suggestedBreakdown: p.suggestedBreakdown || {},
-          imageIndex: p.imageIndex || 0,
-        };
-      }),
-      terms: [],
-      displayTotals: true,
-      displayHSNCodes: true,
-    };
-  
+    const payload = buildQuotationPayload();
+
     try {
       const token = localStorage.getItem("token");
-      const { data } = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setQuotationId(data.quotation._id);
-      alert("Quotation created!");
-    } catch {
+      let response;
+      if (isQuotationEditMode && quotationId) {
+        // Update existing quotation
+        response = await axios.put(
+          `${BACKEND_URL}/api/admin/quotations/${quotationId}`,
+          payload,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        alert("Quotation updated!");
+      } else {
+        // Create new quotation
+        response = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setQuotationId(response.data.quotation._id);
+        alert("Quotation created!");
+      }
+    } catch (error) {
+      console.error("Error saving quotation:", error);
       alert("Error saving quotation");
     }
   };
@@ -1123,6 +1137,8 @@ useEffect(() => {
           selected={selectedCategories}
           toggle={(v) => toggleFilter(v, selectedCategories, setSelectedCategories)}
           counts={filterCounts.categories}
+          allSelectedFilters={allSelectedFilters}
+          removeFilter={removeFilter}
         />
         <FilterDropdown
           label="SubCategories"
@@ -1138,9 +1154,11 @@ useEffect(() => {
             subCategories: selectedSubCategories,
             brands: selectedBrands,
             priceRanges: selectedPriceRanges,
-            variationHinges: selectedVariationHinges
+            variationHinges: selectedVariationHinges,
           }}
           parentChildMap={parentChildMap}
+          allSelectedFilters={allSelectedFilters}
+          removeFilter={removeFilter}
         />
         <FilterDropdown
           label="Brands"
@@ -1150,6 +1168,8 @@ useEffect(() => {
           selected={selectedBrands}
           toggle={(v) => toggleFilter(v, selectedBrands, setSelectedBrands)}
           counts={filterCounts.brands}
+          allSelectedFilters={allSelectedFilters}
+          removeFilter={removeFilter}
         />
         <FilterDropdown
           label="Price Range"
@@ -1159,6 +1179,8 @@ useEffect(() => {
           selected={selectedPriceRanges}
           toggle={(v) => toggleFilter(v, selectedPriceRanges, setSelectedPriceRanges)}
           counts={filterCounts.priceRanges}
+          allSelectedFilters={allSelectedFilters}
+          removeFilter={removeFilter}
         />
         <FilterDropdown
           label="Variation Hinges"
@@ -1174,10 +1196,31 @@ useEffect(() => {
             subCategories: selectedSubCategories,
             brands: selectedBrands,
             priceRanges: selectedPriceRanges,
-            variationHinges: selectedVariationHinges
+            variationHinges: selectedVariationHinges,
           }}
           parentChildMap={parentChildMap}
+          allSelectedFilters={allSelectedFilters}
+          removeFilter={removeFilter}
         />
+        {/* Selected Filters as Tags */}
+        {allSelectedFilters.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {allSelectedFilters.map((filter) => (
+              <div
+                key={`${filter.type}-${filter.value}`}
+                className="flex items-center px-2 py-1 bg-purple-100 text-purple-800 text-sm rounded"
+              >
+                <span>{filter.label}</span>
+                <button
+                  onClick={() => removeFilter(filter.type, filter.value)}
+                  className="ml-2 text-purple-600 hover:text-purple-800"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Product Grid & Pagination */}
@@ -1194,7 +1237,7 @@ useEffect(() => {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {finalProducts.map((prod) => (
+            {(advancedSearchActive ? advancedSearchResults : products).map((prod) => (
               <ProductCard
                 key={prod._id}
                 isLoading={!prod}

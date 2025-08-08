@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import DatePicker from "react-datepicker";
-import { format, parse, isValid, isWithinInterval } from "date-fns";
+import { format, parse, isValid } from "date-fns";
 import "react-datepicker/dist/react-datepicker.css";
 import { Dropdown } from "react-bootstrap";
 import { FaEllipsisV } from "react-icons/fa";
@@ -30,7 +30,6 @@ export default function ManageJobSheets() {
     order: "desc",
   });
   const [modalOpen, setModalOpen] = useState(false);
-  const [createOption, setCreateOption] = useState(null);
   const [draftPanelOpen, setDraftPanelOpen] = useState(false);
   const [draftSheets, setDraftSheets] = useState([]);
   const [draftLoading, setDraftLoading] = useState(false);
@@ -47,16 +46,7 @@ export default function ManageJobSheets() {
 
   const dateFilterRef = useRef(null);
 
-  const handleOpenModal = (jobSheetNumber) => {
-    setSelectedJobSheetNumber(jobSheetNumber);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedJobSheetNumber(null);
-  };
-
+  // Close date filter when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
@@ -69,11 +59,13 @@ export default function ManageJobSheets() {
     };
   }, []);
 
+  // Initial fetch & refetch on filters/page change
   useEffect(() => {
     fetchJobSheets(false);
     fetchUserEmail();
   }, [currentPage, searchQuery, orderFromDate, orderToDate, deliveryFromDate, deliveryToDate]);
 
+  // Fetch latest actions whenever the list updates
   useEffect(() => {
     if (jobSheets.length > 0) {
       fetchLatestActions(jobSheets.map((js) => js._id));
@@ -85,7 +77,7 @@ export default function ManageJobSheets() {
   async function fetchUserEmail() {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/me`, {
+      await axios.get(`${BACKEND_URL}/api/admin/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
@@ -94,73 +86,66 @@ export default function ManageJobSheets() {
     }
   }
 
+  // Fetch job sheets with retry logic
   async function fetchJobSheets(draftOnly = false, retries = 3) {
-    try {
-      setLoading(true);
-      setError(null);
-      for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-          const token = localStorage.getItem("token");
-          const params = {
-            draftOnly: draftOnly ? "true" : undefined,
-            searchQuery: searchQuery || undefined,
-            orderFromDate: orderFromDate ? format(orderFromDate, "yyyy-MM-dd") : undefined,
-            orderToDate: orderToDate ? format(orderToDate, "yyyy-MM-dd") : undefined,
-            deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
-            deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
-            page: currentPage,
-            limit: 100,
-          };
-
-          console.log(`Attempt ${attempt}: Fetching job sheets with params:`, params);
-
-          const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
-            headers: { Authorization: `Bearer ${token}` },
-            params,
-            timeout: 30000,
-          });
-
-          if (!res.data.jobSheets) {
-            throw new Error("No job sheets data received");
-          }
-
-          setJobSheets(res.data.jobSheets);
-          setTotalPages(res.data.totalPages || 1);
-          setTotalJobSheets(res.data.totalJobSheets || 0);
-          setError(null);
-          return;
-        } catch (err) {
-          console.error(`Attempt ${attempt} failed:`, {
-            message: err.message,
-            status: err.response?.status,
-            data: err.response?.data,
-          });
-          if (attempt === retries) {
-            setError(
-              err.response?.status === 401
-                ? "Unauthorized: Please log in again"
-                : err.response?.status === 404
-                ? "No job sheets found"
-                : err.response?.status === 400
-                ? err.response.data.message
-                : "Failed to fetch job sheets. Please try again."
-            );
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+    setLoading(true);
+    setError(null);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const token = localStorage.getItem("token");
+        const params = {
+          draftOnly: draftOnly ? "true" : undefined,
+          searchQuery: searchQuery || undefined,
+          orderFromDate: orderFromDate ? format(orderFromDate, "yyyy-MM-dd") : undefined,
+          orderToDate: orderToDate ? format(orderToDate, "yyyy-MM-dd") : undefined,
+          deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
+          deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
+          page: currentPage,
+          limit: 100,
+        };
+        const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params,
+          timeout: 30000,
+        });
+        if (!res.data.jobSheets) {
+          throw new Error("No job sheets data received");
+        }
+        setJobSheets(res.data.jobSheets);
+        setTotalPages(res.data.totalPages || 1);
+        setTotalJobSheets(res.data.totalJobSheets || 0);
+        setLoading(false);
+        return;
+      } catch (err) {
+        console.error(`Attempt ${attempt} failed:`, err);
+        if (attempt === retries) {
+          const status = err.response?.status;
+          setError(
+            status === 401
+              ? "Unauthorized: Please log in again"
+              : status === 404
+              ? "No job sheets found"
+              : status === 400
+              ? err.response.data.message
+              : "Failed to fetch job sheets. Please try again."
+          );
+          setLoading(false);
+        } else {
+          await new Promise((r) => setTimeout(r, 1000));
         }
       }
-    } finally {
-      setLoading(false);
     }
   }
 
+  // Fetch current user's drafts
   async function fetchMyDrafts() {
+    setDraftLoading(true);
+    setDraftError(null);
     try {
-      setDraftLoading(true);
-      setDraftError(null);
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets?draftOnly=true`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
         headers: { Authorization: `Bearer ${token}` },
+        params: { draftOnly: "true" },
       });
       setDraftSheets(res.data.jobSheets || []);
     } catch (err) {
@@ -171,6 +156,7 @@ export default function ManageJobSheets() {
     }
   }
 
+  // Fetch latest action logs
   async function fetchLatestActions(jobSheetIds) {
     try {
       const token = localStorage.getItem("token");
@@ -186,6 +172,7 @@ export default function ManageJobSheets() {
     }
   }
 
+  // Delete a jobsheet
   async function deleteJobSheet(id, isDraft) {
     try {
       const token = localStorage.getItem("token");
@@ -193,15 +180,14 @@ export default function ManageJobSheets() {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchJobSheets(false);
-      if (draftPanelOpen) {
-        fetchMyDrafts();
-      }
+      if (draftPanelOpen) fetchMyDrafts();
     } catch (err) {
       console.error("Error deleting job sheet:", err);
       alert("Failed to delete job sheet.");
     }
   }
 
+  // Sorting helper
   const handleSort = (field, isDate = false) => {
     let order = "asc";
     if (sortConfig.field === field && sortConfig.order === "asc") {
@@ -210,9 +196,12 @@ export default function ManageJobSheets() {
     setSortConfig({ field, order });
   };
 
+  // EXPORT: Fetch exactly the filtered set, then build the workbook
   const exportToExcel = async () => {
     try {
       const token = localStorage.getItem("token");
+
+      // Fetch all filtered job sheets in one go
       const params = {
         draftOnly: false,
         searchQuery: searchQuery || undefined,
@@ -220,43 +209,42 @@ export default function ManageJobSheets() {
         orderToDate: orderToDate ? format(orderToDate, "yyyy-MM-dd") : undefined,
         deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
         deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
+        page: 1,
+        limit: totalJobSheets > 0 ? totalJobSheets : 1000,
       };
-  
-      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets-export`, {
+
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
         timeout: 60000,
       });
-  
+
+      const allJobSheets = Array.isArray(res.data.jobSheets)
+        ? res.data.jobSheets
+        : [];
+
+      // Build export data rows
       const exportData = [];
       let serial = 1;
-  
-      const allJobSheets = Array.isArray(res.data) ? res.data : res.data.jobSheets || [];
-  
+
       allJobSheets.forEach((js) => {
         const createdAtFormatted = js.createdAt && isValid(new Date(js.createdAt))
           ? format(new Date(js.createdAt), "dd/MM/yyyy")
           : "Invalid date";
-  
         const orderDateFormatted = js.orderDate && isValid(new Date(js.orderDate))
           ? format(new Date(js.orderDate), "dd/MM/yyyy")
           : "Invalid date";
-  
         const deliveryDateFormatted = js.deliveryDate && isValid(new Date(js.deliveryDate))
           ? format(new Date(js.deliveryDate), "dd/MM/yyyy")
           : "Invalid date";
-  
         const latestAction = latestActions[js._id] || {};
-  
+
         if (js.items && js.items.length > 0) {
           js.items.forEach((item) => {
-            // Handle brandingType as string or array
             const brandingType = Array.isArray(item.brandingType)
               ? item.brandingType.join(", ")
-              : typeof item.brandingType === "string"
-              ? item.brandingType
-              : "";
-  
+              : item.brandingType || "";
+
             exportData.push({
               "Sl. No": serial++,
               "Created At": createdAtFormatted,
@@ -267,24 +255,13 @@ export default function ManageJobSheets() {
               "Client Company Name": js.clientCompanyName || "",
               "Client Name": js.clientName || "",
               "Client Delivery Date": deliveryDateFormatted,
-              "CRM": js.crmIncharge || "",
+              CRM: js.crmIncharge || "",
               "Material Particulars": item.product || "",
-              "Quantity": item.quantity || "",
+              Quantity: item.quantity || "",
               "Sourcing Vendor": item.sourcingFrom || "",
-              "Sourcing Vendor Contact": "",
-              "Product Follow Up": "",
-              "Product Expected @ Ace": "",
-              "Product Procured By": "",
-              "Branding Target Date": "",
               "Branding Vendor": item.brandingVendor || "",
               "Branding Type": brandingType,
-              "Branding Vendor Contact": "",
-              "Delivery Status": "",
-              "QC Done By": "",
-              "Delivered By": "",
-              "Delivered On": "",
               "PO Status": js.poStatus || "",
-              "Invoice Submission": "",
               "Latest Action": latestAction.action
                 ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
                 : "No action recorded",
@@ -301,31 +278,20 @@ export default function ManageJobSheets() {
             "Client Company Name": js.clientCompanyName || "",
             "Client Name": js.clientName || "",
             "Client Delivery Date": deliveryDateFormatted,
-            "CRM": js.crmIncharge || "",
+            CRM: js.crmIncharge || "",
             "Material Particulars": "",
-            "Quantity": "",
+            Quantity: "",
             "Sourcing Vendor": "",
-            "Sourcing Vendor Contact": "",
-            "Product Follow Up": "",
-            "Product Expected @ Ace": "",
-            "Product Procured By": "",
-            "Branding Target Date": "",
             "Branding Vendor": "",
             "Branding Type": "",
-            "Branding Vendor Contact": "",
-            "Delivery Status": "",
-            "QC Done By": "",
-            "Delivered By": "",
-            "Delivered On": "",
             "PO Status": js.poStatus || "",
-            "Invoice Submission": "",
             "Latest Action": latestAction.action
               ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? new Date(latestAction.performedAt).toLocaleString() : "Unknown date"}`
               : "No action recorded",
           });
         }
       });
-  
+
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "JobSheets");
@@ -335,10 +301,10 @@ export default function ManageJobSheets() {
       alert("Excel export failed");
     }
   };
-  const isValidDate = (date) => {
-    return date instanceof Date && !isNaN(date);
-  };
 
+  const isValidDate = (date) => date instanceof Date && !isNaN(date);
+
+  // Skeleton loader
   const SkeletonLoader = () => (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-gray-700 border-b border-gray-200">
@@ -397,8 +363,18 @@ export default function ManageJobSheets() {
     </div>
   );
 
+  const handleOpenModal = (jobSheetNumber) => {
+    setSelectedJobSheetNumber(jobSheetNumber);
+    setIsModalOpen(true);
+  };
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJobSheetNumber(null);
+  };
+
   return (
     <div className="p-6">
+      {/* Header and Controls */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-4 md:space-y-0">
         <h1 className="text-2xl font-bold">Manage Job Sheets</h1>
         <div className="flex space-x-2">
@@ -428,6 +404,7 @@ export default function ManageJobSheets() {
         </div>
       </div>
 
+      {/* Search & Filter */}
       <div className="mb-4 p-4 border rounded relative">
         <h2 className="font-bold mb-2">Search & Filter</h2>
         <div className="flex flex-col md:flex-row md:items-center md:space-x-4">
@@ -464,6 +441,7 @@ export default function ManageJobSheets() {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Order Date Range */}
               <div>
                 <h4 className="font-medium mb-2">Order Date Range</h4>
                 <div className="flex space-x-2">
@@ -496,6 +474,8 @@ export default function ManageJobSheets() {
                   />
                 </div>
               </div>
+
+              {/* Delivery Date Range */}
               <div>
                 <h4 className="font-medium mb-2">Delivery Date Range</h4>
                 <div className="flex space-x-2">
@@ -529,12 +509,19 @@ export default function ManageJobSheets() {
                 </div>
               </div>
             </div>
+
+            {/* Sorting Options */}
             <div className="mt-4">
               <h4 className="font-medium mb-2">Sort By</h4>
               <div className="flex space-x-4">
                 <select
                   value={sortConfig.field}
-                  onChange={(e) => handleSort(e.target.value, e.target.value === "orderDate" || e.target.value === "deliveryDate")}
+                  onChange={(e) =>
+                    handleSort(
+                      e.target.value,
+                      ["orderDate", "deliveryDate"].includes(e.target.value)
+                    )
+                  }
                   className="border p-2 rounded"
                 >
                   <option value="jobSheetNumber">JobSheet No.</option>
@@ -558,15 +545,13 @@ export default function ManageJobSheets() {
         )}
       </div>
 
+      {/* Table or Loader / Error */}
       {loading ? (
         <SkeletonLoader />
       ) : error ? (
         <div className="p-4 text-red-600 bg-red-100 border border-red-400 rounded">
           {error}
-          <button
-            onClick={() => fetchJobSheets(false)}
-            className="ml-4 text-blue-600 underline"
-          >
+          <button onClick={() => fetchJobSheets(false)} className="ml-4 text-blue-600 underline">
             Retry
           </button>
         </div>
@@ -575,62 +560,27 @@ export default function ManageJobSheets() {
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="border-b">
-                <th
-                  className="p-2 text-left cursor-pointer"
-                  onClick={() => handleSort("jobSheetNumber")}
-                >
-                  JobSheet No.
-                  {sortConfig.field === "jobSheetNumber" && (
-                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                  )}
-                </th>
-                <th
-                  className="p-2 text-left cursor-pointer"
-                  onClick={() => handleSort("eventName")}
-                >
-                  Event Name
-                  {sortConfig.field === "eventName" && (
-                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                  )}
-                </th>
-                <th
-                  className="p-2 text-left cursor-pointer"
-                  onClick={() => handleSort("clientName")}
-                >
-                  Client Name
-                  {sortConfig.field === "clientName" && (
-                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                  )}
-                </th>
-                <th
-                  className="p-2 text-left cursor-pointer"
-                  onClick={() => handleSort("clientCompanyName")}
-                >
-                  Company
-                  {sortConfig.field === "clientCompanyName" && (
-                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                  )}
-                </th>
-                <th
-                  className="p-2 text-left cursor-pointer"
-                  onClick={() => handleSort("orderDate", true)}
-                >
-                  Order Date
-                  {sortConfig.field === "orderDate" && (
-                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                  )}
-                </th>
-                <th
-                  className="p-2 text-left cursor-pointer"
-                  onClick={() => handleSort("deliveryDate", true)}
-                >
-                  Delivery Date
-                  {sortConfig.field === "deliveryDate" && (
-                    <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
-                  )}
-                </th>
-                <th className="p-2 text-left">Latest Action</th>
-                <th className="p-2 text-left">Actions</th>
+                {[
+                  { label: "JobSheet No.", field: "jobSheetNumber", isDate: false },
+                  { label: "Event Name", field: "eventName", isDate: false },
+                  { label: "Client Name", field: "clientName", isDate: false },
+                  { label: "Company", field: "clientCompanyName", isDate: false },
+                  { label: "Order Date", field: "orderDate", isDate: true },
+                  { label: "Delivery Date", field: "deliveryDate", isDate: true },
+                  { label: "Latest Action", field: null },
+                  { label: "Actions", field: null },
+                ].map((col) => (
+                  <th
+                    key={col.label}
+                    className={`p-2 text-left ${col.field ? "cursor-pointer" : ""}`}
+                    onClick={() => col.field && handleSort(col.field, col.isDate)}
+                  >
+                    {col.label}
+                    {col.field && sortConfig.field === col.field && (
+                      <span>{sortConfig.order === "asc" ? " ↑" : " ↓"}</span>
+                    )}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -701,19 +651,17 @@ export default function ManageJobSheets() {
         </>
       )}
 
+      {/* Global Jobsheet Modal */}
       <JobSheetGlobal
         jobSheetNumber={selectedJobSheetNumber}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
 
+      {/* Create Jobsheet Modal */}
       {modalOpen && (
         <CreateJobsheetModal
-          onClose={() => {
-            setModalOpen(false);
-            setCreateOption(null);
-          }}
-          onSelectOption={(option) => setCreateOption(option)}
+          onClose={() => setModalOpen(false)}
           onCreated={() => {
             setModalOpen(false);
             fetchJobSheets(false);
@@ -723,6 +671,7 @@ export default function ManageJobSheets() {
         />
       )}
 
+      {/* Drafts Panel */}
       {draftPanelOpen && (
         <div
           className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50"
@@ -813,58 +762,31 @@ export default function ManageJobSheets() {
   );
 }
 
-function CreateJobsheetModal({
-  onClose,
-  onSelectOption,
-  onCreated,
-  navigate,
-  BACKEND_URL,
-}) {
-  const [option, setOption] = useState(null);
+// Create Jobsheet Modal Component
+function CreateJobsheetModal({ onClose, onCreated, navigate, BACKEND_URL }) {
   const [formData, setFormData] = useState({
     orderDate: "",
     clientCompanyName: "",
     clientName: "",
-    contactNumber: "",
     deliveryDate: "",
-    deliveryTime: "",
-    crmIncharge: "",
-    items: [],
-    poNumber: "",
-    deliveryType: "",
-    deliveryMode: "",
-    deliveryCharges: "",
-    deliveryAddress: "",
-    giftBoxBagsDetails: "",
-    packagingInstructions: "",
-    otherDetails: "",
-    referenceQuotation: "",
   });
-
   const [createAsDraft, setCreateAsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (
-      !formData.orderDate ||
-      !formData.clientCompanyName ||
-      !formData.clientName ||
-      !formData.deliveryDate
-    ) {
+    if (!formData.orderDate || !formData.clientCompanyName || !formData.clientName || !formData.deliveryDate) {
       setError("Please fill in all required fields.");
       return;
     }
     try {
       setSaving(true);
       const token = localStorage.getItem("token");
-      const body = {
-        ...formData,
-        isDraft: createAsDraft,
-      };
-      await axios.post(`${BACKEND_URL}/api/admin/jobsheets`, body, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.post(
+        `${BACKEND_URL}/api/admin/jobsheets`,
+        { ...formData, isDraft: createAsDraft },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       onCreated();
     } catch (err) {
       console.error("Error creating jobsheet:", err);
@@ -874,127 +796,82 @@ function CreateJobsheetModal({
     }
   };
 
-  function isValidDate(date) {
-    return date instanceof Date && !isNaN(date);
+  function isValidDate(d) {
+    return d instanceof Date && !isNaN(d);
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-      <div className="bg-white p-6 rounded w-4/5 max-w-4xl overflow-auto max-h-full">
-        {!option && (
+      <div className="bg-white p-6 rounded w-4/5 max-w-2xl overflow-auto max-h-full">
+        <h2 className="text-2xl font-bold mb-4">Create Jobsheet</h2>
+        {error && <div className="text-red-500 mb-2">{error}</div>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <h2 className="text-2xl font-bold mb-4">Create Jobsheet</h2>
-            <div className="flex flex-col space-y-4">
-              <Link
-                to={"/admin-dashboard/create-jobsheet"}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-              >
-                Create a New Jobsheet
-              </Link>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={onClose} className="px-4 py-2 border rounded">
-                Cancel
-              </button>
-            </div>
+            <label className="block text-sm font-medium">Order Date *</label>
+            <DatePicker
+              selected={formData.orderDate ? parse(formData.orderDate, "yyyy-MM-dd", new Date()) : null}
+              onChange={(date) =>
+                setFormData({ ...formData, orderDate: date ? format(date, "yyyy-MM-dd") : "" })
+              }
+              dateFormat="dd/MM/yyyy"
+              className="border p-2 rounded w-full"
+              placeholderText="DD/MM/YYYY"
+            />
           </div>
-        )}
-
-        {option === "new" && (
           <div>
-            <h2 className="text-2xl font-bold mb-4">New Jobsheet</h2>
-            {error && <div className="text-red-500 mb-2">{error}</div>}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium">Order Date *</label>
-                <DatePicker
-                  selected={
-                    formData.orderDate
-                      ? parse(formData.orderDate, "yyyy-MM-dd", new Date())
-                      : null
-                  }
-                  onChange={(date) =>
-                    setFormData({
-                      ...formData,
-                      orderDate: date ? format(date, "yyyy-MM-dd") : "",
-                    })
-                  }
-                  dateFormat="dd/MM/yyyy"
-                  className="border p-2 rounded w-full"
-                  placeholderText="DD/MM/YYYY"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Delivery Date *</label>
-                <DatePicker
-                  selected={
-                    formData.deliveryDate
-                      ? parse(formData.deliveryDate, "yyyy-MM-dd", new Date())
-                      : null
-                  }
-                  onChange={(date) =>
-                    setFormData({
-                      ...formData,
-                      deliveryDate: date ? format(date, "yyyy-MM-dd") : "",
-                    })
-                  }
-                  dateFormat="dd/MM/yyyy"
-                  className="border p-2 rounded w-full"
-                  placeholderText="DD/MM/YYYY"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">
-                  Client's Company Name *
-                </label>
-                <input
-                  type="text"
-                  value={formData.clientCompanyName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, clientCompanyName: e.target.value })
-                  }
-                  className="border p-2 rounded w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Client's Name *</label>
-                <input
-                  type="text"
-                  value={formData.clientName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, clientName: e.target.value })
-                  }
-                  className="border p-2 rounded w-full"
-                />
-              </div>
-            </div>
-            <div className="mt-4">
-              <label className="inline-flex items-center space-x-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  checked={createAsDraft}
-                  onChange={() => setCreateAsDraft(!createAsDraft)}
-                />
-                <span>Save as Draft (only visible to me)</span>
-              </label>
-            </div>
-            <div className="mt-4 flex justify-end space-x-4">
-              <button onClick={onClose} className="px-4 py-2 border rounded">
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className={`px-4 py-2 rounded text-white ${
-                  saving ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-                }`}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save Jobsheet"}
-              </button>
-            </div>
+            <label className="block text-sm font-medium">Delivery Date *</label>
+            <DatePicker
+              selected={formData.deliveryDate ? parse(formData.deliveryDate, "yyyy-MM-dd", new Date()) : null}
+              onChange={(date) =>
+                setFormData({ ...formData, deliveryDate: date ? format(date, "yyyy-MM-dd") : "" })
+              }
+              dateFormat="dd/MM/yyyy"
+              className="border p-2 rounded w-full"
+              placeholderText="DD/MM/YYYY"
+            />
           </div>
-        )}
+          <div>
+            <label className="block text-sm font-medium">Client Company Name *</label>
+            <input
+              type="text"
+              value={formData.clientCompanyName}
+              onChange={(e) => setFormData({ ...formData, clientCompanyName: e.target.value })}
+              className="border p-2 rounded w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Client Name *</label>
+            <input
+              type="text"
+              value={formData.clientName}
+              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+              className="border p-2 rounded w-full"
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <label className="inline-flex items-center space-x-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={createAsDraft}
+              onChange={() => setCreateAsDraft(!createAsDraft)}
+            />
+            <span>Save as Draft (only visible to me)</span>
+          </label>
+        </div>
+        <div className="mt-4 flex justify-end space-x-4">
+          <button onClick={onClose} className="px-4 py-2 border rounded">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            className={`px-4 py-2 rounded text-white ${saving ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Jobsheet"}
+          </button>
+        </div>
       </div>
     </div>
   );

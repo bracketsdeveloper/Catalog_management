@@ -1,6 +1,6 @@
 import React from 'react';
 
-const url = `https://api.cloudinary.com/v1_1/dqi1kwv6x/image/upload`;
+const url = `https://api.cloudinary.com/v1_1/dxwax6pir/image/upload`;
 
 const uploadImage = async (image) => {
   try {

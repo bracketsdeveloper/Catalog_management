@@ -101,7 +101,7 @@ export default function ManageDestinations() {
   const saveAll = () => {
     if (!userId) return alert('Select a user first');
     axios.post(
-      `${BACKEND}/api/admin/users/${userId}/destinations`,
+      `${BACKEND}/api/admin/destinations/users/${userId}/destinations`,
       { destinations: dests },
       { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
     )
