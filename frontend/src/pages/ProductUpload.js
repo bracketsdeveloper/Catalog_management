@@ -140,6 +140,9 @@ export default function ProductManagementPage() {
   const [productDetailsOpen, setProductDetailsOpen] = useState(false);
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
 
+  // — NEW: upload progress state for modal progress bar —
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const limit = 100;
 
   // Debounce searchTerm into debouncedSearch
@@ -454,6 +457,33 @@ export default function ProductManagementPage() {
             <button
               onClick={() => {
                 setEditProductId(null);
+                setNewProductData({
+                  productTag: "",
+                  productId: "",
+                  variantId: "",
+                  category: "",
+                  subCategory: "",
+                  variationHinge: "",
+                  name: "",
+                  brandName: "",
+                  images: [],
+                  productDetails: "",
+                  qty: 0,
+                  MRP_Currency: "",
+                  MRP: 0,
+                  MRP_Unit: "",
+                  deliveryTime: "",
+                  size: "",
+                  color: "",
+                  material: "",
+                  priceRange: "",
+                  weight: "",
+                  hsnCode: "",
+                  productCost_Currency: "",
+                  productCost: 0,
+                  productCost_Unit: "",
+                  productGST: 0,
+                });
                 setSingleModalOpen(true);
               }}
               className="px-4 py-2 bg-[#Ff8045] text-white rounded"
@@ -550,106 +580,108 @@ export default function ProductManagementPage() {
             disabled={isFetching}
           />
         </div>
-        {/* SELECTED FILTER PILLS */}
-{(selectedCategories.length ||
-  selectedSubCategories.length ||
-  selectedBrands.length ||
-  selectedPriceRanges.length ||
-  selectedVariationHinges.length) && (
-  <div className="flex flex-wrap gap-2 mb-4">
-    {selectedCategories.map(cat => (
-      <span
-        key={cat}
-        className="flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm"
-      >
-        {cat}
-        <button
-          onClick={() =>
-            setSelectedCategories(sel => sel.filter(x => x !== cat))
-          }
-          className="ml-1 text-purple-500 hover:text-purple-700"
-        >
-          ×
-        </button>
-      </span>
-    ))}
-    {selectedSubCategories.map(sub => (
-      <span
-        key={sub}
-        className="flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-      >
-        {sub}
-        <button
-          onClick={() =>
-            setSelectedSubCategories(sel => sel.filter(x => x !== sub))
-          }
-          className="ml-1 text-green-500 hover:text-green-700"
-        >
-          ×
-        </button>
-      </span>
-    ))}
-    {selectedBrands.map(br => (
-      <span
-        key={br}
-        className="flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-      >
-        {br}
-        <button
-          onClick={() =>
-            setSelectedBrands(sel => sel.filter(x => x !== br))
-          }
-          className="ml-1 text-blue-500 hover:text-blue-700"
-        >
-          ×
-        </button>
-      </span>
-    ))}
-    {selectedPriceRanges.map(pr => (
-      <span
-        key={pr}
-        className="flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm"
-      >
-        {pr}
-        <button
-          onClick={() =>
-            setSelectedPriceRanges(sel => sel.filter(x => x !== pr))
-          }
-          className="ml-1 text-yellow-500 hover:text-yellow-700"
-        >
-          ×
-        </button>
-      </span>
-    ))}
-    {selectedVariationHinges.map(vh => (
-      <span
-        key={vh}
-        className="flex items-center px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
-      >
-        {vh}
-        <button
-          onClick={() =>
-            setSelectedVariationHinges(sel => sel.filter(x => x !== vh))
-          }
-          className="ml-1 text-red-500 hover:text-red-700"
-        >
-          ×
-        </button>
-      </span>
-    ))}
-  </div>
-)}
 
+        {/* SELECTED FILTER PILLS */}
+        {(selectedCategories.length ||
+          selectedSubCategories.length ||
+          selectedBrands.length ||
+          selectedPriceRanges.length ||
+          selectedVariationHinges.length) && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {selectedCategories.map((cat) => (
+              <span
+                key={cat}
+                className="flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm"
+              >
+                {cat}
+                <button
+                  onClick={() =>
+                    setSelectedCategories((sel) => sel.filter((x) => x !== cat))
+                  }
+                  className="ml-1 text-purple-500 hover:text-purple-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {selectedSubCategories.map((sub) => (
+              <span
+                key={sub}
+                className="flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm"
+              >
+                {sub}
+                <button
+                  onClick={() =>
+                    setSelectedSubCategories((sel) =>
+                      sel.filter((x) => x !== sub)
+                    )
+                  }
+                  className="ml-1 text-green-500 hover:text-green-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {selectedBrands.map((br) => (
+              <span
+                key={br}
+                className="flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+              >
+                {br}
+                <button
+                  onClick={() =>
+                    setSelectedBrands((sel) => sel.filter((x) => x !== br))
+                  }
+                  className="ml-1 text-blue-500 hover:text-blue-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {selectedPriceRanges.map((pr) => (
+              <span
+                key={pr}
+                className="flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm"
+              >
+                {pr}
+                <button
+                  onClick={() =>
+                    setSelectedPriceRanges((sel) => sel.filter((x) => x !== pr))
+                  }
+                  className="ml-1 text-yellow-500 hover:text-yellow-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {selectedVariationHinges.map((vh) => (
+              <span
+                key={vh}
+                className="flex items-center px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+              >
+                {vh}
+                <button
+                  onClick={() =>
+                    setSelectedVariationHinges((sel) =>
+                      sel.filter((x) => x !== vh)
+                    )
+                  }
+                  className="ml-1 text-red-500 hover:text-red-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* NO RESULTS */}
-        {!initialLoad &&
-          !isFetching &&
-          displayList.length === 0 && (
-            <div className="py-8 text-center text-gray-500">
-              No products found
-              {hasSearch ? ` for “${debouncedSearch}”` : ""}.
-            </div>
-          )}
+        {!initialLoad && !isFetching && displayList.length === 0 && (
+          <div className="py-8 text-center text-gray-500">
+            No products found
+            {hasSearch ? ` for “${debouncedSearch}”` : ""}.
+          </div>
+        )}
 
         {/* INITIAL SKELETON OR GRID WITH OVERLAY */}
         {initialLoad && isFetching ? (
@@ -667,7 +699,9 @@ export default function ProductManagementPage() {
                   product={p}
                   handleViewProduct={openDetails}
                   handleDeleteProduct={async (id) => {
-                    if (!window.confirm("Are you sure you want to delete this product?"))
+                    if (
+                      !window.confirm("Are you sure you want to delete this product?")
+                    )
                       return;
                     try {
                       const token = localStorage.getItem("token");
@@ -712,9 +746,7 @@ export default function ProductManagementPage() {
             Page {currentPage} of {totalPages}
           </span>
           <button
-            onClick={() =>
-              setCurrentPage((p) => Math.min(p + 1, totalPages))
-            }
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
             disabled={currentPage >= totalPages || isFetching}
             className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
           >
@@ -738,11 +770,9 @@ export default function ProductManagementPage() {
               );
               const payload = { ...newProductData, images: imgs };
               if (!editProductId) {
-                await axios.post(
-                  `${BACKEND_URL}/api/admin/products`,
-                  payload,
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
+                await axios.post(`${BACKEND_URL}/api/admin/products`, payload, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
               } else {
                 await axios.put(
                   `${BACKEND_URL}/api/admin/products/${editProductId}`,
@@ -754,25 +784,55 @@ export default function ProductManagementPage() {
               setCurrentPage(1);
             } catch (err) {
               console.error(err);
-              alert("Error creating/updating product");
+              alert(
+                err?.response?.data?.message ||
+                  err?.message ||
+                  "Error creating/updating product"
+              );
             }
           }}
           closeSingleProductModal={() => setSingleModalOpen(false)}
           handleFileChange={async (e) => {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+
+            setUploadProgress(0);
             const urls = [];
-            for (const f of files) {
+
+            // Upload sequentially for simpler progress UX
+            for (const file of files) {
               try {
-                const r = await uploadImage(f);
-                if (r.secure_url) urls.push(r.secure_url);
-              } catch {}
+                const result = await uploadImage(file, (pct) => {
+                  setUploadProgress(pct);
+                });
+                if (result.secure_url) {
+                  urls.push(result.secure_url);
+                } else {
+                  throw new Error("Upload returned no URL");
+                }
+              } catch (err) {
+                console.error("Upload failed:", err);
+                alert(
+                  `Upload failed for ${file.name}: ${
+                    err?.message || "Unknown error"
+                  }`
+                );
+              } finally {
+                // slight reset for next file in a batch
+                setTimeout(() => setUploadProgress(0), 300);
+              }
             }
-            setNewProductData((d) => ({
-              ...d,
-              images: [...d.images, ...urls],
-            }));
+
+            if (urls.length) {
+              setNewProductData((d) => ({
+                ...d,
+                images: [...(d.images || []), ...urls],
+              }));
+            }
+            // Clear input so choosing the same file again triggers onChange
+            e.target.value = "";
           }}
-          uploadProgress={0}
+          uploadProgress={uploadProgress}
           categories={filterOptions.categories}
           subCategories={filterOptions.subCategories}
           brands={filterOptions.brands}
@@ -818,9 +878,7 @@ export default function ProductManagementPage() {
               "Other_image_URL",
               "ProductGST",
             ];
-            const example = headerRow.map((_, i) =>
-              i === 0 ? "Tag123" : ""
-            );
+            const example = headerRow.map((_, i) => (i === 0 ? "Tag123" : ""));
             const ws = XLSX.utils.aoa_to_sheet([headerRow, example]);
             XLSX.utils.book_append_sheet(wb, ws, "Template");
             const blob = new Blob(
@@ -892,7 +950,7 @@ export default function ProductManagementPage() {
       {/* PRODUCT DETAILS LIGHTBOX */}
       {productDetailsOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-auto">
+          <div className="relative bg-white rounded-lg shadow-lg w/full max-w-4xl max-h-[90vh] overflow-auto">
             <button
               onClick={() => setProductDetailsOpen(false)}
               className="absolute top-4 right-4 text-2xl text-gray-600 z-50"

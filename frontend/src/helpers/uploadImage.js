@@ -1,26 +1,40 @@
-import React from 'react';
+// src/helpers/uploadImage.js
+import axios from "axios";
 
-const url = `https://api.cloudinary.com/v1_1/dxwax6pir/image/upload`;
+// Cloudinary unsigned upload endpoint (change if your cloud name/preset differ)
+const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dxwax6pir/image/upload";
+const UPLOAD_PRESET = "ace-catalog";
 
-const uploadImage = async (image) => {
-  try {
-    const formData = new FormData();
-    formData.append("file", image);
-    formData.append("upload_preset", "acecatalog");
-    
-    const dataResponse = await fetch(url, {
-      method: "post",
-      body: formData,
-    });
+/**
+ * Upload a single image file to Cloudinary.
+ * @param {File|Blob} file
+ * @param {(percent:number)=>void} onProgress - optional progress callback 0..100
+ * @returns {Promise<{ secure_url: string, public_id: string }>}
+ */
+export default async function uploadImage(file, onProgress) {
+  if (!file) throw new Error("No file provided");
 
-    const result = await dataResponse.json();
-    // Log the result URL for debugging
-    // console.log("Uploaded Image URL:", result.secure_url);
-    return result;
-  } catch (error) {
-    console.error("Error uploading image:", error);
-    throw error;
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", UPLOAD_PRESET);
+
+  const res = await axios.post(CLOUDINARY_URL, formData, {
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+    onUploadProgress: (evt) => {
+      if (!onProgress || !evt.total) return;
+      const pct = Math.round((evt.loaded * 100) / evt.total);
+      onProgress(pct);
+    },
+    timeout: 60000,
+    validateStatus: (s) => s >= 200 && s < 500, // let us read Cloudinary error JSON
+  });
+
+  if (res.status >= 400 || res.data?.error) {
+    const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+    throw new Error(msg);
   }
-};
 
-export default uploadImage;
+  const { secure_url, public_id } = res.data || {};
+  if (!secure_url) throw new Error("No secure_url returned by Cloudinary");
+  return { secure_url, public_id };
+}
