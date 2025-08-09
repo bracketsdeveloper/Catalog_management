@@ -388,7 +388,7 @@ export default function ManageJobSheets() {
             View My Drafts
           </button>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => navigate("/admin-dashboard/create-jobsheet")}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
             Create Jobsheet
