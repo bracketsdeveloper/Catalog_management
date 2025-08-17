@@ -13,6 +13,19 @@ const Company = require("../models/Company");
 const axios = require("axios");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
+function parseGstPercent(raw) {
+  if (!raw) return 0;
+  const s = String(raw).trim();
+  const n = parseFloat(s.replace("%", ""));
+  return isNaN(n) ? 0 : n;
+}
+
+function toNum(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+
 // Load environment variables
 const WHITEBOOKS_API_URL = process.env.WHITEBOOKS_API_URL;
 const WHITEBOOKS_CREDENTIALS = {
@@ -60,6 +73,9 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       displayTotals,
       displayHSNCodes,
       operations,
+
+      // NEW: operations breakdown rows
+      operationsBreakdown
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -67,17 +83,10 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     const defaultTerms = [
-      {
-        heading: "Delivery",
-        content:
-          "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost",
-      },
+      { heading: "Delivery", content: "10 – 12 Working days upon order confirmation\nSingle delivery to Hyderabad office included in the cost" },
       { heading: "Branding", content: "As mentioned above" },
       { heading: "Payment Terms", content: "Within 30 days upon delivery" },
-      {
-        heading: "Quote Validity",
-        content: "The quote is valid only for 6 days from the date of quotation",
-      },
+      { heading: "Quote Validity", content: "The quote is valid only for 6 days from the date of quotation" },
     ];
     const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
@@ -92,16 +101,11 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
       const total = parseFloat((amount + gstVal).toFixed(2));
 
-      const hsnCode = it.hsnCode || "";
-      if (!hsnCode && it.productId) {
-        console.warn(`HSN code missing for productId ${it.productId} in quotation item ${idx + 1}`);
-      }
-
       return {
         slNo: it.slNo || idx + 1,
         productId: it.productId || null,
         product: it.productName || it.product || "",
-        hsnCode,
+        hsnCode: it.hsnCode || "",
         quantity: qty,
         rate,
         productprice: price,
@@ -135,6 +139,39 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       };
     }) : [];
 
+    // NEW: normalize operationsBreakdown rows and compute derived fields
+    const builtOperationsBreakdown = Array.isArray(operationsBreakdown) ? operationsBreakdown.map((row, idx) => {
+      const slNo = row.slNo || idx + 1;                         // auto-increment if not provided
+      const product = row.product || "";
+      const quantity = toNum(row.quantity);
+      const ourCost = toNum(row.ourCost);
+      const brandingCost = toNum(row.brandingCost);
+      const deliveryCost = toNum(row.deliveryCost);
+      const markUpCost = toNum(row.markUpCost);
+      const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost; // l
+      const rate = finalTotal;                                               // d
+      const amount = quantity * rate;                                        // e
+      const gstStr = row.gst || "";
+      const gstPct = parseGstPercent(gstStr);                                // f
+      const total = amount * (1 + gstPct / 100);                             // g = e + GST
+
+      return {
+        slNo,
+        product,
+        quantity,
+        rate,
+        amount,
+        gst: gstStr,
+        total,
+        ourCost,
+        brandingCost,
+        deliveryCost,
+        markUpCost,
+        finalTotal,
+        vendor: row.vendor || ""
+      };
+    }) : [];
+
     const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
 
@@ -157,11 +194,23 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       displayHSNCodes: !!displayHSNCodes,
       terms: quotationTerms,
       operations: builtOperations,
+
+      // NEW
+      operationsBreakdown: builtOperationsBreakdown,
+
       createdBy: req.user.email,
     });
 
     const savedQuotation = await quotation.save();
-    await createLog("create", null, savedQuotation, req.user, req.ip);
+    await Log.create({
+      action: "create",
+      field: "quotation",
+      oldValue: null,
+      newValue: savedQuotation,
+      performedBy: req.user?._id || null,
+      performedAt: new Date(),
+      ipAddress: req.ip,
+    });
 
     res.status(201).json({ message: "Quotation created", quotation: savedQuotation.toObject() });
   } catch (err) {
@@ -169,6 +218,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     res.status(400).json({ message: err.message || "Server error creating quotation" });
   }
 });
+
 
 
 router.get("/quotations-export", authenticate, authorizeAdmin, async (req, res) => {
@@ -394,6 +444,9 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       displayTotals,
       displayHSNCodes,
       operations,
+
+      // NEW
+      operationsBreakdown
     } = req.body;
 
     const builtItems = Array.isArray(items) && items.length
@@ -401,23 +454,18 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           const qty = parseInt(it.quantity, 10) || 1;
           const rate = parseFloat(it.rate) || 0;
           const price = parseFloat(it.productprice) || rate;
-          const marginFactor = 1 + (parseFloat(margin) || 0) / 100;
+          const marginFactor = 1 + (parseFloat(margin ?? existing.margin) || 0) / 100;
           const effRate = rate * marginFactor;
           const amount = parseFloat((effRate * qty).toFixed(2));
-          const gstRate = it.productGST != null ? parseFloat(it.productGST) : parseFloat(gst);
+          const gstRate = it.productGST != null ? parseFloat(it.productGST) : parseFloat(gst ?? existing.gst);
           const gstVal = parseFloat((amount * (gstRate / 100)).toFixed(2));
           const total = parseFloat((amount + gstVal).toFixed(2));
-
-          const hsnCode = it.hsnCode || "";
-          if (!hsnCode && it.productId) {
-            console.warn(`HSN code missing for productId ${it.productId} in quotation item ${idx + 1}`);
-          }
 
           return {
             slNo: it.slNo || idx + 1,
             productId: it.productId || null,
             product: it.productName || it.product || "",
-            hsnCode,
+            hsnCode: it.hsnCode || "",
             quantity: qty,
             rate,
             productprice: price,
@@ -434,23 +482,60 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         })
       : existing.items;
 
-    const builtOperations = Array.isArray(operations) ? operations.map(op => {
-      const ourCost = parseFloat(op.ourCost) || 0;
-      const branding = parseFloat(op.branding) || 0;
-      const delivery = parseFloat(op.delivery) || 0;
-      const markup = parseFloat(op.markup) || 0;
-      const total = (ourCost + branding + delivery + markup).toFixed(2);
-      return {
-        ourCost: op.ourCost || "",
-        branding: op.branding || "",
-        delivery: op.delivery || "",
-        markup: op.markup || "",
-        total,
-        vendor: op.vendor || "",
-        remarks: op.remarks || "",
-        reference: op.reference || "",
-      };
-    }) : existing.operations;
+    const builtOperations = Array.isArray(operations)
+      ? operations.map(op => {
+          const ourCost = parseFloat(op.ourCost) || 0;
+          const branding = parseFloat(op.branding) || 0;
+          const delivery = parseFloat(op.delivery) || 0;
+          const markup = parseFloat(op.markup) || 0;
+          const total = (ourCost + branding + delivery + markup).toFixed(2);
+          return {
+            ourCost: op.ourCost || "",
+            branding: op.branding || "",
+            delivery: op.delivery || "",
+            markup: op.markup || "",
+            total,
+            vendor: op.vendor || "",
+            remarks: op.remarks || "",
+            reference: op.reference || "",
+          };
+        })
+      : existing.operations;
+
+    // NEW: normalize operationsBreakdown on update
+    const builtOperationsBreakdown = Array.isArray(operationsBreakdown)
+      ? operationsBreakdown.map((row, idx) => {
+          const slNo = row.slNo || idx + 1;
+          const product = row.product || "";
+          const quantity = toNum(row.quantity);
+          const ourCost = toNum(row.ourCost);
+          const brandingCost = toNum(row.brandingCost);
+          const deliveryCost = toNum(row.deliveryCost);
+          const markUpCost = toNum(row.markUpCost);
+          const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost; // l
+          const rate = finalTotal;                                               // d
+          const amount = quantity * rate;                                        // e
+          const gstStr = row.gst || "";
+          const gstPct = parseGstPercent(gstStr);                                // f
+          const total = amount * (1 + gstPct / 100);                             // g
+
+          return {
+            slNo,
+            product,
+            quantity,
+            rate,
+            amount,
+            gst: gstStr,
+            total,
+            ourCost,
+            brandingCost,
+            deliveryCost,
+            markUpCost,
+            finalTotal,
+            vendor: row.vendor || ""
+          };
+        })
+      : existing.operationsBreakdown;
 
     const totalAmount = builtItems.reduce((sum, x) => sum + (x.amount || 0), 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + (x.total || 0), 0);
@@ -474,6 +559,9 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       displayHSNCodes: displayHSNCodes ?? existing.displayHSNCodes,
       terms: Array.isArray(terms) && terms.length > 0 ? terms : existing.terms,
       operations: builtOperations,
+
+      // NEW
+      operationsBreakdown: builtOperationsBreakdown,
     };
 
     const updated = await Quotation.findByIdAndUpdate(
@@ -482,7 +570,16 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       { new: true, runValidators: true }
     ).populate("items.productId", "images name productCost category subCategory hsnCode");
 
-    await createLog("update", existing, updated, req.user, req.ip);
+    await Log.create({
+      action: "update",
+      field: "quotation",
+      oldValue: existing,
+      newValue: updated,
+      performedBy: req.user?._id || null,
+      performedAt: new Date(),
+      ipAddress: req.ip,
+    });
+
     res.json({ message: "Quotation updated", quotation: updated.toObject() });
   } catch (err) {
     console.error("Error updating quotation:", err);

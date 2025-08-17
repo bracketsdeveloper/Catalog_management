@@ -51,20 +51,22 @@ export default function AddExpenseModal({ expense, onClose }) {
       crmName: expense.crmName
     });
     setExpenses(
-      expense.expenses?.map(item => ({
+      (expense.expenses || []).map(item => ({
         ...item,
-        expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
-      })) || []
+        expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : "",
+        damagedBy: item.damagedBy || ""
+      }))
     );
     setOrderConfirmed(expense.orderConfirmed || false);
     setJobSheets(
       expense.jobSheets?.length
         ? expense.jobSheets.map(js => ({
             jobSheetNumber: js.jobSheetNumber || "",
-            orderExpenses: js.orderExpenses?.map(item => ({
+            orderExpenses: (js.orderExpenses || []).map(item => ({
               ...item,
-              expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : ""
-            })) || [],
+              expenseDate: item.expenseDate ? new Date(item.expenseDate).toISOString().slice(0, 10) : "",
+              damagedBy: item.damagedBy || ""
+            })),
             jsSuggestions: []
           }))
         : [{ jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]
@@ -136,16 +138,21 @@ export default function AddExpenseModal({ expense, onClose }) {
   };
 
   // Row helpers
-  const addRow = (list, setList) => setList([...list, { section: "", amount: "", expenseDate: "", remarks: "" }]);
+  const addRow = (list, setList) =>
+    setList([...list, { section: "", amount: "", expenseDate: "", remarks: "", damagedBy: "" }]);
+
   const updateRow = (list, setList, idx, field, val) => {
     const newList = [...list];
     newList[idx][field] = val;
     setList(newList);
   };
+
   const removeRow = (list, setList, idx) => setList(list.filter((_, i) => i !== idx));
 
   // Jobsheet helpers
-  const addJobSheet = () => setJobSheets([...jobSheets, { jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]);
+  const addJobSheet = () =>
+    setJobSheets([...jobSheets, { jobSheetNumber: "", orderExpenses: [], jsSuggestions: [] }]);
+
   const updateJobSheetNumber = (index, value) => {
     setJobSheets(js => {
       const newJs = [...js];
@@ -154,19 +161,21 @@ export default function AddExpenseModal({ expense, onClose }) {
     });
     fetchJsSuggestions(index, value);
   };
+
   const removeJobSheet = index => setJobSheets(js => js.filter((_, i) => i !== index));
 
   const filteredOrderSections = isSuperAdmin
     ? ORDER_SECTIONS
     : ORDER_SECTIONS.filter(s => s !== "Product Cost" && s !== "Branding Cost");
 
-  // Get available sections for dropdowns - allow all sections to be selected multiple times
-  const getAvailableSections = (list, currentIdx) => SAMPLE_SECTIONS;
-
-  const getAvailableOrderSections = (list, currentIdx) => filteredOrderSections;
+  // Allow all sections, duplicates permitted
+  const getAvailableSections = () => SAMPLE_SECTIONS;
+  const getAvailableOrderSections = () => filteredOrderSections;
 
   // Submit handler with validation
   const handleSubmit = async () => {
+    setError("");
+
     // Validate required fields
     if (!opptyCode || !form.clientCompanyName || !form.clientName) {
       setError("Opportunity #, Client Company, and Client Name are required.");
@@ -182,6 +191,10 @@ export default function AddExpenseModal({ expense, onClose }) {
       for (const item of expenses) {
         if (!item.section || item.amount === "" || !item.expenseDate) {
           setError("All expense fields (section, amount, date) are required.");
+          return;
+        }
+        if (item.section === "Damages" && (!item.damagedBy || item.damagedBy.trim() === "")) {
+          setError("For 'Damages' in Sample Expenses, 'Damaged By' is required.");
           return;
         }
       }
@@ -200,6 +213,10 @@ export default function AddExpenseModal({ expense, onClose }) {
               setError("All order expense fields (section, amount, date) are required.");
               return;
             }
+            if (item.section === "Damages" && (!item.damagedBy || item.damagedBy.trim() === "")) {
+              setError("For 'Damages' in Order Expenses, 'Damaged By' is required.");
+              return;
+            }
           }
         }
       }
@@ -210,10 +227,12 @@ export default function AddExpenseModal({ expense, onClose }) {
       ...form,
       expenses,
       orderConfirmed,
-      jobSheets: orderConfirmed ? jobSheets.map(js => ({
-        jobSheetNumber: js.jobSheetNumber,
-        orderExpenses: js.orderExpenses
-      })) : []
+      jobSheets: orderConfirmed
+        ? jobSheets.map(js => ({
+            jobSheetNumber: js.jobSheetNumber,
+            orderExpenses: js.orderExpenses
+          }))
+        : []
     };
 
     const config = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
@@ -302,14 +321,14 @@ export default function AddExpenseModal({ expense, onClose }) {
             + Add Expense
           </button>
           {expenses.map((it, i) => (
-            <div key={i} className="flex gap-2 mb-2 text-xs">
+            <div key={i} className="flex flex-wrap items-center gap-2 mb-2 text-xs">
               <select
                 value={it.section}
                 onChange={e => updateRow(expenses, setExpenses, i, "section", e.target.value)}
-                className="border p-1 rounded flex-1"
+                className="border p-1 rounded flex-1 min-w-[160px]"
               >
                 <option value="">Select</option>
-                {getAvailableSections(expenses, i).map(s => (
+                {getAvailableSections().map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
@@ -318,24 +337,34 @@ export default function AddExpenseModal({ expense, onClose }) {
                 placeholder="Amount"
                 value={it.amount}
                 onChange={e => updateRow(expenses, setExpenses, i, "amount", e.target.value)}
-                className="border p-1 rounded w-20"
+                className="border p-1 rounded w-24"
                 min="0"
               />
               <input
                 type="date"
                 value={it.expenseDate}
                 onChange={e => updateRow(expenses, setExpenses, i, "expenseDate", e.target.value)}
-                className="border p-1 rounded w-32"
+                className="border p-1 rounded w-36"
               />
+              {/* NEW: Damaged By for Sample when section === Damages */}
+              {it.section === "Damages" && (
+                <input
+                  placeholder="Damaged By"
+                  value={it.damagedBy || ""}
+                  onChange={e => updateRow(expenses, setExpenses, i, "damagedBy", e.target.value)}
+                  className="border p-1 rounded flex-1 min-w-[160px]"
+                />
+              )}
               <input
                 placeholder="Remarks"
-                value={it.remarks}
+                value={it.remarks || ""}
                 onChange={e => updateRow(expenses, setExpenses, i, "remarks", e.target.value)}
-                className="border p-1 rounded flex-1"
+                className="border p-1 rounded flex-1 min-w-[160px]"
               />
               <button
                 onClick={() => removeRow(expenses, setExpenses, i)}
                 className="text-red-600 px-1"
+                title="Remove row"
               >
                 ×
               </button>
@@ -399,11 +428,16 @@ export default function AddExpenseModal({ expense, onClose }) {
                     </button>
                   )}
                 </div>
+
                 <button
                   onClick={() => {
                     setJobSheets(jsList => {
                       const newJs = [...jsList];
-                      addRow(newJs[index].orderExpenses, exps => newJs[index].orderExpenses = exps);
+                      const current = newJs[index].orderExpenses || [];
+                      newJs[index].orderExpenses = [
+                        ...current,
+                        { section: "", amount: "", expenseDate: "", remarks: "", damagedBy: "" }
+                      ];
                       return newJs;
                     });
                   }}
@@ -411,21 +445,27 @@ export default function AddExpenseModal({ expense, onClose }) {
                 >
                   + Add Order Expense
                 </button>
-                {js.orderExpenses.map((it, i) => (
-                  <div key={i} className="flex gap-2 mb-2 text-xs">
+
+                {(js.orderExpenses || []).map((it, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                     <select
                       value={it.section}
                       onChange={e => {
                         setJobSheets(jsList => {
                           const newJs = [...jsList];
-                          updateRow(newJs[index].orderExpenses, exps => newJs[index].orderExpenses = exps, i, "section", e.target.value);
+                          const list = newJs[index].orderExpenses;
+                          list[i].section = e.target.value;
+                          // reset damagedBy when switching away from Damages
+                          if (e.target.value !== "Damages") {
+                            list[i].damagedBy = list[i].damagedBy || "";
+                          }
                           return newJs;
                         });
                       }}
-                      className="border p-1 rounded flex-1"
+                      className="border p-1 rounded flex-1 min-w-[160px]"
                     >
                       <option value="">Select</option>
-                      {getAvailableOrderSections(js.orderExpenses, i).map(s => (
+                      {getAvailableOrderSections().map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
@@ -436,11 +476,11 @@ export default function AddExpenseModal({ expense, onClose }) {
                       onChange={e => {
                         setJobSheets(jsList => {
                           const newJs = [...jsList];
-                          updateRow(newJs[index].orderExpenses, exps => newJs[index].orderExpenses = exps, i, "amount", e.target.value);
+                          newJs[index].orderExpenses[i].amount = e.target.value;
                           return newJs;
                         });
                       }}
-                      className="border p-1 rounded w-20"
+                      className="border p-1 rounded w-24"
                       min="0"
                     />
                     <input
@@ -449,33 +489,49 @@ export default function AddExpenseModal({ expense, onClose }) {
                       onChange={e => {
                         setJobSheets(jsList => {
                           const newJs = [...jsList];
-                          updateRow(newJs[index].orderExpenses, exps => newJs[index].orderExpenses = exps, i, "expenseDate", e.target.value);
+                          newJs[index].orderExpenses[i].expenseDate = e.target.value;
                           return newJs;
                         });
                       }}
-                      className="border p-1 rounded w-32"
+                      className="border p-1 rounded w-36"
                     />
+                    {/* NEW: Damaged By for Order when section === Damages */}
+                    {it.section === "Damages" && (
+                      <input
+                        placeholder="Damaged By"
+                        value={it.damagedBy || ""}
+                        onChange={e => {
+                          setJobSheets(jsList => {
+                            const newJs = [...jsList];
+                            newJs[index].orderExpenses[i].damagedBy = e.target.value;
+                            return newJs;
+                          });
+                        }}
+                        className="border p-1 rounded flex-1 min-w-[160px]"
+                      />
+                    )}
                     <input
                       placeholder="Remarks"
-                      value={it.remarks}
+                      value={it.remarks || ""}
                       onChange={e => {
                         setJobSheets(jsList => {
                           const newJs = [...jsList];
-                          updateRow(newJs[index].orderExpenses, exps => newJs[index].orderExpenses = exps, i, "remarks", e.target.value);
+                          newJs[index].orderExpenses[i].remarks = e.target.value;
                           return newJs;
                         });
                       }}
-                      className="border p-1 rounded flex-1"
+                      className="border p-1 rounded flex-1 min-w-[160px]"
                     />
                     <button
                       onClick={() => {
                         setJobSheets(jsList => {
                           const newJs = [...jsList];
-                          removeRow(newJs[index].orderExpenses, exps => newJs[index].orderExpenses = exps, i);
+                          newJs[index].orderExpenses = newJs[index].orderExpenses.filter((_, k) => k !== i);
                           return newJs;
                         });
                       }}
                       className="text-red-600 px-1"
+                      title="Remove row"
                     >
                       ×
                     </button>

@@ -12,6 +12,23 @@ const operationsSchema = new mongoose.Schema({
   reference: { type: String, default: "" },
 });
 
+// NEW: Operations Breakdown Row schema (your table)
+const operationsBreakdownRowSchema = new mongoose.Schema({
+  slNo: { type: Number, required: true },                    // a
+  product: { type: String, default: "" },                    // b
+  quantity: { type: Number, default: 0 },                    // c
+  rate: { type: Number, default: 0 },                        // d = h+i+j+k
+  amount: { type: Number, default: 0 },                      // e = c*d
+  gst: { type: String, default: "" },                        // f (manual string, e.g., "18" or "18%")
+  total: { type: Number, default: 0 },                       // g = e * f(%)  (see route calc for safety)
+  ourCost: { type: Number, default: 0 },                     // h
+  brandingCost: { type: Number, default: 0 },                // i
+  deliveryCost: { type: Number, default: 0 },                // j
+  markUpCost: { type: Number, default: 0 },                  // k
+  finalTotal: { type: Number, default: 0 },                  // l = h+i+j+k
+  vendor: { type: String, default: "" },                     // m
+}, { _id: false });
+
 const quotationItemSchema = new mongoose.Schema({
   slNo: { type: Number, default: 1 },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
@@ -74,6 +91,10 @@ const quotationSchema = new mongoose.Schema({
     },
   ],
   operations: [operationsSchema],
+
+  // NEW: the table you asked for
+  operationsBreakdown: { type: [operationsBreakdownRowSchema], default: [] },
+
   createdBy: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
 });

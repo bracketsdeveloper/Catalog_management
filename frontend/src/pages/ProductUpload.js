@@ -1,5 +1,5 @@
 // src/pages/ProductManagementPage.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -42,6 +42,7 @@ export default function ProductManagementPage() {
     loadState("productSearchTerm", "")
   );
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+
   const [selectedCategories, setSelectedCategories] = useState(
     loadState("productCategories", [])
   );
@@ -65,7 +66,7 @@ export default function ProductManagementPage() {
   const [priceRangeOpen, setPriceRangeOpen] = useState(false);
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
-  // — UI and sort state —
+  // — UI state —
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
     subCategories: [],
@@ -125,7 +126,7 @@ export default function ProductManagementPage() {
   );
   const [advLoading, setAdvLoading] = useState(false);
 
-  // — data fetched from API —
+  // — data —
   const [products, setProducts] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -140,20 +141,18 @@ export default function ProductManagementPage() {
   const [productDetailsOpen, setProductDetailsOpen] = useState(false);
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
 
-  // — NEW: upload progress state for modal progress bar —
+  // — NEW: upload progress for modal —
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const limit = 100;
 
-  // Debounce searchTerm into debouncedSearch
+  // Debounce searchTerm
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchTerm.trim());
-    }, 100);
-    return () => clearTimeout(handler);
+    const h = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 100);
+    return () => clearTimeout(h);
   }, [searchTerm]);
 
-  // Persist page & filters & URL
+  // Persist page & URL
   useEffect(() => {
     saveState("productPage", currentPage);
     navigate(`/admin-dashboard/manage-products?page=${currentPage}`, {
@@ -161,57 +160,28 @@ export default function ProductManagementPage() {
     });
   }, [currentPage, navigate]);
 
-  useEffect(() => {
-    saveState("productSearchTerm", searchTerm);
-  }, [searchTerm]);
-  useEffect(() => {
-    saveState("productCategories", selectedCategories);
-  }, [selectedCategories]);
-  useEffect(() => {
-    saveState("productSubCategories", selectedSubCategories);
-  }, [selectedSubCategories]);
-  useEffect(() => {
-    saveState("productBrands", selectedBrands);
-  }, [selectedBrands]);
-  useEffect(() => {
-    saveState("productPriceRanges", selectedPriceRanges);
-  }, [selectedPriceRanges]);
-  useEffect(() => {
-    saveState("productVariationHinges", selectedVariationHinges);
-  }, [selectedVariationHinges]);
-  useEffect(() => {
-    saveState("productAdvancedSearchActive", advancedSearchActive);
-  }, [advancedSearchActive]);
-  useEffect(() => {
-    saveState("productAdvancedSearchResults", advancedSearchResults);
-  }, [advancedSearchResults]);
-  useEffect(() => {
-    saveState("productCarouselIndexMap", carouselIndexMap);
-  }, [carouselIndexMap]);
+  // Persist filters
+  useEffect(() => { saveState("productSearchTerm", searchTerm); }, [searchTerm]);
+  useEffect(() => { saveState("productCategories", selectedCategories); }, [selectedCategories]);
+  useEffect(() => { saveState("productSubCategories", selectedSubCategories); }, [selectedSubCategories]);
+  useEffect(() => { saveState("productBrands", selectedBrands); }, [selectedBrands]);
+  useEffect(() => { saveState("productPriceRanges", selectedPriceRanges); }, [selectedPriceRanges]);
+  useEffect(() => { saveState("productVariationHinges", selectedVariationHinges); }, [selectedVariationHinges]);
+  useEffect(() => { saveState("productAdvancedSearchActive", advancedSearchActive); }, [advancedSearchActive]);
+  useEffect(() => { saveState("productAdvancedSearchResults", advancedSearchResults); }, [advancedSearchResults]);
+  useEffect(() => { saveState("productCarouselIndexMap", carouselIndexMap); }, [carouselIndexMap]);
 
-  // normalize helper
   const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
-
-  // toggle helper
-  const toggleList = (val, arr, setArr) => {
-    const next = arr.includes(val)
-      ? arr.filter((x) => x !== val)
-      : [...arr, val];
-    setArr(next);
-    return next;
-  };
 
   // Fetch filter options once
   useEffect(() => {
     (async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `${BACKEND_URL}/api/admin/products/filters`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const { categories, subCategories, brands, priceRanges, variationHinges } =
-          res.data;
+        const res = await axios.get(`${BACKEND_URL}/api/admin/products/filters`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const { categories, subCategories, brands, priceRanges, variationHinges } = res.data;
         setFilterOptions({
           categories: categories.map((c) => c.name),
           subCategories: subCategories.map((c) => c.name),
@@ -220,21 +190,11 @@ export default function ProductManagementPage() {
           variationHinges: variationHinges.map((v) => v.name),
         });
         setFilterCounts({
-          categories: Object.fromEntries(
-            categories.map((c) => [norm(c.name), c.count])
-          ),
-          subCategories: Object.fromEntries(
-            subCategories.map((c) => [norm(c.name), c.count])
-          ),
-          brands: Object.fromEntries(
-            brands.map((b) => [norm(b.name), b.count])
-          ),
-          priceRanges: Object.fromEntries(
-            priceRanges.map((p) => [norm(p.name), p.count])
-          ),
-          variationHinges: Object.fromEntries(
-            variationHinges.map((v) => [norm(v.name), v.count])
-          ),
+          categories: Object.fromEntries(categories.map((c) => [norm(c.name), c.count])),
+          subCategories: Object.fromEntries(subCategories.map((c) => [norm(c.name), c.count])),
+          brands: Object.fromEntries(brands.map((b) => [norm(b.name), b.count])),
+          priceRanges: Object.fromEntries(priceRanges.map((p) => [norm(p.name), p.count])),
+          variationHinges: Object.fromEntries(variationHinges.map((v) => [norm(v.name), v.count])),
         });
       } catch (err) {
         console.error("Error fetching filter options:", err);
@@ -242,7 +202,7 @@ export default function ProductManagementPage() {
     })();
   }, [BACKEND_URL]);
 
-  // Unified fetch effect
+  // Unified fetch
   useEffect(() => {
     const cancelSrc = axios.CancelToken.source();
     (async () => {
@@ -251,34 +211,23 @@ export default function ProductManagementPage() {
         const token = localStorage.getItem("token");
         const params = new URLSearchParams();
         if (debouncedSearch) params.set("search", debouncedSearch);
-        if (selectedCategories.length)
-          params.set("categories", selectedCategories.join(","));
-        if (selectedSubCategories.length)
-          params.set("subCategories", selectedSubCategories.join(","));
-        if (selectedBrands.length)
-          params.set("brands", selectedBrands.join(","));
-        if (selectedPriceRanges.length)
-          params.set("priceRanges", selectedPriceRanges.join(","));
-        if (selectedVariationHinges.length)
-          params.set("variationHinges", selectedVariationHinges.join(","));
+        if (selectedCategories.length) params.set("categories", selectedCategories.join(","));
+        if (selectedSubCategories.length) params.set("subCategories", selectedSubCategories.join(","));
+        if (selectedBrands.length) params.set("brands", selectedBrands.join(","));
+        if (selectedPriceRanges.length) params.set("priceRanges", selectedPriceRanges.join(","));
+        if (selectedVariationHinges.length) params.set("variationHinges", selectedVariationHinges.join(","));
         params.set("page", currentPage);
         params.set("limit", limit);
 
         const [prodRes, countRes] = await Promise.all([
-          axios.get(
-            `${BACKEND_URL}/api/admin/products?${params.toString()}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-              cancelToken: cancelSrc.token,
-            }
-          ),
-          axios.get(
-            `${BACKEND_URL}/api/admin/products/filters?${params.toString()}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-              cancelToken: cancelSrc.token,
-            }
-          ),
+          axios.get(`${BACKEND_URL}/api/admin/products?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cancelToken: cancelSrc.token,
+          }),
+          axios.get(`${BACKEND_URL}/api/admin/products/filters?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cancelToken: cancelSrc.token,
+          }),
         ]);
 
         setProducts(prodRes.data.products);
@@ -286,24 +235,13 @@ export default function ProductManagementPage() {
 
         const fc = countRes.data;
         setFilterCounts({
-          categories: Object.fromEntries(
-            fc.categories.map((c) => [norm(c.name), c.count])
-          ),
-          subCategories: Object.fromEntries(
-            fc.subCategories.map((c) => [norm(c.name), c.count])
-          ),
-          brands: Object.fromEntries(
-            fc.brands.map((b) => [norm(b.name), b.count])
-          ),
-          priceRanges: Object.fromEntries(
-            fc.priceRanges.map((p) => [norm(p.name), p.count])
-          ),
-          variationHinges: Object.fromEntries(
-            fc.variationHinges.map((v) => [norm(v.name), v.count])
-          ),
+          categories: Object.fromEntries(fc.categories.map((c) => [norm(c.name), c.count])),
+          subCategories: Object.fromEntries(fc.subCategories.map((c) => [norm(c.name), c.count])),
+          brands: Object.fromEntries(fc.brands.map((b) => [norm(b.name), b.count])),
+          priceRanges: Object.fromEntries(fc.priceRanges.map((p) => [norm(p.name), p.count])),
+          variationHinges: Object.fromEntries(fc.variationHinges.map((v) => [norm(v.name), v.count])),
         });
 
-        // handle out-of-range page
         if (currentPage > prodRes.data.totalPages && prodRes.data.totalPages > 0) {
           setCurrentPage(1);
         }
@@ -337,11 +275,9 @@ export default function ProductManagementPage() {
         const token = localStorage.getItem("token");
         const fd = new FormData();
         fd.append("image", file);
-        const res = await axios.post(
-          `${BACKEND_URL}/api/products/advanced-search`,
-          fd,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, fd, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setAdvancedSearchResults(res.data.products);
         setAdvancedSearchActive(true);
       } catch (err) {
@@ -357,6 +293,26 @@ export default function ProductManagementPage() {
     setAdvancedSearchResults([]);
   };
 
+  // CSV dropzone (for Bulk modal preview/import)
+  const { getRootProps: csvRootProps, getInputProps: csvInputProps } = useDropzone({
+    accept: {
+      "text/csv": [".csv"],
+      "application/vnd.ms-excel": [".xls"],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+    },
+    multiple: false,
+    onDrop: async ([file]) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        setCsvData(XLSX.utils.sheet_to_json(sheet));
+      };
+      reader.readAsArrayBuffer(file);
+    },
+  });
+
   // Carousel handlers
   const handleNextImage = (id) => {
     setCarouselIndexMap((prev) => {
@@ -370,16 +326,13 @@ export default function ProductManagementPage() {
     setCarouselIndexMap((prev) => {
       const prod = products.find((x) => x._id === id);
       if (!prod?.images?.length) return prev;
-      const next =
-        ((prev[id] || 0) - 1 + prod.images.length) % prod.images.length;
+      const next = ((prev[id] || 0) - 1 + prod.images.length) % prod.images.length;
       return { ...prev, [id]: next };
     });
   };
 
   // Product details modal
-  const displayList = advancedSearchActive
-    ? advancedSearchResults
-    : products;
+  const displayList = advancedSearchActive ? advancedSearchResults : products;
   const hasSearch = Boolean(debouncedSearch);
   const openDetails = (id) => {
     const idx = displayList.findIndex((p) => p._id === id);
@@ -388,12 +341,8 @@ export default function ProductManagementPage() {
       setProductDetailsOpen(true);
     }
   };
-  const nextDetails = () =>
-    setSelectedProductIndex((i) => (i + 1) % displayList.length);
-  const prevDetails = () =>
-    setSelectedProductIndex((i) =>
-      (i - 1 + displayList.length) % displayList.length
-    );
+  const nextDetails = () => setSelectedProductIndex((i) => (i + 1) % displayList.length);
+  const prevDetails = () => setSelectedProductIndex((i) => (i - 1 + displayList.length) % displayList.length);
 
   // Clear all filters
   const clearAllFilters = () => {
@@ -445,10 +394,7 @@ export default function ProductManagementPage() {
               )}
             </div>
             {advancedSearchActive && (
-              <button
-                onClick={clearAdvancedSearch}
-                className="px-3 py-2 bg-red-500 text-white rounded"
-              >
+              <button onClick={clearAdvancedSearch} className="px-3 py-2 bg-red-500 text-white rounded">
                 Clear Image Search
               </button>
             )}
@@ -490,10 +436,7 @@ export default function ProductManagementPage() {
             >
               Upload Single Product
             </button>
-            <button
-              onClick={() => setBulkOpen(true)}
-              className="px-4 py-2 bg-[#66C3D0] text-white rounded"
-            >
+            <button onClick={() => setBulkOpen(true)} className="px-4 py-2 bg-[#66C3D0] text-white rounded">
               Bulk Upload
             </button>
           </div>
@@ -508,10 +451,7 @@ export default function ProductManagementPage() {
           selectedVariationHinges.length ||
           advancedSearchActive) && (
           <div className="mb-4">
-            <button
-              onClick={clearAllFilters}
-              className="px-4 py-2 bg-red-500 text-white rounded text-sm"
-            >
+            <button onClick={clearAllFilters} className="px-4 py-2 bg-red-500 text-white rounded text-sm">
               Clear Filters
             </button>
           </div>
@@ -525,9 +465,7 @@ export default function ProductManagementPage() {
             setIsOpen={setCategoryOpen}
             options={filterOptions.categories}
             selectedOptions={selectedCategories}
-            toggleOption={(v) =>
-              toggleList(v, selectedCategories, setSelectedCategories)
-            }
+            onApply={(nextSelected) => setSelectedCategories(nextSelected)}
             filterCounts={filterCounts.categories}
             disabled={isFetching}
           />
@@ -537,9 +475,7 @@ export default function ProductManagementPage() {
             setIsOpen={setSubCategoryOpen}
             options={filterOptions.subCategories}
             selectedOptions={selectedSubCategories}
-            toggleOption={(v) =>
-              toggleList(v, selectedSubCategories, setSelectedSubCategories)
-            }
+            onApply={(nextSelected) => setSelectedSubCategories(nextSelected)}
             filterCounts={filterCounts.subCategories}
             disabled={isFetching}
           />
@@ -549,9 +485,7 @@ export default function ProductManagementPage() {
             setIsOpen={setBrandOpen}
             options={filterOptions.brands}
             selectedOptions={selectedBrands}
-            toggleOption={(v) =>
-              toggleList(v, selectedBrands, setSelectedBrands)
-            }
+            onApply={(nextSelected) => setSelectedBrands(nextSelected)}
             filterCounts={filterCounts.brands}
             disabled={isFetching}
           />
@@ -561,9 +495,7 @@ export default function ProductManagementPage() {
             setIsOpen={setPriceRangeOpen}
             options={filterOptions.priceRanges}
             selectedOptions={selectedPriceRanges}
-            toggleOption={(v) =>
-              toggleList(v, selectedPriceRanges, setSelectedPriceRanges)
-            }
+            onApply={(nextSelected) => setSelectedPriceRanges(nextSelected)}
             filterCounts={filterCounts.priceRanges}
             disabled={isFetching}
           />
@@ -573,9 +505,7 @@ export default function ProductManagementPage() {
             setIsOpen={setVariationHingeOpen}
             options={filterOptions.variationHinges}
             selectedOptions={selectedVariationHinges}
-            toggleOption={(v) =>
-              toggleList(v, selectedVariationHinges, setSelectedVariationHinges)
-            }
+            onApply={(nextSelected) => setSelectedVariationHinges(nextSelected)}
             filterCounts={filterCounts.variationHinges}
             disabled={isFetching}
           />
@@ -589,15 +519,10 @@ export default function ProductManagementPage() {
           selectedVariationHinges.length) && (
           <div className="flex flex-wrap gap-2 mb-4">
             {selectedCategories.map((cat) => (
-              <span
-                key={cat}
-                className="flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm"
-              >
+              <span key={cat} className="flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
                 {cat}
                 <button
-                  onClick={() =>
-                    setSelectedCategories((sel) => sel.filter((x) => x !== cat))
-                  }
+                  onClick={() => setSelectedCategories((sel) => sel.filter((x) => x !== cat))}
                   className="ml-1 text-purple-500 hover:text-purple-700"
                 >
                   ×
@@ -605,17 +530,10 @@ export default function ProductManagementPage() {
               </span>
             ))}
             {selectedSubCategories.map((sub) => (
-              <span
-                key={sub}
-                className="flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-              >
+              <span key={sub} className="flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">
                 {sub}
                 <button
-                  onClick={() =>
-                    setSelectedSubCategories((sel) =>
-                      sel.filter((x) => x !== sub)
-                    )
-                  }
+                  onClick={() => setSelectedSubCategories((sel) => sel.filter((x) => x !== sub))}
                   className="ml-1 text-green-500 hover:text-green-700"
                 >
                   ×
@@ -623,15 +541,10 @@ export default function ProductManagementPage() {
               </span>
             ))}
             {selectedBrands.map((br) => (
-              <span
-                key={br}
-                className="flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-              >
+              <span key={br} className="flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                 {br}
                 <button
-                  onClick={() =>
-                    setSelectedBrands((sel) => sel.filter((x) => x !== br))
-                  }
+                  onClick={() => setSelectedBrands((sel) => sel.filter((x) => x !== br))}
                   className="ml-1 text-blue-500 hover:text-blue-700"
                 >
                   ×
@@ -639,15 +552,10 @@ export default function ProductManagementPage() {
               </span>
             ))}
             {selectedPriceRanges.map((pr) => (
-              <span
-                key={pr}
-                className="flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm"
-              >
+              <span key={pr} className="flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
                 {pr}
                 <button
-                  onClick={() =>
-                    setSelectedPriceRanges((sel) => sel.filter((x) => x !== pr))
-                  }
+                  onClick={() => setSelectedPriceRanges((sel) => sel.filter((x) => x !== pr))}
                   className="ml-1 text-yellow-500 hover:text-yellow-700"
                 >
                   ×
@@ -655,17 +563,10 @@ export default function ProductManagementPage() {
               </span>
             ))}
             {selectedVariationHinges.map((vh) => (
-              <span
-                key={vh}
-                className="flex items-center px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
-              >
+              <span key={vh} className="flex items-center px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm">
                 {vh}
                 <button
-                  onClick={() =>
-                    setSelectedVariationHinges((sel) =>
-                      sel.filter((x) => x !== vh)
-                    )
-                  }
+                  onClick={() => setSelectedVariationHinges((sel) => sel.filter((x) => x !== vh))}
                   className="ml-1 text-red-500 hover:text-red-700"
                 >
                   ×
@@ -678,8 +579,7 @@ export default function ProductManagementPage() {
         {/* NO RESULTS */}
         {!initialLoad && !isFetching && displayList.length === 0 && (
           <div className="py-8 text-center text-gray-500">
-            No products found
-            {hasSearch ? ` for “${debouncedSearch}”` : ""}.
+            No products found{hasSearch ? ` for “${debouncedSearch}”` : ""}.
           </div>
         )}
 
@@ -699,16 +599,12 @@ export default function ProductManagementPage() {
                   product={p}
                   handleViewProduct={openDetails}
                   handleDeleteProduct={async (id) => {
-                    if (
-                      !window.confirm("Are you sure you want to delete this product?")
-                    )
-                      return;
+                    if (!window.confirm("Are you sure you want to delete this product?")) return;
                     try {
                       const token = localStorage.getItem("token");
-                      await axios.delete(
-                        `${BACKEND_URL}/api/admin/products/${id}`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                      );
+                      await axios.delete(`${BACKEND_URL}/api/admin/products/${id}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
                       setCurrentPage(1);
                     } catch (err) {
                       console.error(err);
@@ -742,9 +638,7 @@ export default function ProductManagementPage() {
           >
             Previous
           </button>
-          <span>
-            Page {currentPage} of {totalPages}
-          </span>
+          <span>Page {currentPage} of {totalPages}</span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
             disabled={currentPage >= totalPages || isFetching}
@@ -765,71 +659,45 @@ export default function ProductManagementPage() {
             e.preventDefault();
             try {
               const token = localStorage.getItem("token");
-              const imgs = newProductData.images.filter(
-                (i) => typeof i === "string"
-              );
+              const imgs = newProductData.images.filter((i) => typeof i === "string");
               const payload = { ...newProductData, images: imgs };
               if (!editProductId) {
                 await axios.post(`${BACKEND_URL}/api/admin/products`, payload, {
                   headers: { Authorization: `Bearer ${token}` },
                 });
               } else {
-                await axios.put(
-                  `${BACKEND_URL}/api/admin/products/${editProductId}`,
-                  payload,
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
+                await axios.put(`${BACKEND_URL}/api/admin/products/${editProductId}`, payload, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
               }
               setSingleModalOpen(false);
               setCurrentPage(1);
             } catch (err) {
               console.error(err);
-              alert(
-                err?.response?.data?.message ||
-                  err?.message ||
-                  "Error creating/updating product"
-              );
+              alert(err?.response?.data?.message || err?.message || "Error creating/updating product");
             }
           }}
           closeSingleProductModal={() => setSingleModalOpen(false)}
           handleFileChange={async (e) => {
             const files = Array.from(e.target.files || []);
             if (!files.length) return;
-
             setUploadProgress(0);
             const urls = [];
-
-            // Upload sequentially for simpler progress UX
             for (const file of files) {
               try {
-                const result = await uploadImage(file, (pct) => {
-                  setUploadProgress(pct);
-                });
-                if (result.secure_url) {
-                  urls.push(result.secure_url);
-                } else {
-                  throw new Error("Upload returned no URL");
-                }
+                const result = await uploadImage(file, (pct) => setUploadProgress(pct));
+                if (result.secure_url) urls.push(result.secure_url);
+                else throw new Error("Upload returned no URL");
               } catch (err) {
                 console.error("Upload failed:", err);
-                alert(
-                  `Upload failed for ${file.name}: ${
-                    err?.message || "Unknown error"
-                  }`
-                );
+                alert(`Upload failed for ${file.name}: ${err?.message || "Unknown error"}`);
               } finally {
-                // slight reset for next file in a batch
                 setTimeout(() => setUploadProgress(0), 300);
               }
             }
-
             if (urls.length) {
-              setNewProductData((d) => ({
-                ...d,
-                images: [...(d.images || []), ...urls],
-              }));
+              setNewProductData((d) => ({ ...d, images: [...(d.images || []), ...urls] }));
             }
-            // Clear input so choosing the same file again triggers onChange
             e.target.value = "";
           }}
           uploadProgress={uploadProgress}
@@ -843,48 +711,23 @@ export default function ProductManagementPage() {
       {bulkOpen && (
         <BulkUploadModal
           onClose={() => setBulkOpen(false)}
-          getRootProps={advRoot}
-          getInputProps={advInput}
+          getRootProps={csvRootProps}
+          getInputProps={csvInputProps}
           handleDownloadTemplate={() => {
             const wb = XLSX.utils.book_new();
             const headerRow = [
-              "Product Tag",
-              "Product ID",
-              "Variant ID",
-              "Category",
-              "Sub Category",
-              "Variation_hinge",
-              "Name",
-              "Brand Name",
-              "Qty",
-              "MRP_Currency",
-              "MRP",
-              "MRP_Unit",
-              "Delivery Time",
-              "Size",
-              "Color",
-              "Material",
-              "Price Range",
-              "Weight",
-              "HSN Code",
-              "Product Cost_Currency",
-              "Product Cost",
-              "Product Cost_Unit",
-              "Product_Details",
-              "Main_Image_URL",
-              "Second_Image_URL",
-              "Third_Image_URL",
-              "Fourth_Image_URL",
-              "Other_image_URL",
-              "ProductGST",
+              "Product Tag","Product ID","Variant ID","Category","Sub Category","Variation_hinge",
+              "Name","Brand Name","Qty","MRP_Currency","MRP","MRP_Unit","Delivery Time","Size","Color",
+              "Material","Price Range","Weight","HSN Code","Product Cost_Currency","Product Cost",
+              "Product Cost_Unit","Product_Details","Main_Image_URL","Second_Image_URL","Third_Image_URL",
+              "Fourth_Image_URL","Other_image_URL","ProductGST",
             ];
             const example = headerRow.map((_, i) => (i === 0 ? "Tag123" : ""));
             const ws = XLSX.utils.aoa_to_sheet([headerRow, example]);
             XLSX.utils.book_append_sheet(wb, ws, "Template");
-            const blob = new Blob(
-              [XLSX.write(wb, { bookType: "xlsx", type: "array" })],
-              { type: "application/octet-stream" }
-            );
+            const blob = new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })], {
+              type: "application/octet-stream",
+            });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -930,11 +773,9 @@ export default function ProductManagementPage() {
                 productCost_Unit: r["Product Cost_Unit"] || "",
                 productGST: Number(r["ProductGST"] || 0),
               }));
-              await axios.post(
-                `${BACKEND_URL}/api/admin/products/bulk`,
-                toUpload,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
+              await axios.post(`${BACKEND_URL}/api/admin/products/bulk`, toUpload, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
               alert("Bulk upload successful!");
               setBulkOpen(false);
               setCurrentPage(1);
@@ -950,7 +791,7 @@ export default function ProductManagementPage() {
       {/* PRODUCT DETAILS LIGHTBOX */}
       {productDetailsOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative bg-white rounded-lg shadow-lg w/full max-w-4xl max-h-[90vh] overflow-auto">
+          <div className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-auto">
             <button
               onClick={() => setProductDetailsOpen(false)}
               className="absolute top-4 right-4 text-2xl text-gray-600 z-50"
@@ -958,18 +799,12 @@ export default function ProductManagementPage() {
               ×
             </button>
             <div className="absolute inset-y-0 left-0 flex items-center px-4">
-              <button
-                onClick={prevDetails}
-                className="bg-gray-800 text-white p-2 rounded-full"
-              >
+              <button onClick={prevDetails} className="bg-gray-800 text-white p-2 rounded-full">
                 ←
               </button>
             </div>
             <div className="absolute inset-y-0 right-0 flex items-center px-4">
-              <button
-                onClick={nextDetails}
-                className="bg-gray-800 text-white p-2 rounded-full"
-              >
+              <button onClick={nextDetails} className="bg-gray-800 text-white p-2 rounded-full">
                 →
               </button>
             </div>

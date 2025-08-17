@@ -1,3 +1,4 @@
+// CreateManualCatalog.jsx
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -1127,23 +1128,23 @@ export default function CreateManualCatalog() {
       {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
         <FilterDropdown
-          label="Categories"
+          label="categories"
           open={catsOpen}
           setOpen={setCatsOpen}
           options={fullCategories}
           selected={selectedCategories}
-          toggle={(v) => toggleFilter(v, selectedCategories, setSelectedCategories)}
+          onApply={(next) => setSelectedCategories(next)}   // ← set full array
           counts={filterCounts.categories}
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
         />
         <FilterDropdown
-          label="SubCategories"
+          label="subCategories"
           open={subOpen}
           setOpen={setSubOpen}
           options={fullSubCategories}
           selected={selectedSubCategories}
-          toggle={(v) => toggleFilter(v, selectedSubCategories, setSelectedSubCategories)}
+          onApply={(next) => setSelectedSubCategories(next)} // ← set full array
           counts={filterCounts.subCategories}
           dependsOn={filterDependencies}
           allSelections={{
@@ -1158,34 +1159,34 @@ export default function CreateManualCatalog() {
           removeFilter={removeFilter}
         />
         <FilterDropdown
-          label="Brands"
+          label="brands"
           open={brandsOpen}
           setOpen={setBrandsOpen}
           options={fullBrands}
           selected={selectedBrands}
-          toggle={(v) => toggleFilter(v, selectedBrands, setSelectedBrands)}
+          onApply={(next) => setSelectedBrands(next)}        // ← set full array
           counts={filterCounts.brands}
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
         />
         <FilterDropdown
-          label="Price Range"
+          label="priceRanges"
           open={prOpen}
           setOpen={setPrOpen}
           options={fullPriceRanges}
           selected={selectedPriceRanges}
-          toggle={(v) => toggleFilter(v, selectedPriceRanges, setSelectedPriceRanges)}
+          onApply={(next) => setSelectedPriceRanges(next)}   // ← set full array
           counts={filterCounts.priceRanges}
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
         />
         <FilterDropdown
-          label="Variation Hinges"
+          label="variationHinges"
           open={vhOpen}
           setOpen={setVhOpen}
           options={fullVariationHinges}
           selected={selectedVariationHinges}
-          toggle={(v) => toggleFilter(v, selectedVariationHinges, setSelectedVariationHinges)}
+          onApply={(next) => setSelectedVariationHinges(next)} // ← set full array
           counts={filterCounts.variationHinges}
           dependsOn={filterDependencies}
           allSelections={{

@@ -1,3 +1,4 @@
+// src/components/manageproducts/DropdownFilter.jsx
 import React, { useEffect, useRef, useState } from "react";
 import FilterItem from "./FilterItem";
 
@@ -7,25 +8,29 @@ export default function DropdownFilter({
   setIsOpen,
   options = [],
   selectedOptions = [],
-  toggleOption,
+  onApply,                 // <<< apply WHOLE selection (array), not a single toggle
   filterCounts = {},
+  disabled = false,
 }) {
-  const dropdownRef = useRef();
+  const dropdownRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [tempSelectedOptions, setTempSelectedOptions] = useState([...selectedOptions]);
+
+  // keep local temp in sync when external selectedOptions change (e.g., Clear Filters)
+  useEffect(() => {
+    setTempSelectedOptions([...selectedOptions]);
+  }, [selectedOptions]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
-        setTempSelectedOptions([...selectedOptions]);
+        setTempSelectedOptions([...selectedOptions]); // revert unsaved changes
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [setIsOpen, selectedOptions]);
 
   // Filter options based on search term and count > 0
@@ -35,26 +40,27 @@ export default function DropdownFilter({
       (filterCounts[option] || 0) > 0
   );
 
-  // Handle temporary selection changes
+  // Toggle in local temp set
   const handleTempToggle = (option) => {
     setTempSelectedOptions((prev) =>
-      prev.includes(option)
-        ? prev.filter((v) => v !== option)
-        : [...prev, option]
+      prev.includes(option) ? prev.filter((v) => v !== option) : [...prev, option]
     );
   };
 
-  // Apply temporary selections to parent state
+  // Apply whole selection back to parent
   const applyFilters = () => {
-    toggleOption(tempSelectedOptions);
+    if (typeof onApply === "function") {
+      onApply([...tempSelectedOptions]);
+    }
     setIsOpen(false);
   };
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="px-4 py-2 bg-gray-200 rounded"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`px-4 py-2 rounded ${disabled ? "bg-gray-200 cursor-not-allowed" : "bg-gray-200"}`}
+        disabled={disabled}
       >
         {label}
       </button>
@@ -70,7 +76,8 @@ export default function DropdownFilter({
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          {/* Filtered options (scrollable) */}
+
+          {/* Options */}
           <div className="flex-1 overflow-y-auto">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => (
@@ -87,7 +94,8 @@ export default function DropdownFilter({
               <div className="px-4 py-2 text-gray-500">No options found</div>
             )}
           </div>
-          {/* Filter Button (fixed at bottom) */}
+
+          {/* Apply */}
           <div className="p-2 border-t border-gray-200 sticky bottom-0 bg-white">
             <button
               onClick={applyFilters}
@@ -101,3 +109,4 @@ export default function DropdownFilter({
     </div>
   );
 }
+  

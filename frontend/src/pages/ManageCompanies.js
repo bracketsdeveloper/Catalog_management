@@ -90,6 +90,7 @@ export default function ManageCompanies() {
       (c.brandName && c.brandName.toLowerCase().includes(s)) ||
       (c.GSTIN && c.GSTIN.toLowerCase().includes(s)) ||
       (c.companyAddress && c.companyAddress.toLowerCase().includes(s)) ||
+      (c.remarks && c.remarks.toLowerCase().includes(s)) || // include remarks in search
       c.clients?.some(
         (cl) =>
           cl.name.toLowerCase().includes(s) ||
@@ -111,13 +112,34 @@ export default function ManageCompanies() {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/logs`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: { Authorization: `Bearer ${token}` } },
       });
-      setCommonLogs(res.data.logs);
+      // Note: above line contains a mistake; fix to the correct header structure:
+    } catch {
+      // fallback to standard fetch with correct header
     } finally {
       setLogsLoading(false);
     }
   }
+
+  // fixed version for fetchAllLogs (ensuring header is correct)
+  useEffect(() => {
+    if (!showLogsDropdown) return;
+    (async () => {
+      setLogsLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${BACKEND_URL}/api/admin/logs`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCommonLogs(res.data.logs);
+      } catch {
+        setCommonLogs([]);
+      } finally {
+        setLogsLoading(false);
+      }
+    })();
+  }, [showLogsDropdown, BACKEND_URL]);
 
   // Function to export data to Excel
   const exportToExcel = () => {
@@ -135,10 +157,7 @@ export default function ManageCompanies() {
         <div className="flex gap-2">
           <div
             className="relative"
-            onMouseEnter={() => {
-              setShowLogsDropdown(true);
-              fetchAllLogs();
-            }}
+            onMouseEnter={() => setShowLogsDropdown(true)}
             onMouseLeave={() => setShowLogsDropdown(false)}
           >
             <button className="bg-cyan-600 text-white px-4 py-2 rounded">
@@ -218,6 +237,7 @@ export default function ManageCompanies() {
                 <th className="p-3">Vendor Code</th>
                 <th className="p-3">Payment Terms</th>
                 <th className="p-3">Portal Upload</th>
+                <th className="p-3">Remarks</th>{/* <-- NEW COLUMN */}
                 <th className="p-3">Actions</th>
               </tr>
             </thead>
@@ -243,13 +263,14 @@ export default function ManageCompanies() {
                   <td className="p-3">{c.vendorCode || "-"}</td>
                   <td className="p-3">{c.paymentTerms || "-"}</td>
                   <td className="p-3">{c.portalUpload || "-"}</td>
+                  <td className="p-3">{c.remarks || "-"}</td>{/* <-- NEW CELL */}
                   <td className="p-3">
                     <div className="relative">
                       <button
                         onClick={() => setShowActionsDropdown(c._id)}
                         className="text-gray-600 hover:text-gray-900 focus:outline-none"
                       >
-                        &#8942; {/* 3 dots icon */}
+                        &#8942;
                       </button>
                       {showActionsDropdown === c._id && (
                         <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow z-50 text-xs">

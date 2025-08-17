@@ -1,5 +1,3 @@
-// routes/companies.js
-
 const express = require("express");
 const router = express.Router();
 const XLSX = require("xlsx");
@@ -134,6 +132,7 @@ router.post(
         paymentTerms,
         companyAddress,
         pincode,
+        remarks, // <-- NEW
         clients: rawClients = [],
       } = req.body;
 
@@ -159,6 +158,7 @@ router.post(
         paymentTerms,
         companyAddress,
         pincode,
+        remarks, // <-- NEW
         clients: sanitiseClients(rawClients),
         createdBy: req.user.id,
         logs: [createLogEntry(req, "create")],
@@ -237,6 +237,7 @@ router.put(
         paymentTerms,
         companyAddress,
         pincode,
+        remarks, // <-- NEW
         clients: rawClients,
       } = req.body;
 
@@ -272,6 +273,7 @@ router.put(
       check("GSTIN", GSTIN);
       check("companyAddress", companyAddress);
       check("pincode", pincode);
+      check("remarks", remarks); // <-- NEW
       if (rawClients !== undefined) check("clients", sanitiseClients(rawClients));
 
       if (!Object.keys(updates).length)
@@ -392,6 +394,7 @@ router.get(
           GSTIN: "22AAAAA0000A1Z5",
           "Company Address": "123 Main St",
           "Pincode*": "560001",
+          "Remarks": "Priority client", // <-- NEW COLUMN
           "Client 1 Name": "Alice",
           "Client 1 Department": "Procurement",
           "Client 1 Email": "alice@example.com",
@@ -461,6 +464,7 @@ router.post(
           GSTIN: r["GSTIN"] || "",
           companyAddress: r["Company Address"] || "",
           pincode: r["Pincode*"].toString(),
+          remarks: r["Remarks"] || "", // <-- NEW
           clients,
           createdBy: req.user.id,
           logs: [createLogEntry(req, "create")],

@@ -75,7 +75,7 @@ export default function ExpenseTable({ data, onEdit }) {
           if (ORDER_SECTIONS.includes(key)) {
             return exp.orderConfirmed ? sumBy(exp.orderExpenses, key).toString().includes(searchLower) : false;
           }
-          const value = exp[key] || "";
+          const value = (exp[key] || "").toString();
           return value.toLowerCase().includes(searchLower);
         });
       }

@@ -1,4 +1,3 @@
-// backend/models/Company.js
 const mongoose = require("mongoose");
 
 const clientSchema = new mongoose.Schema({
@@ -29,6 +28,7 @@ const companySchema = new mongoose.Schema({
   vendorCode: { type: String },
   paymentTerms: { type: String },
   portalUpload: { type: String },
+  remarks: { type: String }, // <-- NEW
   createdAt: { type: Date, default: Date.now },
   updatedAt: Date,
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },

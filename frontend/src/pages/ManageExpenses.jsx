@@ -83,7 +83,7 @@ export default function ManageExpenses() {
     });
   }, [expenses, searchTerm, filters]);
 
-  // Export to Excel
+  // Export to Excel (unchanged; does not include damagedBy unless you want it)
   const exportToExcel = () => {
     const SAMPLE_SECTIONS = [
       "Sample Product Cost",

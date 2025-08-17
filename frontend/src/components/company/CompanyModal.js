@@ -1,4 +1,3 @@
-// frontend/components/CompanyModal.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -23,6 +22,7 @@ export default function CompanyModal({
     vendorCode: company?.vendorCode || "",
     paymentTerms: company?.paymentTerms || "",
     portalUpload: company?.portalUpload || "",
+    remarks: company?.remarks || "", // <-- NEW
   });
   const [clientTmp, setClientTmp] = useState({
     name: "",
@@ -83,9 +83,10 @@ export default function CompanyModal({
       ...form,
       companyName: form.companyName.trim(),
       pincode: form.pincode.trim(),
-      GSTIN: form.GSTIN.trim(),
-      brandName: form.brandName.trim(),
-      companyAddress: form.companyAddress.trim(),
+      GSTIN: (form.GSTIN || "").trim(),
+      brandName: (form.brandName || "").trim(),
+      companyAddress: (form.companyAddress || "").trim(),
+      remarks: (form.remarks || "").trim(), // ensure trimmed
       clients: sanitiseContacts(form.clients),
     };
     try {
@@ -226,6 +227,17 @@ export default function CompanyModal({
               onChange={(e) =>
                 setForm({ ...form, portalUpload: e.target.value })
               }
+            />
+          </div>
+
+          {/* Remarks */}
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-1">Remarks</label>
+            <textarea
+              rows={2}
+              className="w-full p-2 border rounded"
+              value={form.remarks}
+              onChange={(e) => setForm({ ...form, remarks: e.target.value })}
             />
           </div>
 

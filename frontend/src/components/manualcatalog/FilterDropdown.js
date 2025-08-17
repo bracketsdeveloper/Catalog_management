@@ -1,3 +1,4 @@
+// components/manualcatalog/FilterDropdown.js
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 export default function FilterDropdown({
@@ -6,7 +7,7 @@ export default function FilterDropdown({
   setOpen,
   options,
   selected,
-  toggle,
+  onApply,                 // ← apply WHOLE selection (array)
   counts,
   dependsOn = {},
   allSelections = {},
@@ -18,6 +19,11 @@ export default function FilterDropdown({
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredOptions, setFilteredOptions] = useState([]);
   const [tempSelected, setTempSelected] = useState([...selected]);
+
+  // keep tempSelected synced with external selected (e.g., Clear Filters)
+  useEffect(() => {
+    setTempSelected([...selected]);
+  }, [selected]);
 
   // Close dropdown when clicking outside and reset temp selections
   useEffect(() => {
@@ -34,14 +40,6 @@ export default function FilterDropdown({
     };
   }, [setOpen, selected]);
 
-  // Memoize toggle to prevent unnecessary re-renders
-  const stableToggle = useCallback(
-    (newSelected) => {
-      toggle(newSelected);
-    },
-    [toggle]
-  );
-
   // Filter options based on search term, counts, and dependencies
   useEffect(() => {
     const filtered = options.filter((opt) => {
@@ -49,8 +47,8 @@ export default function FilterDropdown({
       const hasProducts = (counts[norm(opt)] || 0) > 0;
       let respectsDependencies = true;
 
-      if (dependsOn[label.toLowerCase()]) {
-        respectsDependencies = dependsOn[label.toLowerCase()].every((parentFilter) => {
+      if (dependsOn[label]) {
+        respectsDependencies = dependsOn[label].every((parentFilter) => {
           const parentOptions = allSelections[parentFilter] || [];
           if (parentOptions.length === 0) return true;
           return parentOptions.some((parent) =>
@@ -62,7 +60,6 @@ export default function FilterDropdown({
       return matchesSearch && hasProducts && respectsDependencies;
     });
 
-    // Only update state if filtered options have changed
     setFilteredOptions((prev) => {
       if (JSON.stringify(prev) === JSON.stringify(filtered)) return prev;
       return filtered;
@@ -78,7 +75,9 @@ export default function FilterDropdown({
 
   // Apply temporary selections to parent state
   const applyFilters = () => {
-    stableToggle(tempSelected);
+    if (typeof onApply === "function") {
+      onApply([...tempSelected]); // send full array
+    }
     setOpen(false);
     setSearchTerm("");
   };
@@ -92,7 +91,7 @@ export default function FilterDropdown({
         {label} ({selected.length})
       </button>
       {open && (
-        <div className="absolute mt-2 w-48 bg-white border border-purple-200 rounded z-20 max-h-60 flex flex-col">
+        <div className="absolute mt-2 w-56 bg-white border border-purple-200 rounded z-20 max-h-60 flex flex-col">
           {/* Search bar */}
           <div className="p-1 border-b border-gray-200">
             <input
