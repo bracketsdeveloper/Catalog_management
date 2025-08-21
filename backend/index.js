@@ -24,7 +24,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://69.62.73.158:3001',
   'https://catalog-management.vercel.app',
-  'https://pacer2gift.in'
+  'https://pacer2gift.in',
+  "http://91.230.110.152:3001"
 ];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
