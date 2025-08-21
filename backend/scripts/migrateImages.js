@@ -3,7 +3,7 @@ const path = require("path");
 const axios = require("axios");
 const mongoose = require("mongoose");
 
-const IMAGE_DIR = "../frontend/public/images";
+const IMAGE_DIR = "../../frontend/public/images";
 const PUBLIC_URL_BASE = "http://localhost:3000/images/";
 const CLOUDINARY_PREFIX = "https://res.cloudinary.com/";
 
