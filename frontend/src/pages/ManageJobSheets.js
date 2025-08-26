@@ -213,7 +213,7 @@ export default function ManageJobSheets() {
         limit: totalJobSheets > 0 ? totalJobSheets : 1000,
       };
 
-      const res = await axios.get(`${BACKEND_URL}/api/admin//jobsheets-export`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets-export`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
         timeout: 60000,
