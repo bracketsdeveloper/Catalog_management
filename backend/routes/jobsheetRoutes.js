@@ -187,7 +187,7 @@ router.get("/jobsheets-export", authenticate, authorizeAdmin, async (req, res) =
       if (isNaN(pageNum) || pageNum < 1) {
         return res.status(400).json({ message: "Invalid page number" });
       }
-      if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > 10000) {
         return res.status(400).json({ message: "Invalid limit value" });
       }
 
