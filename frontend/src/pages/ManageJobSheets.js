@@ -209,11 +209,9 @@ export default function ManageJobSheets() {
         orderToDate: orderToDate ? format(orderToDate, "yyyy-MM-dd") : undefined,
         deliveryFromDate: deliveryFromDate ? format(deliveryFromDate, "yyyy-MM-dd") : undefined,
         deliveryToDate: deliveryToDate ? format(deliveryToDate, "yyyy-MM-dd") : undefined,
-        page: 1,
-        limit: totalJobSheets > 0 ? totalJobSheets : 1000,
       };
 
-      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets`, {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/jobsheets-export`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
         timeout: 60000,
