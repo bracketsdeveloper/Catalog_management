@@ -175,28 +175,34 @@ export default function QuotationView() {
   };
   const addOpRow = () => {
     const nextSl = (opRows[opRows.length - 1]?.slNo || 0) + 1;
-    setOpRows((prev) => [...prev, recalcRow({
-      slNo: nextSl,
-      product: "",
-      quantity: 0,
-      rate: 0,
-      amount: 0,
-      gst: "",
-      total: 0,
-      ourCost: 0,
-      brandingCost: 0,
-      deliveryCost: 0,
-      markUpCost: 0,
-      finalTotal: 0,
-      vendor: "",
-    })]);
+    setOpRows((prev) => [
+      ...prev,
+      recalcRow({
+        slNo: nextSl,
+        product: "",
+        quantity: 0,
+        rate: 0,
+        amount: 0,
+        gst: "",
+        total: 0,
+        ourCost: 0,
+        brandingCost: 0,
+        deliveryCost: 0,
+        markUpCost: 0,
+        finalTotal: 0,
+        vendor: "",
+      }),
+    ]);
   };
   const updateOpRow = (idx, field, value) => {
     setOpRows((prev) => {
       const copy = [...prev];
       copy[idx] = recalcRow({
         ...copy[idx],
-        [field]: (field === "product" || field === "gst" || field === "vendor") ? value : num(value),
+        [field]:
+          field === "product" || field === "gst" || field === "vendor"
+            ? value
+            : num(value),
       });
       return copy;
     });
@@ -206,6 +212,66 @@ export default function QuotationView() {
       prev.filter((_, i) => i !== idx).map((r, i2) => ({ ...r, slNo: i2 + 1 }))
     );
   };
+
+  // NEW: Save ONLY operationsBreakdown to current quotation (no new quotation)
+  async function handleSaveOperationsBreakdownOnly() {
+    try {
+      const payload = {
+        operationsBreakdown: opRows.map((r) => ({
+          slNo: r.slNo,
+          product: r.product,
+          quantity: num(r.quantity),
+          rate: num(r.rate),
+          amount: num(r.amount),
+          gst: r.gst,
+          total: num(r.total),
+          ourCost: num(r.ourCost),
+          brandingCost: num(r.brandingCost),
+          deliveryCost: num(r.deliveryCost),
+          markUpCost: num(r.markUpCost),
+          finalTotal: num(r.finalTotal),
+          vendor: r.vendor,
+        })),
+      };
+
+      const res = await axios.put(`${BACKEND_URL}/api/admin/quotations/${id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // refresh local state from server response if available
+      if (res?.data?.quotation) {
+        setEditableQuotation(res.data.quotation);
+        setQuotation(res.data.quotation);
+
+        const fresh = (res.data.quotation.operationsBreakdown || []).map((r, idx) =>
+          recalcRow({
+            slNo: r.slNo || idx + 1,
+            product: r.product || "",
+            quantity: Number(r.quantity) || 0,
+            rate: Number(r.rate) || 0,
+            amount: Number(r.amount) || 0,
+            gst: r.gst || "",
+            total: Number(r.total) || 0,
+            ourCost: Number(r.ourCost) || 0,
+            brandingCost: Number(r.brandingCost) || 0,
+            deliveryCost: Number(r.deliveryCost) || 0,
+            markUpCost: Number(r.markUpCost) || 0,
+            finalTotal: Number(r.finalTotal) || 0,
+            vendor: r.vendor || "",
+          })
+        );
+        setOpRows(fresh);
+      }
+
+      alert("Operations breakdown saved to this quotation (no new quotation created).");
+    } catch (err) {
+      console.error("Save operations breakdown only error:", err);
+      alert(
+        "Failed to save operations breakdown on this quotation: " +
+        (err.response?.data?.message || err.message)
+      );
+    }
+  }
 
   async function handleAuthenticate() {
     try {
@@ -238,7 +304,7 @@ export default function QuotationView() {
     } catch (err) {
       setErrorMessage(
         "Failed to fetch customer details: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -297,7 +363,7 @@ export default function QuotationView() {
     } catch (err) {
       setErrorMessage(
         "Failed to save reference JSON: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -336,14 +402,13 @@ export default function QuotationView() {
                   type="text"
                   value={parsedJson[key][subKey] || ""}
                   onChange={(e) => handleFormFieldChange(subKey, e.target.value, key)}
-                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    key === "RefDtls" &&
-                    subKey === "InvRm" &&
-                    (parsedJson[key][subKey]?.length < 3 ||
-                      parsedJson[key][subKey]?.length > 100)
+                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${key === "RefDtls" &&
+                      subKey === "InvRm" &&
+                      (parsedJson[key][subKey]?.length < 3 ||
+                        parsedJson[key][subKey]?.length > 100)
                       ? "border-red-500"
                       : "border-gray-300"
-                  }`}
+                    }`}
                 />
                 {key === "RefDtls" &&
                   subKey === "InvRm" &&
@@ -390,7 +455,7 @@ export default function QuotationView() {
 
     return (
       <div className="mb-6">
-       制限
+        制限
         <h3 className="text-lg font-semibold mb-2 text-gray-700">Product Details</h3>
         <table className="w-full border-collapse text-xs">
           <thead>
@@ -414,8 +479,8 @@ export default function QuotationView() {
                 item.productGST != null
                   ? parseFloat(item.productGST)
                   : editableQuotation.gst
-                  ? parseFloat(editableQuotation.gst)
-                  : 0;
+                    ? parseFloat(editableQuotation.gst)
+                    : 0;
               const total = (
                 parseFloat(amount) +
                 (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
@@ -483,7 +548,7 @@ export default function QuotationView() {
         try {
           const list = JSON.parse(detail);
           detail = list.map((e) => e.ErrorMessage).join("\n");
-        } catch {}
+        } catch { }
       }
       setErrorMessage("Failed to generate IRN: " + detail);
     }
@@ -502,7 +567,7 @@ export default function QuotationView() {
     } catch (err) {
       setErrorMessage(
         "Failed to cancel e-invoice: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -540,8 +605,8 @@ export default function QuotationView() {
           item.productGST != null
             ? parseFloat(item.productGST)
             : gst
-            ? parseFloat(gst)
-            : 0;
+              ? parseFloat(gst)
+              : 0;
         const gstAmount =
           gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
         const total = parseFloat((amount + gstAmount).toFixed(2));
@@ -645,6 +710,26 @@ export default function QuotationView() {
     }
   }
 
+  async function handleCreateInvoice(format) {
+    try {
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/invoices/from-quotation/${id}`,
+        // Pass optional format string; fallback is APP/{FY}/{SEQ4}
+        format ? { format } : {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert(`Invoice created: ${res.data.invoice.invoiceDetails.invoiceNumber}`);
+      // Navigate to your invoice page (adjust route as per your app)
+      navigate(`/admin-dashboard/invoices/${res.data.invoice._id}`);
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      alert(
+        "Failed to create invoice: " + (error.response?.data?.message || error.message)
+      );
+    }
+  }
+
+
   function handleHeaderBlur(field, e) {
     setEditableQuotation((prev) => ({
       ...prev,
@@ -724,9 +809,7 @@ export default function QuotationView() {
 
   // Add the missing handleViewOperation function
   const handleViewOperation = (operation) => {
-    // For now, just log the operation - you can expand this later
     console.log("View/Edit operation:", operation);
-    // You can implement a modal or form to edit the operation here
     alert(`Operation details: ${JSON.stringify(operation, null, 2)}`);
   };
 
@@ -748,14 +831,20 @@ export default function QuotationView() {
         </button>
 
         <div className="flex space-x-4">
-          {!eInvoiceData?.irn || eInvoiceData?.cancelled ? (
-            <button
-              onClick={() => setEInvoiceModalOpen(true)}
-              className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-xs"
-            >
-              Generate E-Invoice
-            </button>
-          ) : null}
+          <button
+            onClick={() => {
+              const defFmt = "APP/{FY}/{SEQ4}";
+              const fmt = window.prompt(
+                `Enter invoice number format (tokens: {FY}, {SEQn}).\nExample: ${defFmt}`,
+                defFmt
+              );
+              if (fmt === null) return; // user cancelled
+              handleCreateInvoice(fmt.trim());
+            }}
+            className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-xs"
+          >
+            Create Invoice
+          </button>
 
           <button
             onClick={async () => {
@@ -819,44 +908,39 @@ export default function QuotationView() {
         id="op-breakdown-panel"
         className="sticky top-16 z-30 bg-white border border-gray-300 shadow p-3 rounded mb-6"
       >
-        <div className="text-xs font-semibold mb-2">
-          Operations Cost — Detailed Table
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs font-semibold">Operations Cost — Detailed Table</div>
+
+          {/* NEW: Save-only button for operationsBreakdown */}
+          <button
+            onClick={handleSaveOperationsBreakdownOnly}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs"
+            title="Save operations breakdown to this quotation without creating a new one"
+          >
+            Save Operations Breakdown
+          </button>
         </div>
+
         <div className="overflow-auto">
           <table className="table-auto w-full text-[11px] border-collapse">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border px-2 py-1">slno (a)</th>
-                <th className="border px-2 py-1">product (b)</th>
-                <th className="border px-2 py-1">quantity (c)</th>
-                <th className="border px-2 py-1">rate (d=h+i+j+k)</th>
-                <th className="border px-2 py-1">amount (e=c*d)</th>
-                <th className="border px-2 py-1">gst (f)</th>
-                <th className="border px-2 py-1">total (g=e+GST)</th>
-                <th className="border px-2 py-1">our cost (h)</th>
-                <th className="border px-2 py-1">branding cost (i)</th>
-                <th className="border px-2 py-1">delivery cost (j)</th>
-                <th className="border px-2 py-1">mark up cost (k)</th>
-                <th className="border px-2 py-1">Final Total (l)</th>
-                <th className="border px-2 py-1">Vendor (m)</th>
+                <th className="border px-2 py-1">slno</th>
+                <th className="border px-2 py-1">product</th>
+                <th className="border px-2 py-1">quantity</th>
+                <th className="border px-2 py-1">rate</th>
+                <th className="border px-2 py-1">amount</th>
+                <th className="border px-2 py-1">gst</th>
+                <th className="border px-2 py-1">total</th>
+                <th className="border px-2 py-1">our cost</th>
+                <th className="border px-2 py-1">branding cost</th>
+                <th className="border px-2 py-1">delivery cost</th>
+                <th className="border px-2 py-1">mark up cost</th>
+                <th className="border px-2 py-1">Final Total</th>
+                <th className="border px-2 py-1">Vendor</th>
                 <th className="border px-2 py-1">Action</th>
               </tr>
-              <tr>
-                <th className="border px-2 py-1 text-gray-500">auto</th>
-                <th className="border px-2 py-1 text-gray-500">text</th>
-                <th className="border px-2 py-1 text-gray-500">int</th>
-                <th className="border px-2 py-1 text-gray-500">calc</th>
-                <th className="border px-2 py-1 text-gray-500">calc</th>
-                <th className="border px-2 py-1 text-gray-500">text / %</th>
-                <th className="border px-2 py-1 text-gray-500">calc</th>
-                <th className="border px-2 py-1 text-gray-500">int</th>
-                <th className="border px-2 py-1 text-gray-500">int</th>
-                <th className="border px-2 py-1 text-gray-500">int</th>
-                <th className="border px-2 py-1 text-gray-500">int</th>
-                <th className="border px-2 py-1 text-gray-500">calc</th>
-                <th className="border px-2 py-1 text-gray-500">text</th>
-                <th className="border px-2 py-1"></th>
-              </tr>
+
             </thead>
             <tbody>
               {opRows.map((r, idx) => (
@@ -1112,7 +1196,7 @@ export default function QuotationView() {
 
       {eInvoiceModalOpen && (
         <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50 z-50">
-          <div className="bg-white p-8 rounded-lg w-3/4 max-h-[80vh] overflow-y-auto shadow-xl">
+          <div className="bg-white p-8 rounded-lg w-3/4 max_h-[80vh] overflow-y-auto shadow-xl">
             <h2 className="text-2xl font-semibold mb-6 text-gray-800">Generate E-Invoice</h2>
             {errorMessage && (
               <div className="text-red-500 mb-4 text-xs bg-red-100 p-2 rounded">{errorMessage}</div>
@@ -1195,22 +1279,21 @@ export default function QuotationView() {
                         <textarea
                           value={referenceJson}
                           onChange={(e) => setReferenceJson(e.target.value)}
-                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            referenceJson &&
+                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${referenceJson &&
                             (() => {
                               try {
                                 const parsed = JSON.parse(referenceJson);
                                 return parsed.RefDtls?.InvRm &&
                                   (parsed.RefDtls.InvRm.length < 3 || parsed.RefDtls.InvRm.length > 100)
                                   ? "border-red-500"
-                                  : "border-gray-300"
+                                  : "border-gray-300";
                               } catch {
                                 return "border-red-500";
                               }
                             })()
-                          }`}
+                            }`}
                         />
-                        {referenceJson && (
+                        {referenceJson &&
                           (() => {
                             try {
                               const parsed = JSON.parse(referenceJson);
@@ -1228,8 +1311,7 @@ export default function QuotationView() {
                               return <p className="text-red-500 text-xs mt-1">Invalid JSON format</p>;
                             }
                             return null;
-                          })()
-                        )}
+                          })()}
                       </>
                     ) : (
                       renderJsonForm()
@@ -1363,8 +1445,16 @@ export default function QuotationView() {
             const baseRate = parseFloat(item.rate) || 0;
             const effRate = baseRate * marginFactor;
             const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(2);
-            const gstRate = item.productGST != null ? parseFloat(item.productGST) : (editableQuotation.gst ? parseFloat(editableQuotation.gst) : 0);
-            const total = (parseFloat(amount) + (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)).toFixed(2);
+            const gstRate =
+              item.productGST != null
+                ? parseFloat(item.productGST)
+                : editableQuotation.gst
+                  ? parseFloat(editableQuotation.gst)
+                  : 0;
+            const total = (
+              parseFloat(amount) +
+              (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
+            ).toFixed(2);
 
             return (
               <tr key={index} className="border-b">
@@ -1466,7 +1556,12 @@ export default function QuotationView() {
                 const baseRate = parseFloat(item.rate) || 0;
                 const effRate = baseRate * marginFactor;
                 const amount = effRate * (parseFloat(item.quantity) || 1);
-                const gstRate = item.productGST != null ? parseFloat(item.productGST) : (editableQuotation.gst ? parseFloat(editableQuotation.gst) : 0);
+                const gstRate =
+                  item.productGST != null
+                    ? parseFloat(item.productGST)
+                    : editableQuotation.gst
+                      ? parseFloat(editableQuotation.gst)
+                      : 0;
                 return sum + (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0));
               }, 0)
               .toFixed(2)}

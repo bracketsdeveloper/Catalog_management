@@ -14,19 +14,19 @@ const operationsSchema = new mongoose.Schema({
 
 // NEW: Operations Breakdown Row schema (your table)
 const operationsBreakdownRowSchema = new mongoose.Schema({
-  slNo: { type: Number, required: true },                    // a
-  product: { type: String, default: "" },                    // b
-  quantity: { type: Number, default: 0 },                    // c
-  rate: { type: Number, default: 0 },                        // d = h+i+j+k
-  amount: { type: Number, default: 0 },                      // e = c*d
-  gst: { type: String, default: "" },                        // f (manual string, e.g., "18" or "18%")
-  total: { type: Number, default: 0 },                       // g = e * f(%)  (see route calc for safety)
-  ourCost: { type: Number, default: 0 },                     // h
-  brandingCost: { type: Number, default: 0 },                // i
-  deliveryCost: { type: Number, default: 0 },                // j
-  markUpCost: { type: Number, default: 0 },                  // k
-  finalTotal: { type: Number, default: 0 },                  // l = h+i+j+k
-  vendor: { type: String, default: "" },                     // m
+  slNo: { type: Number, required: true },                    
+  product: { type: String, default: "" },                    
+  quantity: { type: Number, default: 0 },                    
+  rate: { type: Number, default: 0 },                        
+  amount: { type: Number, default: 0 },                      
+  gst: { type: String, default: "" },                        
+  total: { type: Number, default: 0 },                       
+  ourCost: { type: Number, default: 0 },                     
+  brandingCost: { type: Number, default: 0 },                
+  deliveryCost: { type: Number, default: 0 },                
+  markUpCost: { type: Number, default: 0 },                  
+  finalTotal: { type: Number, default: 0 },                  
+  vendor: { type: String, default: "" },                     
 }, { _id: false });
 
 const quotationItemSchema = new mongoose.Schema({

@@ -165,7 +165,7 @@ router.get(
   }
 );
 
-// Update Delivery Challan
+// Update Delivery Challan (now supports editing items + totals)
 router.put(
   "/delivery-challans/:id",
   authenticate,
@@ -177,28 +177,95 @@ router.put(
         return res.status(404).json({ message: "Delivery Challan not found" });
       }
 
+      const b = req.body || {};
       const updatedData = {
-        quotationNumber: req.body.quotationNumber || oldChallan.quotationNumber,
-        opportunityNumber: req.body.opportunityNumber || oldChallan.opportunityNumber,
-        catalogName: req.body.catalogName || oldChallan.catalogName,
-        fieldsToDisplay: req.body.fieldsToDisplay || oldChallan.fieldsToDisplay,
-        priceRange: req.body.priceRange || oldChallan.priceRange,
-        salutation: req.body.salutation || oldChallan.salutation,
-        customerName: req.body.customerName || oldChallan.customerName,
-        customerEmail: req.body.customerEmail || oldChallan.customerEmail,
-        customerCompany: req.body.customerCompany || oldChallan.customerCompany,
-        customerAddress: req.body.customerAddress || oldChallan.customerAddress,
-        margin: req.body.margin || oldChallan.margin,
-        gst: req.body.gst || oldChallan.gst,
-        displayTotals: req.body.displayTotals ?? oldChallan.displayTotals,
-        displayHSNCodes: req.body.displayHSNCodes ?? oldChallan.displayHSNCodes,
-        terms: req.body.terms || oldChallan.terms,
-        poNumber: req.body.poNumber || oldChallan.poNumber,
-        poDate: req.body.poDate || oldChallan.poDate,
-        otherReferences: req.body.otherReferences || oldChallan.otherReferences,
-        materialTerms: req.body.materialTerms || oldChallan.materialTerms,
-        dcDate: req.body.dcDate || oldChallan.dcDate,
+        quotationNumber: b.quotationNumber ?? oldChallan.quotationNumber,
+        opportunityNumber: b.opportunityNumber ?? oldChallan.opportunityNumber,
+        opportunityOwner: b.opportunityOwner ?? oldChallan.opportunityOwner, // allow editing owner
+        catalogName: b.catalogName ?? oldChallan.catalogName,
+        fieldsToDisplay: Array.isArray(b.fieldsToDisplay)
+          ? b.fieldsToDisplay
+          : oldChallan.fieldsToDisplay,
+        priceRange: b.priceRange ?? oldChallan.priceRange,
+        salutation: b.salutation ?? oldChallan.salutation,
+        customerName: b.customerName ?? oldChallan.customerName,
+        customerEmail: b.customerEmail ?? oldChallan.customerEmail,
+        customerCompany: b.customerCompany ?? oldChallan.customerCompany,
+        customerAddress: b.customerAddress ?? oldChallan.customerAddress,
+        margin: typeof b.margin === "number" ? b.margin : oldChallan.margin,
+        gst: typeof b.gst === "number" ? b.gst : oldChallan.gst,
+        displayTotals: b.displayTotals ?? oldChallan.displayTotals,
+        displayHSNCodes: b.displayHSNCodes ?? oldChallan.displayHSNCodes,
+        terms: Array.isArray(b.terms) ? b.terms : oldChallan.terms,
+        poNumber: b.poNumber ?? oldChallan.poNumber,
+        poDate: b.poDate ? new Date(b.poDate) : oldChallan.poDate,
+        otherReferences: b.otherReferences ?? oldChallan.otherReferences,
+        materialTerms: Array.isArray(b.materialTerms)
+          ? b.materialTerms
+          : oldChallan.materialTerms,
+        dcDate: b.dcDate ? new Date(b.dcDate) : oldChallan.dcDate,
       };
+
+      // If items were provided, normalize + (re)compute derived numbers
+      let items = oldChallan.items;
+      if (Array.isArray(b.items)) {
+        items = b.items.map((it, idx) => {
+          const qty = Number(it.quantity) || 0;
+          const rate = Number(it.rate) || 0;
+          const price = it.productprice != null ? Number(it.productprice) : rate;
+          const gstRate = Number(it.productGST) || 0;
+
+          // Prefer client-provided amount/total if present, else compute
+          const amount =
+            it.amount != null
+              ? Number(it.amount)
+              : Math.round((rate * qty + Number.EPSILON) * 100) / 100;
+
+          const total =
+            it.total != null
+              ? Number(it.total)
+              : Math.round((amount * (1 + gstRate / 100) + Number.EPSILON) * 100) / 100;
+
+          return {
+            slNo: Number(it.slNo) || idx + 1,
+            productId: it.productId || null,
+            product: it.product || "",
+            hsnCode: it.hsnCode || "",
+            quantity: qty,
+            rate,
+            productprice: price,
+            amount,
+            productGST: gstRate,
+            total,
+            baseCost: Number(it.baseCost) || 0,
+            material: it.material || "",
+            weight: it.weight || "",
+            brandingTypes: Array.isArray(it.brandingTypes) ? it.brandingTypes : [],
+            suggestedBreakdown: it.suggestedBreakdown || {
+              baseCost: 0,
+              marginPct: 0,
+              marginAmount: 0,
+              logisticsCost: 0,
+              brandingCost: 0,
+              finalPrice: 0,
+            },
+            imageIndex: Number(it.imageIndex) || 0,
+          };
+        });
+
+        // Optional: warn for empty HSN codes
+        items.forEach((it) => {
+          if (!it.hsnCode) {
+            console.warn(`HSN code missing for item slNo=${it.slNo}`);
+          }
+        });
+
+        updatedData.items = items;
+        updatedData.totalAmount = items.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+        updatedData.grandTotal = items.reduce((s, x) => s + (Number(x.total) || 0), 0);
+        updatedData.totalAmount = Math.round((updatedData.totalAmount + Number.EPSILON) * 100) / 100;
+        updatedData.grandTotal = Math.round((updatedData.grandTotal + Number.EPSILON) * 100) / 100;
+      }
 
       const updatedChallan = await DeliveryChallan.findByIdAndUpdate(
         req.params.id,
@@ -217,5 +284,6 @@ router.put(
     }
   }
 );
+
 
 module.exports = router;

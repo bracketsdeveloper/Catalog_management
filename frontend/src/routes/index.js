@@ -72,6 +72,9 @@ import MapDashboard from "../pages/MapDashboard";
 import ManageDestinations from "../pages/ManageDestinations";
 import UserTrackingMap from "../pages/UserTrackingMap";
 import AssignDestinations from "../pages/AssignDestinations";
+import ManageInvoices from "../pages/ManageInvoices";
+import InvoiceEditPage from "../pages/InvoiceEditPage";
+import InvoicePrint from "../pages/InvoicePrint";
 
 
 const router = createBrowserRouter([
@@ -376,12 +379,16 @@ const router = createBrowserRouter([
                         element : <EInvoiceTable/>
                     },
                     {
-                        path:"location-tracker",
-                        element:<UserTrackingMap/>
+                        path : "manage-invoices",
+                        element : <ManageInvoices/>
                     },
                     {
-                        path: "set-destination",
-                        element:<AssignDestinations/>
+                        path : "invoices/:id/edit",
+                        element:<InvoiceEditPage/>
+                    },
+                    {
+                        path : "invoices/:id/print",
+                        element:<InvoicePrint/>
                     }
 
                 ]

@@ -143,6 +143,15 @@ app.use('/api', require('./routes/destinationRoutes.js'));
 app.use('/api', require('./routes/destinationArrivalRoutes.js'));
 app.use('/api/admin', require('./routes/userTrackingRoutes'));
 
+
+app.use("/api/admin", require("./routes/adminInvoices"));
+
+// server.js or index.js
+const invoicesEinvoiceRoutes = require("./routes/invoices.einvoice");
+app.use("/api/admin", invoicesEinvoiceRoutes);
+
+
+
 // 7) Health check
 app.get('/health', (req, res) => res.send('OK'));
 

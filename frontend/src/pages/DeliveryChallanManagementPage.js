@@ -44,7 +44,6 @@ export default function DeliveryChallanManagementPage() {
     { label: "Opportunity Owner", field: "opportunityOwner" },
     { label: "Company Name", field: "customerCompany" },
     { label: "Customer Name", field: "customerName" },
-    { label: "Event Name", field: "catalogName" },
     { label: "Items", field: "items.length" },
     { label: "DC Date", field: "dcDate", isDate: true },
     { label: "Latest Action", field: "latestAction" },
@@ -63,17 +62,11 @@ export default function DeliveryChallanManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("Fetched opportunities:", res.data);
-      // Normalize response to array
       const data = Array.isArray(res.data) ? res.data : res.data.opportunities || [];
       setOpportunities(data);
     } catch (err) {
-      console.error("Error fetching opportunities:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
-      setOpportunities([]); // Fallback to empty array
+      console.error("Error fetching opportunities:", err);
+      setOpportunities([]);
     } finally {
       setOpportunitiesLoading(false);
     }
@@ -87,7 +80,6 @@ export default function DeliveryChallanManagementPage() {
         { quotationIds: challanIds },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("Fetched latest actions:", res.data);
       setLatestActions(res.data);
     } catch (err) {
       console.error("Error fetching latest actions:", err);
@@ -102,19 +94,15 @@ export default function DeliveryChallanManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/delivery-challans`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("Fetched delivery challans:", res.data);
-      setDeliveryChallans(Array.isArray(res.data) ? res.data : res.data.deliveryChallans || []);
-      const challanIds = (Array.isArray(res.data) ? res.data : res.data.deliveryChallans || []).map((q) => q._id);
+      const list = Array.isArray(res.data) ? res.data : res.data.deliveryChallans || [];
+      setDeliveryChallans(list);
+      const challanIds = list.map((q) => q._id);
       if (challanIds.length > 0) {
         await fetchLatestActions(challanIds);
       }
       setError(null);
     } catch (err) {
-      console.error("Error fetching delivery challans:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
+      console.error("Error fetching delivery challans:", err);
       setError("Failed to fetch delivery challans");
       setDeliveryChallans([]);
     } finally {
@@ -124,15 +112,13 @@ export default function DeliveryChallanManagementPage() {
 
   // Prepare base rows with computed fields
   const baseRows = useMemo(() => {
-    console.log("Computing baseRows, opportunities:", opportunities);
-    // Ensure opportunities is an array
     const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
     return deliveryChallans.map((challan) => {
       const opp = safeOpportunities.find((o) => o.opportunityCode === challan.opportunityNumber);
       const latestAction = latestActions[challan._id] || {};
       return {
         ...challan,
-        opportunityOwner: opp?.opportunityOwner || "N/A",
+        opportunityOwner: challan.opportunityOwner || opp?.opportunityOwner || "N/A",
         "items.length": (challan.items || []).length,
         latestAction: latestAction.action
           ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${
@@ -226,7 +212,6 @@ export default function DeliveryChallanManagementPage() {
           q.opportunityOwner || "N/A",
           q.customerCompany || "N/A",
           q.customerName || "N/A",
-          q.catalogName || "N/A",
           q.items?.length || 0,
           format(new Date(q.dcDate), "dd/MM/yyyy"),
           q.latestAction || "No action recorded",
@@ -253,50 +238,162 @@ export default function DeliveryChallanManagementPage() {
   const openEditModalHandler = (challan) => {
     setEditFormData({
       _id: challan._id,
+      dcNumber: challan.dcNumber || "",
       quotationNumber: challan.quotationNumber || "",
       opportunityNumber: challan.opportunityNumber || "",
+      opportunityOwner: challan.opportunityOwner || "",
       catalogName: challan.catalogName || "",
-      fieldsToDisplay: challan.fieldsToDisplay || [],
+      fieldsToDisplay: Array.isArray(challan.fieldsToDisplay) ? challan.fieldsToDisplay : [],
       priceRange: challan.priceRange || { from: 0, to: 0 },
       salutation: challan.salutation || "Mr.",
       customerName: challan.customerName || "",
       customerEmail: challan.customerEmail || "",
       customerCompany: challan.customerCompany || "",
       customerAddress: challan.customerAddress || "",
-      margin: challan.margin || 0,
-      gst: challan.gst || 18,
-      displayTotals: challan.displayTotals || false,
-      displayHSNCodes: challan.displayHSNCodes || true,
-      terms: challan.terms || [],
+      margin: typeof challan.margin === "number" ? challan.margin : 0,
+      gst: typeof challan.gst === "number" ? challan.gst : 18,
+      displayTotals: !!challan.displayTotals,
+      displayHSNCodes: challan.displayHSNCodes ?? true,
+      terms: Array.isArray(challan.terms) ? challan.terms : [],
       poNumber: challan.poNumber || "",
       poDate: challan.poDate ? format(new Date(challan.poDate), "yyyy-MM-dd") : "",
       otherReferences: challan.otherReferences || "",
-      materialTerms: challan.materialTerms || [
-        "Material received in good condition and correct quantity.",
-        "No physical damage or shortage noticed at the time of delivery.",
-        "Accepted after preliminary inspection and verification with delivery documents.",
-      ],
+      materialTerms:
+        Array.isArray(challan.materialTerms) && challan.materialTerms.length
+          ? challan.materialTerms
+          : defaultMaterialTerms,
       dcDate: format(new Date(challan.dcDate), "yyyy-MM-dd"),
-      items: challan.items || [],
+      items: Array.isArray(challan.items) ? challan.items.map((x) => ({ ...x })) : [],
     });
     setOpenEditModal(challan._id);
   };
 
+  // ---- helpers for numeric coercion + item recalculation
+  const toNum = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const recalcItem = (it) => {
+    const qty = toNum(it.quantity);
+    const rate = toNum(it.rate);
+    const gst = toNum(it.productGST);
+    // Only autocalc if user hasn't directly typed amount/total in this change
+    const amount = Math.round((rate * qty + Number.EPSILON) * 100) / 100;
+    const total = Math.round((amount * (1 + gst / 100) + Number.EPSILON) * 100) / 100;
+    return {
+      ...it,
+      amount,
+      total,
+      productprice: it.productprice != null ? toNum(it.productprice) : rate,
+    };
+  };
+
+  // ---- top-level field change
   const handleEditInputChange = (e, field, index = null) => {
-    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    const raw = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+
     setEditFormData((prev) => {
       if (field === "priceRange") {
-        return { ...prev, priceRange: { ...prev.priceRange, [e.target.name]: Number(value) } };
-      } else if (field === "terms" && index !== null) {
-        const newTerms = [...prev.terms];
-        newTerms[index] = { ...newTerms[index], [e.target.name]: value };
-        return { ...prev, terms: newTerms };
-      } else if (field === "materialTerms" && index !== null) {
-        const newMaterialTerms = [...prev.materialTerms];
-        newMaterialTerms[index] = value;
-        return { ...prev, materialTerms: newMaterialTerms };
+        return { ...prev, priceRange: { ...prev.priceRange, [e.target.name]: toNum(raw) } };
       }
-      return { ...prev, [field]: value };
+      if (field === "terms" && index !== null) {
+        const terms = [...prev.terms];
+        terms[index] = { ...terms[index], [e.target.name]: raw };
+        return { ...prev, terms };
+      }
+      if (field === "materialTerms" && index !== null) {
+        const materialTerms = [...prev.materialTerms];
+        materialTerms[index] = raw;
+        return { ...prev, materialTerms };
+      }
+      if (field === "fieldsToDisplay") {
+        // comma-separated -> array of trimmed strings
+        const arr = raw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return { ...prev, fieldsToDisplay: arr };
+      }
+      if (field === "margin" || field === "gst") {
+        return { ...prev, [field]: toNum(raw) };
+      }
+      if (field === "displayTotals" || field === "displayHSNCodes") {
+        return { ...prev, [field]: !!raw };
+      }
+      return { ...prev, [field]: raw };
+    });
+  };
+
+  // ---- items editing
+  const handleItemChange = (idx, key, value) => {
+    setEditFormData((prev) => {
+      const items = [...prev.items];
+      const draft = { ...items[idx], [key]: key === "slNo" ? Number(value) : value };
+
+      // If user changes qty/rate/GST -> recalc
+      if (["quantity", "rate", "productGST"].includes(key)) {
+        items[idx] = recalcItem({
+          ...draft,
+          quantity: toNum(draft.quantity),
+          rate: toNum(draft.rate),
+          productGST: toNum(draft.productGST),
+        });
+      } else if (key === "amount" || key === "total" || key === "productprice") {
+        // allow manual override
+        items[idx] = {
+          ...draft,
+          [key]: toNum(value),
+        };
+      } else {
+        items[idx] = draft;
+      }
+      return { ...prev, items };
+    });
+  };
+
+  const addItemRow = () => {
+    setEditFormData((prev) => {
+      const nextSl = (prev.items?.length || 0) + 1;
+      const items = [
+        ...(prev.items || []),
+        recalcItem({
+          slNo: nextSl,
+          productId: null,
+          product: "",
+          hsnCode: "",
+          quantity: 1,
+          rate: 0,
+          productprice: 0,
+          amount: 0,
+          productGST: toNum(prev.gst) || 18,
+          total: 0,
+          baseCost: 0,
+          material: "",
+          weight: "",
+          brandingTypes: [],
+          suggestedBreakdown: {
+            baseCost: 0,
+            marginPct: 0,
+            marginAmount: 0,
+            logisticsCost: 0,
+            brandingCost: 0,
+            finalPrice: 0,
+          },
+          imageIndex: 0,
+        }),
+      ];
+      return { ...prev, items };
+    });
+  };
+
+  const removeItemRow = (idx) => {
+    setEditFormData((prev) => {
+      const items = [...(prev.items || [])];
+      items.splice(idx, 1);
+      // re-number slNo
+      items.forEach((it, i) => (it.slNo = i + 1));
+      return { ...prev, items };
     });
   };
 
@@ -317,22 +414,48 @@ export default function DeliveryChallanManagementPage() {
   async function handleSaveEdit() {
     try {
       const token = localStorage.getItem("token");
-      const updatedData = {
+
+      // prepare payload, coerce numbers/dates
+      const payload = {
         ...editFormData,
+        // normalize arrays/fields
+        fieldsToDisplay: Array.isArray(editFormData.fieldsToDisplay)
+          ? editFormData.fieldsToDisplay
+          : [],
+        priceRange: {
+          from: toNum(editFormData.priceRange?.from),
+          to: toNum(editFormData.priceRange?.to),
+        },
+        margin: toNum(editFormData.margin),
+        gst: toNum(editFormData.gst),
         poDate: editFormData.poDate ? new Date(editFormData.poDate) : null,
-        dcDate: new Date(editFormData.dcDate),
+        dcDate: editFormData.dcDate ? new Date(editFormData.dcDate) : new Date(),
+        items: (editFormData.items || []).map((it, idx) => ({
+          ...it,
+          slNo: Number(it.slNo) || idx + 1,
+          quantity: toNum(it.quantity),
+          rate: toNum(it.rate),
+          productprice: it.productprice != null ? toNum(it.productprice) : toNum(it.rate),
+          amount: toNum(it.amount),
+          productGST: toNum(it.productGST),
+          total: toNum(it.total),
+          baseCost: toNum(it.baseCost),
+          imageIndex: Number(it.imageIndex) || 0,
+        })),
       };
-      const res = await axios.put(
+
+      await axios.put(
         `${BACKEND_URL}/api/admin/delivery-challans/${editFormData._id}`,
-        updatedData,
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       alert("Delivery Challan updated successfully!");
       setOpenEditModal(null);
       fetchData();
     } catch (error) {
       console.error("Error updating delivery challan:", error);
-      alert("Failed to update delivery challan.");
+      alert(error.response?.data?.message || "Failed to update delivery challan.");
     }
   }
 
@@ -340,9 +463,10 @@ export default function DeliveryChallanManagementPage() {
     if (!openEditModal) return null;
     return createPortal(
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div className="bg-white p-6 rounded-lg w-full max-w-5xl max-h-[85vh] overflow-y-auto">
           <h2 className="text-xl font-bold mb-4">Edit Delivery Challan</h2>
           <div className="grid grid-cols-2 gap-4">
+            {/* DC Number (read-only) */}
             <div>
               <label className="block text-sm font-medium">DC Number</label>
               <input
@@ -352,6 +476,8 @@ export default function DeliveryChallanManagementPage() {
                 className="w-full p-2 border rounded text-sm bg-gray-100"
               />
             </div>
+
+            {/* Quotation / Opportunity */}
             <div>
               <label className="block text-sm font-medium">Quotation Number</label>
               <input
@@ -370,6 +496,17 @@ export default function DeliveryChallanManagementPage() {
                 className="w-full p-2 border rounded text-sm"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium">Opportunity Owner</label>
+              <input
+                type="text"
+                value={editFormData.opportunityOwner || ""}
+                onChange={(e) => handleEditInputChange(e, "opportunityOwner")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+
+            {/* Event / Salutation / Names */}
             <div>
               <label className="block text-sm font-medium">Event Name</label>
               <input
@@ -423,6 +560,80 @@ export default function DeliveryChallanManagementPage() {
                 className="w-full p-2 border rounded text-sm"
               />
             </div>
+
+            {/* Pricing / display controls */}
+            <div>
+              <label className="block text-sm font-medium">Margin (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={editFormData.margin}
+                onChange={(e) => handleEditInputChange(e, "margin")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Default GST (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={editFormData.gst}
+                onChange={(e) => handleEditInputChange(e, "gst")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!editFormData.displayTotals}
+                onChange={(e) => handleEditInputChange(e, "displayTotals")}
+              />
+              <label className="text-sm font-medium">Display Totals</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!editFormData.displayHSNCodes}
+                onChange={(e) => handleEditInputChange(e, "displayHSNCodes")}
+              />
+              <label className="text-sm font-medium">Display HSN Codes</label>
+            </div>
+
+            {/* Fields to display + price range */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium">Fields To Display (comma-separated)</label>
+              <input
+                type="text"
+                value={(editFormData.fieldsToDisplay || []).join(", ")}
+                onChange={(e) => handleEditInputChange(e, "fieldsToDisplay")}
+                className="w-full p-2 border rounded text-sm"
+                placeholder="e.g. product, quantity, rate, amount"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Price Range From</label>
+              <input
+                name="from"
+                type="number"
+                step="0.01"
+                value={editFormData.priceRange?.from ?? 0}
+                onChange={(e) => handleEditInputChange(e, "priceRange")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Price Range To</label>
+              <input
+                name="to"
+                type="number"
+                step="0.01"
+                value={editFormData.priceRange?.to ?? 0}
+                onChange={(e) => handleEditInputChange(e, "priceRange")}
+                className="w-full p-2 border rounded text-sm"
+              />
+            </div>
+
+            {/* PO / Other refs / Dates */}
             <div>
               <label className="block text-sm font-medium">PO Number</label>
               <input
@@ -459,19 +670,12 @@ export default function DeliveryChallanManagementPage() {
                 className="w-full p-2 border rounded text-sm"
               />
             </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={editFormData.displayHSNCodes}
-                onChange={(e) => handleEditInputChange(e, "displayHSNCodes")}
-                className="mr-2"
-              />
-              <label className="text-sm font-medium">Display HSN Codes</label>
-            </div>
+
+            {/* Material Terms */}
             <div className="col-span-2">
               <label className="block text-sm font-medium">Material Terms</label>
               {editFormData.materialTerms.map((term, index) => (
-                <div key={index} className="mb-2">
+                <div key={index} className="mb-2 flex gap-2">
                   <input
                     type="text"
                     value={term}
@@ -481,37 +685,155 @@ export default function DeliveryChallanManagementPage() {
                 </div>
               ))}
             </div>
+
+            {/* Terms (heading/content) */}
             <div className="col-span-2">
-              <label className="block text-sm font-medium">Products (Read-only)</label>
-              <table className="w-full border-collapse border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border border-gray-300 p-2 text-left">Sl No</th>
-                    <th className="border border-gray-300 p-2 text-left">Product</th>
-                    <th className="border border-gray-300 p-2 text-left">HSN Code</th>
-                    <th className="border border-gray-300 p-2 text-left">Quantity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(editFormData.items || []).map((item, index) => (
-                    <tr key={index}>
-                      <td className="border border-gray-300 p-2">{item.slNo}</td>
-                      <td className="border border-gray-300 p-2">{item.product}</td>
-                      <td className="border border-gray-300 p-2">{item.hsnCode}</td>
-                      <td className="border border-gray-300 p-2">{item.quantity}</td>
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium">Terms</label>
+                <button
+                  onClick={addTerm}
+                  className="px-2 py-1 bg-gray-800 text-white rounded text-xs"
+                >
+                  + Add Term
+                </button>
+              </div>
+              {(editFormData.terms || []).map((t, idx) => (
+                <div key={idx} className="grid grid-cols-2 gap-2 mt-2">
+                  <input
+                    name="heading"
+                    placeholder="Heading"
+                    value={t.heading}
+                    onChange={(e) => handleEditInputChange(e, "terms", idx)}
+                    className="w-full p-2 border rounded text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      name="content"
+                      placeholder="Content"
+                      value={t.content}
+                      onChange={(e) => handleEditInputChange(e, "terms", idx)}
+                      className="w-full p-2 border rounded text-sm"
+                    />
+                    
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ITEMS — fully editable */}
+            <div className="col-span-2">
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium">Products / Items</label>
+                <button
+                  onClick={addItemRow}
+                  className="px-2 py-1 bg-gray-800 text-white rounded text-xs"
+                >
+                  + Add Item
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300 text-xs">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border p-2 text-left">Sl No</th>
+                      <th className="border p-2 text-left">Product</th>
+                      <th className="border p-2 text-left">HSN Code</th>
+                      <th className="border p-2 text-left">Qty</th>
+                      <th className="border p-2 text-left">Rate</th>
+                      <th className="border p-2 text-left">GST %</th>
+                      <th className="border p-2 text-left">Amount</th>
+                      <th className="border p-2 text-left">Total</th>
+                      
                     </tr>
-                  ))}
-                  {!editFormData.items?.length && (
-                    <tr>
-                      <td colSpan={4} className="border border-gray-300 p-2 text-center">
-                        No items found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(editFormData.items || []).map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="border p-1">
+                          <input
+                            type="number"
+                            className="w-16 p-1 border rounded"
+                            value={it.slNo ?? idx + 1}
+                            onChange={(e) => handleItemChange(idx, "slNo", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="text"
+                            className="w-64 p-1 border rounded"
+                            value={it.product || ""}
+                            onChange={(e) => handleItemChange(idx, "product", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="text"
+                            className="w-28 p-1 border rounded"
+                            value={it.hsnCode || ""}
+                            onChange={(e) => handleItemChange(idx, "hsnCode", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="number"
+                            className="w-20 p-1 border rounded"
+                            value={it.quantity ?? 0}
+                            onChange={(e) => handleItemChange(idx, "quantity", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-24 p-1 border rounded"
+                            value={it.rate ?? 0}
+                            onChange={(e) => handleItemChange(idx, "rate", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-20 p-1 border rounded"
+                            value={it.productGST ?? 0}
+                            onChange={(e) => handleItemChange(idx, "productGST", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-24 p-1 border rounded"
+                            value={it.amount ?? 0}
+                            onChange={(e) => handleItemChange(idx, "amount", e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-24 p-1 border rounded"
+                            value={it.total ?? 0}
+                            onChange={(e) => handleItemChange(idx, "total", e.target.value)}
+                          />
+                        </td>
+                        
+                      </tr>
+                    ))}
+                    {!editFormData.items?.length && (
+                      <tr>
+                        <td colSpan={9} className="border p-2 text-center">
+                          No items. Click “Add Item” to start.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
+
           <div className="mt-4 flex justify-end gap-2">
             <button
               onClick={() => setOpenEditModal(null)}

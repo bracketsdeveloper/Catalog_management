@@ -37,7 +37,11 @@ const deliveryChallanSchema = new mongoose.Schema({
   dcNumber: { type: String, unique: true },
   quotationId: { type: mongoose.Schema.Types.ObjectId, ref: "Quotation" },
   quotationNumber: { type: String, default: "" },
+
+  // Opportunity linkage
   opportunityNumber: { type: String, default: "" },
+  opportunityOwner: { type: String, default: "" },
+
   catalogName: { type: String, default: "" },
   fieldsToDisplay: { type: [String], default: [] },
   priceRange: {
@@ -65,7 +69,10 @@ const deliveryChallanSchema = new mongoose.Schema({
   ],
   poNumber: { type: String, default: "" },
   poDate: { type: Date, default: null },
-  otherReferences: { type: String, default: "" }, // New field
+
+  // Store Ref. JobSheet# here per your mapping requirement
+  otherReferences: { type: String, default: "" },
+
   materialTerms: {
     type: [String],
     default: [

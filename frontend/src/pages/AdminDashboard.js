@@ -52,6 +52,11 @@ const adminPages = [
     icon: <ReceiptPercentIcon className="w-8 h-8 flex justify-center items-center" />,
     subItems: [
       {
+        name: "Manage Invoices",
+        path: "/admin-dashboard/manage-invoices",
+        permission: "manage-einvoice"
+      },
+      {
         name: "Manage DC",
         path: "/admin-dashboard/manage-dc",
         permission: "manage-dc",
@@ -362,20 +367,7 @@ const adminPages = [
         name: "Events Calender",
         path: "/admin-dashboard/events-calender",
         permission: "events-calender",
-      },
-      {
-        name: "Pacer Tracker",
-        path: "/admin-dashboard/location-tracker",
-        
-      },
-      {
-        name: "Set destinations",
-        path: "/admin-dashboard/set-destination",
-        
       }
-
-
-      
     ],
 
   },
