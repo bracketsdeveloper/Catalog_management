@@ -103,21 +103,18 @@ router.post("/catalogs", authenticate, authorizeAdmin, async (req, res) => {
       gst,
     } = req.body;
 
-    // validate opportunity
     if (opportunityNumber) {
       const ok = await Opportunity.exists({ opportunityCode: opportunityNumber });
       if (!ok) return res.status(400).json({ message: "Invalid opportunity number" });
     }
 
-    // fetch master product docs
-    const ids = products.map(p => p.productId);
+    const ids = products.map((p) => p.productId);
     const docs = await Product.find({ _id: { $in: ids } }).lean();
-    const map = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
+    const map = Object.fromEntries(docs.map((d) => [d._id.toString(), d]));
 
-    // build sub-docs
     const subs = products
-      .filter(p => map[p.productId])
-      .map(p => buildSubDoc(p, map[p.productId]));
+      .filter((p) => map[p.productId])
+      .map((p) => buildSubDoc(p, map[p.productId]));
 
     const catalog = await Catalog.create({
       opportunityNumber: opportunityNumber ?? "",
@@ -176,7 +173,6 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
       gst,
     } = req.body;
 
-    // validate opportunity
     if (opportunityNumber) {
       const ok = await Opportunity.exists({ opportunityCode: opportunityNumber });
       if (!ok) return res.status(400).json({ message: "Invalid opportunity number" });
@@ -186,15 +182,13 @@ router.put("/catalogs/:id", authenticate, authorizeAdmin, async (req, res) => {
     if (!catalog) return res.status(404).json({ message: "Catalog not found" });
     const old = catalog.toObject();
 
-    // rebuild products
-    const ids = products.map(p => p.productId);
+    const ids = products.map((p) => p.productId);
     const docs = await Product.find({ _id: { $in: ids } }).lean();
-    const map = Object.fromEntries(docs.map(d => [d._id.toString(), d]));
+    const map = Object.fromEntries(docs.map((d) => [d._id.toString(), d]));
     catalog.products = products
-      .filter(p => map[p.productId])
-      .map(p => buildSubDoc(p, map[p.productId]));
+      .filter((p) => map[p.productId])
+      .map((p) => buildSubDoc(p, map[p.productId]));
 
-    // update other fields
     catalog.set({
       opportunityNumber: opportunityNumber ?? "",
       catalogName,
@@ -268,6 +262,106 @@ router.put("/catalogs/:id/remarks", authenticate, authorizeAdmin, async (req, re
   }
 });
 
+/**
+ * DUPLICATE catalog (duplication logic v1.0, file version v5.0)
+ * POST /api/admin/catalogs/:id/duplicate
+ * Body (optional): { resetApproval?: boolean, clearRemarks?: boolean }
+ */
+router.post("/catalogs/:id/duplicate", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { resetApproval = true, clearRemarks = true } = req.body || {};
+
+    // Load source as lean to avoid mongoose doc mutations
+    const src = await Catalog.findById(req.params.id).lean();
+    if (!src) return res.status(404).json({ message: "Catalog not found" });
+
+    // Optionally validate the opportunity number again
+    if (src.opportunityNumber) {
+      const ok = await Opportunity.exists({ opportunityCode: src.opportunityNumber });
+      if (!ok) {
+        return res.status(400).json({ message: "Source has invalid opportunity number" });
+      }
+    }
+
+    // Deep copy products (strip _id on subdocs so Mongoose assigns new ones)
+    const products = (src.products || []).map((p) => {
+      const {
+        _id, // strip
+        productId,
+        images,
+        imageIndex,
+        productName,
+        ProductDescription,
+        ProductBrand,
+        color,
+        size,
+        productCost,
+        baseCost,
+        quantity,
+        productGST,
+        material,
+        weight,
+        brandingTypes,
+        suggestedBreakdown,
+      } = p;
+      return {
+        productId,
+        images: images || [],
+        imageIndex: typeof imageIndex === "number" ? imageIndex : 0,
+        productName: productName || "",
+        ProductDescription: ProductDescription || "",
+        ProductBrand: ProductBrand || "",
+        color: color || "",
+        size: size || "",
+        productCost: typeof productCost === "number" ? productCost : 0,
+        baseCost: typeof baseCost === "number" ? baseCost : 0,
+        quantity: typeof quantity === "number" ? quantity : 1,
+        productGST: typeof productGST === "number" ? productGST : 0,
+        material: material || "",
+        weight: weight || "",
+        brandingTypes: Array.isArray(brandingTypes) ? brandingTypes : [],
+        suggestedBreakdown: suggestedBreakdown || {
+          baseCost: 0,
+          marginPct: 0,
+          marginAmount: 0,
+          logisticsCost: 0,
+          brandingCost: 0,
+          finalPrice: 0,
+        },
+      };
+    });
+
+    // Build the duplicate payload.
+    // DO NOT set catalogNumber — let pre('save') auto-increment it.
+    const payload = {
+      opportunityNumber: src.opportunityNumber || "",
+      catalogName: src.catalogName,
+      salutation: src.salutation || "Mr.",
+      customerName: src.customerName,
+      customerEmail: src.customerEmail,
+      customerCompany: src.customerCompany,
+      customerAddress: src.customerAddress,
+      margin: typeof src.margin === "number" ? src.margin : 0,
+      gst: typeof src.gst === "number" ? src.gst : 18,
+      fieldsToDisplay: Array.isArray(src.fieldsToDisplay) ? src.fieldsToDisplay : [],
+      priceRange: src.priceRange || undefined,
+      products,
+      approveStatus: resetApproval ? false : !!src.approveStatus,
+      remarks: clearRemarks ? [] : src.remarks || [],
+      createdBy: req.user?.email || "",
+      // createdAt left undefined -> default Date.now
+    };
+
+    const dup = await Catalog.create(payload);
+
+    await createLog("duplicate", src, dup, req.user, req.ip);
+    return res.status(201).json({ message: "Catalog duplicated", catalog: dup });
+  } catch (err) {
+    console.error("Error duplicating catalog:", err);
+    return res.status(500).json({ message: "Server error duplicating catalog" });
+  }
+});
+
 /** GET latest logs for catalogs */
 router.post("/catalogs/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -276,38 +370,31 @@ router.post("/catalogs/logs/latest", authenticate, authorizeAdmin, async (req, r
       return res.status(400).json({ message: "Invalid or empty catalog IDs" });
     }
 
-    const objectIds = catalogIds.map(id => new mongoose.Types.ObjectId(id));
+    const objectIds = catalogIds.map((id) => new mongoose.Types.ObjectId(id));
 
     const logs = await Log.aggregate([
       { $match: { field: "catalog" } },
       {
         $match: {
-          $or: [
-            { "newValue._id": { $in: objectIds } },
-            { "oldValue._id": { $in: objectIds } }
-          ]
-        }
+          $or: [{ "newValue._id": { $in: objectIds } }, { "oldValue._id": { $in: objectIds } }],
+        },
       },
       { $sort: { performedAt: -1 } },
       {
         $group: {
           _id: {
-            $cond: [
-              { $ifNull: ["$newValue._id", null] },
-              "$newValue._id",
-              "$oldValue._id"
-            ]
+            $cond: [{ $ifNull: ["$newValue._id", null] }, "$newValue._id", "$oldValue._id"],
           },
-          latestLog: { $first: "$$ROOT" }
-        }
+          latestLog: { $first: "$$ROOT" },
+        },
       },
       {
         $lookup: {
           from: "users",
           localField: "latestLog.performedBy",
           foreignField: "_id",
-          as: "performedBy"
-        }
+          as: "performedBy",
+        },
       },
       { $unwind: { path: "$performedBy", preserveNullAndEmptyArrays: true } },
       {
@@ -316,19 +403,21 @@ router.post("/catalogs/logs/latest", authenticate, authorizeAdmin, async (req, r
           catalogId: "$_id",
           action: "$latestLog.action",
           performedBy: { $ifNull: ["$performedBy", { email: "Unknown" }] },
-          performedAt: "$latestLog.performedAt"
-        }
-      }
+          performedAt: "$latestLog.performedAt",
+        },
+      },
     ]);
 
     const latestLogs = {};
-    catalogIds.forEach(id => {
-      const log = logs.find(l => l.catalogId.toString() === id);
-      latestLogs[id] = log ? {
-        action: log.action,
-        performedBy: log.performedBy,
-        performedAt: log.performedAt
-      } : {};
+    catalogIds.forEach((id) => {
+      const log = logs.find((l) => l.catalogId.toString() === id);
+      latestLogs[id] = log
+        ? {
+            action: log.action,
+            performedBy: log.performedBy,
+            performedAt: log.performedAt,
+          }
+        : {};
     });
 
     res.json(latestLogs);
