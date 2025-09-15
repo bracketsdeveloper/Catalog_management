@@ -143,7 +143,21 @@ export default function ManageCompanies() {
 
   // Function to export data to Excel
   const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(filteredCompanies);
+    const flattenedData = filteredCompanies.map((company) => ({
+      Company: company.companyName || "-",
+      Brand: company.brandName || "-",
+      Segment: company.segment || "-",
+      Clients: company.clients?.map((client) => `${client.name} | ${client.department || "-"} | ${client.email || "-"} | ${client.contactNumber}`).join("; ") || "-",
+      Address: company.companyAddress || "-",
+      GSTIN: company.GSTIN || "-",
+      Pincode: company.pincode || "-",
+      "Vendor Code": company.vendorCode || "-",
+      "Payment Terms": company.paymentTerms || "-",
+      "Portal Upload": company.portalUpload || "-",
+      Remarks: company.remarks || "-",
+    }));
+  
+    const worksheet = XLSX.utils.json_to_sheet(flattenedData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Companies");
     XLSX.writeFile(workbook, "Companies.xlsx");
