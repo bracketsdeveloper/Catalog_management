@@ -25,9 +25,9 @@ const allowedOrigins = [
   'http://69.62.73.158:3001',
   'https://catalog-management.vercel.app',
   'https://pacer2gift.in',
-  "http://91.230.110.152:3001",
-  "https://backup.pacer2gift.in/api",
-  "http://103.118.16.67:3001"
+  'http://91.230.110.152:3001',
+  'https://backup.pacer2gift.in/api',
+  'http://103.118.16.67:3001'
 ];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -49,10 +49,7 @@ app.use('/api', syncRoutes);
 
 // 5) MongoDB connection
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
+  .connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err.message));
 
@@ -143,14 +140,11 @@ app.use('/api', require('./routes/destinationRoutes.js'));
 app.use('/api', require('./routes/destinationArrivalRoutes.js'));
 app.use('/api/admin', require('./routes/userTrackingRoutes'));
 
+app.use('/api/admin', require('./routes/adminInvoices'));
 
-app.use("/api/admin", require("./routes/adminInvoices"));
-
-// server.js or index.js
-const invoicesEinvoiceRoutes = require("./routes/invoices.einvoice");
-app.use("/api/admin", invoicesEinvoiceRoutes);
-
-
+// E-Invoice routes
+const invoicesEinvoiceRoutes = require('./routes/invoices.einvoice');
+app.use('/api/admin', invoicesEinvoiceRoutes);
 
 // 7) Health check
 app.get('/health', (req, res) => res.send('OK'));
@@ -168,9 +162,12 @@ server.keepAliveTimeout = 60_000;
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
   server.close(() => {
-    mongoose.connection.close(false, () => {
+    mongoose.connection.close().then(() => {
       console.log('MongoDB connection closed.');
       process.exit(0);
+    }).catch(err => {
+      console.error('Error closing MongoDB connection:', err.message);
+      process.exit(1);
     });
   });
 });
@@ -178,9 +175,12 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('SIGINT received. Shutting down gracefully...');
   server.close(() => {
-    mongoose.connection.close(false, () => {
+    mongoose.connection.close().then(() => {
       console.log('MongoDB connection closed.');
       process.exit(0);
+    }).catch(err => {
+      console.error('Error closing MongoDB connection:', err.message);
+      process.exit(1);
     });
   });
 });
