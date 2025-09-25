@@ -684,12 +684,7 @@ export default function QuotationManagementPage() {
                             >
                               Remarks
                             </Dropdown.Item>
-                            <Dropdown.Item
-                              onClick={() => handleGenerateDeliveryChallan(q)}
-                              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                            >
-                              Generate Delivery Challan
-                            </Dropdown.Item>
+                            
                             <Dropdown.Item
                               onClick={() => handleDeleteQuotation(q)}
                               className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
