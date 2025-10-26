@@ -455,7 +455,6 @@ export default function QuotationView() {
 
     return (
       <div className="mb-6">
-        制限
         <h3 className="text-lg font-semibold mb-2 text-gray-700">Product Details</h3>
         <table className="w-full border-collapse text-xs">
           <thead>
@@ -846,7 +845,7 @@ export default function QuotationView() {
             Create Invoice
           </button>
 
-          <button
+          {/* <button
             onClick={async () => {
               try {
                 const res = await axios.post(
@@ -864,7 +863,7 @@ export default function QuotationView() {
             className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-xs"
           >
             Generate Delivery Challan
-          </button>
+          </button> */}
 
           <button
             onClick={handleSaveQuotation}
@@ -922,7 +921,7 @@ export default function QuotationView() {
         </div>
 
         <div className="overflow-auto">
-          <table className="table-auto w-full text-[11px] border-collapse">
+          <table className="table-auto w-3/4 text-[11px] border-collapse">
             <thead>
               <tr className="bg-gray-100">
                 <th className="border px-2 py-1">slno</th>
@@ -950,7 +949,7 @@ export default function QuotationView() {
                     <input
                       value={r.product}
                       onChange={(e) => updateOpRow(idx, "product", e.target.value)}
-                      className="w-40 border px-1 py-0.5 rounded"
+                      className="w-60 border px-1 py-0.5 rounded"
                     />
                   </td>
                   <td className="border px-2 py-1">
@@ -958,7 +957,7 @@ export default function QuotationView() {
                       type="number"
                       value={r.quantity}
                       onChange={(e) => updateOpRow(idx, "quantity", e.target.value)}
-                      className="w-24 border px-1 py-0.5 rounded"
+                      className="w-10 border px-1 py-0.5 rounded"
                       min="0"
                     />
                   </td>
@@ -966,14 +965,14 @@ export default function QuotationView() {
                     <input
                       value={r.rate}
                       disabled
-                      className="w-24 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
+                      className="w-10 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
                     />
                   </td>
                   <td className="border px-2 py-1">
                     <input
                       value={r.amount.toFixed(2)}
                       disabled
-                      className="w-24 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
+                      className="w-10 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
                     />
                   </td>
                   <td className="border px-2 py-1">
@@ -981,14 +980,14 @@ export default function QuotationView() {
                       value={r.gst}
                       onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
                       placeholder="e.g., 18 or 18%"
-                      className="w-24 border px-1 py-0.5 rounded"
+                      className="w-10 border px-1 py-0.5 rounded"
                     />
                   </td>
                   <td className="border px-2 py-1">
                     <input
                       value={r.total.toFixed(2)}
                       disabled
-                      className="w-24 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
+                      className="w-20 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
                     />
                   </td>
                   <td className="border px-2 py-1">
@@ -996,7 +995,7 @@ export default function QuotationView() {
                       type="number"
                       value={r.ourCost}
                       onChange={(e) => updateOpRow(idx, "ourCost", e.target.value)}
-                      className="w-24 border px-1 py-0.5 rounded"
+                      className="w-10 border px-1 py-0.5 rounded"
                     />
                   </td>
                   <td className="border px-2 py-1">
@@ -1004,7 +1003,7 @@ export default function QuotationView() {
                       type="number"
                       value={r.brandingCost}
                       onChange={(e) => updateOpRow(idx, "brandingCost", e.target.value)}
-                      className="w-24 border px-1 py-0.5 rounded"
+                      className="w-10 border px-1 py-0.5 rounded"
                     />
                   </td>
                   <td className="border px-2 py-1">
@@ -1012,7 +1011,7 @@ export default function QuotationView() {
                       type="number"
                       value={r.deliveryCost}
                       onChange={(e) => updateOpRow(idx, "deliveryCost", e.target.value)}
-                      className="w-24 border px-1 py-0.5 rounded"
+                      className="w-10 border px-1 py-0.5 rounded"
                     />
                   </td>
                   <td className="border px-2 py-1">
@@ -1020,14 +1019,14 @@ export default function QuotationView() {
                       type="number"
                       value={r.markUpCost}
                       onChange={(e) => updateOpRow(idx, "markUpCost", e.target.value)}
-                      className="w-24 border px-1 py-0.5 rounded"
+                      className="w-10 border px-1 py-0.5 rounded"
                     />
                   </td>
                   <td className="border px-2 py-1">
                     <input
                       value={r.finalTotal.toFixed(2)}
                       disabled
-                      className="w-24 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
+                      className="w-25 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
                     />
                   </td>
                   <td className="border px-2 py-1">

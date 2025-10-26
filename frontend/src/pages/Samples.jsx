@@ -8,14 +8,12 @@ import SampleTable from "../components/samples/SampleTable.js";
 import AddSampleModal from "../components/samples/AddSampleModal.js";
 
 export default function Samples() {
-  /* ------------------------------------------------------------ state */
-  const [all, setAll] = useState([]); // raw list from API
+  const [all, setAll] = useState([]);
   const [search, setSearch] = useState("");
   const [showPanel, setShowPanel] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
 
-  /* panel filters */
   const [flt, setFlt] = useState({
     dateFrom: "",
     dateTo: "",
@@ -25,7 +23,6 @@ export default function Samples() {
     returnable: "",
   });
 
-  /* column sort state */
   const [sort, setSort] = useState({ field: "", dir: "asc" });
   const toggleSort = (field) => {
     setSort((s) => ({
@@ -34,7 +31,6 @@ export default function Samples() {
     }));
   };
 
-  /* --------------------------------------------------------------- env */
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const token = localStorage.getItem("token");
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
@@ -42,7 +38,6 @@ export default function Samples() {
     .getItem("permissions")
     ?.includes("export-samples");
 
-  /* -------------------------------------------------------------- data */
   const fetchSamples = async () => {
     try {
       let url = `${BACKEND_URL}/api/admin/samples`;
@@ -62,7 +57,6 @@ export default function Samples() {
     fetchSamples();
   }, [search]);
 
-  /* ----------------------------------------------------------- helpers */
   const inRange = (d, f, t) => {
     if (!f && !t) return true;
     const ts = new Date(d).setHours(0, 0, 0, 0);
@@ -84,7 +78,6 @@ export default function Samples() {
     (!flt.returnable || s.returnable === flt.returnable)
   );
 
-  /* ------------------------------------------------------------ export */
   const handleExport = () => {
     if (!visible.length) {
       alert("Nothing to export");
@@ -102,8 +95,9 @@ export default function Samples() {
       Qty: s.qty,
       Returnable: s.returnable,
       "Return Days": s.returnableDays ?? "",
-      "Opportunity #": s.opportunityNumber ?? "", // Added
-      Remarks: s.remarks ?? "", // Added
+      "Opportunity #": s.opportunityNumber ?? "",
+      "CRM Name": s.crmName ?? "", // NEW
+      Remarks: s.remarks ?? "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -111,7 +105,6 @@ export default function Samples() {
     XLSX.writeFile(wb, "samples.xlsx");
   };
 
-  /* ----------------------------------------------------------- modal op */
   const openCreate = () => {
     setEditItem(null);
     setModalOpen(true);
@@ -121,10 +114,8 @@ export default function Samples() {
     setModalOpen(true);
   };
 
-  /* =============================================================== UI */
   return (
     <div className="p-6">
-      {/* ------------------- toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <input
           type="text"
@@ -158,10 +149,8 @@ export default function Samples() {
         </button>
       </div>
 
-      {/* ------------------- filter panel */}
       {showPanel && (
         <div className="border rounded p-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50">
-          {/* date from / to */}
           <div>
             <label className="block text-xs mb-1">From (In Date)</label>
             <input
@@ -184,8 +173,6 @@ export default function Samples() {
               }
             />
           </div>
-
-          {/* text filters */}
           <div>
             <label className="block text-xs mb-1">Category</label>
             <input
@@ -216,8 +203,6 @@ export default function Samples() {
               }
             />
           </div>
-
-          {/* returnable */}
           <div>
             <label className="block text-xs mb-1">Returnable</label>
             <select
@@ -235,7 +220,6 @@ export default function Samples() {
         </div>
       )}
 
-      {/* ------------------- table */}
       <SampleTable
         samples={visible}
         sortField={sort.field}
@@ -244,7 +228,6 @@ export default function Samples() {
         onEdit={openEdit}
       />
 
-      {/* ------------------- add / edit modal */}
       {modalOpen && (
         <AddSampleModal
           initialData={editItem}

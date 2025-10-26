@@ -1,4 +1,3 @@
-// src/pages/ProductManagementPage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
@@ -21,7 +20,6 @@ export default function ProductManagementPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // — persisted state helpers —
   const loadState = (key, def) => {
     try {
       return JSON.parse(localStorage.getItem(key)) ?? def;
@@ -33,7 +31,6 @@ export default function ProductManagementPage() {
     localStorage.setItem(key, JSON.stringify(val));
   };
 
-  // — paging & filters —
   const query = new URLSearchParams(location.search);
   const [currentPage, setCurrentPage] = useState(
     parseInt(query.get("page"), 10) || loadState("productPage", 1)
@@ -42,7 +39,6 @@ export default function ProductManagementPage() {
     loadState("productSearchTerm", "")
   );
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
-
   const [selectedCategories, setSelectedCategories] = useState(
     loadState("productCategories", [])
   );
@@ -59,14 +55,12 @@ export default function ProductManagementPage() {
     loadState("productVariationHinges", [])
   );
 
-  // — dropdown open state —
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [subCategoryOpen, setSubCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
   const [priceRangeOpen, setPriceRangeOpen] = useState(false);
   const [variationHingeOpen, setVariationHingeOpen] = useState(false);
 
-  // — UI state —
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
     subCategories: [],
@@ -82,7 +76,6 @@ export default function ProductManagementPage() {
     variationHinges: {},
   });
 
-  // — single product modal —
   const [singleModalOpen, setSingleModalOpen] = useState(false);
   const [editProductId, setEditProductId] = useState(null);
   const [newProductData, setNewProductData] = useState({
@@ -111,13 +104,11 @@ export default function ProductManagementPage() {
     productCost: 0,
     productCost_Unit: "",
     productGST: 0,
+    preferredVendors: [],
   });
 
-  // — bulk upload modal —
   const [bulkOpen, setBulkOpen] = useState(false);
   const [csvData, setCsvData] = useState([]);
-
-  // — advanced image search —
   const [advancedSearchActive, setAdvancedSearchActive] = useState(
     loadState("productAdvancedSearchActive", false)
   );
@@ -125,34 +116,24 @@ export default function ProductManagementPage() {
     loadState("productAdvancedSearchResults", [])
   );
   const [advLoading, setAdvLoading] = useState(false);
-
-  // — data —
   const [products, setProducts] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
-
-  // — loading flags —
   const [isFetching, setIsFetching] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
-
-  // — carousel & details modal —
   const [carouselIndexMap, setCarouselIndexMap] = useState(
     loadState("productCarouselIndexMap", {})
   );
   const [productDetailsOpen, setProductDetailsOpen] = useState(false);
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
-
-  // — NEW: upload progress for modal —
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const limit = 100;
 
-  // Debounce searchTerm
   useEffect(() => {
     const h = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 100);
     return () => clearTimeout(h);
   }, [searchTerm]);
 
-  // Persist page & URL
   useEffect(() => {
     saveState("productPage", currentPage);
     navigate(`/admin-dashboard/manage-products?page=${currentPage}`, {
@@ -160,7 +141,6 @@ export default function ProductManagementPage() {
     });
   }, [currentPage, navigate]);
 
-  // Persist filters
   useEffect(() => { saveState("productSearchTerm", searchTerm); }, [searchTerm]);
   useEffect(() => { saveState("productCategories", selectedCategories); }, [selectedCategories]);
   useEffect(() => { saveState("productSubCategories", selectedSubCategories); }, [selectedSubCategories]);
@@ -173,7 +153,6 @@ export default function ProductManagementPage() {
 
   const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
 
-  // Fetch filter options once
   useEffect(() => {
     (async () => {
       try {
@@ -202,7 +181,6 @@ export default function ProductManagementPage() {
     })();
   }, [BACKEND_URL]);
 
-  // Unified fetch
   useEffect(() => {
     const cancelSrc = axios.CancelToken.source();
     (async () => {
@@ -265,7 +243,6 @@ export default function ProductManagementPage() {
     initialLoad,
   ]);
 
-  // Advanced image search
   const { getRootProps: advRoot, getInputProps: advInput } = useDropzone({
     accept: "image/*",
     multiple: false,
@@ -275,6 +252,7 @@ export default function ProductManagementPage() {
         const token = localStorage.getItem("token");
         const fd = new FormData();
         fd.append("image", file);
+        // FIX: matches backend route (no /admin)
         const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, fd, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -288,12 +266,12 @@ export default function ProductManagementPage() {
       }
     },
   });
+
   const clearAdvancedSearch = () => {
     setAdvancedSearchActive(false);
     setAdvancedSearchResults([]);
   };
 
-  // CSV dropzone (for Bulk modal preview/import)
   const { getRootProps: csvRootProps, getInputProps: csvInputProps } = useDropzone({
     accept: {
       "text/csv": [".csv"],
@@ -313,7 +291,6 @@ export default function ProductManagementPage() {
     },
   });
 
-  // Carousel handlers
   const handleNextImage = (id) => {
     setCarouselIndexMap((prev) => {
       const prod = products.find((x) => x._id === id);
@@ -331,7 +308,6 @@ export default function ProductManagementPage() {
     });
   };
 
-  // Product details modal
   const displayList = advancedSearchActive ? advancedSearchResults : products;
   const hasSearch = Boolean(debouncedSearch);
   const openDetails = (id) => {
@@ -341,10 +317,10 @@ export default function ProductManagementPage() {
       setProductDetailsOpen(true);
     }
   };
+
   const nextDetails = () => setSelectedProductIndex((i) => (i + 1) % displayList.length);
   const prevDetails = () => setSelectedProductIndex((i) => (i - 1 + displayList.length) % displayList.length);
 
-  // Clear all filters
   const clearAllFilters = () => {
     setSearchTerm("");
     setSelectedCategories([]);
@@ -367,10 +343,21 @@ export default function ProductManagementPage() {
     localStorage.removeItem("productCarouselIndexMap");
   };
 
+  // Helper: find the product object (with populated preferredVendors) by ID
+  const findProductById = (id) =>
+    products.find((x) => x._id === id) ||
+    advancedSearchResults.find((x) => x._id === id) ||
+    null;
+
+  // Compute the initialSelectedVendors (array of populated vendor docs) for the modal
+  const initialSelectedVendors =
+    editProductId && findProductById(editProductId) && Array.isArray(findProductById(editProductId).preferredVendors)
+      ? findProductById(editProductId).preferredVendors
+      : [];
+
   return (
     <div className="bg-white text-gray-800 min-h-screen">
       <div className="md:p-6 p-4 max-w-7xl mx-auto">
-        {/* SEARCH & ACTIONS */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-1/2">
             <input
@@ -429,6 +416,7 @@ export default function ProductManagementPage() {
                   productCost: 0,
                   productCost_Unit: "",
                   productGST: 0,
+                  preferredVendors: [],
                 });
                 setSingleModalOpen(true);
               }}
@@ -442,7 +430,6 @@ export default function ProductManagementPage() {
           </div>
         </div>
 
-        {/* CLEAR FILTERS */}
         {(searchTerm ||
           selectedCategories.length ||
           selectedSubCategories.length ||
@@ -457,7 +444,6 @@ export default function ProductManagementPage() {
           </div>
         )}
 
-        {/* FILTERS */}
         <div className="flex flex-wrap gap-4 mb-6">
           <DropdownFilter
             label={`Categories (${selectedCategories.length})`}
@@ -511,7 +497,6 @@ export default function ProductManagementPage() {
           />
         </div>
 
-        {/* SELECTED FILTER PILLS */}
         {(selectedCategories.length ||
           selectedSubCategories.length ||
           selectedBrands.length ||
@@ -576,14 +561,12 @@ export default function ProductManagementPage() {
           </div>
         )}
 
-        {/* NO RESULTS */}
         {!initialLoad && !isFetching && displayList.length === 0 && (
           <div className="py-8 text-center text-gray-500">
             No products found{hasSearch ? ` for “${debouncedSearch}”` : ""}.
           </div>
         )}
 
-        {/* INITIAL SKELETON OR GRID WITH OVERLAY */}
         {initialLoad && isFetching ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -608,11 +591,20 @@ export default function ProductManagementPage() {
                       setCurrentPage(1);
                     } catch (err) {
                       console.error(err);
+                      alert("Error deleting product");
                     }
                   }}
                   openSingleProductModal={() => {
                     setEditProductId(p._id);
-                    setNewProductData(p);
+                    setNewProductData({
+                      ...p,
+                      // Defensive mapping: supports undefined, string IDs, or populated docs
+                      preferredVendors: Array.isArray(p.preferredVendors)
+                        ? p.preferredVendors
+                            .map((v) => (typeof v === "string" ? v : v?._id))
+                            .filter(Boolean)
+                        : [],
+                    });
                     setSingleModalOpen(true);
                   }}
                   carouselIndexMap={carouselIndexMap}
@@ -629,7 +621,6 @@ export default function ProductManagementPage() {
           </div>
         )}
 
-        {/* PAGINATION */}
         <div className="flex justify-center items-center mt-6 space-x-4">
           <button
             onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
@@ -649,7 +640,6 @@ export default function ProductManagementPage() {
         </div>
       </div>
 
-      {/* SINGLE PRODUCT MODAL */}
       {singleModalOpen && (
         <SingleProductModal
           editProductId={editProductId}
@@ -704,10 +694,11 @@ export default function ProductManagementPage() {
           categories={filterOptions.categories}
           subCategories={filterOptions.subCategories}
           brands={filterOptions.brands}
+          // NEW: give the modal the populated vendors for label rendering
+          initialSelectedVendors={initialSelectedVendors}
         />
       )}
 
-      {/* BULK UPLOAD MODAL */}
       {bulkOpen && (
         <BulkUploadModal
           onClose={() => setBulkOpen(false)}
@@ -720,9 +711,9 @@ export default function ProductManagementPage() {
               "Name","Brand Name","Qty","MRP_Currency","MRP","MRP_Unit","Delivery Time","Size","Color",
               "Material","Price Range","Weight","HSN Code","Product Cost_Currency","Product Cost",
               "Product Cost_Unit","Product_Details","Main_Image_URL","Second_Image_URL","Third_Image_URL",
-              "Fourth_Image_URL","Other_image_URL","ProductGST",
+              "Fourth_Image_URL","Other_image_URL","ProductGST","Preferred_Vendor_IDs",
             ];
-            const example = headerRow.map((_, i) => (i === 0 ? "Tag123" : ""));
+            const example = headerRow.map((_, i) => (i === 0 ? "Tag123" : i === headerRow.length - 1 ? "vendor_id1,vendor_id2" : ""));
             const ws = XLSX.utils.aoa_to_sheet([headerRow, example]);
             XLSX.utils.book_append_sheet(wb, ws, "Template");
             const blob = new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })], {
@@ -757,9 +748,9 @@ export default function ProductManagementPage() {
                   r["Other_image_URL"],
                 ].filter(Boolean),
                 productDetails: r["Product_Details"] || "",
-                qty: r["Qty"] || 0,
+                qty: Number(r["Qty"]) || 0,
                 MRP_Currency: r["MRP_Currency"] || "",
-                MRP: r["MRP"] || 0,
+                MRP: Number(r["MRP"]) || 0,
                 MRP_Unit: r["MRP_Unit"] || "",
                 deliveryTime: r["Delivery Time"] || "",
                 size: r["Size"] || "",
@@ -769,9 +760,10 @@ export default function ProductManagementPage() {
                 weight: r["Weight"] || "",
                 hsnCode: r["HSN Code"] || "",
                 productCost_Currency: r["Product Cost_Currency"] || "",
-                productCost: r["Product Cost"] || 0,
+                productCost: Number(r["Product Cost"]) || 0,
                 productCost_Unit: r["Product Cost_Unit"] || "",
-                productGST: Number(r["ProductGST"] || 0),
+                productGST: Number(r["ProductGST"]) || 0,
+                preferredVendors: r["Preferred_Vendor_IDs"] ? r["Preferred_Vendor_IDs"].split(",").map((id) => id.trim()) : [],
               }));
               await axios.post(`${BACKEND_URL}/api/admin/products/bulk`, toUpload, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -781,14 +773,13 @@ export default function ProductManagementPage() {
               setCurrentPage(1);
             } catch (err) {
               console.error(err);
-              alert("Error with bulk upload");
+              alert(err?.response?.data?.message || "Error with bulk upload");
             }
           }}
           csvData={csvData}
         />
       )}
 
-      {/* PRODUCT DETAILS LIGHTBOX */}
       {productDetailsOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-auto">
@@ -813,8 +804,17 @@ export default function ProductManagementPage() {
                 product={displayList[selectedProductIndex]}
                 onEditToggle={() => {
                   setProductDetailsOpen(false);
-                  setEditProductId(displayList[selectedProductIndex]._id);
-                  setNewProductData(displayList[selectedProductIndex]);
+                  const sel = displayList[selectedProductIndex];
+                  setEditProductId(sel._id);
+                  setNewProductData({
+                    ...sel,
+                    // Defensive mapping here as well
+                    preferredVendors: Array.isArray(sel?.preferredVendors)
+                      ? sel.preferredVendors
+                          .map((v) => (typeof v === "string" ? v : v?._id))
+                          .filter(Boolean)
+                      : [],
+                  });
                   setSingleModalOpen(true);
                 }}
               />

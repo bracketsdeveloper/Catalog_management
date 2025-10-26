@@ -6,7 +6,7 @@ const Sample = require("../models/Sample");
 const User = require("../models/User");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
-// ─── READ SINGLE ─────────────────────────────────────────────────────
+// READ SINGLE
 router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const so = await SampleOut.findById(req.params.id).lean();
@@ -18,26 +18,25 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// ─── CREATE ──────────────────────────────────────────────────────────
+// CREATE
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const b = req.body;
 
-    // 1) Company & client lookup
+    // Company & client lookup
     const comp = await Company.findOne({ companyName: b.clientCompanyName });
     if (!comp) return res.status(400).json({ message: "Invalid company" });
-    const client = comp.clients.find(c => c.name === b.clientName);
+    const client = comp.clients.find((c) => c.name === b.clientName);
     if (!client) return res.status(400).json({ message: "Invalid client name" });
 
-    // 2) User lookup
+    // User lookup
     const usr = await User.findOne({ name: b.sentBy });
     if (!usr) return res.status(400).json({ message: "Invalid sentBy user" });
 
-    // 3) Sample lookup
+    // Sample lookup
     const samp = await Sample.findOne({ sampleReferenceCode: b.sampleReferenceCode });
     if (!samp) return res.status(400).json({ message: "Invalid sample reference" });
 
-    // 4) Build record
     const so = new SampleOut({
       sampleOutDate:       b.sampleOutDate,
       clientCompanyId:     comp._id,
@@ -59,8 +58,11 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       sampleOutStatus:     b.sampleOutStatus,
       qtyReceivedBack:     b.qtyReceivedBack,
       receivedBack:        b.receivedBack,
-      returned:            b.returned, // Added returned field
+      returned:            b.returned,
       sampleBackDate:      b.sampleBackDate,
+
+      // NEW
+      opportunityNumber:   (b.opportunityNumber || "").trim(),
     });
 
     await so.save();
@@ -71,16 +73,19 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// ─── READ ALL ─────────────────────────────────────────────────────────
+// READ ALL
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { search = "" } = req.query;
     const q = search
-      ? { sampleReferenceCode: { $regex: search, $options: "i" } }
+      ? {
+          $or: [
+            { sampleReferenceCode: { $regex: search, $options: "i" } },
+            { opportunityNumber:   { $regex: search, $options: "i" } }, // allow searching this too
+          ],
+        }
       : {};
-    const list = await SampleOut.find(q)
-      .sort({ sampleOutDate: -1 })
-      .lean();
+    const list = await SampleOut.find(q).sort({ sampleOutDate: -1 }).lean();
     res.json(list);
   } catch (err) {
     console.error(err);
@@ -88,7 +93,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// ─── UPDATE ───────────────────────────────────────────────────────────
+// UPDATE
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const b = req.body;
@@ -99,7 +104,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     if (b.clientCompanyName && b.clientName) {
       const comp = await Company.findOne({ companyName: b.clientCompanyName });
       if (!comp) return res.status(400).json({ message: "Invalid company" });
-      const client = comp.clients.find(c => c.name === b.clientName);
+      const client = comp.clients.find((c) => c.name === b.clientName);
       if (!client) return res.status(400).json({ message: "Invalid client" });
 
       so.clientCompanyId = comp._id;
@@ -118,8 +123,11 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // sampleReferenceCode if changed
     if (b.sampleReferenceCode) {
-      const samp = await Sample.findOne({ sampleReferenceCode: b.sampleReferenceCode });
-      if (!samp) return res.status(400).json({ message: "Invalid sample reference" });
+      const samp = await Sample.findOne({
+        sampleReferenceCode: b.sampleReferenceCode,
+      });
+      if (!samp)
+        return res.status(400).json({ message: "Invalid sample reference" });
       so.sampleRefId = samp._id;
       so.sampleReferenceCode = samp.sampleReferenceCode;
       so.productCode = samp.productId;
@@ -131,11 +139,23 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // Other updatable fields
     [
-      "sampleOutDate", "qty", "sentThrough", "sampleDCNumber",
-      "sampleOutStatus", "qtyReceivedBack", "receivedBack", "returned", "sampleBackDate"
-    ].forEach(field => {
+      "sampleOutDate",
+      "qty",
+      "sentThrough",
+      "sampleDCNumber",
+      "sampleOutStatus",
+      "qtyReceivedBack",
+      "receivedBack",
+      "returned",
+      "sampleBackDate",
+    ].forEach((field) => {
       if (typeof b[field] !== "undefined") so[field] = b[field];
     });
+
+    // NEW: opportunityNumber
+    if (typeof b.opportunityNumber !== "undefined") {
+      so.opportunityNumber = (b.opportunityNumber || "").trim();
+    }
 
     await so.save();
     res.json({ message: "Sample Out updated", sampleOut: so });
@@ -145,7 +165,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// ─── DELETE ───────────────────────────────────────────────────────────
+// DELETE
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const deleted = await SampleOut.findByIdAndDelete(req.params.id);

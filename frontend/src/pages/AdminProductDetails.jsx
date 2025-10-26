@@ -20,7 +20,13 @@ function getColorHex(colorName) {
   return found ? COLOR_MAP[found] : "#ffffff";
 }
 
-export default function AdminProductDetails({ product, onEditToggle }) {
+export default function AdminProductDetails({
+  product,
+  onEditToggle,
+  categories,
+  subCategories,
+  brands,
+}) {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
   // Helper to load state from localStorage
@@ -64,6 +70,7 @@ export default function AdminProductDetails({ product, onEditToggle }) {
     productCost: product?.productCost || 0,
     productCost_Unit: product?.productCost_Unit || "",
     productGST: product?.productGST || 0,
+    preferredVendors: product?.preferredVendors?.map((v) => v._id) || [], // Initialize with vendor IDs
   });
 
   // Persist activeImageIndex to localStorage
@@ -88,7 +95,7 @@ export default function AdminProductDetails({ product, onEditToggle }) {
     } else {
       setActiveImageIndex(0);
     }
-  }, [product]);
+  }, [product]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update formData when product changes
   useEffect(() => {
@@ -119,6 +126,7 @@ export default function AdminProductDetails({ product, onEditToggle }) {
         productCost: product.productCost || 0,
         productCost_Unit: product.productCost_Unit || "",
         productGST: product.productGST || 0,
+        preferredVendors: product.preferredVendors?.map((v) => v._id) || [],
       });
     }
   }, [product]);
@@ -150,10 +158,11 @@ export default function AdminProductDetails({ product, onEditToggle }) {
     const urls = [];
     for (let file of files) {
       try {
-        const up = await uploadImage(file);
+        const up = await uploadImage(file, (pct) => setUploadProgress(pct));
         urls.push(up.secure_url);
       } catch (err) {
         console.error("Image upload error:", err);
+        alert(`Failed to upload image: ${err.message}`);
       }
     }
     setFormData((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
@@ -164,7 +173,13 @@ export default function AdminProductDetails({ product, onEditToggle }) {
     setUploadProgress(0);
     try {
       const token = localStorage.getItem("token");
-      const payload = { ...formData, productGST: Number(formData.productGST) };
+      const payload = {
+        ...formData,
+        productGST: Number(formData.productGST),
+        qty: Number(formData.qty),
+        MRP: Number(formData.MRP),
+        productCost: Number(formData.productCost),
+      };
       await axios.put(`${BACKEND_URL}/api/admin/products/${product._id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -174,7 +189,7 @@ export default function AdminProductDetails({ product, onEditToggle }) {
       }
     } catch (err) {
       console.error("Error updating product:", err);
-      alert("Failed to update product");
+      alert(err?.response?.data?.message || "Failed to update product");
     } finally {
       setUploadProgress(0);
     }
@@ -188,6 +203,12 @@ export default function AdminProductDetails({ product, onEditToggle }) {
       </div>
     );
   }
+
+  // Build vendor labels using vendorCompany -> vendorName -> _id
+  const vendorLabels =
+    (product.preferredVendors || [])
+      .map((v) => v?.vendorCompany || v?.vendorName || v?._id)
+      .filter(Boolean) || [];
 
   return (
     <div className="bg-white py-6">
@@ -369,7 +390,17 @@ export default function AdminProductDetails({ product, onEditToggle }) {
                     <p className="text-sm">{product.productGST}</p>
                   </div>
                 )}
+                {/* Preferred Vendors */}
+                {product.preferredVendors?.length > 0 && (
+                  <div className="col-span-2">
+                    <h3 className="text-sm font-medium text-gray-600">Preferred Vendors</h3>
+                    <p className="text-sm">
+                      {vendorLabels.length ? vendorLabels.join(", ") : "None"}
+                    </p>
+                  </div>
+                )}
               </div>
+
               {/* Details */}
               {product.productDetails && (
                 <div className="mt-6 text-sm text-gray-600">
@@ -377,6 +408,7 @@ export default function AdminProductDetails({ product, onEditToggle }) {
                   <p className="mt-1">{product.productDetails}</p>
                 </div>
               )}
+
               {/* Edit Button */}
               {localStorage.getItem("role") === "ADMIN" && (
                 <button
@@ -397,9 +429,9 @@ export default function AdminProductDetails({ product, onEditToggle }) {
             closeSingleProductModal={handleEditToggle}
             handleFileChange={handleFileChange}
             uploadProgress={uploadProgress}
-            categories={product.categories || []}
-            subCategories={product.subCategories || []}
-            brands={product.brands || []}
+            categories={categories || []}
+            subCategories={subCategories || []}
+            brands={brands || []}
           />
         )}
       </div>
@@ -435,9 +467,19 @@ AdminProductDetails.propTypes = {
     productCost: PropTypes.number,
     productCost_Unit: PropTypes.string,
     productGST: PropTypes.number,
+    preferredVendors: PropTypes.arrayOf(
+      PropTypes.shape({
+        _id: PropTypes.string,
+        vendorCompany: PropTypes.string, // show company first
+        vendorName: PropTypes.string,    // fallback if company missing
+      })
+    ),
     categories: PropTypes.arrayOf(PropTypes.string),
     subCategories: PropTypes.arrayOf(PropTypes.string),
     brands: PropTypes.arrayOf(PropTypes.string),
   }).isRequired,
   onEditToggle: PropTypes.func,
+  categories: PropTypes.arrayOf(PropTypes.string),
+  subCategories: PropTypes.arrayOf(PropTypes.string),
+  brands: PropTypes.arrayOf(PropTypes.string),
 };

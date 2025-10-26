@@ -29,7 +29,7 @@ const OpportunitySuggestionInput = ({ value, onChange, onSelect, placeholder, su
         placeholder={placeholder}
       />
       {dropdownOpen && suggestions.length > 0 && (
-        <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-60 overflow-y-auto">
+        <div className="absolute z-20 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-60 overflow-y-auto">
           {suggestions.map((opportunity, index) => (
             <div
               key={index}
@@ -124,9 +124,15 @@ const JobSheetForm = ({
   const [addresses, setAddresses] = useState(deliveryAddress.length > 0 ? deliveryAddress : [""]);
   const [customDeliveryType, setCustomDeliveryType] = useState("");
   const [customDeliveryMode, setCustomDeliveryMode] = useState("");
+
+  // Vendors
   const [vendorSuggestions, setVendorSuggestions] = useState([]);
   const [vendorOtherMap, setVendorOtherMap] = useState({});
   const [sourcingOtherMap, setSourcingOtherMap] = useState({});
+
+  // NEW: per-row typeahead state for "sourcingFrom"
+  const [sourcingQueryMap, setSourcingQueryMap] = useState({});
+  const [sourcingOpenMap, setSourcingOpenMap] = useState({});
 
   const deliveryTypeOptions = [
     "Single office delivery",
@@ -211,6 +217,14 @@ const JobSheetForm = ({
   };
 
   const currentCompanyClients = getCurrentCompanyClients();
+
+  // helper: filter vendors by a query
+  const filterVendors = (q) => {
+    const s = (q || "").toLowerCase();
+    return vendorSuggestions
+      .filter(v => (v.vendorName || "").toLowerCase().includes(s))
+      .slice(0, 8);
+  };
 
   return (
     <div className="space-y-4 mb-6">
@@ -306,7 +320,7 @@ const JobSheetForm = ({
           required
         />
         {dropdownOpen && clientCompanyName && (
-          <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
+          <div className="absolute z-20 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
             {companies
               .filter((company) =>
                 company.companyName.toLowerCase().includes(clientCompanyName.toLowerCase())
@@ -345,7 +359,7 @@ const JobSheetForm = ({
             required
           />
           {clientDropdownOpen && currentCompanyClients.length > 0 && (
-            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
+            <div className="absolute z-20 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full">
               {currentCompanyClients
                 .filter((client) =>
                   client.name.toLowerCase().includes(clientName.toLowerCase())
@@ -407,7 +421,7 @@ const JobSheetForm = ({
         </div>
       </div>
 
-      {/* Row: If Quotation + items => show table of items */}
+      {/* Row: If Quotation + items => table */}
       {referenceQuotation && selectedItems.length > 0 && (
         <div className="mt-4">
           <h3 className="font-medium text-purple-700 mb-2">Products</h3>
@@ -442,152 +456,186 @@ const JobSheetForm = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {selectedItems.map((item, idx) => (
-                  <tr key={idx}>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {item.product}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {item.color || "-"}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {item.size || "-"}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-16 border rounded p-1"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "quantity", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {sourcingOtherMap[idx] ? (
-                        <div className="relative">
-                          <input
-                            type="text"
+                {selectedItems.map((item, idx) => {
+                  const q = sourcingQueryMap[idx] ?? (item.sourcingFrom || "");
+                  const filtered = filterVendors(q);
+                  return (
+                    <tr key={idx}>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.product}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.color || "-"}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {item.size || "-"}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-16 border rounded p-1"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            handleInlineUpdate(idx, "quantity", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      {/* Sourcing From (typeahead) */}
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {sourcingOtherMap[idx] ? (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              className="border rounded p-1 w-full"
+                              value={item.sourcingFrom || ""}
+                              onFocus={() =>
+                                setSourcingOpenMap((m) => ({ ...m, [idx]: true }))
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                handleInlineUpdate(idx, "sourcingFrom", val);
+                                setSourcingQueryMap((m) => ({ ...m, [idx]: val }));
+                                setSourcingOpenMap((m) => ({ ...m, [idx]: true }));
+                              }}
+                              placeholder="Type vendor name…"
+                            />
+                            {/* Suggestions */}
+                            {sourcingOpenMap[idx] && filtered.length > 0 && (
+                              <div className="absolute z-20 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-48 overflow-y-auto">
+                                {filtered.map((v) => (
+                                  <div
+                                    key={v._id}
+                                    className="p-2 cursor-pointer hover:bg-gray-100"
+                                    onMouseDown={() => {
+                                      handleInlineUpdate(idx, "sourcingFrom", v.vendorName);
+                                      setSourcingQueryMap((m) => ({ ...m, [idx]: v.vendorName }));
+                                      setSourcingOpenMap((m) => ({ ...m, [idx]: false }));
+                                    }}
+                                  >
+                                    {v.vendorName}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSourcingOtherMap((prev) => ({ ...prev, [idx]: false }))
+                              }
+                              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                            >
+                              Go to option
+                            </button>
+                          </div>
+                        ) : (
+                          <select
                             className="border rounded p-1 w-full"
                             value={item.sourcingFrom || ""}
-                            onChange={(e) =>
-                              handleInlineUpdate(idx, "sourcingFrom", e.target.value)
-                            }
-                            placeholder="Enter Sourcing"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSourcingOtherMap((prev) => ({ ...prev, [idx]: false }))
-                            }
-                            className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                            onChange={(e) => {
+                              const selected = e.target.value;
+                              if (selected === "Other") {
+                                setSourcingOtherMap((prev) => ({ ...prev, [idx]: true }));
+                                handleInlineUpdate(idx, "sourcingFrom", "");
+                              } else {
+                                handleInlineUpdate(idx, "sourcingFrom", selected);
+                              }
+                            }}
                           >
-                            Go to option
-                          </button>
-                        </div>
-                      ) : (
+                            <option value="">Select Sourcing</option>
+                            {vendorSuggestions.map((vendor) => (
+                              <option key={vendor._id} value={vendor.vendorName}>
+                                {vendor.vendorName}
+                              </option>
+                            ))}
+                            <option value="Other">Other</option>
+                          </select>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                         <select
                           className="border rounded p-1 w-full"
-                          value={item.sourcingFrom || ""}
-                          onChange={(e) => {
-                            const selected = e.target.value;
-                            if (selected === "Other") {
-                              setSourcingOtherMap((prev) => ({ ...prev, [idx]: true }));
-                              handleInlineUpdate(idx, "sourcingFrom", "");
-                            } else {
-                              handleInlineUpdate(idx, "sourcingFrom", selected);
-                            }
-                          }}
+                          value={item.brandingType || ""}
+                          onChange={(e) =>
+                            handleInlineUpdate(idx, "brandingType", e.target.value)
+                          }
                         >
-                          <option value="">Select Sourcing</option>
-                          {vendorSuggestions.map((vendor, i) => (
-                            <option key={i} value={vendor.vendorName}>
-                              {vendor.vendorName}
+                          <option value="">Select Branding Type</option>
+                          {brandingTypeOptions.map((option, optionIdx) => (
+                            <option key={optionIdx} value={option}>
+                              {option}
                             </option>
                           ))}
-                          <option value="Other">Other</option>
                         </select>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      <select
-                        className="border rounded p-1 w-full"
-                        value={item.brandingType || ""}
-                        onChange={(e) =>
-                          handleInlineUpdate(idx, "brandingType", e.target.value)
-                        }
-                      >
-                        <option value="">Select Branding Type</option>
-                        {brandingTypeOptions.map((option, optionIdx) => (
-                          <option key={optionIdx} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {vendorOtherMap[idx] ? (
-                        <div className="relative">
-                          <input
-                            type="text"
+                      </td>
+
+                      {/* Branding Vendor (unchanged behavior with Other toggle) */}
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {vendorOtherMap[idx] ? (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              className="border rounded p-1 w-full"
+                              value={item.brandingVendor || ""}
+                              onChange={(e) =>
+                                handleInlineUpdate(idx, "brandingVendor", e.target.value)
+                              }
+                              placeholder="Enter Vendor"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVendorOtherMap((prev) => ({ ...prev, [idx]: false }))
+                              }
+                              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                            >
+                              Go to option
+                            </button>
+                          </div>
+                        ) : (
+                          <select
                             className="border rounded p-1 w-full"
                             value={item.brandingVendor || ""}
-                            onChange={(e) =>
-                              handleInlineUpdate(idx, "brandingVendor", e.target.value)
-                            }
-                            placeholder="Enter Vendor"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setVendorOtherMap((prev) => ({ ...prev, [idx]: false }))
-                            }
-                            className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                            onChange={(e) => {
+                              const selected = e.target.value;
+                              if (selected === "Other") {
+                                setVendorOtherMap((prev) => ({ ...prev, [idx]: true }));
+                                handleInlineUpdate(idx, "brandingVendor", "");
+                              } else {
+                                handleInlineUpdate(idx, "brandingVendor", selected);
+                              }
+                            }}
                           >
-                            Go to option
-                          </button>
-                        </div>
-                      ) : (
-                        <select
-                          className="border rounded p-1 w-full"
-                          value={item.brandingVendor || ""}
-                          onChange={(e) => {
-                            const selected = e.target.value;
-                            if (selected === "Other") {
-                              setVendorOtherMap((prev) => ({ ...prev, [idx]: true }));
-                              handleInlineUpdate(idx, "brandingVendor", "");
-                            } else {
-                              handleInlineUpdate(idx, "brandingVendor", selected);
-                            }
-                          }}
+                            <option value="">Select Vendor</option>
+                            {vendorSuggestions.map((vendor) => (
+                              <option key={vendor._id} value={vendor.vendorName}>
+                                {vendor.vendorName}
+                              </option>
+                            ))}
+                            <option value="Other">Other</option>
+                          </select>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        <button
+                          onClick={() => handleEditItem(idx)}
+                          className="text-blue-600 hover:text-blue-900 mr-2"
                         >
-                          <option value="">Select Vendor</option>
-                          {vendorSuggestions.map((vendor, i) => (
-                            <option key={i} value={vendor.vendorName}>
-                              {vendor.vendorName}
-                            </option>
-                          ))}
-                          <option value="Other">Other</option>
-                        </select>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      <button
-                        onClick={() => handleEditItem(idx)}
-                        className="text-blue-600 hover:text-blue-900 mr-2"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleRemoveSelectedItem(idx)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleRemoveSelectedItem(idx)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

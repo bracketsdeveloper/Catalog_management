@@ -27,9 +27,12 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     sampleOutStatus: "",
     qtyReceivedBack: "",
     receivedBack: false,
-    returned: false, // Added returned field
+    returned: false,
     sampleBackDate: null,
     sampleQty: 0,
+
+    // NEW: manual opportunity number
+    opportunityNumber: "",
   });
 
   // suggestions & lists
@@ -47,7 +50,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
   // 1) prefill basic fields when editing
   useEffect(() => {
     if (!initialData) return;
-    setForm(f => ({
+    setForm((f) => ({
       ...f,
       sampleOutDate: new Date(initialData.sampleOutDate),
       clientCompanyName: initialData.clientCompanyName,
@@ -66,10 +69,13 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       sampleOutStatus: initialData.sampleOutStatus,
       qtyReceivedBack: initialData.qtyReceivedBack,
       receivedBack: initialData.receivedBack,
-      returned: initialData.returned ?? false, // Added returned field
+      returned: initialData.returned ?? false,
       sampleBackDate: initialData.sampleBackDate
         ? new Date(initialData.sampleBackDate)
         : null,
+
+      // NEW: prefill opp number
+      opportunityNumber: initialData.opportunityNumber || "",
     }));
   }, [initialData]);
 
@@ -78,17 +84,20 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     if (!initialData) return;
 
     // fetch client list for this company
-    axios.get(
-      `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
-        initialData.clientCompanyName
-      )}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => {
-        const c = r.data.find(x => x.companyName === initialData.clientCompanyName);
+    axios
+      .get(
+        `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
+          initialData.clientCompanyName
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then((r) => {
+        const c = r.data.find(
+          (x) => x.companyName === initialData.clientCompanyName
+        );
         if (c) setClientList(c.clients || []);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Error fetching client list:", {
           message: err.message,
           stack: err.stack,
@@ -99,18 +108,21 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       });
 
     // fetch this sample's details to get sampleQty
-    axios.get(
-      `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
-        initialData.sampleReferenceCode
-      )}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => {
+    axios
+      .get(
+        `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
+          initialData.sampleReferenceCode
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then((r) => {
         const list = r.data.products ?? r.data;
-        const s = list.find(x => x.sampleReferenceCode === initialData.sampleReferenceCode);
-        if (s) setForm(f => ({ ...f, sampleQty: s.qty }));
+        const s = list.find(
+          (x) => x.sampleReferenceCode === initialData.sampleReferenceCode
+        );
+        if (s) setForm((f) => ({ ...f, sampleQty: s.qty }));
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Error fetching sample details:", {
           message: err.message,
           stack: err.stack,
@@ -121,14 +133,15 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       });
 
     // fetch existing outs for availability
-    axios.get(
-      `${BACKEND_URL}/api/admin/sample-outs?search=${encodeURIComponent(
-        initialData.sampleReferenceCode
-      )}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => setExistingOuts(r.data))
-      .catch(err => {
+    axios
+      .get(
+        `${BACKEND_URL}/api/admin/sample-outs?search=${encodeURIComponent(
+          initialData.sampleReferenceCode
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then((r) => setExistingOuts(r.data))
+      .catch((err) => {
         console.error("Error fetching existing sample-outs:", {
           message: err.message,
           stack: err.stack,
@@ -142,7 +155,10 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
   // 3) recalc availableQty whenever sampleQty or existingOuts change
   useEffect(() => {
     const totalSent = existingOuts.reduce((sum, o) => sum + Number(o.qty), 0);
-    const totalRet = existingOuts.reduce((sum, o) => sum + Number(o.qtyReceivedBack), 0);
+    const totalRet = existingOuts.reduce(
+      (sum, o) => sum + Number(o.qtyReceivedBack),
+      0
+    );
     setAvailableQty(form.sampleQty - totalSent + totalRet);
   }, [form.sampleQty, existingOuts]);
 
@@ -152,14 +168,15 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       setCompanySug([]);
       return;
     }
-    axios.get(
-      `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
-        form.clientCompanyName
-      )}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => setCompanySug(r.data))
-      .catch(err => {
+    axios
+      .get(
+        `${BACKEND_URL}/api/admin/companies?search=${encodeURIComponent(
+          form.clientCompanyName
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then((r) => setCompanySug(r.data))
+      .catch((err) => {
         console.error("Error fetching company suggestions:", {
           message: err.message,
           stack: err.stack,
@@ -170,8 +187,8 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       });
   }, [form.clientCompanyName]);
 
-  const selectCompany = c => {
-    setForm(f => ({
+  const selectCompany = (c) => {
+    setForm((f) => ({
       ...f,
       clientCompanyName: c.companyName,
       clientName: "",
@@ -187,12 +204,15 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       setUserSug([]);
       return;
     }
-    axios.get(
-      `${BACKEND_URL}/api/admin/users?search=${encodeURIComponent(form.sentBy)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => setUserSug(r.data))
-      .catch(err => {
+    axios
+      .get(
+        `${BACKEND_URL}/api/admin/users?search=${encodeURIComponent(
+          form.sentBy
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then((r) => setUserSug(r.data))
+      .catch((err) => {
         console.error("Error fetching user suggestions:", {
           message: err.message,
           stack: err.stack,
@@ -209,14 +229,15 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       setSampleSug([]);
       return;
     }
-    axios.get(
-      `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
-        form.sampleReferenceCode
-      )}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then(r => setSampleSug(r.data.products ?? r.data))
-      .catch(err => {
+    axios
+      .get(
+        `${BACKEND_URL}/api/admin/samples?search=${encodeURIComponent(
+          form.sampleReferenceCode
+        )}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then((r) => setSampleSug(r.data.products ?? r.data))
+      .catch((err) => {
         console.error("Error fetching sample suggestions:", {
           message: err.message,
           stack: err.stack,
@@ -227,8 +248,8 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
       });
   }, [form.sampleReferenceCode]);
 
-  const selectSample = s => {
-    setForm(f => ({
+  const selectSample = (s) => {
+    setForm((f) => ({
       ...f,
       sampleReferenceCode: s.sampleReferenceCode,
       productCode: s.productId,
@@ -247,14 +268,12 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
 
   // 7) handleChange + validation
   const handleChange = (key, val) => {
-    setForm(f => ({ ...f, [key]: val }));
+    setForm((f) => ({ ...f, [key]: val }));
 
     if (key === "qty") {
       const out = Number(val);
       setQtyError(
-        out > availableQty
-          ? `Cannot exceed available qty (${availableQty})`
-          : ""
+        out > availableQty ? `Cannot exceed available qty (${availableQty})` : ""
       );
       if (form.qtyReceivedBack !== "") {
         setReceivedBackError(
@@ -268,9 +287,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     if (key === "qtyReceivedBack") {
       const ret = Number(val);
       const out = Number(form.qty) || 0;
-      setReceivedBackError(
-        ret > out ? `Must be ≤ out qty (${out})` : ""
-      );
+      setReceivedBackError(ret > out ? `Must be ≤ out qty (${out})` : "");
     }
   };
 
@@ -284,6 +301,9 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         sampleBackDate: form.sampleBackDate
           ? form.sampleBackDate.toISOString()
           : null,
+
+        // ensure trimmed string to API
+        opportunityNumber: (form.opportunityNumber || "").trim(),
       };
 
       if (isEdit) {
@@ -317,20 +337,20 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
   };
 
   // helper for <input type="date">
-  const toDateInput = date =>
+  const toDateInput = (date) =>
     date ? new Date(date).toISOString().slice(0, 10) : "";
 
   // filter suggestion lists
-  const filteredCompanySug = companySug.filter(c =>
+  const filteredCompanySug = companySug.filter((c) =>
     c.companyName.toLowerCase().includes(form.clientCompanyName.toLowerCase())
   );
-  const filteredClientSug = clientList.filter(c =>
+  const filteredClientSug = clientList.filter((c) =>
     c.name.toLowerCase().includes(form.clientName.toLowerCase())
   );
-  const filteredUserSug = userSug.filter(u =>
+  const filteredUserSug = userSug.filter((u) =>
     u.name.toLowerCase().includes(form.sentBy.toLowerCase())
   );
-  const filteredSampleSug = sampleSug.filter(s =>
+  const filteredSampleSug = sampleSug.filter((s) =>
     s.sampleReferenceCode
       .toLowerCase()
       .includes(form.sampleReferenceCode.toLowerCase())
@@ -351,9 +371,20 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
               type="date"
               className="border rounded p-2 w-full"
               value={toDateInput(form.sampleOutDate)}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("sampleOutDate", new Date(e.target.value))
               }
+            />
+          </div>
+
+          {/* NEW: Opportunity Number (manual input) */}
+          <div>
+            <label className="block mb-1">Opportunity #</label>
+            <input
+              className="border rounded p-2 w-full"
+              value={form.opportunityNumber}
+              onChange={(e) => handleChange("opportunityNumber", e.target.value)}
+              placeholder="Enter opportunity number"
             />
           </div>
 
@@ -363,13 +394,13 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.clientCompanyName}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("clientCompanyName", e.target.value)
               }
             />
             {filteredCompanySug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredCompanySug.map(c => (
+                {filteredCompanySug.map((c) => (
                   <li
                     key={c._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -388,11 +419,11 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.clientName}
-              onChange={e => handleChange("clientName", e.target.value)}
+              onChange={(e) => handleChange("clientName", e.target.value)}
             />
             {filteredClientSug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredClientSug.map(c => (
+                {filteredClientSug.map((c) => (
                   <li
                     key={c.name}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -424,11 +455,11 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sentBy}
-              onChange={e => handleChange("sentBy", e.target.value)}
+              onChange={(e) => handleChange("sentBy", e.target.value)}
             />
             {filteredUserSug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredUserSug.map(u => (
+                {filteredUserSug.map((u) => (
                   <li
                     key={u._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -447,13 +478,13 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sampleReferenceCode}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("sampleReferenceCode", e.target.value)
               }
             />
             {filteredSampleSug.length > 0 && (
               <ul className="border bg-white max-h-40 overflow-auto mt-1">
-                {filteredSampleSug.map(s => (
+                {filteredSampleSug.map((s) => (
                   <li
                     key={s._id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -513,16 +544,14 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
 
           {/* Qty (Out) */}
           <div>
-            <label className="block mb-1">
-              Qty (max: {availableQty})
-            </label>
+            <label className="block mb-1">Qty (max: {availableQty})</label>
             <input
               type="number"
               className={`border rounded p-2 w-full ${
                 qtyError ? "border-red-500" : ""
               }`}
               value={form.qty}
-              onChange={e => handleChange("qty", e.target.value)}
+              onChange={(e) => handleChange("qty", e.target.value)}
             />
             {qtyError && (
               <p className="text-red-600 text-sm mt-1">{qtyError}</p>
@@ -545,7 +574,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sentThrough}
-              onChange={e => handleChange("sentThrough", e.target.value)}
+              onChange={(e) => handleChange("sentThrough", e.target.value)}
             />
           </div>
 
@@ -555,7 +584,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <input
               className="border rounded p-2 w-full"
               value={form.sampleDCNumber}
-              onChange={e => handleChange("sampleDCNumber", e.target.value)}
+              onChange={(e) => handleChange("sampleDCNumber", e.target.value)}
             />
           </div>
 
@@ -565,7 +594,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <select
               className="border rounded p-2 w-full"
               value={form.sampleOutStatus}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("sampleOutStatus", e.target.value)
               }
             >
@@ -584,7 +613,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
                 receivedBackError ? "border-red-500" : ""
               }`}
               value={form.qtyReceivedBack}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("qtyReceivedBack", e.target.value)
               }
             />
@@ -601,7 +630,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <select
               className="border rounded p-2 w-full"
               value={form.receivedBack}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("receivedBack", e.target.value === "true")
               }
             >
@@ -616,7 +645,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             <select
               className="border rounded p-2 w-full"
               value={form.returned}
-              onChange={e =>
+              onChange={(e) =>
                 handleChange("returned", e.target.value === "true")
               }
             >
@@ -633,7 +662,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
                 type="date"
                 className="border rounded p-2 w-full"
                 value={toDateInput(form.sampleBackDate)}
-                onChange={e =>
+                onChange={(e) =>
                   handleChange("sampleBackDate", new Date(e.target.value))
                 }
               />

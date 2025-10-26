@@ -75,6 +75,12 @@ import AssignDestinations from "../pages/AssignDestinations";
 import ManageInvoices from "../pages/ManageInvoices";
 import InvoiceEditPage from "../pages/InvoiceEditPage";
 import InvoicePrint from "../pages/InvoicePrint";
+import EmployeesPage from "../pages/EmployeesPage";
+import EmployeeDetailPage from "../pages/EmployeeDetailPage";
+import AttendancePage from "../pages/AttendancePage";
+import WfhPage from "../pages/WfhPage";
+import LeavesPage from "../pages/LeavesPage";
+import SalaryPage from "../pages/SalaryPage";
 
 
 const router = createBrowserRouter([
@@ -389,8 +395,31 @@ const router = createBrowserRouter([
                     {
                         path : "invoices/:id/print",
                         element:<InvoicePrint/>
+                    },
+                    {
+                        path : "hrms/employees",
+                        element:<EmployeesPage/>
+                    },
+                    {
+                        path : "hrms/employees/:employeeId",
+                        element:<EmployeeDetailPage/>
+                    },
+                    {
+                        path : "hrms/attendance",
+                        element:<AttendancePage/>
+                    },
+                    {
+                        path : "hrms/wfh",
+                        element:<WfhPage/>
+                    },
+                    {
+                        path : "hrms/leaves",
+                        element:<LeavesPage/>
+                    },
+                    {
+                        path : "hrms/salary",
+                        element:<SalaryPage/>
                     }
-
                 ]
             }
         ],

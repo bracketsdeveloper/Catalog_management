@@ -15,6 +15,13 @@ const sanitiseClients = (raw = []) =>
         }))
     : [];
 
+const normaliseReliability = (val) => {
+  const s = (val || "").toString().trim().toLowerCase();
+  return s === "non-reliable" || s === "non reliable"
+    ? "non-reliable"
+    : "reliable";
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5MB max, 1 file
@@ -34,7 +41,7 @@ const upload = multer({
 router.get("/vendors", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const vendors = await Vendor.find({ deleted: false }).select(
-      "vendorName vendorCompany brandDealing location clients gst bankName accountNumber ifscCode postalCode createdAt createdBy updatedAt updatedBy deletedAt deletedBy"
+      "vendorName vendorCompany brandDealing location clients gst bankName accountNumber ifscCode postalCode reliability createdAt createdBy updatedAt updatedBy deletedAt deletedBy"
     );
     res.json(vendors);
   } catch (e) {
@@ -57,6 +64,7 @@ router.post("/vendors", authenticate, authorizeAdmin, async (req, res) => {
       accountNumber,
       ifscCode,
       postalCode,
+      reliability, // NEW
     } = req.body;
 
     if (!vendorName)
@@ -76,6 +84,7 @@ router.post("/vendors", authenticate, authorizeAdmin, async (req, res) => {
       accountNumber,
       ifscCode,
       postalCode,
+      reliability: normaliseReliability(reliability), // NEW
       createdBy: req.user.id,
     });
 
@@ -140,6 +149,7 @@ router.post(
           ifscCode: vendor.ifscCode?.trim(),
           postalCode: postalCode,
           clients,
+          reliability: normaliseReliability(vendor.reliability), // NEW
           createdBy: req.user.id,
         };
       });
@@ -172,6 +182,7 @@ router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
       accountNumber,
       ifscCode,
       postalCode,
+      reliability, // NEW
     } = req.body;
 
     // Basic validation
@@ -196,6 +207,7 @@ router.put("/vendors/:id", authenticate, authorizeAdmin, async (req, res) => {
         accountNumber,
         ifscCode,
         postalCode,
+        reliability: normaliseReliability(reliability), // NEW
         updatedAt: new Date(),
         updatedBy: req.user.id,
       },

@@ -70,9 +70,10 @@ export default function CatalogManagementPage() {
       if (!dropdownButtonRef.current) return;
       const rect = dropdownButtonRef.current.getBoundingClientRect();
       const dropdownHeight = 200;
-      let top = window.innerHeight - rect.bottom < dropdownHeight
-        ? rect.top + window.pageYOffset - dropdownHeight
-        : rect.bottom + window.pageYOffset;
+      let top =
+        window.innerHeight - rect.bottom < dropdownHeight
+          ? rect.top + window.pageYOffset - dropdownHeight
+          : rect.bottom + window.pageYOffset;
       setDropdownPosition({
         top,
         left: rect.left + window.pageXOffset,
@@ -125,11 +126,12 @@ export default function CatalogManagementPage() {
       const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      let data = approvalFilter === "all"
-        ? res.data
-        : res.data.filter((cat) =>
-            approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
-          );
+      let data =
+        approvalFilter === "all"
+          ? res.data
+          : res.data.filter((cat) =>
+              approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
+            );
       if (fromDateFilter) {
         const from = new Date(fromDateFilter);
         data = data.filter((item) => new Date(item.createdAt) >= from);
@@ -139,9 +141,7 @@ export default function CatalogManagementPage() {
         data = data.filter((item) => new Date(item.createdAt) <= to);
       }
       if (companyFilter.length > 0) {
-        data = data.filter((item) =>
-          companyFilter.includes(item.customerCompany)
-        );
+        data = data.filter((item) => companyFilter.includes(item.customerCompany));
       }
       if (opportunityOwnerFilter.length > 0) {
         const filteredOpportunities = opportunities.filter((opp) =>
@@ -162,11 +162,11 @@ export default function CatalogManagementPage() {
   }
 
   const handleSort = (key, isDate = false) => {
-    let direction = sortConfig.key === key && sortConfig.direction === "asc" ? "desc" : "asc";
+    let direction =
+      sortConfig.key === key && sortConfig.direction === "asc" ? "desc" : "asc";
     setSortConfig({ key, direction });
 
     const sortedCatalogs = [...catalogs].sort((a, b) => {
-      // Add null checks and default values
       let valA = a?.[key] ?? "";
       let valB = b?.[key] ?? "";
 
@@ -258,11 +258,15 @@ export default function CatalogManagementPage() {
           const gst = prod.productGST || catalog.gst || 18;
           const gstAmount = parseFloat((amount * (gst / 100)).toFixed(2));
           const total = parseFloat((amount + gstAmount).toFixed(2));
-          const productName = prod.productName || (prod.productId && typeof prod.productId === "object" ? prod.productId.name : "");
+          const productName =
+            prod.productName ||
+            (prod.productId && typeof prod.productId === "object" ? prod.productId.name : "");
           return {
             slNo: idx + 1,
             productId: prod.productId,
-            product: `${productName}${prod.color ? `(${prod.color})` : ""}${prod.size ? `[${prod.size}]` : ""}`,
+            product: `${productName}${prod.color ? `(${prod.color})` : ""}${
+              prod.size ? `[${prod.size}]` : ""
+            }`,
             hsnCode: prod.hsnCode || "",
             quantity,
             rate,
@@ -418,14 +422,16 @@ export default function CatalogManagementPage() {
 
       for (let i = 0; i < (catalog.products || []).length; i++) {
         const sub = catalog.products[i];
-        const prod = (sub.productId && typeof sub.productId === "object") ? sub.productId : {};
+        const prod =
+          sub.productId && typeof sub.productId === "object" ? sub.productId : {};
 
         const [page] = await newPdf.copyPages(pdf2Doc, [0]);
         const { width, height } = page.getSize();
         const fixedHeight = 550;
         const imageX = 100;
         const imageY = height - 780;
-        let mainImg = (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
+        let mainImg =
+          (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
         if (mainImg && mainImg.startsWith("http://")) {
           mainImg = mainImg.replace("http://", "https://");
         }
@@ -508,7 +514,10 @@ export default function CatalogManagementPage() {
           });
           yText -= lineHeight;
 
-          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(/\n/g, " ");
+          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(
+            /\n/g,
+            " "
+          );
           const wrapped = wrapText(descriptionText, 500, normalFont, 7);
           wrapped.forEach((line) => {
             page.drawText(line, {
@@ -639,9 +648,10 @@ export default function CatalogManagementPage() {
     dropdownButtonRef.current = e.currentTarget;
     const rect = e.currentTarget.getBoundingClientRect();
     const dropdownHeight = 200;
-    let top = window.innerHeight - rect.bottom < dropdownHeight
-      ? rect.top + window.pageYOffset - dropdownHeight
-      : rect.bottom + window.pageYOffset;
+    let top =
+      window.innerHeight - rect.bottom < dropdownHeight
+        ? rect.top + window.pageYOffset - dropdownHeight
+        : rect.bottom + window.pageYOffset;
     setDropdownPosition({
       top,
       left: rect.left + window.pageXOffset,
@@ -650,22 +660,20 @@ export default function CatalogManagementPage() {
     setOpenDropdownForCatalog(id === openDropdownForCatalog ? null : id);
   }
 
+  // UPDATED: server-side duplication. No client-side catalogNumber edits.
   async function handleDuplicateCatalog(catalog) {
     try {
       const token = localStorage.getItem("token");
-      const duplicatedCatalog = { ...catalog };
-      delete duplicatedCatalog._id;
-      delete duplicatedCatalog.createdAt;
-      duplicatedCatalog.catalogNumber = `${duplicatedCatalog.catalogNumber}-copy-${Date.now()}`;
-
-      const res = await axios.post(`${BACKEND_URL}/api/admin/catalogs`, duplicatedCatalog, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/catalogs/${catalog._id}/duplicate`,
+        { resetApproval: true, clearRemarks: true }, // optional flags
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       if (res.status === 201) {
-        alert("Catalog duplicated successfully!");
+        alert(`Catalog duplicated. New number: ${res.data.catalog.catalogNumber}`);
         fetchData();
       } else {
-        throw new Error("Failed to duplicate catalog");
+        throw new Error("Duplication failed");
       }
     } catch (error) {
       console.error("Error duplicating catalog:", error);

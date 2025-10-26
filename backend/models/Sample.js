@@ -21,8 +21,12 @@ const sampleSchema = new mongoose.Schema({
     default: "" 
   },
   returnableDays:     { type: Number, default: 0 },
-  opportunityNumber:  { type: String }, // New field
-  remarks:            { type: String }, // New field
+  opportunityNumber:  { type: String },
+  remarks:            { type: String },
+
+  // NEW: CRM Name
+  crmName:            { type: String, default: "" },
+
   createdAt:          { type: Date,   default: Date.now },
 });
 

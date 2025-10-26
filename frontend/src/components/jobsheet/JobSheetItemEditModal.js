@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 
 const JobSheetItemEditModal = ({ item, onClose, onUpdate }) => {
   const [color, setColor] = useState(item.color || "");
@@ -10,6 +11,29 @@ const JobSheetItemEditModal = ({ item, onClose, onUpdate }) => {
   const [brandingType, setBrandingType] = useState(item.brandingType || "");
   const [brandingVendor, setBrandingVendor] = useState(item.brandingVendor || "");
   const [remarks, setRemarks] = useState(item.remarks || "");
+
+  // vendor suggestions for sourcing typeahead
+  const [vendors, setVendors] = useState([]);
+  const [openSuggest, setOpenSuggest] = useState(false);
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${BACKEND_URL}/api/admin/vendors`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setVendors(res.data || []);
+      } catch (e) {
+        console.error("Failed to load vendors", e);
+      }
+    })();
+  }, []);
+
+  const filtered = vendors
+    .filter(v => (v.vendorName || "").toLowerCase().includes((sourcingFrom || "").toLowerCase()))
+    .slice(0, 8);
 
   const handleSave = () => {
     const updatedItem = {
@@ -66,15 +90,29 @@ const JobSheetItemEditModal = ({ item, onClose, onUpdate }) => {
                 className="border border-purple-300 rounded p-2 w-full"
               />
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-purple-700 mb-1">Sourcing From</label>
               <input
                 type="text"
                 value={sourcingFrom}
-                onChange={(e) => setSourcingFrom(e.target.value)}
+                onChange={(e) => { setSourcingFrom(e.target.value); setOpenSuggest(true); }}
+                onFocus={() => setOpenSuggest(true)}
                 className="border border-purple-300 rounded p-2 w-full"
-                placeholder="Enter sourcing info"
+                placeholder="Type vendor name…"
               />
+              {openSuggest && filtered.length > 0 && (
+                <div className="absolute z-20 bg-white border border-gray-300 rounded shadow-lg mt-1 w-full max-h-48 overflow-y-auto">
+                  {filtered.map(v => (
+                    <div
+                      key={v._id}
+                      className="p-2 cursor-pointer hover:bg-gray-100"
+                      onMouseDown={() => { setSourcingFrom(v.vendorName); setOpenSuggest(false); }}
+                    >
+                      {v.vendorName}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-purple-700 mb-1">Branding Type</label>

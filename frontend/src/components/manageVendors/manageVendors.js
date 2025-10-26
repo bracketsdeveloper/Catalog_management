@@ -99,6 +99,7 @@ export const ManageVendors = () => {
         v.accountNumber,
         v.ifscCode,
         v.postalCode,
+        v.reliability, // search new field
         ...(v.clients || []).flatMap((c) => [c.name, c.contactNumber]),
       ]
         .filter(Boolean)
@@ -134,7 +135,8 @@ export const ManageVendors = () => {
       GST: v.gst,
       "Bank Name": v.bankName,
       "Account Number": v.accountNumber,
-      "IFSC Code": v.ifscCode,
+      IFSC: v.ifscCode,
+      Reliability: v.reliability || "reliable", // NEW
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -167,21 +169,13 @@ export const ManageVendors = () => {
 
   const dropdownEditStyle = {
     ...dropdownItemStyle,
-    backgroundColor : "white",
-    "&:hover": {
-      backgroundColor: "#EDF2F7",
-      color: "#2D3748",
-    },
+    backgroundColor: "white",
   };
 
   const dropdownDeleteStyle = {
     ...dropdownItemStyle,
     color: "#e53e3e",
-    backgroundColor : "white",
-    "&:hover": {
-      backgroundColor: "#FED7D7",
-      color: "#C53030",
-    },
+    backgroundColor: "white",
   };
 
   if (loading) return <div className="p-6 text-xs">Loading...</div>;
@@ -292,64 +286,98 @@ export const ManageVendors = () => {
                 IFSC
                 <SortIndicator field="ifscCode" />
               </th>
+              <th
+                onClick={() => handleSort("reliability")}
+                className="p-2 cursor-pointer border border-gray-200"
+              >
+                Reliability
+                <SortIndicator field="reliability" />
+              </th>
               <th className="p-2 border border-gray-200">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {displayedVendors.map((v) => (
-              <tr key={v._id} className="hover:bg-gray-50">
-                <td className="p-2 border border-gray-200">{v.vendorName}</td>
-                <td className="p-2 border border-gray-200">{v.vendorCompany}</td>
-                <td className="p-2 border border-gray-200">{v.brandDealing}</td>
-                <td className="p-2 border border-gray-200">{v.location}</td>
-                <td className="p-2 border border-gray-200">{v.postalCode}</td>
-                <td className="p-2 border border-gray-200">
-                  {v.clients?.length ? (
-                    <ul>
-                      {v.clients.map((c, i) => (
-                        <li key={i}>
-                          {c.name} | {c.contactNumber}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td className="p-2 border border-gray-200">{v.gst}</td>
-                <td className="p-2 border border-gray-200">{v.bankName}</td>
-                <td className="p-2 border border-gray-200">{v.accountNumber}</td>
-                <td className="p-2 border border-gray-200">{v.ifscCode}</td>
-                <td className="p-2 border border-gray-200">
-                  <Dropdown>
-                    <Dropdown.Toggle
-                      variant="link"
-                      id={`dropdown-actions-${v._id}`}
-                      className="text-gray-500 hover:text-gray-800"
-                      style={dropdownStyle}
+            {displayedVendors.map((v) => {
+              const isNonReliable = (v.reliability || "reliable") === "non-reliable";
+              return (
+                <tr
+                  key={v._id}
+                  className={`${
+                    isNonReliable ? "bg-red-50" : "hover:bg-gray-50"
+                  }`}
+                >
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.vendorName}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.vendorCompany}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.brandDealing}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.location}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.postalCode}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.clients?.length ? (
+                      <ul>
+                        {v.clients.map((c, i) => (
+                          <li key={i}>
+                            {c.name} | {c.contactNumber}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.gst}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.bankName}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.accountNumber}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.ifscCode}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    <span
+                      className={`inline-block px-2 py-0.5 text-[10px] rounded ${
+                        isNonReliable ? "bg-red-600 text-white" : "bg-green-600 text-white"
+                      }`}
                     >
-                      <FaEllipsisV />
-                    </Dropdown.Toggle>
-                    <Dropdown.Menu style={dropdownMenuStyle}>
-                      <Dropdown.Item
-                        onClick={() => openEditModal(v)}
-                        style={dropdownEditStyle}
-                        className="bg-grey-100 hover:bg-gray-100 "
+                      {v.reliability || "reliable"}
+                    </span>
+                  </td>
+                  <td className="p-2 border border-gray-200">
+                    <Dropdown>
+                      <Dropdown.Toggle
+                        variant="link"
+                        id={`dropdown-actions-${v._id}`}
+                        className="text-gray-500 hover:text-gray-800"
+                        style={dropdownStyle}
                       >
-                        Edit
-                      </Dropdown.Item>
-                      <Dropdown.Item
-                        onClick={() => handleDelete(v._id)}
-                        style={dropdownDeleteStyle}
-                        className="hover:bg-red-100"
-                      >
-                        Delete
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown>
-                </td>
-              </tr>
-            ))}
+                        <FaEllipsisV />
+                      </Dropdown.Toggle>
+                      <Dropdown.Menu style={dropdownMenuStyle}>
+                        <Dropdown.Item
+                          onClick={() => openEditModal(v)}
+                          style={dropdownEditStyle}
+                          className="bg-grey-100 hover:bg-gray-100 "
+                        >
+                          Edit
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          onClick={() => handleDelete(v._id)}
+                          style={dropdownDeleteStyle}
+                          className="hover:bg-red-100"
+                        >
+                          Delete
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

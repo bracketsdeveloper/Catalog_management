@@ -151,6 +151,9 @@ const invoicesEinvoiceRoutes = require("./routes/invoices.einvoice");
 app.use("/api/admin", invoicesEinvoiceRoutes);
 
 
+app.use('/api', require('./routes/hrms'));
+
+
 
 // 7) Health check
 app.get('/health', (req, res) => res.send('OK'));

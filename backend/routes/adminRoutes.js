@@ -8,12 +8,13 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const Product = require("../models/Product");
 const User = require("../models/User");
 const Log = require("../models/Log");
+const Vendor = require("../models/Vendor");
 
 // ------------------------------
 // UTILITY FUNCTIONS
 // ------------------------------
 
-async function createLog(action, field, oldValue, newValue, performedBy, ip) { 
+async function createLog(action, field, oldValue, newValue, performedBy, ip) {
   try {
     await Log.create({
       action,
@@ -57,7 +58,6 @@ async function computeImageHash(source, bitLength = 8) {
       throw new Error("Invalid source: must be a URL or Buffer");
     }
 
-    // Basic validation of image content
     if (buffer.length < 100) {
       throw new Error("Image file is too small or corrupted");
     }
@@ -138,10 +138,33 @@ router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => 
 });
 
 // ------------------------------
+// VENDOR ENDPOINT FOR SUGGESTIONS
+// ------------------------------
+
+router.get("/vendors/suggestions", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { query = "" } = req.query;
+    const vendors = await Vendor.find({
+      deleted: false,
+      $or: [
+        { vendorCompany: { $regex: query, $options: "i" } },
+        { vendorName:    { $regex: query, $options: "i" } },
+      ],
+    })
+      .select("vendorCompany vendorName _id")
+      .limit(10)
+      .lean();
+    res.status(200).json(vendors);
+  } catch (err) {
+    console.error("Error fetching vendor suggestions:", err);
+    res.status(500).json({ message: "Server error fetching vendor suggestions" });
+  }
+});
+
+// ------------------------------
 // PRODUCT ENDPOINTS
 // ------------------------------
 
-// GET /api/admin/products - Filtered & Paginated Products with Enhanced Search
 router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -201,7 +224,12 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const products = await Product.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean();
+    const products = await Product.find(query)
+      .populate("preferredVendors", "vendorCompany vendorName")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
     const totalProducts = await Product.countDocuments(query);
 
     res.status(200).json({
@@ -215,9 +243,6 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-
-// GET /api/admin/products/filters - Returns distinct filter values with counts
-// routes/admin.js  (only the /products/filters endpoint shown)
 router.get(
   "/products/filters",
   authenticate,
@@ -232,7 +257,6 @@ router.get(
         variationHinges,
       } = req.query;
 
-      // Build match from incoming query-filters
       const match = {};
       if (categories) {
         match.category = {
@@ -260,7 +284,6 @@ router.get(
         };
       }
 
-      // Helper to build aggregation pipeline for a field, excluding its own filter
       const buildAggregation = (field, excludeField) => {
         const filteredMatch = { ...match };
         if (excludeField) {
@@ -276,10 +299,9 @@ router.get(
         ];
       };
 
-      // Helper for priceRange with safe numeric conversion
       const buildPriceRangeAggregation = () => {
         const filteredMatch = { ...match };
-        delete filteredMatch.priceRange; // Exclude priceRange filter for its own options
+        delete filteredMatch.priceRange;
         return [
           ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
           { $match: { priceRange: { $nin: [null, ""] } } },
@@ -307,7 +329,6 @@ router.get(
         ];
       };
 
-      // Run aggregations in parallel, excluding the field being aggregated from the match
       const [
         categoriesAgg,
         subCategoriesAgg,
@@ -336,19 +357,26 @@ router.get(
   }
 );
 
-
-
-
-// POST /api/admin/products - Create a single product (with hash computation)
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { images = [] } = req.body;
+    const { images = [], preferredVendors = [] } = req.body;
 
     if (!req.body.productTag || !req.body.productId || !req.body.category || !req.body.name) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields",
       });
+    }
+
+    // Validate vendor IDs
+    if (preferredVendors.length > 0) {
+      const validVendors = await Vendor.find({ _id: { $in: preferredVendors }, deleted: false });
+      if (validVendors.length !== preferredVendors.length) {
+        return res.status(400).json({
+          success: false,
+          message: "One or more vendor IDs are invalid or deleted",
+        });
+      }
     }
 
     const imageHashes = images.length > 0 ? await computeAllHashes(images) : [];
@@ -380,6 +408,7 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       productCost: Number(req.body.productCost) || 0,
       productCost_Unit: req.body.productCost_Unit || "",
       productGST: Number(req.body.productGST) || 0,
+      preferredVendors,
     });
 
     await newProduct.save();
@@ -415,11 +444,10 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/admin/products/:id - Update a single product (with hash computation)
 router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { images = [] } = req.body;
+    const { images = [], preferredVendors = [] } = req.body;
 
     const existingProduct = await Product.findById(id);
     if (!existingProduct) {
@@ -427,6 +455,17 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
         success: false,
         message: "Product not found",
       });
+    }
+
+    // Validate vendor IDs
+    if (preferredVendors.length > 0) {
+      const validVendors = await Vendor.find({ _id: { $in: preferredVendors }, deleted: false });
+      if (validVendors.length !== preferredVendors.length) {
+        return res.status(400).json({
+          success: false,
+          message: "One or more vendor IDs are invalid or deleted",
+        });
+      }
     }
 
     const imageHashes =
@@ -468,6 +507,7 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
         req.body.productGST != null
           ? Number(req.body.productGST)
           : existingProduct.productGST,
+      preferredVendors,
     };
 
     const fieldDiffs = getFieldDifferences(existingProduct.toObject(), updatedData);
@@ -475,7 +515,7 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
       new: true,
       runValidators: true,
-    });
+    }).populate("preferredVendors", "vendorCompany vendorName");
 
     for (const diff of fieldDiffs) {
       await createLog(
@@ -503,7 +543,6 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/admin/products/:id - Delete a product
 router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const existingProduct = await Product.findById(req.params.id);
@@ -529,7 +568,6 @@ router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) =>
   }
 });
 
-// POST /api/admin/products/bulk - Bulk upload products (with hash computation)
 router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const productsData = req.body.map((p) => ({
@@ -557,16 +595,27 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       productCost_Currency: p.productCost_Currency || "",
       productCost: Number(p.productCost) || 0,
       productCost_Unit: p.productCost_Unit || "",
-      productGST: p.productGST != null ? Number(p.productGST) : 0,
+      productGST: Number(p.productGST) || 0,
+      preferredVendors: p.preferredVendors || [],
     }));
 
+    // Validate vendor IDs
     for (const prodData of productsData) {
+      if (prodData.preferredVendors.length > 0) {
+        const validVendors = await Vendor.find({ _id: { $in: prodData.preferredVendors }, deleted: false });
+        if (validVendors.length !== prodData.preferredVendors.length) {
+          return res.status(400).json({
+            success: false,
+            message: "One or more vendor IDs are invalid or deleted in bulk upload",
+          });
+        }
+      }
       prodData.imageHashes = await computeAllHashes(prodData.images);
     }
 
     const insertedProducts = await Product.insertMany(productsData);
 
-    for (const prod of insertedProducts) { 
+    for (const prod of insertedProducts) {
       await createLog(
         "create",
         null,
@@ -591,16 +640,18 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
   }
 });
 
-// GET /api/admin/products/:id - Fetch a single product
 router.get("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const full = req.query.full === "true";
     let product;
     if (full) {
-      product = await Product.findById(req.params.id).lean();
+      product = await Product.findById(req.params.id)
+        .populate("preferredVendors", "vendorCompany vendorName")
+        .lean();
     } else {
       product = await Product.findById(req.params.id)
-        .select("name productDetails brandName category subCategory images productCost productGST")
+        .select("name productDetails brandName category subCategory images productCost productGST preferredVendors")
+        .populate("preferredVendors", "vendorCompany vendorName")
         .lean();
     }
     if (!product) {
@@ -616,7 +667,7 @@ router.get("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
 // Multer configuration for image uploads
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
     if (!allowedTypes.includes(file.mimetype)) {
@@ -626,20 +677,17 @@ const upload = multer({
   },
 });
 
-// POST /api/products/advanced-search - Advanced Image Search
 router.post("/products/advanced-search", authenticate, upload.single("image"), async (req, res) => {
   try {
-    // Check if an image was uploaded
     if (!req.file) {
       return res.status(400).json({ message: "No image uploaded" });
     }
 
     const imageFile = req.file;
 
-    // Compute image hash with lower bit length for less strict matching
     let hash;
     try {
-      hash = await computeImageHash(imageFile.buffer, 8); // Reduced bit length for broader matches
+      hash = await computeImageHash(imageFile.buffer, 8);
     } catch (hashError) {
       console.error("Error computing image hash:", hashError.message);
       return res.status(500).json({ message: "Failed to compute image hash" });
@@ -649,12 +697,12 @@ router.post("/products/advanced-search", authenticate, upload.single("image"), a
       return res.status(500).json({ message: "Image hash computation returned no result" });
     }
 
-    // Search for products with matching image hash
     const products = await Product.find({
       imageHashes: { $in: [hash] },
-    }).lean();
+    })
+      .populate("preferredVendors", "vendorCompany vendorName")
+      .lean();
 
-    // Log the search attempt
     await createLog(
       "image_search",
       "imageHashes",
@@ -664,7 +712,6 @@ router.post("/products/advanced-search", authenticate, upload.single("image"), a
       req.ip
     );
 
-    // Return products with a message if no matches found
     if (products.length === 0) {
       return res.status(200).json({
         message: "No products found matching the uploaded image",

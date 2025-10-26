@@ -1,10 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+
+const RELIABILITY_OPTIONS = [
+  { value: "reliable", label: "Reliable" },
+  { value: "non-reliable", label: "Non-reliable" },
+];
+
+const normaliseReliability = (val) => {
+  const s = (val || "").toString().trim().toLowerCase();
+  return s === "non-reliable" || s === "non reliable" ? "non-reliable" : "reliable";
+};
 
 export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => {
   const isEdit = mode === "edit";
   const [error, setError] = useState("");
   const [vendorList, setVendorList] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
   const [form, setForm] = useState({
     vendorName: "",
     vendorCompany: "",
@@ -16,12 +29,19 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
     accountNumber: "",
     ifscCode: "",
     postalCode: "",
+    reliability: "reliable", // default
   });
 
   const [clientTmp, setClientTmp] = useState({
     name: "",
     contactNumber: "",
   });
+
+  // Ensure reliability is always a valid option (prevents invisible select due to invalid value)
+  const reliableValue = useMemo(
+    () => normaliseReliability(form.reliability),
+    [form.reliability]
+  );
 
   useEffect(() => {
     if (isEdit && vendor) {
@@ -36,6 +56,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
         accountNumber: vendor.accountNumber || "",
         ifscCode: vendor.ifscCode || "",
         postalCode: vendor.postalCode || "",
+        reliability: normaliseReliability(vendor.reliability || "reliable"),
       });
     }
   }, [isEdit, vendor]);
@@ -80,9 +101,6 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
     fetchVendors();
   }, []);
 
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-
   const submit = async () => {
     setErr("");
 
@@ -98,6 +116,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
       accountNumber: form.accountNumber.trim(),
       ifscCode: form.ifscCode.trim(),
       postalCode: form.postalCode.trim(),
+      reliability: normaliseReliability(form.reliability),
     };
 
     if (!payload.vendorName) return setErr("Vendor name required");
@@ -118,11 +137,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
         alert("Vendor updated successfully!");
         setError("");
       } else {
-        await axios.post(
-          `${BACKEND_URL}/api/admin/vendors`,
-          payload,
-          config
-        );
+        await axios.post(`${BACKEND_URL}/api/admin/vendors`, payload, config);
         alert("Vendor created successfully!");
       }
       onSuccess();
@@ -146,7 +161,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
         {err && <div className="bg-red-100 text-red-700 p-2 mb-3">{err}</div>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* --- company basics --- */}
+          {/* --- basics --- */}
           <div className="col-span-2">
             <label className="block text-sm font-medium mb-1">Vendor Name</label>
             <input
@@ -171,7 +186,7 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-            Specialises In
+              Specialises In
             </label>
             <input
               className="w-full p-2 border rounded"
@@ -187,19 +202,43 @@ export const VendorAdd = ({ mode, vendor, onClose, onSuccess, BACKEND_URL }) => 
               rows={3}
               className="w-full p-2 border rounded"
               value={form.location}
-              onChange={(e) =>
-                setForm({ ...form, location: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
             />
           </div>
+
+          {/* NEW: Reliability */}
+          <div className="relative z-50">
+            <label className="block text-sm font-medium mb-1">Reliability</label>
+            <select
+              className="w-full p-2 border rounded bg-white"
+              value={reliableValue}
+              onChange={(e) =>
+                setForm({ ...form, reliability: e.target.value })
+              }
+            >
+              {/* Optional placeholder shown only if value is empty (defensive) */}
+              {!reliableValue && (
+                <option value="" disabled>
+                  -- Select reliability --
+                </option>
+              )}
+              {RELIABILITY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Mark as <b>Non-reliable</b> to highlight this vendor in red in the list.
+            </p>
+          </div>
+
           <div className="col-span-2">
             <label className="block text-sm font-medium mb-1">Postal Code</label>
             <input
               className="w-full p-2 border rounded"
               value={form.postalCode}
-              onChange={(e) =>
-                setForm({ ...form, postalCode: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
               placeholder="6-digit postal code"
             />
           </div>

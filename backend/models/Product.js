@@ -10,11 +10,9 @@ const productSchema = new mongoose.Schema(
     variationHinge: String,
     name: { type: String, required: true },
     brandName: String,
-    images: [String], 
-    // New field for storing precomputed image hashes
+    images: [String],
     imageHashes: [String],
     productDetails: { type: String, default: "" },
-    // NEW FIELDS
     qty: { type: Number, default: 0 },
     MRP_Currency: { type: String, default: "" },
     MRP: { type: Number, default: 0 },
@@ -29,10 +27,8 @@ const productSchema = new mongoose.Schema(
     productCost_Currency: { type: String, default: "" },
     productCost: { type: Number, default: 0 },
     productCost_Unit: { type: String, default: "" },
-
-    // Add your new GST field here
     productGST: { type: Number, default: 0 },
-
+    preferredVendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "Vendor" }], // New field
     createdAt: { type: Date, default: Date.now }
   },
   { timestamps: true }

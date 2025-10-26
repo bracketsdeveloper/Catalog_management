@@ -12,13 +12,13 @@ export default function SampleOutTable({
 }) {
   const [preview, setPreview] = useState(null);
 
-  // define columns
   const columns = [
     { label: "Out Date", field: "sampleOutDate", isDate: true },
     { label: "Company", field: "clientCompanyName" },
     { label: "Client", field: "clientName" },
     { label: "Sent By", field: "sentByName" },
     { label: "Sample Ref", field: "sampleReferenceCode" },
+    { label: "Opportunity #", field: "opportunityNumber" },
     { label: "Picture", field: null },
     { label: "Product", field: "productName" },
     { label: "Brand", field: "brand" },
@@ -26,12 +26,11 @@ export default function SampleOutTable({
     { label: "Color", field: "color" },
     { label: "Status", field: "sampleOutStatus" },
     { label: "Received Back", field: "receivedBack" },
-    { label: "Returned To Vendor", field: "returned" }, // Added returned field
+    { label: "Returned To Vendor", field: "returned" },
     { label: "Out Since (d)", field: "outSince" },
     { label: "Actions", field: null }
   ];
 
-  // header filters state
   const [headerFilters, setHeaderFilters] = useState(
     columns.reduce((acc, col) => {
       if (col.field) acc[col.field] = "";
@@ -41,11 +40,9 @@ export default function SampleOutTable({
   const handleFilterChange = (field, val) =>
     setHeaderFilters((h) => ({ ...h, [field]: val }));
 
-  // compute "out since" days
   const computeOutSince = (r) =>
     r.receivedBack ? 0 : differenceInCalendarDays(new Date(), new Date(r.sampleOutDate));
 
-  // apply header filters
   const filtered = useMemo(() => {
     return data.filter((r) =>
       Object.entries(headerFilters).every(([field, fVal]) => {
@@ -56,7 +53,7 @@ export default function SampleOutTable({
         } else if (field === "receivedBack") {
           cell = r.receivedBack ? "Yes" : "No";
         } else if (field === "returned") {
-          cell = r.returned ? "Yes" : "No"; // Added returned filter
+          cell = r.returned ? "Yes" : "No";
         } else if (field === "outSince") {
           cell = computeOutSince(r).toString();
         } else {
@@ -67,7 +64,6 @@ export default function SampleOutTable({
     );
   }, [data, headerFilters]);
 
-  // apply sorting
   const sorted = useMemo(() => {
     if (!sortField) return filtered;
     return [...filtered].sort((a, b) => {
@@ -82,8 +78,8 @@ export default function SampleOutTable({
           bv = b.receivedBack ? 1 : 0;
           break;
         case "returned":
-          av = a.returned ? 1 : 0; // Added returned sort
-          bv = b.receivedBack ? 1 : 0;
+          av = a.returned ? 1 : 0;
+          bv = b.returned ? 1 : 0;
           break;
         case "outSince":
           av = computeOutSince(a);
@@ -99,39 +95,42 @@ export default function SampleOutTable({
     });
   }, [filtered, sortField, sortOrder]);
 
+  // shared cell classes to wrap text & keep things compact
+  const cellCls = "px-2 py-1 align-top whitespace-normal break-words text-xs";
+
   return (
     <>
-      <div className="overflow-auto border rounded">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="border rounded overflow-x-hidden">
+        <table className="w-full table-fixed divide-y divide-gray-200">
+          <thead className="bg-gray-50 text-xs">
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.label}
                   onClick={() => col.field && toggleSort(col.field)}
-                  className={`px-3 py-2 text-left font-medium text-gray-600 uppercase select-none ${
+                  className={`px-2 py-2 text-left font-medium text-gray-600 uppercase select-none ${
                     col.field ? "cursor-pointer hover:bg-gray-100" : ""
                   }`}
                 >
-                  {col.label}
-                  {col.field && sortField === col.field && (
-                    <span>{sortOrder === "asc" ? " ▲" : " ▼"}</span>
-                  )}
+                  <div className="whitespace-normal break-words">
+                    {col.label}
+                    {col.field && sortField === col.field && (
+                      <span>{sortOrder === "asc" ? " ▲" : " ▼"}</span>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
             <tr className="bg-gray-100">
               {columns.map((col) => (
-                <td key={col.label} className="px-3 py-1">
+                <td key={col.label} className="px-2 py-1">
                   {col.field ? (
                     <input
                       type="text"
                       placeholder="Filter…"
                       value={headerFilters[col.field]}
-                      onChange={(e) =>
-                        handleFilterChange(col.field, e.target.value)
-                      }
-                      className="w-full p-1 border rounded text-xs"
+                      onChange={(e) => handleFilterChange(col.field, e.target.value)}
+                      className="w-full p-1 border rounded text-[11px]"
                     />
                   ) : (
                     <div />
@@ -143,27 +142,27 @@ export default function SampleOutTable({
 
           <tbody className="bg-white divide-y divide-gray-200">
             {sorted.map((r) => (
-              <tr key={r._id}>
+              <tr key={r._id} className="align-top">
                 {columns.map((col) => {
                   if (col.field === "sampleOutDate") {
                     return (
-                      <td key="date" className="px-3 py-2">
+                      <td key="date" className={cellCls}>
                         {format(new Date(r.sampleOutDate), "dd/MM/yyyy")}
                       </td>
                     );
                   }
                   if (col.field === null && col.label === "Picture") {
                     return (
-                      <td key="pic" className="px-3 py-2">
+                      <td key="pic" className={`${cellCls}`}>
                         {r.productPicture ? (
                           <img
                             src={r.productPicture}
                             alt=""
-                            className="h-10 w-10 object-contain cursor-pointer"
+                            className="h-10 w-10 object-contain mx-auto block cursor-pointer"
                             onClick={() => setPreview(r.productPicture)}
                           />
                         ) : (
-                          <div className="h-10 w-10 border flex items-center justify-center text-xs">
+                          <div className="h-10 w-10 border mx-auto flex items-center justify-center text-[10px]">
                             No
                           </div>
                         )}
@@ -172,39 +171,24 @@ export default function SampleOutTable({
                   }
                   if (col.field === null && col.label === "Actions") {
                     return (
-                      <td key="act" className="px-3 py-2">
-                        <button
-                          onClick={() => onEdit(r)}
-                          className="text-blue-600 hover:underline"
-                        >
+                      <td key="act" className={cellCls}>
+                        <button onClick={() => onEdit(r)} className="text-blue-600 hover:underline">
                           Edit
                         </button>
                       </td>
                     );
                   }
                   if (col.field === "receivedBack") {
-                    return (
-                      <td key="rb" className="px-3 py-2">
-                        {r.receivedBack ? "Yes" : "No"}
-                      </td>
-                    );
+                    return <td key="rb" className={cellCls}>{r.receivedBack ? "Yes" : "No"}</td>;
                   }
                   if (col.field === "returned") {
-                    return (
-                      <td key="rt" className="px-3 py-2">
-                        {r.returned ? "Yes" : "No"} 
-                      </td>
-                    );
+                    return <td key="rt" className={cellCls}>{r.returned ? "Yes" : "No"}</td>;
                   }
                   if (col.field === "outSince") {
-                    return (
-                      <td key="os" className="px-3 py-2">
-                        {computeOutSince(r)}
-                      </td>
-                    );
+                    return <td key="os" className={cellCls}>{computeOutSince(r)}</td>;
                   }
                   return (
-                    <td key={col.field} className="px-3 py-2">
+                    <td key={col.field || col.label} className={cellCls}>
                       {r[col.field]}
                     </td>
                   );
@@ -214,10 +198,7 @@ export default function SampleOutTable({
 
             {!sorted.length && (
               <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-3 py-6 text-center text-gray-500"
-                >
+                <td colSpan={columns.length} className="px-3 py-6 text-center text-gray-500 text-sm">
                   No records.
                 </td>
               </tr>
@@ -226,14 +207,10 @@ export default function SampleOutTable({
         </table>
       </div>
 
-      {/* image light-box */}
       {preview && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="relative">
-            <button
-              onClick={() => setPreview(null)}
-              className="absolute top-2 right-2 text-white text-xl"
-            >
+            <button onClick={() => setPreview(null)} className="absolute top-2 right-2 text-white text-xl">
               ×
             </button>
             <img

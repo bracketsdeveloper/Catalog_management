@@ -52,7 +52,7 @@ router.get("/opportunity-suggestions", authenticate, authorizeAdmin, async (req,
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     await attachProductPicture(req.body);
-    const sample = new Sample(req.body);
+    const sample = new Sample(req.body); // includes crmName if provided
     await sample.save();
     res.status(201).json({ message: "Sample created", sample });
   } catch (err) {
@@ -77,6 +77,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
             { productName: { $regex: search, $options: "i" } },
             { opportunityNumber: { $regex: search, $options: "i" } },
             { remarks: { $regex: search, $options: "i" } },
+            // NEW: search by CRM name
+            { crmName: { $regex: search, $options: "i" } },
           ],
         }
       : {};
@@ -136,7 +138,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     await attachProductPicture(req.body);
     const updated = await Sample.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      req.body, // includes crmName if provided
       { new: true, runValidators: true }
     );
     if (!updated) {

@@ -90,7 +90,7 @@ export default function ManageCompanies() {
       (c.brandName && c.brandName.toLowerCase().includes(s)) ||
       (c.GSTIN && c.GSTIN.toLowerCase().includes(s)) ||
       (c.companyAddress && c.companyAddress.toLowerCase().includes(s)) ||
-      (c.remarks && c.remarks.toLowerCase().includes(s)) || // include remarks in search
+      (c.remarks && c.remarks.toLowerCase().includes(s)) ||
       c.clients?.some(
         (cl) =>
           cl.name.toLowerCase().includes(s) ||
@@ -107,22 +107,7 @@ export default function ManageCompanies() {
       ? "bg-orange-500"
       : "bg-red-600";
 
-  async function fetchAllLogs() {
-    setLogsLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${BACKEND_URL}/api/admin/logs`, {
-        headers: { Authorization: { Authorization: `Bearer ${token}` } },
-      });
-      // Note: above line contains a mistake; fix to the correct header structure:
-    } catch {
-      // fallback to standard fetch with correct header
-    } finally {
-      setLogsLoading(false);
-    }
-  }
-
-  // fixed version for fetchAllLogs (ensuring header is correct)
+  // Load all logs when the dropdown is opened
   useEffect(() => {
     if (!showLogsDropdown) return;
     (async () => {
@@ -141,9 +126,56 @@ export default function ManageCompanies() {
     })();
   }, [showLogsDropdown, BACKEND_URL]);
 
-  // Function to export data to Excel
-  const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(filteredCompanies);
+  /* =============================
+     ✅ ONE-SHEET MERGED EXPORT
+     ============================= */
+  const exportCompaniesToExcel = () => {
+    const mergedData = [];
+
+    filteredCompanies.forEach((company) => {
+      if (company.clients && company.clients.length > 0) {
+        company.clients.forEach((cl, idx) => {
+          mergedData.push({
+            "Company Name": company.companyName || "-",
+            "Brand Name": company.brandName || "-",
+            Segment: company.segment || "-",
+            Address: company.companyAddress || "-",
+            GSTIN: company.GSTIN || "-",
+            Pincode: company.pincode || "-",
+            "Vendor Code": company.vendorCode || "-",
+            "Payment Terms": company.paymentTerms || "-",
+            "Portal Upload": company.portalUpload || "-",
+            Remarks: company.remarks || "-",
+            "Client #": idx + 1,
+            "Client Name": cl?.name ?? "-",
+            Department: cl?.department ?? "-",
+            Email: cl?.email ?? "-",
+            "Contact Number": cl?.contactNumber ?? "-",
+          });
+        });
+      } else {
+        // still export companies with no clients
+        mergedData.push({
+          "Company Name": company.companyName || "-",
+          "Brand Name": company.brandName || "-",
+          Segment: company.segment || "-",
+          Address: company.companyAddress || "-",
+          GSTIN: company.GSTIN || "-",
+          Pincode: company.pincode || "-",
+          "Vendor Code": company.vendorCode || "-",
+          "Payment Terms": company.paymentTerms || "-",
+          "Portal Upload": company.portalUpload || "-",
+          Remarks: company.remarks || "-",
+          "Client #": "-",
+          "Client Name": "-",
+          Department: "-",
+          Email: "-",
+          "Contact Number": "-",
+        });
+      }
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(mergedData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Companies");
     XLSX.writeFile(workbook, "Companies.xlsx");
@@ -193,7 +225,7 @@ export default function ManageCompanies() {
           </div>
           {(isSuperAdmin || canExportCRM) && (
             <button
-              onClick={exportToExcel}
+              onClick={exportCompaniesToExcel} // merged export
               className="bg-green-600 text-white px-4 py-2 rounded"
             >
               Export to Excel
@@ -237,7 +269,7 @@ export default function ManageCompanies() {
                 <th className="p-3">Vendor Code</th>
                 <th className="p-3">Payment Terms</th>
                 <th className="p-3">Portal Upload</th>
-                <th className="p-3">Remarks</th>{/* <-- NEW COLUMN */}
+                <th className="p-3">Remarks</th>
                 <th className="p-3">Actions</th>
               </tr>
             </thead>
@@ -263,7 +295,7 @@ export default function ManageCompanies() {
                   <td className="p-3">{c.vendorCode || "-"}</td>
                   <td className="p-3">{c.paymentTerms || "-"}</td>
                   <td className="p-3">{c.portalUpload || "-"}</td>
-                  <td className="p-3">{c.remarks || "-"}</td>{/* <-- NEW CELL */}
+                  <td className="p-3">{c.remarks || "-"}</td>
                   <td className="p-3">
                     <div className="relative">
                       <button

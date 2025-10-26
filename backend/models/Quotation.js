@@ -14,19 +14,19 @@ const operationsSchema = new mongoose.Schema({
 
 // NEW: Operations Breakdown Row schema (your table)
 const operationsBreakdownRowSchema = new mongoose.Schema({
-  slNo: { type: Number, required: true },                    
-  product: { type: String, default: "" },                    
-  quantity: { type: Number, default: 0 },                    
-  rate: { type: Number, default: 0 },                        
-  amount: { type: Number, default: 0 },                      
-  gst: { type: String, default: "" },                        
-  total: { type: Number, default: 0 },                       
-  ourCost: { type: Number, default: 0 },                     
-  brandingCost: { type: Number, default: 0 },                
-  deliveryCost: { type: Number, default: 0 },                
-  markUpCost: { type: Number, default: 0 },                  
-  finalTotal: { type: Number, default: 0 },                  
-  vendor: { type: String, default: "" },                     
+  slNo: { type: Number, required: true },
+  product: { type: String, default: "" },
+  quantity: { type: Number, default: 0 },
+  rate: { type: Number, default: 0 },
+  amount: { type: Number, default: 0 },
+  gst: { type: String, default: "" },
+  total: { type: Number, default: 0 },
+  ourCost: { type: Number, default: 0 },
+  brandingCost: { type: Number, default: 0 },
+  deliveryCost: { type: Number, default: 0 },
+  markUpCost: { type: Number, default: 0 },
+  finalTotal: { type: Number, default: 0 },
+  vendor: { type: String, default: "" },
 }, { _id: false });
 
 const quotationItemSchema = new mongoose.Schema({
@@ -94,6 +94,12 @@ const quotationSchema = new mongoose.Schema({
 
   // NEW: the table you asked for
   operationsBreakdown: { type: [operationsBreakdownRowSchema], default: [] },
+
+  // NEW: Draft flag
+  isDraft: { type: Boolean, default: false },
+
+  // OPTIONAL: keep a pointer to the source quotation when duplicating
+  sourceQuotationId: { type: mongoose.Schema.Types.ObjectId, ref: "Quotation", default: null },
 
   createdBy: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },

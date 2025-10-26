@@ -367,7 +367,7 @@ export default function CreateManualCatalog() {
         });
         if (Array.isArray(quotationData) && quotationData.length > 0) {
           setQuotationId(quotationData[0]._id);
-          setQuotationNumber(quotationData[0].quotationNumber || null); // Set quotation number
+          setQuotationNumber(quotationData[0].quotationNumber || null);
         }
       } catch (err) {
         console.error("Error fetching catalog:", err);
@@ -380,7 +380,7 @@ export default function CreateManualCatalog() {
           headers: { Authorization: `Bearer ${token}` },
         });
         setQuotationId(data._id);
-        setQuotationNumber(data.quotationNumber || null); // Set quotation number
+        setQuotationNumber(data.quotationNumber || null);
         setOpportunityNumber(data.opportunityNumber || "");
         setCatalogName(data.catalogName || "");
         setCustomerName(data.customerName || "");
@@ -469,7 +469,6 @@ export default function CreateManualCatalog() {
     const opp = opportunityCodes.find((o) => o.opportunityCode === opportunityNumber);
     if (opp && opp.account) {
       setCustomerCompany(opp.account);
-      // Set customer name and salutation from opportunity contact
       if (opp.contact) {
         const contactParts = opp.contact.split(" ");
         const sal = contactParts[0].toLowerCase().includes("ms.") ? "Ms." : "Mr.";
@@ -480,27 +479,26 @@ export default function CreateManualCatalog() {
         setCustomerName("");
       }
       // Fetch company details
-      console.log("Fetching company with name:", opp.account);
       axios
         .get(`${BACKEND_URL}/api/admin/companies`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           params: { companyName: opp.account.trim() },
         })
         .then((res) => {
-          console.log("Company fetch response:", res.data);
           const comp = Array.isArray(res.data) ? res.data[0] : res.data;
           if (comp) {
-            console.log("Fetched company details:", comp);
             setSelectedCompanyData(comp);
             setCustomerAddress(comp.companyAddress || "");
             setClients(comp.clients || []);
-            // Set email from client matching opportunity contact
             const matchingClient = comp.clients?.find(
               (c) => c.name?.toLowerCase() === opp.contact?.toLowerCase()
             );
             setCustomerEmail(matchingClient?.email || comp.companyEmail || "");
           } else {
-            console.warn("No company found for:", opp.account, res.data);
+            setSelectedCompanyData(null);
+            setCustomerAddress("");
+            setClients([]);
+            setCustomerEmail("");
           }
         })
         .catch(() => {
@@ -543,7 +541,6 @@ export default function CreateManualCatalog() {
   );
 
   const isDuplicate = (pid, c, s, productName) => {
-    // Skip duplication check for products with "voucher", "giftcard", or "e-vouchers" in their name (case-insensitive)
     const skipKeywords = ["voucher", "giftcard", "e-vouchers"];
     const shouldSkip = skipKeywords.some((keyword) =>
       productName?.toLowerCase().includes(keyword.toLowerCase())
@@ -645,10 +642,9 @@ export default function CreateManualCatalog() {
         const gst = p.productGST ?? selectedGst;
         const gstVal = parseFloat((amount * (gst / 100)).toFixed(2));
         const total = parseFloat((amount + gstVal).toFixed(2));
-        // Ensure product name is clean and only includes color/size if specified
         const cleanProductName = p.productName
-          .replace(/\s*\(\w+\)\s*/g, "") // Remove existing (color)
-          .replace(/\s*\[\w+\]\s*/g, ""); // Remove existing [size]
+          .replace(/\s*\(\w+\)\s*/g, "")
+          .replace(/\s*\[\w+\]\s*/g, "");
         const productDisplayName = `${cleanProductName}${p.color ? ` (${p.color})` : ""}${p.size ? ` [${p.size}]` : ""}`;
         return {
           slNo: i + 1,
@@ -681,22 +677,47 @@ export default function CreateManualCatalog() {
       return alert("Enter Catalog Name & add ≥1 product");
     }
 
-    const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
     const payload = buildQuotationPayload();
 
     try {
       const token = localStorage.getItem("token");
-      let response;
-      // Always create a new quotation, even in edit mode
-      response = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
+      const response = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setQuotationId(response.data.quotation._id);
-      setQuotationNumber(response.data.quotation.quotationNumber || null); // Update with new quotation number
+      setQuotationNumber(response.data.quotation.quotationNumber || null);
       alert("New quotation created!");
     } catch (error) {
       console.error("Error saving quotation:", error);
       alert("Error saving quotation");
+    }
+  };
+
+  // ─── NEW: Save Draft Quotation (marks with a DRAFT remark) ────────────────
+  const handleCreateDraftQuotation = async () => {
+    if (!catalogName || !selectedProducts.length) {
+      return alert("Enter Catalog Name & add ≥1 product");
+    }
+
+    const payload = {
+      ...buildQuotationPayload(),
+      // Mark as draft using remarks (no schema change needed)
+      remarks: [{ sender: "system", message: "__DRAFT__" }],
+    };
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(`${BACKEND_URL}/api/admin/quotations`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setQuotationId(response.data.quotation._id);
+      setQuotationNumber(response.data.quotation.quotationNumber || null);
+      alert(`Draft quotation created! #${response.data.quotation.quotationNumber}`);
+      // Optional: take them to management to see the draft section
+      // navigate("/admin-dashboard/manage-quotations");
+    } catch (error) {
+      console.error("Error creating draft quotation:", error);
+      alert("Error creating draft quotation");
     }
   };
 
@@ -707,7 +728,6 @@ export default function CreateManualCatalog() {
       return;
     }
 
-    // Ensure customerName is empty if not entered
     const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
 
     const payload = {
@@ -747,7 +767,7 @@ export default function CreateManualCatalog() {
       const url = isCatalogEditMode && id
         ? `${BACKEND_URL}/api/admin/catalogs/${id}`
         : `${BACKEND_URL}/api/admin/catalogs`;
-      const { data } = await axios[method](url, payload, {
+      await axios[method](url, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert(isCatalogEditMode && id ? "Catalog updated!" : "Catalog created!");
@@ -770,7 +790,7 @@ export default function CreateManualCatalog() {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(`${BACKEND_URL}/api/admin/companies?all=true`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: { Authorization: `Bearer ${token}` } },
       });
       setCompanies(Array.isArray(res.data) ? res.data : []);
     } catch {
@@ -847,7 +867,6 @@ export default function CreateManualCatalog() {
   };
 
   const handleOpenCompanyModal = () => setShowCompanyModal(true);
-
   const handleCloseCompanyModal = () => {
     setShowCompanyModal(false);
     fetchCompanies();
@@ -866,7 +885,6 @@ export default function CreateManualCatalog() {
   // Add cleanup effect
   useEffect(() => {
     return () => {
-      // Cleanup function
       setProducts([]);
       setSelectedProducts([]);
       setLoading(true);
@@ -893,13 +911,23 @@ export default function CreateManualCatalog() {
         <h1 className="text-2xl font-bold text-purple-700">
           {isCatalogEditMode ? "Edit Catalog" : isQuotationEditMode ? "Edit Quotation" : "Create Catalog (Manual)"}
         </h1>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleSaveCatalog}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
           >
             {isCatalogEditMode && id ? "Update Catalog" : "Create Catalog"}
           </button>
+
+          {/* NEW: Create Draft Quotation */}
+          <button
+            onClick={handleCreateDraftQuotation}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+            title="Creates a quotation marked as draft"
+          >
+            Create Draft Quotation
+          </button>
+
           <button
             onClick={handleSaveQuotation}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
@@ -1111,7 +1139,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Clear Filters */}
       {(searchTerm ||
         selectedCategories.length > 0 ||
         selectedSubCategories.length > 0 ||
@@ -1133,7 +1160,7 @@ export default function CreateManualCatalog() {
           setOpen={setCatsOpen}
           options={fullCategories}
           selected={selectedCategories}
-          onApply={(next) => setSelectedCategories(next)}   // ← set full array
+          onApply={(next) => setSelectedCategories(next)}
           counts={filterCounts.categories}
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
@@ -1144,7 +1171,7 @@ export default function CreateManualCatalog() {
           setOpen={setSubOpen}
           options={fullSubCategories}
           selected={selectedSubCategories}
-          onApply={(next) => setSelectedSubCategories(next)} // ← set full array
+          onApply={(next) => setSelectedSubCategories(next)}
           counts={filterCounts.subCategories}
           dependsOn={filterDependencies}
           allSelections={{
@@ -1164,7 +1191,7 @@ export default function CreateManualCatalog() {
           setOpen={setBrandsOpen}
           options={fullBrands}
           selected={selectedBrands}
-          onApply={(next) => setSelectedBrands(next)}        // ← set full array
+          onApply={(next) => setSelectedBrands(next)}
           counts={filterCounts.brands}
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
@@ -1175,7 +1202,7 @@ export default function CreateManualCatalog() {
           setOpen={setPrOpen}
           options={fullPriceRanges}
           selected={selectedPriceRanges}
-          onApply={(next) => setSelectedPriceRanges(next)}   // ← set full array
+          onApply={(next) => setSelectedPriceRanges(next)}
           counts={filterCounts.priceRanges}
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
@@ -1186,7 +1213,7 @@ export default function CreateManualCatalog() {
           setOpen={setVhOpen}
           options={fullVariationHinges}
           selected={selectedVariationHinges}
-          onApply={(next) => setSelectedVariationHinges(next)} // ← set full array
+          onApply={(next) => setSelectedVariationHinges(next)}
           counts={filterCounts.variationHinges}
           dependsOn={filterDependencies}
           allSelections={{
@@ -1200,7 +1227,7 @@ export default function CreateManualCatalog() {
           allSelectedFilters={allSelectedFilters}
           removeFilter={removeFilter}
         />
-        {/* Selected Filters as Tags */}
+
         {allSelectedFilters.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {allSelectedFilters.map((filter) => (
@@ -1302,8 +1329,12 @@ export default function CreateManualCatalog() {
               <Droppable droppableId="cartItems">
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps}>
-                    {selectedProducts.map((row, idx) => (
-                      <Draggable key={row._id || idx} draggableId={String(row._id || idx)} index={idx}>
+                                        {selectedProducts.map((row, idx) => (
+                      <Draggable
+                        key={row._id || `${row.productId}-${idx}`}
+                        draggableId={String(row._id || `${row.productId}-${idx}`)}
+                        index={idx}
+                      >
                         {(prov) => (
                           <div
                             ref={prov.innerRef}
@@ -1316,45 +1347,23 @@ export default function CreateManualCatalog() {
                                 <div className="font-semibold">{row.productName}</div>
                                 {row.color && <div className="text-xs">Color: {row.color}</div>}
                                 {row.size && <div className="text-xs">Size: {row.size}</div>}
-                                <div className="text-xs">Base Cost: ₹{row.baseCost.toFixed(2)}</div>
-                                <div className="text-xs">
-                                  Product Cost: ₹{row.productCost.toFixed(2)}
-                                  <span className="relative inline-block ml-2 cursor-pointer group">
-                                    <span className="text-sm bg-gray-200 rounded-full px-2 py-1">i</span>
-                                    <div className="absolute z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible bg-white border border-gray-300 rounded shadow-lg p-2 w-48 text-sm mt-2 transition-all duration-200">
-                                      <ul>
-                                        <li>
-                                          Product Cost: ₹
-                                          {(row.baseCost * (1 + row.suggestedBreakdown.marginPct / 100)).toFixed(2)}
-                                        </li>
-                                        <li>Logistics: ₹{row.suggestedBreakdown.logisticsCost.toFixed(2)}</li>
-                                        <li>Branding: ₹{row.suggestedBreakdown.brandingCost.toFixed(2)}</li>
-                                        <li>Final Price: ₹{row.suggestedBreakdown.finalPrice.toFixed(2)}</li>
-                                        <li>
-                                          Profit: ₹
-                                          {(
-                                            row.baseCost * (1 + row.suggestedBreakdown.marginPct / 100) -
-                                            row.baseCost
-                                          ).toFixed(2)}
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </span>
-                                </div>
+                                <div className="text-xs">Base Cost: ₹{Number(row.baseCost || row.productCost || 0).toFixed(2)}</div>
+                                <div className="text-xs">Product Cost: ₹{Number(row.productCost || 0).toFixed(2)}</div>
                                 <div className="text-xs">Qty: {row.quantity}</div>
                                 <div className="text-xs">GST: {row.productGST}%</div>
-                                {row.brandingTypes.length > 0 && (
+                                {Array.isArray(row.brandingTypes) && row.brandingTypes.length > 0 && (
                                   <div className="text-xs">
-                                    Branding:{" "}
-                                    {row.brandingTypes
+                                    Branding:&nbsp;
+                                    {(row.brandingTypes || [])
                                       .map((id) => {
-                                        const bt = brandingTypesList.find((b) => b._id === id);
+                                        const bt = brandingTypesList.find((b) => (b._id || b.id) === id);
                                         return bt ? bt.brandingName : "Unknown";
                                       })
                                       .join(", ")}
                                   </div>
                                 )}
                               </div>
+
                               <button
                                 onClick={() => setSelectedProducts((ps) => ps.filter((_, i) => i !== idx))}
                                 className="text-red-600"
@@ -1362,6 +1371,7 @@ export default function CreateManualCatalog() {
                                 Remove
                               </button>
                             </div>
+
                             <button
                               onClick={() => handleEditItem(idx)}
                               className="mt-2 bg-blue-500 text-white px-2 py-1 rounded text-xs"
@@ -1383,49 +1393,37 @@ export default function CreateManualCatalog() {
 
       {/* Variation Modal */}
       {variationModalOpen && variationModalProduct && (
-        <>
-          {console.log(
-            "VariationModal companyPincode:",
-            selectedCompanyData?.pincode
-          )}
-          <VariationModal
-            product={variationModalProduct}
-            onClose={closeVariationModal}
-            onSave={handleAddVariations}
-            companySegment={selectedCompanyData?.segment}
-            companyPincode={selectedCompanyData?.pincode}
-            brandingTypesList={brandingTypesList}
-            segmentsList={segmentsList}
-          />
-        </>
+        <VariationModal
+          product={variationModalProduct}
+          onClose={closeVariationModal}
+          onSave={handleAddVariations}
+          companySegment={selectedCompanyData?.segment}
+          companyPincode={selectedCompanyData?.pincode}
+          brandingTypesList={brandingTypesList}
+          segmentsList={segmentsList}
+        />
       )}
 
       {/* Edit Modal */}
       {editModalOpen && editIndex !== null && (
-        <>
-          {console.log(
-            "VariationEditModal companyPincode:",
-            selectedCompanyData?.pincode
-          )}
-          <VariationEditModal
-            item={selectedProducts[editIndex]}
-            brandingTypesList={brandingTypesList}
-            segmentsList={segmentsList}
-            segmentName={selectedCompanyData?.segment}
-            companyPincode={selectedCompanyData?.pincode}
-            onClose={() => setEditModalOpen(false)}
-            onUpdate={(upd) => {
-              handleUpdateItem(upd);
-              setEditModalOpen(false);
-            }}
-          />
-        </>
+        <VariationEditModal
+          item={selectedProducts[editIndex]}
+          brandingTypesList={brandingTypesList}
+          segmentsList={segmentsList}
+          segmentName={selectedCompanyData?.segment}
+          companyPincode={selectedCompanyData?.pincode}
+          onClose={() => setEditModalOpen(false)}
+          onUpdate={(upd) => {
+            handleUpdateItem(upd);
+            setEditModalOpen(false);
+          }}
+        />
       )}
 
       {/* Company Creation Modal */}
-      {showCompanyModal && (
-        <CompanyModal onClose={handleCloseCompanyModal} />
-      )}
+      {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
+
+      {/* Product Details Drawer/Modal */}
       {detailsModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 z-50">
           <div className="bg-white w-full max-w-5xl h-[100vh] overflow-auto rounded-lg shadow-lg relative">

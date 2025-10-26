@@ -49,6 +49,12 @@ export default function QuotationManagementPage() {
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("crm-export");
 
+  // DRAFT drawer state
+  const [showDraftWindow, setShowDraftWindow] = useState(false);
+  const [draftQuotations, setDraftQuotations] = useState([]);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState(null);
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) {
@@ -64,6 +70,7 @@ export default function QuotationManagementPage() {
     fetchUserEmail();
     fetchOpportunities();
     if (id) fetchQuotation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, currentPage, approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchQuery, headerSearch]);
 
   useEffect(() => {
@@ -73,6 +80,13 @@ export default function QuotationManagementPage() {
       setLatestActions({});
     }
   }, [quotations]);
+
+  // Auto-fetch drafts whenever the window opens
+  useEffect(() => {
+    if (showDraftWindow) {
+      fetchDrafts();
+    }
+  }, [showDraftWindow]);
 
   async function fetchUserEmail() {
     try {
@@ -206,6 +220,68 @@ export default function QuotationManagementPage() {
     }
   }
 
+  // -------------- Drafts --------------
+  async function fetchDrafts() {
+    try {
+      setDraftLoading(true);
+      setDraftError(null);
+      const token = localStorage.getItem("token");
+      // Pull only drafts. Use pages or plain list; plain list is fine for <=100.
+      const res = await axios.get(`${BACKEND_URL}/api/admin/quotations`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { draft: true, page: 1, limit: 100 },
+        timeout: 30000,
+      });
+      const drafts = Array.isArray(res.data?.quotations) ? res.data.quotations : [];
+      setDraftQuotations(drafts);
+    } catch (err) {
+      console.error("Error fetching draft quotations:", err);
+      setDraftError("Failed to load draft quotations");
+      setDraftQuotations([]);
+    } finally {
+      setDraftLoading(false);
+    }
+  }
+
+  async function handlePublishDraft(draft) {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `${BACKEND_URL}/api/admin/quotations/${draft._id}/publish`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 20000 }
+      );
+      // Refresh both lists
+      fetchDrafts();
+      fetchData();
+      alert("Draft published successfully!");
+    } catch (err) {
+      console.error("Error publishing draft:", err);
+      alert("Failed to publish draft.");
+    }
+  }
+
+  async function handleDeleteDraft(draft) {
+    if (!window.confirm(`Delete draft ${draft.quotationNumber}? This cannot be undone.`)) return;
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`${BACKEND_URL}/api/admin/quotations/${draft._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchDrafts();
+      fetchData();
+      alert("Draft deleted.");
+    } catch (err) {
+      console.error("Error deleting draft:", err);
+      alert("Failed to delete draft.");
+    }
+  }
+
+  function toggleDraftWindow() {
+    setShowDraftWindow((s) => !s);
+  }
+
+  // -------------- Existing Handlers --------------
   async function handleGenerateDeliveryChallan(quotation) {
     try {
       const token = localStorage.getItem("token");
@@ -331,10 +407,35 @@ export default function QuotationManagementPage() {
     }
   }
 
+  async function handleDuplicateQuotation(q) {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.put(
+        `${BACKEND_URL}/api/admin/quotations/${q._id}`,
+        {}, // no overrides -> pure clone
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 30000 }
+      );
+
+      const newQ = res.data?.quotation;
+      if (!newQ?._id) {
+        alert("Duplicate created, but response was unexpected.");
+        fetchData();
+        return;
+      }
+
+      alert(`Quotation duplicated as ${newQ.quotationNumber}`);
+      navigate(`/admin-dashboard/quotations/${newQ._id}`);
+      fetchData();
+    } catch (error) {
+      console.error("Error duplicating quotation:", error);
+      alert("Failed to create duplicate quotation.");
+    }
+  }
+
   const handleSort = (key, isDate = false) => {
     const direction = sortConfig.key === key && sortConfig.direction === "asc" ? "desc" : "asc";
     setSortConfig({ key, direction });
-    fetchData(); // Trigger fetchData to apply sorting
+    fetchData();
   };
 
   const handleHeaderSearch = (key, value) => {
@@ -436,7 +537,18 @@ export default function QuotationManagementPage() {
             placeholder="Search by Company, Event, Quotation, etc."
             className="border p-2 rounded w-full md:w-1/2 mb-2 md:mb-0"
           />
-          
+          <button
+            onClick={() => setShowFilterWindow((s) => !s)}
+            className="border px-3 py-2 rounded text-sm"
+          >
+            {showFilterWindow ? "Hide Filters" : "Show Filters"}
+          </button>
+          <button
+            onClick={toggleDraftWindow}
+            className="border px-3 py-2 rounded text-sm"
+          >
+            {showDraftWindow ? "Hide Drafts" : "Show Drafts"}
+          </button>
         </div>
 
         {showFilterWindow && (
@@ -583,36 +695,27 @@ export default function QuotationManagementPage() {
                 <tr>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("quotationNumber")}>
                     Quotation No. {sortConfig.key === "quotationNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
-                   
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("opportunityNumber")}>
                     Opportunity No. {sortConfig.key === "opportunityNumber" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("opportunityOwner")}>
                     Opportunity Owner {sortConfig.key === "opportunityOwner" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("customerCompany")}>
                     Company {sortConfig.key === "customerCompany" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("customerName")}>
                     Customer Name {sortConfig.key === "customerName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("catalogName")}>
                     Event Name {sortConfig.key === "catalogName" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("items.length")}>
                     Items {sortConfig.key === "items.length" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left cursor-pointer" onClick={() => handleSort("createdAt", true)}>
                     Created At {sortConfig.key === "createdAt" && (sortConfig.direction === "asc" ? "↑" : "↓")}
-                    
                   </th>
                   <th className="p-2 text-left">
                     Latest Action
@@ -635,6 +738,7 @@ export default function QuotationManagementPage() {
                         >
                           {q.quotationNumber}
                           {q.quotationNumber < 10496 && <span> (old)</span>}
+                          {q.isDraft && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">DRAFT</span>}
                         </button>
                       </td>
                       <td className="p-2">{q.opportunityNumber || "N/A"}</td>
@@ -691,6 +795,12 @@ export default function QuotationManagementPage() {
                               Generate Delivery Challan
                             </Dropdown.Item>
                             <Dropdown.Item
+                              onClick={() => handleDuplicateQuotation(q)}
+                              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                            >
+                              Create Duplicate
+                            </Dropdown.Item>
+                            <Dropdown.Item
                               onClick={() => handleDeleteQuotation(q)}
                               className="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100"
                             >
@@ -707,6 +817,121 @@ export default function QuotationManagementPage() {
           </div>
           {renderPagination()}
         </>
+      )}
+
+      {/* Floating Drafts button with count (bottom-right) */}
+      <button
+        onClick={toggleDraftWindow}
+        className="fixed right-4 bottom-4 px-4 py-2 rounded-full shadow-md border bg-white hover:bg-gray-50"
+        title="Show Draft Quotations"
+      >
+        Drafts
+        {draftQuotations.length > 0 && (
+          <span className="ml-2 inline-flex items-center justify-center text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-900">
+            {draftQuotations.length}
+          </span>
+        )}
+      </button>
+
+      {/* Bottom slide-up Drafts window */}
+      {showDraftWindow && (
+        <div className="fixed left-0 right-0 bottom-0 z-30">
+          <div className="mx-auto max-w-7xl border-t border-gray-300 shadow-2xl bg-white rounded-t-lg">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center space-x-3">
+                <h3 className="text-lg font-semibold">Draft Quotations</h3>
+                <span className="text-sm text-gray-500">({draftQuotations.length})</span>
+              </div>
+              <div className="space-x-2">
+                <button
+                  onClick={fetchDrafts}
+                  className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                >
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowDraftWindow(false)}
+                  className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+              {draftLoading ? (
+                <div className="p-4 text-sm text-gray-600">Loading drafts…</div>
+              ) : draftError ? (
+                <div className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded">
+                  {draftError}
+                </div>
+              ) : draftQuotations.length === 0 ? (
+                <div className="p-6 text-sm text-gray-600">No drafts found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-sm">
+                    <thead className="bg-yellow-50 border-b text-gray-700 uppercase">
+                      <tr>
+                        <th className="p-2 text-left">Quotation No.</th>
+                        <th className="p-2 text-left">Company</th>
+                        <th className="p-2 text-left">Event</th>
+                        <th className="p-2 text-left">Items</th>
+                        <th className="p-2 text-left">Created</th>
+                        <th className="p-2 text-left">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {draftQuotations.map((d) => (
+                        <tr key={d._id} className="border-b">
+                          <td className="p-2">
+                            <span className="font-medium">{d.quotationNumber}</span>
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">DRAFT</span>
+                          </td>
+                          <td className="p-2">{d.customerCompany || "—"}</td>
+                          <td className="p-2">{d.catalogName || "—"}</td>
+                          <td className="p-2">{d.items?.length || 0}</td>
+                          <td className="p-2">{d.createdAt ? format(new Date(d.createdAt), "dd/MM/yyyy") : "—"}</td>
+                          <td className="p-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => navigate(`/admin-dashboard/quotations/${d._id}`)}
+                                className="px-2 py-1 border rounded hover:bg-gray-50"
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() =>
+                                  d.quotationNumber >= 10496
+                                    ? navigate(`/admin-dashboard/quotation/manual/${d._id}`)
+                                    : navigate(`/admin-dashboard/oldquotation/manual/${d._id}`)
+                                }
+                                className="px-2 py-1 border rounded hover:bg-gray-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handlePublishDraft(d)}
+                                className="px-2 py-1 border rounded bg-green-600 text-white hover:bg-green-700"
+                              >
+                                Publish
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDraft(d)}
+                                className="px-2 py-1 border rounded text-red-600 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {remarksModalOpen && selectedItemForRemarks && (

@@ -70,6 +70,7 @@ function ManageOpportunity() {
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("crm-export");
   const canViewAllOpp = permissions.includes("viewallopp");
+
   const [activeTab, setActiveTab] = useState(
     isSuperAdmin || canViewAllOpp ? "all-opportunities" : "my-opportunities"
   );
@@ -117,29 +118,53 @@ function ManageOpportunity() {
     return d.toLocaleDateString("en-GB");
   };
 
+  // ===== FETCH LIST (with cache-buster & clean params) =====
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const params = {
-          filter: activeTab === "my-opportunities" ? "my" : activeTab === "team-opportunities" ? "team" : undefined,
+        const rawParams = {
+          filter:
+            activeTab === "my-opportunities"
+              ? "my"
+              : activeTab === "team-opportunities"
+              ? "team"
+              : undefined,
           searchTerm: searchTerm || undefined,
-          page: currentPage,
+          page: Number(currentPage),
           limit: 100,
-          opportunityStage: filterCriteria.opportunityStage !== "All" ? filterCriteria.opportunityStage : undefined,
+          opportunityStage:
+            filterCriteria.opportunityStage !== "All"
+              ? filterCriteria.opportunityStage
+              : undefined,
           closureFromDate: filterCriteria.closureFromDate || undefined,
           closureToDate: filterCriteria.closureToDate || undefined,
-          createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
+          createdFilter:
+            filterCriteria.createdFilter !== "All"
+              ? filterCriteria.createdFilter
+              : undefined,
+          _t: Date.now(), // cache buster to avoid stale page 1 payloads
         };
+
+        // strip undefined keys so axios sends a clean querystring
+        const params = Object.fromEntries(
+          Object.entries(rawParams).filter(([, v]) => v !== undefined && v !== null)
+        );
+
         const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities-pages`, {
           headers: getAuthHeaders(),
           params,
-          timeout: 30000, // Added to prevent 504
         });
-        setOpportunities(res.data.opportunities);
-        setTotalPages(res.data.totalPages);
-        setTotalOpportunities(res.data.totalOpportunities);
+
+        setOpportunities(res.data.opportunities || []);
+        setTotalPages(res.data.totalPages || 1);
+        setTotalOpportunities(res.data.totalOpportunities || 0);
+
+        // If backend returns currentPage, sync to it so UI reflects server paging
+        if (res.data.currentPage) {
+          setCurrentPage(res.data.currentPage);
+        }
       } catch (error) {
         console.error("Error fetching opportunities:", error);
         setError("Failed to fetch opportunities");
@@ -148,8 +173,17 @@ function ManageOpportunity() {
       }
     };
     fetchData();
-  }, [activeTab, searchTerm, filterCriteria, currentPage, isSuperAdmin, canViewAllOpp]);
+  }, [
+    activeTab,
+    searchTerm,
+    filterCriteria.opportunityStage,
+    filterCriteria.closureFromDate,
+    filterCriteria.closureToDate,
+    filterCriteria.createdFilter,
+    currentPage,
+  ]);
 
+  // ===== LATEST ACTIONS =====
   useEffect(() => {
     if (opportunities.length > 0) {
       fetchLatestActions(opportunities.map((op) => op._id));
@@ -165,7 +199,7 @@ function ManageOpportunity() {
         { opportunityIds },
         { headers: getAuthHeaders() }
       );
-      setLatestActions(res.data);
+      setLatestActions(res.data || {});
     } catch (err) {
       console.error("Error fetching latest actions:", err);
       setLatestActions({});
@@ -240,20 +274,31 @@ function ManageOpportunity() {
 
   const exportToExcel = async () => {
     try {
-      const params = {
-        filter: activeTab === "my-opportunities" ? "my" : activeTab === "team-opportunities" ? "team" : undefined,
+      const rawParams = {
+        filter:
+          activeTab === "my-opportunities"
+            ? "my"
+            : activeTab === "team-opportunities"
+            ? "team"
+            : undefined,
         searchTerm: searchTerm || undefined,
-        opportunityStage: filterCriteria.opportunityStage !== "All" ? filterCriteria.opportunityStage : undefined,
+        opportunityStage:
+          filterCriteria.opportunityStage !== "All" ? filterCriteria.opportunityStage : undefined,
         closureFromDate: filterCriteria.closureFromDate || undefined,
         closureToDate: filterCriteria.closureToDate || undefined,
-        createdFilter: filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
+        createdFilter:
+          filterCriteria.createdFilter !== "All" ? filterCriteria.createdFilter : undefined,
+        _t: Date.now(),
       };
+      const params = Object.fromEntries(
+        Object.entries(rawParams).filter(([, v]) => v !== undefined && v !== null)
+      );
       const res = await axios.get(`${BACKEND_URL}/api/admin/opportunities-export`, {
         headers: getAuthHeaders(),
         params,
-        timeout: 60000, // Increased timeout for larger data
+        timeout: 60000,
       });
-      const exportData = res.data.opportunities.map((op) => {
+      const exportData = (res.data.opportunities || []).map((op) => {
         const latestAction = latestActions[op._id] || {};
         return {
           opportunityCode: op.opportunityCode,
@@ -317,7 +362,7 @@ function ManageOpportunity() {
           activeTab={activeTab}
           setActiveTab={(tab) => {
             setActiveTab(tab);
-            setCurrentPage(1); // Reset to first page on tab change
+            setCurrentPage(1);
           }}
           isSuperAdmin={isSuperAdmin}
           canViewAllOpp={canViewAllOpp}
@@ -390,7 +435,7 @@ function ManageOpportunity() {
             searchTerm={searchTerm}
             setSearchTerm={(term) => {
               setSearchTerm(term);
-              setCurrentPage(1); // Reset to first page on search
+              setCurrentPage(1);
             }}
           />
           <button
@@ -425,18 +470,20 @@ function ManageOpportunity() {
           </Link>
         </div>
       </div>
+
       {showFilter && (
         <FilterPanel
           filterCriteria={filterCriteria}
           handleFilterChange={(e) => {
             const { name, value } = e.target;
             setFilterCriteria((prev) => ({ ...prev, [name]: value }));
-            setCurrentPage(1); // Reset to first page on filter change
+            setCurrentPage(1);
           }}
           setShowFilter={setShowFilter}
           stages={stages}
         />
       )}
+
       <div className="border-t border-gray-200 mt-4">
         {loading ? (
           <SkeletonLoader />

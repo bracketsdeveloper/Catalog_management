@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function SingleProductModal({
   editProductId,
@@ -10,13 +11,39 @@ export default function SingleProductModal({
   uploadProgress,
   categories,
   subCategories,
-  brands
+  brands,
+
+  // NEW: pass populated vendors (objects with _id, vendorCompany/vendorName)
+  initialSelectedVendors = [],
 }) {
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const [categorySuggestions, setCategorySuggestions] = useState([]);
   const [subCategorySuggestions, setSubCategorySuggestions] = useState([]);
   const [brandSuggestions, setBrandSuggestions] = useState([]);
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+  const [vendorSearch, setVendorSearch] = useState("");
 
-  // Helpers for filtering suggestions
+  // Map of vendorId -> { _id, vendorCompany?, vendorName? }
+  const [selectedVendorsMap, setSelectedVendorsMap] = useState({});
+
+  // Hydrate map from initialSelectedVendors (edit mode or prefilled product)
+  useEffect(() => {
+    if (!Array.isArray(initialSelectedVendors)) return;
+    setSelectedVendorsMap((prev) => {
+      const next = { ...prev };
+      for (const v of initialSelectedVendors) {
+        if (v && v._id) {
+          next[v._id] = {
+            _id: v._id,
+            vendorCompany: v.vendorCompany,
+            vendorName: v.vendorName,
+          };
+        }
+      }
+      return next;
+    });
+  }, [initialSelectedVendors]);
+
   const filterSuggestions = (input, list, setSuggestions) => {
     if (!input) {
       setSuggestions([]);
@@ -26,6 +53,89 @@ export default function SingleProductModal({
       item.toLowerCase().includes(input.toLowerCase())
     );
     setSuggestions(filtered);
+  };
+
+  const fetchVendorSuggestions = async (query) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/vendors/suggestions?query=${encodeURIComponent(
+          query
+        )}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const list = res.data || [];
+      setVendorSuggestions(list);
+
+      // Merge labels for currently selected ids
+      if (Array.isArray(newProductData?.preferredVendors)) {
+        setSelectedVendorsMap((prev) => {
+          const next = { ...prev };
+          for (const v of list) {
+            if (newProductData.preferredVendors.includes(v._id)) {
+              next[v._id] =
+                next[v._id] || {
+                  _id: v._id,
+                  vendorCompany: v.vendorCompany,
+                  vendorName: v.vendorName,
+                };
+            }
+          }
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching vendor suggestions:", err);
+      setVendorSuggestions([]);
+    }
+  };
+
+  // Debounced vendor search
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      if (vendorSearch) {
+        fetchVendorSuggestions(vendorSearch);
+      } else {
+        setVendorSuggestions([]);
+      }
+    }, 300);
+    return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorSearch]);
+
+  const handleVendorSelect = (vendor) => {
+    setNewProductData((prev) => ({
+      ...prev,
+      preferredVendors: [
+        ...new Set([...(prev.preferredVendors || []), vendor._id]),
+      ],
+    }));
+    setSelectedVendorsMap((prev) => ({
+      ...prev,
+      [vendor._id]: {
+        _id: vendor._id,
+        vendorCompany: vendor.vendorCompany,
+        vendorName: vendor.vendorName,
+      },
+    }));
+    setVendorSearch("");
+    setVendorSuggestions([]);
+  };
+
+  const handleVendorRemove = (vendorId) => {
+    setNewProductData((prev) => ({
+      ...prev,
+      preferredVendors: (prev.preferredVendors || []).filter(
+        (id) => id !== vendorId
+      ),
+    }));
+    setSelectedVendorsMap((prev) => {
+      const next = { ...prev };
+      delete next[vendorId];
+      return next;
+    });
   };
 
   return (
@@ -53,13 +163,12 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productTag: e.target.value
+                      productTag: e.target.value,
                     }))
                   }
                   required
                 />
               </div>
-
               {/* Product ID */}
               <div>
                 <label className="block font-medium mb-1">Product ID</label>
@@ -70,13 +179,12 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productId: e.target.value
+                      productId: e.target.value,
                     }))
                   }
                   required
                 />
               </div>
-
               {/* Variant ID */}
               <div>
                 <label className="block font-medium mb-1">Variant ID</label>
@@ -87,12 +195,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      variantId: e.target.value
+                      variantId: e.target.value,
                     }))
                   }
                 />
               </div>
-
               {/* Category */}
               <div>
                 <label className="block font-medium mb-1">Category</label>
@@ -103,13 +210,16 @@ export default function SingleProductModal({
                   onChange={(e) => {
                     setNewProductData((prev) => ({
                       ...prev,
-                      category: e.target.value
+                      category: e.target.value,
                     }));
-                    filterSuggestions(e.target.value, categories, setCategorySuggestions);
+                    filterSuggestions(
+                      e.target.value,
+                      categories,
+                      setCategorySuggestions
+                    );
                   }}
                   required
                 />
-                {/* Category Suggestions */}
                 {categorySuggestions.length > 0 && (
                   <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
                     {categorySuggestions.map((suggestion, index) => (
@@ -119,7 +229,7 @@ export default function SingleProductModal({
                         onClick={() => {
                           setNewProductData((prev) => ({
                             ...prev,
-                            category: suggestion
+                            category: suggestion,
                           }));
                           setCategorySuggestions([]);
                         }}
@@ -130,8 +240,7 @@ export default function SingleProductModal({
                   </div>
                 )}
               </div>
-
-              {/* Sub Category */}
+              {/* SubCategory */}
               <div>
                 <label className="block font-medium mb-1">Sub Category</label>
                 <input
@@ -141,12 +250,15 @@ export default function SingleProductModal({
                   onChange={(e) => {
                     setNewProductData((prev) => ({
                       ...prev,
-                      subCategory: e.target.value
+                      subCategory: e.target.value,
                     }));
-                    filterSuggestions(e.target.value, subCategories, setSubCategorySuggestions);
+                    filterSuggestions(
+                      e.target.value,
+                      subCategories,
+                      setSubCategorySuggestions
+                    );
                   }}
                 />
-                {/* SubCategory Suggestions */}
                 {subCategorySuggestions.length > 0 && (
                   <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
                     {subCategorySuggestions.map((suggestion, index) => (
@@ -156,7 +268,7 @@ export default function SingleProductModal({
                         onClick={() => {
                           setNewProductData((prev) => ({
                             ...prev,
-                            subCategory: suggestion
+                            subCategory: suggestion,
                           }));
                           setSubCategorySuggestions([]);
                         }}
@@ -167,7 +279,6 @@ export default function SingleProductModal({
                   </div>
                 )}
               </div>
-
               {/* Variation Hinge */}
               <div>
                 <label className="block font-medium mb-1">Variation Hinge</label>
@@ -178,12 +289,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      variationHinge: e.target.value
+                      variationHinge: e.target.value,
                     }))
                   }
                 />
               </div>
-
               {/* Name */}
               <div>
                 <label className="block font-medium mb-1">Name</label>
@@ -194,13 +304,12 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      name: e.target.value
+                      name: e.target.value,
                     }))
                   }
                   required
                 />
               </div>
-
               {/* Brand Name */}
               <div>
                 <label className="block font-medium mb-1">Brand Name</label>
@@ -211,12 +320,11 @@ export default function SingleProductModal({
                   onChange={(e) => {
                     setNewProductData((prev) => ({
                       ...prev,
-                      brandName: e.target.value
+                      brandName: e.target.value,
                     }));
                     filterSuggestions(e.target.value, brands, setBrandSuggestions);
                   }}
                 />
-                {/* Brand Suggestions */}
                 {brandSuggestions.length > 0 && (
                   <div className="bg-white border border-gray-300 mt-1 rounded shadow-md">
                     {brandSuggestions.map((suggestion, index) => (
@@ -226,7 +334,7 @@ export default function SingleProductModal({
                         onClick={() => {
                           setNewProductData((prev) => ({
                             ...prev,
-                            brandName: suggestion
+                            brandName: suggestion,
                           }));
                           setBrandSuggestions([]);
                         }}
@@ -238,7 +346,7 @@ export default function SingleProductModal({
                 )}
               </div>
 
-              {/* Product Description */}
+              {/* Description */}
               <div className="col-span-2">
                 <label className="block font-medium mb-1">Product Description</label>
                 <textarea
@@ -247,14 +355,14 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productDetails: e.target.value
+                      productDetails: e.target.value,
                     }))
                   }
                   rows={4}
                 />
               </div>
 
-              {/* Qty */}
+              {/* Qty / prices */}
               <div>
                 <label className="block font-medium mb-1">Qty</label>
                 <input
@@ -264,13 +372,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      qty: e.target.value
+                      qty: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* MRP Currency */}
               <div>
                 <label className="block font-medium mb-1">MRP Currency</label>
                 <input
@@ -280,13 +386,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      MRP_Currency: e.target.value
+                      MRP_Currency: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* MRP */}
               <div>
                 <label className="block font-medium mb-1">MRP</label>
                 <input
@@ -296,13 +400,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      MRP: e.target.value
+                      MRP: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* MRP Unit */}
               <div>
                 <label className="block font-medium mb-1">MRP Unit</label>
                 <input
@@ -312,13 +414,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      MRP_Unit: e.target.value
+                      MRP_Unit: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Delivery Time */}
               <div>
                 <label className="block font-medium mb-1">Delivery Time</label>
                 <input
@@ -328,13 +428,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      deliveryTime: e.target.value
+                      deliveryTime: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Size */}
               <div>
                 <label className="block font-medium mb-1">Size</label>
                 <input
@@ -344,13 +442,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      size: e.target.value
+                      size: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Color */}
               <div>
                 <label className="block font-medium mb-1">Color</label>
                 <input
@@ -360,13 +456,11 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      color: e.target.value
+                      color: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Material */}
               <div>
                 <label className="block font-medium mb-1">Material</label>
                 <input
@@ -376,17 +470,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      material: e.target.value
+                      material: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Price Range */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Price Range
-                </label>
+              <div>
+                <label className="block font-medium mb-1">Price Range</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -394,17 +484,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      priceRange: e.target.value
+                      priceRange: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Weight */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Weight
-                </label>
+              <div>
+                <label className="block font-medium mb-1">Weight</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -412,17 +498,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      weight: e.target.value
+                      weight: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* HSN Code */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  HSN Code
-                </label>
+              <div>
+                <label className="block font-medium mb-1">HSN Code</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -430,17 +512,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      hsnCode: e.target.value
+                      hsnCode: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Product Cost Currency */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Product Cost Currency
-                </label>
+              <div>
+                <label className="block font-medium mb-1">Product Cost Currency</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -448,17 +526,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productCost_Currency: e.target.value
+                      productCost_Currency: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Product Cost */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Product Cost
-                </label>
+              <div>
+                <label className="block font-medium mb-1">Product Cost</label>
                 <input
                   type="number"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -466,17 +540,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productCost: e.target.value
+                      productCost: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Product Cost Unit */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Product Cost Unit
-                </label>
+              <div>
+                <label className="block font-medium mb-1">Product Cost Unit</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -484,17 +554,13 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productCost_Unit: e.target.value
+                      productCost_Unit: e.target.value,
                     }))
                   }
                 />
               </div>
-
-              {/* Product GST */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700">
-                  Product GST (%)
-                </label>
+              <div>
+                <label className="block font-medium mb-1">Product GST (%)</label>
                 <input
                   type="number"
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
@@ -502,73 +568,128 @@ export default function SingleProductModal({
                   onChange={(e) =>
                     setNewProductData((prev) => ({
                       ...prev,
-                      productGST: Number(e.target.value)
+                      productGST: e.target.value,
                     }))
                   }
                 />
               </div>
-            </div>
 
-            {/* Existing Images */}
-            {editProductId &&
-              newProductData.images?.length > 0 &&
-              typeof newProductData.images[0] === "string" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Existing Images
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {newProductData.images.map((imgUrl, idx) => (
-                      <div key={idx} className="relative">
+              {/* Preferred Vendors */}
+              <div className="col-span-2">
+                <label className="block font-medium mb-1">Preferred Vendors</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                  value={vendorSearch}
+                  onChange={(e) => setVendorSearch(e.target.value)}
+                  placeholder="Search vendors..."
+                />
+                {vendorSuggestions.length > 0 && (
+                  <div className="bg-white border border-gray-300 mt-1 rounded shadow-md max-h-40 overflow-y-auto">
+                    {vendorSuggestions.map((vendor) => (
+                      <div
+                        key={vendor._id}
+                        className="p-2 cursor-pointer hover:bg-gray-200"
+                        onClick={() => handleVendorSelect(vendor)}
+                      >
+                        {vendor.vendorCompany || vendor.vendorName}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(newProductData.preferredVendors || []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(newProductData.preferredVendors || []).map((vendorId) => {
+                      const fromMap = selectedVendorsMap[vendorId];
+                      const fromSuggestions =
+                        vendorSuggestions.find((v) => v._id === vendorId) || null;
+                      const label =
+                        (fromMap && (fromMap.vendorCompany || fromMap.vendorName)) ||
+                        (fromSuggestions &&
+                          (fromSuggestions.vendorCompany || fromSuggestions.vendorName)) ||
+                        vendorId;
+                      return (
+                        <span
+                          key={vendorId}
+                          className="flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                        >
+                          {label}
+                          <button
+                            type="button"
+                            onClick={() => handleVendorRemove(vendorId)}
+                            className="ml-1 text-blue-500 hover:text-blue-700"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Images */}
+              <div className="col-span-2">
+                <label className="block font-medium mb-1">Images</label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
+                />
+                {uploadProgress > 0 && (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Uploading: {uploadProgress}%
+                    </p>
+                  </div>
+                )}
+                {newProductData.images && newProductData.images.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {newProductData.images.map((img, index) => (
+                      <div key={index} className="relative">
                         <img
-                          src={imgUrl}
-                          alt="existing"
-                          className="w-24 h-24 object-cover border border-gray-300 rounded"
+                          src={img}
+                          alt={`Uploaded ${index}`}
+                          className="h-20 w-20 object-cover rounded"
                         />
                         <button
                           type="button"
                           onClick={() =>
                             setNewProductData((prev) => ({
                               ...prev,
-                              images: prev.images.filter((_, i) => i !== idx)
+                              images: prev.images.filter((_, i) => i !== index),
                             }))
                           }
-                          className="absolute top-0 right-0 bg-red-600 text-white text-xs p-1 rounded"
+                          className="absolute top-0 right-0 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center"
                         >
-                          X
+                          ×
                         </button>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-            {/* Upload New Images */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Upload Images
-              </label>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="w-full"
-                onChange={handleFileChange}
-              />
-              {uploadProgress > 0 && (
-                <div className="mt-2 w-full bg-gray-200 h-2.5 rounded">
-                  <div
-                    className="bg-purple-500 h-2.5 rounded"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            <div className="mt-6">
+            <div className="flex justify-end space-x-2 mt-4">
+              <button
+                type="button"
+                onClick={closeSingleProductModal}
+                className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
               <button
                 type="submit"
-                className="px-6 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 text-white rounded hover:opacity-90 disabled:opacity-50"
+                className="px-4 py-2 bg-[#Ff8045] text-white rounded hover:bg-[#e66f3b]"
               >
                 {editProductId ? "Update Product" : "Create Product"}
               </button>

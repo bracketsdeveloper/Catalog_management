@@ -25,9 +25,13 @@ const sampleOutSchema = new mongoose.Schema({
   },
   qtyReceivedBack:    { type: Number, default: 0 },
   receivedBack:       { type: Boolean, default: false },
-  returned:           { type: Boolean, default: false }, // Added returned field
+  returned:           { type: Boolean, default: false },
   outSince:           { type: Number, default: 0 },
   sampleBackDate:     { type: Date },
+
+  // NEW: manual input
+  opportunityNumber:  { type: String, default: "" },
+
   createdAt:          { type: Date, default: Date.now },
   updatedAt:          { type: Date, default: Date.now },
 });

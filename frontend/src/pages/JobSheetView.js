@@ -198,7 +198,14 @@ export default function JobSheetView() {
           ]}
         />
 
-        <Line label="DELIVERY ADDRESS:" value={jobSheet.deliveryAddress} />
+        <Line
+          label="DELIVERY ADDRESS:"
+          value={
+            Array.isArray(jobSheet.deliveryAddress)
+              ? jobSheet.deliveryAddress[0]
+              : jobSheet.deliveryAddress
+          }
+        />
         <Line label="GIFT BOX / BAGS DETAILS:" value={jobSheet.giftBoxBagsDetails} />
         <Line label="PACKAGING INSTRUCTIONS:" value={jobSheet.packagingInstructions} />
         <Line label="ANY OTHER DETAILS:" value={jobSheet.otherDetails} />
@@ -249,16 +256,14 @@ function Section({ rows }) {
       {rows.map((row, i) => (
         <div
           key={i}
-          className={`grid gap-0 border-b border-black ${
-            row.length === 2 ? "grid-cols-2" : "grid-cols-3"
-          }`}
+          className={`grid gap-0 border-b border-black ${row.length === 2 ? "grid-cols-2" : "grid-cols-3"
+            }`}
         >
           {row.map((cell) => (
             <div
               key={cell.label}
-              className={`p-1 ${
-                row.length === 3 ? "border-r border-black" : ""
-              }`}
+              className={`p-1 ${row.length === 3 ? "border-r border-black" : ""
+                }`}
             >
               <span className="font-bold uppercase">{cell.label}</span>
               <span className="ml-1 font-semibold">{cell.val || "N/A"}</span>

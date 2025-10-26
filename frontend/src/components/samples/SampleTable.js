@@ -12,11 +12,10 @@ export default function SampleTable({
 }) {
   const [preview, setPreview] = useState(null);
 
-  // per-column header filters
   const [headerFilters, setHeaderFilters] = useState({
     sampleInDate: "",
     sampleReferenceCode: "",
-    opportunityNumber: "", // Added
+    opportunityNumber: "",
     productId: "",
     productName: "",
     category: "",
@@ -25,13 +24,12 @@ export default function SampleTable({
     sampleRate: "",
     qty: "",
     returnable: "",
-    
-    remarks: "", // Added
+    crmName: "",     // NEW filter
+    remarks: "",
   });
   const handleFilterChange = (field, val) =>
     setHeaderFilters((h) => ({ ...h, [field]: val }));
 
-  // apply header filters
   const filtered = useMemo(() => {
     return samples.filter((s) => {
       return Object.entries(headerFilters).every(([field, filterVal]) => {
@@ -45,7 +43,6 @@ export default function SampleTable({
     });
   }, [samples, headerFilters]);
 
-  // apply sorting
   const sorted = useMemo(() => {
     if (!sortField) return filtered;
     return [...filtered].sort((a, b) => {
@@ -73,7 +70,7 @@ export default function SampleTable({
                 { label: "Date", field: "sampleInDate" },
                 { label: "Picture", field: null },
                 { label: "Ref Code", field: "sampleReferenceCode" },
-                { label: "Opp #", field: "opportunityNumber" }, // Added
+                { label: "Opp #", field: "opportunityNumber" },
                 { label: "Product ID", field: "productId" },
                 { label: "Name", field: "productName" },
                 { label: "Category", field: "category" },
@@ -82,8 +79,8 @@ export default function SampleTable({
                 { label: "Rate", field: "sampleRate" },
                 { label: "Qty", field: "qty" },
                 { label: "Returnable", field: "returnable" },
-                
-                { label: "Remarks", field: "remarks" }, // Added
+                { label: "CRM Name", field: "crmName" },         // NEW column
+                { label: "Remarks", field: "remarks" },
               ].map(({ label, field }) => (
                 <th
                   key={label}
@@ -102,12 +99,13 @@ export default function SampleTable({
                 Actions
               </th>
             </tr>
+
             <tr className="bg-gray-100">
               {[
                 "sampleInDate",
                 null,
                 "sampleReferenceCode",
-                "opportunityNumber", // Added
+                "opportunityNumber",
                 "productId",
                 "productName",
                 "category",
@@ -116,8 +114,8 @@ export default function SampleTable({
                 "sampleRate",
                 "qty",
                 "returnable",
-                
-                "remarks", // Added
+                "crmName",          // NEW filter cell
+                "remarks",
               ].map((field, idx) => (
                 <td key={idx} className="px-4 py-1">
                   {field ? (
@@ -172,6 +170,7 @@ export default function SampleTable({
                   {s.returnable}
                   {s.returnable === "Returnable" && ` (${s.returnableDays} d)`}
                 </td>
+                <td className="px-4 py-2">{s.crmName}</td> {/* NEW cell */}
                 <td className="px-4 py-2">{s.remarks}</td>
                 <td className="px-4 py-2">
                   <button
@@ -187,7 +186,7 @@ export default function SampleTable({
             {!sorted.length && (
               <tr>
                 <td
-                  colSpan={14} // Updated to account for new columns
+                  colSpan={15}
                   className="px-4 py-6 text-center text-gray-500"
                 >
                   No samples found.
@@ -198,7 +197,6 @@ export default function SampleTable({
         </table>
       </div>
 
-      {/* ---------------- image light-box */}
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
           <div className="relative">

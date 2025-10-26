@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
-//import  logoImg from  '../../public/pacer-logo.jpeg';
 import { CgOrganisation } from "react-icons/cg";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -22,10 +21,8 @@ import {
 } from "@heroicons/react/24/outline";
 
 /* ------------------------------------------------------------------ */
-/* TOP‑LEVEL NAVIGATION CONFIG                                        */
+/* TOP-LEVEL NAVIGATION CONFIG                                        */
 /* ------------------------------------------------------------------ */
-
-
 
 const adminPages = [
   /* ----------------------- TASK MANAGER ------------------------------ */
@@ -43,9 +40,10 @@ const adminPages = [
         name: "Manage Tickets",
         path: "/admin-dashboard/manage-tickets"
       }
-      
     ],
   },
+
+  /* ----------------------- SALES ------------------------------------- */
   {
     name: "Sales",
     defaultPath: "/admin-dashboard/manage-dc",
@@ -66,9 +64,10 @@ const adminPages = [
         path:"/admin-dashboard/e-invoice",
         permission : "manage-einvoice"
       }
-      
     ],
   },
+
+  /* ----------------------- USER MANAGEMENT --------------------------- */
   {
     name: "User Management",
     defaultPath: "/admin-dashboard/manage-users",
@@ -86,6 +85,8 @@ const adminPages = [
       },
     ],
   },
+
+  /* ----------------------- CALCULATIONS ------------------------------ */
   {
     name: "Calculations",
     defaultPath: "/admin-dashboard/segment-manager",
@@ -104,42 +105,11 @@ const adminPages = [
     ],
   },
 
-
-
-
-
-
-
-
-
-  
-  // {
-  //   name: "Review Catalog",
-  //   path: "/admin-dashboard/review-catalog",
-  //   permission: "review-catalog",
-  //   icon: (
-  //     <img src="/Review_catalog.png" className="h-12 w-12" alt="Review Catalog" />
-  //   ),
-  // },
-  // {
-  //   name: "Add Viewers",
-  //   path: "/admin-dashboard/viewer-manager",
-  //   permission: "viewers-manager",
-  //   icon: (
-  //     <img src="/Add_Viewers.png" className="h-12 w-12" alt="Viewers" />
-  //   ),
-  // },
-
-  /* ----------------------- CRM ----------------------------------- */
-
-  
-
+  /* ----------------------- CRM -------------------------------------- */
   {
     name: "CRM",
     defaultPath: "/admin-dashboard/manage-companies",
-    icon: (
-      <img src='/CRM.png' alt="CRM Icon" className="h-12 w-12" />
-    ),
+    icon: <img src='/CRM.png' alt="CRM Icon" className="h-12 w-12" />,
     subItems: [
       {
         name: "Manage Client/Company Details",
@@ -174,15 +144,13 @@ const adminPages = [
     ],
   },
 
-  /* ----------------------- PURCHASE ------------------------------ */
+  /* ----------------------- PURCHASE --------------------------------- */
   {
     name: "PURCHASE",
     defaultPath: "/admin-dashboard/manage-openpurchase",
-    icon: (
-      <img src='/Purchase.png' alt="Purchase Icon" className="h-12 w-12" />
-    ),
+    icon: <img src='/Purchase.png' alt="Purchase Icon" className="h-12 w-12" />,
     subItems: [
-        {
+      {
         name: "Add / Manage Vendor",
         path: "/admin-dashboard/manage-vendors",
         permission: "manage-vendors",
@@ -205,13 +173,11 @@ const adminPages = [
     ],
   },
 
-  /* ----------------------- PRODUCTION ---------------------------- */
+  /* ----------------------- PRODUCTION ------------------------------- */
   {
     name: "Production",
     defaultPath: "/admin-dashboard/manage-productionjobsheet",
-    icon: (
-      <img src='/Production.png' alt="Production Icon" className="h-12 w-12" />
-    ),
+    icon: <img src='/Production.png' alt="Production Icon" className="h-12 w-12" />,
     subItems: [
       {
         name: "Open Production",
@@ -231,17 +197,11 @@ const adminPages = [
     ],
   },
 
-  /* ------------------- NEW: PACKING / DELIVERY ------------------- */
+  /* ----------------------- PACKING / DELIVERY ----------------------- */
   {
     name: "Packing / Delivery",
     defaultPath: "/admin-dashboard/pending-packing",
-    icon:(
-      <img src='/Packing.png' alt="Packing Icon" className="h-12 w-12" />
-    ),
-    /* 
-      We keep every leaf page in subItems; a `group` key lets
-      the menu renderer show the two mid‑level subsections.
-    */
+    icon: <img src='/Packing.png' alt="Packing Icon" className="h-12 w-12" />,
     subItems: [
       /* Packing & QC */
       {
@@ -279,13 +239,11 @@ const adminPages = [
     ],
   },
 
-  /* ------------------- NEW: INVOICES FOLLOW UP & SUMMARY ------------------- */
+  /* ------------------- INVOICES FOLLOW UP & SUMMARY ----------------- */
   {
     name: "Invoices Follow up & Summary",
     defaultPath: "/admin-dashboard/invoice-followup",
-    icon: (
-      <img src='/Invoices.png' alt="Invoices Icon" className="h-12 w-12" />
-    ),
+    icon: <img src='/Invoices.png' alt="Invoices Icon" className="h-12 w-12" />,
     subItems: [
       {
         name: "PO Follow Up",
@@ -305,13 +263,11 @@ const adminPages = [
     ],
   },
 
-  /* ----------------------- SAMPLES ------------------------------ */
+  /* ----------------------- SAMPLES ---------------------------------- */
   {
     name: "Samples",
     defaultPath: "/admin-dashboard/manage-samples",
-    icon: (
-      <img src="/Sample.png" className="h-8 w-8" alt="Samples" />
-    ),
+    icon: <img src="/Sample.png" className="h-8 w-8" alt="Samples" />,
     subItems: [
       {
         name: "Manage Samples",
@@ -328,17 +284,14 @@ const adminPages = [
         path: "/admin-dashboard/sample-status",
         permission: "sample-status",
       },
-      
-      
     ],
   },
 
+  /* ----------------------- EXPENSE RECORDING ------------------------ */
   {
     name: "Expense Recording",
     defaultPath: "/admin-dashboard/manage-expenses",
-    icon: (
-      <img src="/expenses.png" className="h-8 w-8" alt="Samples" />
-    ),
+    icon: <img src="/expenses.png" className="h-8 w-8" alt="Expenses" />,
     subItems: [
       {
         name: "Manage Expenses",
@@ -348,6 +301,7 @@ const adminPages = [
     ],
   },
 
+  /* ----------------------- FOLLOW UP TRACKER ------------------------ */
   {
     name: "FollowUp Tracker",
     defaultPath: "/admin-dashboard/manage-potential-clients",
@@ -369,11 +323,41 @@ const adminPages = [
         permission: "events-calender",
       }
     ],
-
   },
 
-  
-
+  /* ======================= NEW: HRMS SECTION ======================== */
+  {
+    name: "HRMS",
+    defaultPath: "/admin-dashboard/hrms/employees",
+    icon: <UserGroupIcon className="w-8 h-8 flex justify-center items-center" />,
+    subItems: [
+      {
+        name: "Employees",
+        path: "/admin-dashboard/hrms/employees",
+        permission: "hrms-employees",
+      },
+      {
+        name: "Attendance",
+        path: "/admin-dashboard/hrms/attendance",
+        permission: "hrms-attendance",
+      },
+      {
+        name: "Work From Home",
+        path: "/admin-dashboard/hrms/wfh",
+        permission: "hrms-wfh",
+      },
+      {
+        name: "Leaves",
+        path: "/admin-dashboard/hrms/leaves",
+        permission: "hrms-leaves",
+      },
+      {
+        name: "Salary",
+        path: "/admin-dashboard/hrms/salary",
+        permission: "hrms-salary",
+      },
+    ],
+  },
 ];
 
 /* ================================================================== */
@@ -385,7 +369,7 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHover, setSidebarHover] = useState(false);
 
-  /* individual hover flags for mega‑menus */
+  /* individual hover flags for mega-menus */
   const [crmHovered, setCrmHovered] = useState(false);
   const [purchaseHovered, setPurchaseHovered] = useState(false);
   const [productionHovered, setProductionHovered] = useState(false);
@@ -397,12 +381,8 @@ export default function AdminDashboard() {
   const [calculationsHovered, setCalculationsHovered] = useState(false);
   const [taskManagerHovered, setTaskManagerHovered] = useState(false);
   const [SalesManagerHovered, setSalesManagerHovered] = useState(false);
-
-  //user management
   const [userManagementHovered, setUserManagementHovered] = useState(false);
-  
-
-  
+  const [hrmsHovered, setHrmsHovered] = useState(false); // NEW: HRMS hover
 
   /* ------------------------- AUTH STATE -------------------------- */
   const [permissions, setPermissions] = useState([]);
@@ -417,14 +397,9 @@ export default function AdminDashboard() {
   // Function to get time-based greeting
   const getTimeBasedGreeting = (username) => {
     const hour = new Date().getHours();
-    
-    if (hour >= 5 && hour < 12) {
-      return `Good Morning ${username}`;
-    } else if (hour >= 12 && hour < 17) {
-      return `Good Afternoon ${username}`;
-    } else {
-      return `Good Evening ${username}`;
-    }
+    if (hour >= 5 && hour < 12) return `Good Morning ${username}`;
+    if (hour >= 12 && hour < 17) return `Good Afternoon ${username}`;
+    return `Good Evening ${username}`;
   };
 
   /* fetch role / permissions from localStorage once */
@@ -443,45 +418,26 @@ export default function AdminDashboard() {
       setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     }
 
-    // Show greeting toast only when on the main admin dashboard page
     if (isAdminDashboard) {
-      // Fetch current user's name and show greeting
       const fetchUserAndShowGreeting = async () => {
         try {
           const token = localStorage.getItem("token");
           const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/me`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          
           const username = response.data.name || "User";
-          const greeting = getTimeBasedGreeting(username);
-          
-          toast.success(greeting, {
-            position: "top-center",
-            autoClose: 3000,
-          });
+          toast.success(getTimeBasedGreeting(username), { position: "top-center", autoClose: 3000 });
         } catch (error) {
-          console.error("Error fetching user data:", error);
-          // Fallback to localStorage if API call fails
           const username = localStorage.getItem("name") || "User";
-          const greeting = getTimeBasedGreeting(username);
-          toast.success(greeting, {
-            position: "top-center",
-            autoClose: 3000,
-          });
+          toast.success(getTimeBasedGreeting(username), { position: "top-center", autoClose: 3000 });
         }
       };
-
       fetchUserAndShowGreeting();
     }
+    return () => {};
+  }, [isAdminDashboard]);
 
-    // Cleanup function (if needed)
-    return () => {
-      // Any cleanup logic here
-    };
-  }, [isAdminDashboard]); // Add isAdminDashboard as dependency
-
-  /* ---------------------- SIGN‑OUT ------------------------------- */
+  /* ---------------------- SIGN-OUT ------------------------------- */
   const handleSignOut = () => {
     localStorage.clear();
     navigate("/login");
@@ -490,42 +446,41 @@ export default function AdminDashboard() {
   /* ------------------- ACCESSIBLE PAGES FILTER ------------------- */
   const accessiblePages = adminPages.filter((page) => {
     if (page.name === "Calculations") {
-      // For "Calculations", check if the user has the required permission
-      const hasPermission = page.subItems.some(
-        (sub) => permissions.includes(sub.permission)
-      );
+      const hasPermission = page.subItems.some((sub) => isSuperAdmin || permissions.includes(sub.permission));
       return hasPermission;
     }
-
-    // For other pages, use the existing logic
     if (page.subItems) {
-      const accessibleSub = page.subItems.filter(
-        (s) => isSuperAdmin || permissions.includes(s.permission)
-      );
+      const accessibleSub = page.subItems.filter((s) => isSuperAdmin || !s.permission || permissions.includes(s.permission));
       return accessibleSub.length > 0;
     }
-    return isSuperAdmin || permissions.includes(page.permission);
+    return isSuperAdmin || (page.permission && permissions.includes(page.permission));
   });
 
   /* ---------------- SIDEBAR WIDTH LOGIC -------------------------- */
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 224 : 100;
   const megaOpen =
-    crmHovered || purchaseHovered || productionHovered || packDelHovered || invoicesHovered || samplesHovered || expenseHovered || followUpTrackerHovered || calculationsHovered || taskManagerHovered || SalesManagerHovered;
+    crmHovered ||
+    purchaseHovered ||
+    productionHovered ||
+    packDelHovered ||
+    invoicesHovered ||
+    samplesHovered ||
+    expenseHovered ||
+    followUpTrackerHovered ||
+    calculationsHovered ||
+    taskManagerHovered ||
+    SalesManagerHovered ||
+    userManagementHovered ||
+    hrmsHovered; // include HRMS
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 200 : baseSidebarWidth;
 
   /* ------------------------- RENDER ------------------------------ */
-  /* role gate */
   if (role === "GENERAL") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-gray-800">
         <h1 className="text-4xl font-bold mb-4">DEACTIVE</h1>
         <p className="text-gray-500">You do not have admin privileges.</p>
-        <button
-          onClick={handleSignOut}
-          className="mt-6 px-4 py-2 bg-red-500 text-white rounded-md"
-        >
-          Sign Out
-        </button>
+        <button onClick={handleSignOut} className="mt-6 px-4 py-2 bg-red-500 text-white rounded-md">Sign Out</button>
       </div>
     );
   }
@@ -534,16 +489,13 @@ export default function AdminDashboard() {
     return null;
   }
 
-  /* -------------------- SIDEBAR COMPONENT ------------------------ */
   return (
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
       {/* ============ LEFT SIDEBAR ============ */}
       <aside
         className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-[#Ff8045] text-white"
         style={{ width: finalSidebarWidth }}
-        onMouseEnter={() => {
-          if (!sidebarOpen) setSidebarHover(true);
-        }}
+        onMouseEnter={() => { if (!sidebarOpen) setSidebarHover(true); }}
         onMouseLeave={() => {
           if (!sidebarOpen) {
             setSidebarHover(false);
@@ -553,14 +505,21 @@ export default function AdminDashboard() {
             setPackDelHovered(false);
             setExpenseHovered(false);
             setCalculationsHovered(false);
+            setInvoicesHovered(false);
+            setSamplesHovered(false);
+            setFollowUpTrackerHovered(false);
+            setUserManagementHovered(false);
+            setSalesManagerHovered(false);
+            setTaskManagerHovered(false);
+            setHrmsHovered(false); // reset HRMS hover
           }
         }}
       >
         {/* --- Brand / collapse button --- */}
-      <div className="flex items-center justify-between pt-2">
-      <h2 className="font-bold font-sans text-lg ">
-        <img src="/pacer-logo.jpeg" alt="Logo"  className="h-8 w-20 ml-1" />  
-      </h2>
+        <div className="flex items-center justify-between pt-2">
+          <h2 className="font-bold font-sans text-lg ">
+            <img src="/pacer-logo.jpeg" alt="Logo"  className="h-8 w-20 ml-1" />  
+          </h2>
           {sidebarOpen && (
             <button onClick={() => setSidebarOpen(false)}>
               <ArrowLeftOnRectangleIcon className="h-6 w-6" />
@@ -572,7 +531,6 @@ export default function AdminDashboard() {
         <nav className="mt-2 px-2">
           <ul className="space-y-2">
             {accessiblePages.map((page) => {
-              /* ---------------- USER MANAGEMENT (mega‑menu) ---------------- */
               if (page.name === "User Management") {
                 return (
                   <MegaMenu
@@ -585,7 +543,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-              /* ---------------- CRM (mega‑menu) ---------------- */
               if (page.name === "CRM") {
                 return (
                   <MegaMenu
@@ -598,8 +555,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ------------- PURCHASE (mega‑menu) -------------- */
               if (page.name === "PURCHASE") {
                 return (
                   <MegaMenu
@@ -612,8 +567,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ------------- PRODUCTION (mega‑menu) ------------- */
               if (page.name === "Production") {
                 return (
                   <MegaMenu
@@ -626,8 +579,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ===== INVOICES FOLLOW UP & SUMMARY (mega‑menu) ==== */
               if (page.name === "Invoices Follow up & Summary") {
                 return (
                   <MegaMenu
@@ -640,8 +591,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ===== SAMPLES (mega‑menu) ==== */
               if (page.name === "Samples") {
                 return (
                   <MegaMenu
@@ -654,8 +603,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ===== EXPENSE RECORDING (mega‑menu) ==== */
               if (page.name === "Expense Recording") {
                 return (
                   <MegaMenu
@@ -668,8 +615,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ===== FOLLOW UP TRACKER (two‑tier menu) ==== */
               if (page.name === "FollowUp Tracker") {
                 return (
                   <MegaMenu
@@ -682,8 +627,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ===== CALCULATIONS (mega‑menu) ==== */
               if (page.name === "Calculations") {
                 return (
                   <MegaMenu
@@ -696,8 +639,6 @@ export default function AdminDashboard() {
                   />
                 );
               }
-
-              /* ===== TASK MANAGER (mega‑menu) ==== */
               if (page.name === "Dashboard") {
                 return (
                   <MegaMenu
@@ -723,15 +664,13 @@ export default function AdminDashboard() {
                 );
               }
 
-              /* ===== PACKING / DELIVERY (two‑tier menu) ==== */
+              /* ===== PACKING / DELIVERY (two-tier menu) ==== */
               if (page.name === "Packing / Delivery") {
-                /* group leaf pages by `group` key */
                 const grouped = page.subItems.reduce((acc, item) => {
                   acc[item.group] = acc[item.group] || [];
                   acc[item.group].push(item);
                   return acc;
                 }, {});
-
                 return (
                   <li
                     key={page.name}
@@ -753,17 +692,14 @@ export default function AdminDashboard() {
                       )}
                     </Link>
 
-                    {/* nested container */}
                     <div
                       className={`ml-4 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
-                        packDelHovered
-                          ? "max-h-96 opacity-100"
-                          : "max-h-0 opacity-0"
+                        packDelHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
                       }`}
                     >
                       {Object.entries(grouped).map(([groupName, items]) => (
                         <div key={groupName} className="mb-2">
-                          <div className="text-xs font-semibold text-gray-200 mt-2 mb-1">
+                          <div className="text-xs font-semibold text-gray-2 00 mt-2 mb-1">
                             {groupName}
                           </div>
                           {items.map((sub) => (
@@ -784,7 +720,21 @@ export default function AdminDashboard() {
                 );
               }
 
-              /* ---- simple single‑page link ---- */
+              /* ===== HRMS (mega-menu) ==== */
+              if (page.name === "HRMS") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={hrmsHovered}
+                    setHovered={setHrmsHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+
+              /* ---- simple single-page link ---- */
               return (
                 <li key={page.name}>
                   <Link
@@ -802,7 +752,6 @@ export default function AdminDashboard() {
               );
             })}
           </ul>
-  
         </nav>
 
         {/* ---------- FOOTER: LOGOUT ---------- */}
@@ -823,22 +772,22 @@ export default function AdminDashboard() {
       <main className="flex-1 overflow-y-auto p-1">
         {isAdminDashboard ? (
           <div className="flex items-center justify-center h-full">
-          <img
-            src='/pacer-loader.jpeg'
-            alt="Admin Dashboard Background"
-            className="w-full h-full"
-          />
-        </div>
-      ) : (
-        <Outlet key={location.pathname} />
-      )}
+            <img
+              src='/pacer-loader.jpeg'
+              alt="Admin Dashboard Background"
+              className="w-full h-full"
+            />
+          </div>
+        ) : (
+          <Outlet key={location.pathname} />
+        )}
       </main>
     </div>
   );
 }
 
 /* ****************************************************************** */
-/* SMALL HELPER: GENERIC MEGA‑MENU (one‑tier)                          */
+/* SMALL HELPER: GENERIC MEGA-MENU (one-tier)                          */
 /* ****************************************************************** */
 function MegaMenu({
   page,
@@ -865,7 +814,6 @@ function MegaMenu({
         )}
       </Link>
 
-      {/* submenu */}
       <div
         className={`ml-4 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
           hovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
@@ -884,4 +832,3 @@ function MegaMenu({
     </li>
   );
 }
-    
