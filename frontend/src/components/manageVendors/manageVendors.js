@@ -1,3 +1,4 @@
+// frontend/components/admin/ManageVendors.jsx
 import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -74,10 +75,8 @@ export const ManageVendors = () => {
 
   const handleSort = (key) => {
     let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc")
-      direction = "desc";
-    else if (sortConfig.key === key && sortConfig.direction === "desc")
-      direction = "";
+    if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
+    else if (sortConfig.key === key && sortConfig.direction === "desc") direction = "";
     setSortConfig({ key, direction });
   };
   const SortIndicator = ({ field }) => {
@@ -99,7 +98,7 @@ export const ManageVendors = () => {
         v.accountNumber,
         v.ifscCode,
         v.postalCode,
-        v.reliability, // search new field
+        v.reliability,
         ...(v.clients || []).flatMap((c) => [c.name, c.contactNumber]),
       ]
         .filter(Boolean)
@@ -122,22 +121,26 @@ export const ManageVendors = () => {
     return sortConfig.direction === "desc" ? sorted.reverse() : sorted;
   }, [vendors, searchTerm, sortConfig]);
 
+  // Export: default to non-reliable if missing/unknown
   const exportToExcel = () => {
-    const data = displayedVendors.map((v) => ({
-      "Vendor Name": v.vendorName,
-      Company: v.vendorCompany,
-      "Brand Dealing": v.brandDealing,
-      Location: v.location,
-      "Postal Code": v.postalCode,
-      "Contact Person":
-        v.clients?.map((c) => `${c.name} | ${c.contactNumber}`).join(", ") ||
-        "-",
-      GST: v.gst,
-      "Bank Name": v.bankName,
-      "Account Number": v.accountNumber,
-      IFSC: v.ifscCode,
-      Reliability: v.reliability || "reliable", // NEW
-    }));
+    const data = displayedVendors.map((v) => {
+      const rel = String(v.reliability || "").toLowerCase();
+      const safeReliability = rel === "reliable" ? "reliable" : "non-reliable";
+      return {
+        "Vendor Name": v.vendorName,
+        Company: v.vendorCompany,
+        "Brand Dealing": v.brandDealing,
+        Location: v.location,
+        "Postal Code": v.postalCode,
+        "Contact Person":
+          v.clients?.map((c) => `${c.name} | ${c.contactNumber}`).join(", ") || "-",
+        GST: v.gst,
+        "Bank Name": v.bankName,
+        "Account Number": v.accountNumber,
+        IFSC: v.ifscCode,
+        Reliability: safeReliability,
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -222,7 +225,7 @@ export const ManageVendors = () => {
         <table className="min-w-full border-collapse border border-gray-200">
           <thead>
             <tr className="bg-gray-50 text-left">
-            <th
+              <th
                 onClick={() => handleSort("reliability")}
                 className="p-2 cursor-pointer border border-gray-200"
               >
@@ -293,27 +296,32 @@ export const ManageVendors = () => {
                 IFSC
                 <SortIndicator field="ifscCode" />
               </th>
-              
               <th className="p-2 border border-gray-200">Actions</th>
             </tr>
           </thead>
           <tbody>
             {displayedVendors.map((v) => {
-              const isNonReliable = (v.reliability || "reliable") === "non-reliable";
+              const rel = String(v.reliability || "").toLowerCase();
+              // DISPLAY DEFAULT: non-reliable when missing/unknown
+              const isNonReliable = !rel || rel === "non-reliable";
+              const relLabel = isNonReliable ? "Non-Reliable" : "Reliable";
+
               return (
                 <tr
                   key={v._id}
-                  className={`${
-                    isNonReliable ? "bg-red-50" : "hover:bg-gray-50"
-                  }`}
+                  className={`${isNonReliable ? "bg-red-50" : "hover:bg-gray-50"}`}
                 >
-                   <td className={`p-2 border border-gray-200 capitalize ${isNonReliable ? "text-red-700" : ""}`}>
+                  <td
+                    className={`p-2 border border-gray-200 capitalize ${
+                      isNonReliable ? "text-red-700" : ""
+                    }`}
+                  >
                     <span
                       className={`inline-block px-2 py-0.5 text-[10px] rounded ${
                         isNonReliable ? "bg-red-600 text-white" : "bg-green-600 text-white"
                       }`}
                     >
-                      {v.reliability || "Reliable"}
+                      {relLabel}
                     </span>
                   </td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
@@ -344,11 +352,19 @@ export const ManageVendors = () => {
                       "-"
                     )}
                   </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.gst}</td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.bankName}</td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.accountNumber}</td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.ifscCode}</td>
-                 
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.gst}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.bankName}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.accountNumber}
+                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
+                    {v.ifscCode}
+                  </td>
+
                   <td className="p-2 border border-gray-200">
                     <Dropdown>
                       <Dropdown.Toggle

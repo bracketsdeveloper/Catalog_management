@@ -1,3 +1,4 @@
+// models/Vendor.js
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
@@ -24,11 +25,13 @@ const vendorSchema = new Schema({
     },
   },
 
-  // NEW: reliability
+  // Lowercase enum + default to non-reliable
   reliability: {
     type: String,
-    enum: ["Reliable", "Non-Reliable"],
-    default: "Reliable",
+    enum: ["reliable", "non-reliable"],
+    default: "non-reliable",
+    lowercase: true,
+    trim: true,
   },
 
   createdBy: { type: Schema.Types.ObjectId, ref: "User" },
