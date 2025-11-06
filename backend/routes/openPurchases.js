@@ -1,20 +1,69 @@
 const express = require("express");
 const router = express.Router();
+
+const dayjs = require("dayjs");
 const OpenPurchase = require("../models/OpenPurchase");
 const ClosedPurchase = require("../models/ClosedPurchase");
 const JobSheet = require("../models/JobSheet");
+const PurchaseOrder = require("../models/PurchaseOrder");
+const Product = require("../models/Product");
+const Vendor = require("../models/Vendor");
+const Counter = require("../models/PoCounter");
+
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const sendMail = require("../utils/sendMail");
 const User = require("../models/User");
 
+/* ---------------- Helpers ---------------- */
+
+async function isNewVendor(vendorId) {
+  if (!vendorId) return true;
+  const count = await PurchaseOrder.countDocuments({ "vendor.vendorId": vendorId });
+  return count === 0;
+}
+
+function computeTotals(items) {
+  let subTotal = 0, gstTotal = 0;
+  for (const it of items) {
+    const line = (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0);
+    const gst = line * ((Number(it.gstPercent) || 0) / 100);
+    subTotal += line;
+    gstTotal += gst;
+  }
+  return {
+    subTotal: Math.round(subTotal),
+    gstTotal: Math.round(gstTotal),
+    grandTotal: Math.round(subTotal + gstTotal),
+  };
+}
+
+async function nextPO(sequenceKey = "PO-GC") {
+  const year = dayjs().format("YYYY");
+  const key = `${sequenceKey}:${year}`;
+  const doc = await Counter.findOneAndUpdate(
+    { key },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  const seqStr = String(doc.seq).padStart(3, "0");
+  return `PO-GC-${year}-${seqStr}`;
+}
+
+/* ---------------- LIST ----------------
+   Initial productPrice comes from Product model when the row's price is
+   empty/undefined/NaN/<=0. We attempt multiple Product fields in priority:
+   productCost -> purchasePrice -> unitPrice -> price -> MRP (first > 0 wins).
+--------------------------------------- */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sortKey = req.query.sortKey || "deliveryDateTime";
     const sortDirection = req.query.sortDirection === "desc" ? -1 : 1;
 
+    // 1) Load JobSheets (non-draft) + saved OpenPurchases
     const jobSheets = await JobSheet.find({ isDraft: false });
     const dbRecords = await OpenPurchase.find({});
 
+    // 2) Build aggregated view (JobSheet items as temp rows + DB rows)
     let aggregated = [];
     jobSheets.forEach((js) => {
       js.items.forEach((item, index) => {
@@ -45,34 +94,100 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       });
     });
 
+    // Prefer DB rows over temp (same jobSheetId+product+size)
     dbRecords.forEach((db) => {
-      const index = aggregated.findIndex(
+      const idx = aggregated.findIndex(
         (rec) =>
           rec.jobSheetId?.toString() === db.jobSheetId?.toString() &&
           rec.product === db.product &&
           (rec.size || "") === (db.size || "")
       );
-      if (index !== -1) {
-        aggregated[index] = { ...db.toObject(), isTemporary: false };
+      if (idx !== -1) {
+        aggregated[idx] = { ...db.toObject(), isTemporary: false };
       } else {
         aggregated.push({ ...db.toObject(), isTemporary: false });
       }
     });
 
-    const seen = new Set();
-    const finalAggregated = aggregated.filter((rec) => {
-      const key = `${rec.jobSheetNumber}_${rec.product}_${rec.size || ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // Helper normalizers
+    const norm = (s) =>
+      String(s || "")
+        .replace(/\s+/g, " ") // collapse multi-space
+        .trim()
+        .toLowerCase();
 
+    const escapeRegex = (str = "") =>
+      str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // 3) Build a case-insensitive exact-match set of product names
+    const productNames = [
+      ...new Set(aggregated.map((r) => norm(r.product)).filter(Boolean)),
+    ];
+
+    const nameRegexes = productNames.map(
+      (n) => new RegExp(`^${escapeRegex(n)}$`, "i")
+    );
+
+    // 4) Query Product model for any matching names; grab multiple price fields
+    // Try to project several possible fields where your price might live.
+    const prodDocs = await Product.find({ name: { $in: nameRegexes } })
+      .select("name productCost purchasePrice unitPrice price MRP")
+      .lean();
+
+    // Choose the first > 0 among candidate fields
+    const pickPrice = (p) => {
+      const candidates = [
+        p.productCost,
+        p.purchasePrice,
+        p.unitPrice,
+        p.price,
+        p.MRP,
+      ];
+      for (const c of candidates) {
+        const n = Number(c);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      return null;
+    };
+
+    // Map normalized Product.name -> usable price (> 0) or null
+    const priceByName = new Map(
+      prodDocs.map((p) => [norm(p.name), pickPrice(p)])
+    );
+
+    // 5) Deduplicate by (jobSheetNumber, product, size) and attach productPrice
+    const seen = new Set();
+    const finalAggregated = aggregated
+      .filter((rec) => {
+        const key = `${rec.jobSheetNumber}_${rec.product}_${rec.size || ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((rec) => {
+        // Treat 0/<=0/NaN/empty as "no row price" so fallback from Product applies
+        const rowNum = Number(rec.productPrice);
+        const hasUsableRowPrice =
+          Number.isFinite(rowNum) && rowNum > 0; // <-- IMPORTANT: 0 is NOT considered set
+
+        const fallback = priceByName.get(norm(rec.product)) ?? null;
+
+        return {
+          ...rec,
+          productPrice: hasUsableRowPrice ? rowNum : fallback, // may be null if Product not found
+        };
+      });
+
+    // 6) Sorting
     finalAggregated.sort((a, b) => {
       let aVal = a[sortKey];
       let bVal = b[sortKey];
-      if (!aVal && !bVal) return 0;
-      if (!aVal) return sortDirection === 1 ? 1 : -1;
-      if (!bVal) return sortDirection === 1 ? -1 : 1;
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return sortDirection === 1 ? 1 : -1;
+      if (bVal == null) return sortDirection === 1 ? -1 : 1;
+
+      // Dates
       if (
         sortKey.includes("Date") ||
         sortKey === "schedulePickUp" ||
@@ -80,11 +195,20 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       ) {
         aVal = new Date(aVal).getTime();
         bVal = new Date(bVal).getTime();
-      } else if (typeof aVal === "string" && typeof bVal === "string") {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
+        return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
       }
-      return aVal < bVal ? -sortDirection : sortDirection;
+
+      // Numbers
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
+      }
+
+      // Strings
+      aVal = String(aVal).toLowerCase();
+      bVal = String(bVal).toLowerCase();
+      if (aVal < bVal) return -sortDirection;
+      if (aVal > bVal) return sortDirection;
+      return 0;
     });
 
     res.json(finalAggregated);
@@ -94,24 +218,45 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+
+
+
+/* ---------------- GET ONE ---------------- */
+router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const row = await OpenPurchase.findById(req.params.id)
+      .populate("vendorId", "vendorCompany vendorName email phone address")
+      .populate("poId")
+      .lean();
+    if (!row) return res.status(404).json({ message: "Open purchase not found" });
+    res.json(row);
+  } catch (error) {
+    console.error("Error fetching open purchase:", error);
+    res.status(500).json({ message: "Server error fetching open purchase" });
+  }
+});
+
+/* ---------------- CREATE ---------------- */
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const data = { ...req.body };
-    if (data._id && data._id.startsWith("temp_")) {
-      delete data._id;
+    if (data._id && data._id.startsWith("temp_")) delete data._id;
+
+    // Normalize numeric price if provided
+    if (data.productPrice !== undefined && data.productPrice !== null && data.productPrice !== "") {
+      data.productPrice = Number(data.productPrice) || 0;
     }
+
     if (data.jobSheetId) {
       const js = await JobSheet.findById(data.jobSheetId);
-      if (!js) {
-        return res.status(404).json({ message: "JobSheet not found" });
-      }
-      if (js.deliveryDate) {
-        data.deliveryDateTime = new Date(js.deliveryDate);
-      }
+      if (!js) return res.status(404).json({ message: "JobSheet not found" });
+      if (js.deliveryDate) data.deliveryDateTime = new Date(js.deliveryDate);
     }
+
     const newPurchase = new OpenPurchase(data);
     await newPurchase.save();
 
+    // Close when all received (preserved)
     if (newPurchase.status === "received") {
       const jobSheetId = newPurchase.jobSheetId;
       const jobSheet = await JobSheet.findById(jobSheetId);
@@ -122,10 +267,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
         }));
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          $or: products.map((p) => ({
-            product: p.product,
-            size: p.size,
-          })),
+          $or: products.map((p) => ({ product: p.product, size: p.size })),
         });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
@@ -149,20 +291,17 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               createdAt: p.createdAt,
               deliveryDateTime: p.deliveryDateTime,
             };
-            // Check if ClosedPurchase exists
             const existingClosed = await ClosedPurchase.findOne({
               jobSheetId: p.jobSheetId,
               product: p.product,
               size: p.size || "",
             });
             if (existingClosed) {
-              // Update existing record
               await ClosedPurchase.updateOne(
                 { _id: existingClosed._id },
                 { $set: closedData }
               );
             } else {
-              // Insert new record
               const newClosed = new ClosedPurchase(closedData);
               await newClosed.save();
             }
@@ -178,18 +317,40 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+/* ---------------- UPDATE ----------------
+   - Accepts productPrice edits
+   - Enforces PO rule for new vendors when marking 'received'
+----------------------------------------- */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
+    const before = await OpenPurchase.findById(req.params.id);
+    if (!before) return res.status(404).json({ message: "Open purchase not found" });
+
     const updateData = { ...req.body };
+
+    // Normalize numeric price if present
+    if (updateData.productPrice !== undefined && updateData.productPrice !== null && updateData.productPrice !== "") {
+      updateData.productPrice = Number(updateData.productPrice) || 0;
+    }
+
     if (updateData.jobSheetId) {
       const js = await JobSheet.findById(updateData.jobSheetId);
-      if (!js) {
-        return res.status(404).json({ message: "JobSheet not found" });
-      }
-      if (js.deliveryDate) {
-        updateData.deliveryDateTime = new Date(js.deliveryDate);
+      if (!js) return res.status(404).json({ message: "JobSheet not found" });
+      if (js.deliveryDate) updateData.deliveryDateTime = new Date(js.deliveryDate);
+    }
+
+    // PO mandatory on move to 'received' for new vendors
+    const nextStatus = updateData.status ?? before.status;
+    if (nextStatus === "received") {
+      const vendorId = updateData.vendorId || before.vendorId;
+      const newVendor = await isNewVendor(vendorId);
+      if (newVendor && !before.poId) {
+        return res
+          .status(400)
+          .json({ message: "PO is mandatory for a new vendor. Generate a PO first." });
       }
     }
+
     const updatedPurchase = await OpenPurchase.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -199,6 +360,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(404).json({ message: "Open purchase not found" });
     }
 
+    // Close when all received (preserved)
     if (updatedPurchase.status === "received") {
       const jobSheetId = updatedPurchase.jobSheetId;
       const jobSheet = await JobSheet.findById(jobSheetId);
@@ -209,10 +371,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         }));
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          $or: products.map((p) => ({
-            product: p.product,
-            size: p.size,
-          })),
+          $or: products.map((p) => ({ product: p.product, size: p.size })),
         });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
@@ -236,20 +395,17 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               createdAt: p.createdAt,
               deliveryDateTime: p.deliveryDateTime,
             };
-            // Check if ClosedPurchase exists
             const existingClosed = await ClosedPurchase.findOne({
               jobSheetId: p.jobSheetId,
               product: p.product,
               size: p.size || "",
             });
             if (existingClosed) {
-              // Update existing record
               await ClosedPurchase.updateOne(
                 { _id: existingClosed._id },
                 { $set: closedData }
               );
             } else {
-              // Insert new record
               const newClosed = new ClosedPurchase(closedData);
               await newClosed.save();
             }
@@ -258,6 +414,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
+    // Alert email (preserved)
     if (updatedPurchase.status === "alert") {
       const purchaseObj = updatedPurchase.toObject();
       let mailBody = "";
@@ -299,6 +456,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
+/* ---------------- DELETE ---------------- */
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const deletedPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
@@ -309,6 +467,98 @@ router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   } catch (error) {
     console.error("Error deleting open purchase:", error);
     res.status(500).json({ message: "Server error deleting open purchase" });
+  }
+});
+
+/* ---------------- GENERATE PO ---------------- */
+router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      vendorId,
+      productCode,
+      issueDate,
+      requiredDeliveryDate,
+      deliveryAddress,
+      remarks = "",
+      terms,
+    } = req.body;
+
+    const row = await OpenPurchase.findById(id);
+    if (!row) return res.status(404).json({ message: "Open purchase not found" });
+
+    const vendor = await Vendor.findOne({ _id: vendorId, deleted: false }).lean();
+    if (!vendor) return res.status(400).json({ message: "Invalid vendor" });
+
+    // Product lookup by code first, else by name
+    let product = null;
+    if (productCode) {
+      product = await Product.findOne({ productId: productCode }).lean();
+      if (!product) {
+        return res.status(400).json({ message: "Product code not found in Manage Products" });
+      }
+    } else {
+      product = await Product.findOne({ name: row.product }).lean();
+    }
+
+    const qty = row.qtyOrdered || row.qtyRequired || 0;
+    const unitPrice = (row.productPrice || row.productPrice === 0)
+      ? Number(row.productPrice) || 0
+      : Number(product?.productCost ?? product?.MRP ?? 0) || 0;
+    const gstPercent = product?.productGST ?? 0;
+    const hsnCode = product?.hsnCode ?? row.hsnCode ?? "";
+
+    const item = {
+      itemNo: 1,
+      productName: row.product,
+      productDescription: row.size || "",
+      quantity: qty,
+      unitPrice,
+      total: qty * unitPrice,
+      hsnCode,
+      gstPercent,
+    };
+
+    const { subTotal, gstTotal, grandTotal } = computeTotals([item]);
+    const poNumber = await nextPO();
+
+    const po = await PurchaseOrder.create({
+      poNumber,
+      issueDate: issueDate ? new Date(issueDate) : new Date(),
+      requiredDeliveryDate: requiredDeliveryDate
+        ? new Date(requiredDeliveryDate)
+        : row.deliveryDateTime,
+      deliveryAddress: deliveryAddress || "Ace Gifting Solutions",
+      vendor: {
+        vendorId: vendor._id,
+        vendorCompany: vendor.vendorCompany || "",
+        vendorName: vendor.vendorName || "",
+        address: vendor.address || "",
+        phone: vendor.phone || "",
+        email: vendor.email || "",
+      },
+      items: [item],
+      openPurchaseId: row._id,
+      jobSheetId: row.jobSheetId,
+      jobSheetNumber: row.jobSheetNumber,
+      clientCompanyName: row.clientCompanyName,
+      eventName: row.eventName,
+      subTotal,
+      gstTotal,
+      grandTotal,
+      remarks,
+      terms: (terms && terms.trim()) || undefined,
+    });
+
+    await OpenPurchase.updateOne(
+      { _id: row._id },
+      { $set: { poId: po._id, vendorId: vendor._id } }
+    );
+
+    res.status(201).json({ message: "PO created", po });
+  } catch (error) {
+    console.error("Error generating PO:", error);
+    res.status(500).json({ message: "Server error generating PO" });
   }
 });
 

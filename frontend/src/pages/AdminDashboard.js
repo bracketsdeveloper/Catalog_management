@@ -156,10 +156,16 @@ const adminPages = [
         permission: "manage-vendors",
       },
       {
+        name: "Purchase Orders",
+        path: "/admin-dashboard/purchase-orders",
+        permission: "open-purchase",
+      },
+      {
         name: "Open Purchase",
         path: "/admin-dashboard/manage-openpurchase",
         permission: "open-purchase",
       },
+      
       {
         name: "Closed Purchases",
         path: "/admin-dashboard/manage-closepurchase",

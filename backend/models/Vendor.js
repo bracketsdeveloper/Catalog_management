@@ -27,8 +27,8 @@ const vendorSchema = new Schema({
   // NEW: reliability
   reliability: {
     type: String,
-    enum: ["reliable", "non-reliable"],
-    default: "reliable",
+    enum: ["Reliable", "Non-Reliable"],
+    default: "Reliable",
   },
 
   createdBy: { type: Schema.Types.ObjectId, ref: "User" },

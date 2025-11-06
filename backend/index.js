@@ -153,6 +153,10 @@ app.use("/api/admin", invoicesEinvoiceRoutes);
 
 app.use('/api', require('./routes/hrms'));
 
+// server/index.js (or routes/index.js)
+app.use("/api/admin/purchase-orders", require("./routes/purchaseOrders.js"));
+
+
 
 
 // 7) Health check

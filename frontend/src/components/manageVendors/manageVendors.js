@@ -222,6 +222,13 @@ export const ManageVendors = () => {
         <table className="min-w-full border-collapse border border-gray-200">
           <thead>
             <tr className="bg-gray-50 text-left">
+            <th
+                onClick={() => handleSort("reliability")}
+                className="p-2 cursor-pointer border border-gray-200"
+              >
+                Reliability
+                <SortIndicator field="reliability" />
+              </th>
               <th
                 onClick={() => handleSort("vendorName")}
                 className="p-2 cursor-pointer border border-gray-200"
@@ -286,13 +293,7 @@ export const ManageVendors = () => {
                 IFSC
                 <SortIndicator field="ifscCode" />
               </th>
-              <th
-                onClick={() => handleSort("reliability")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Reliability
-                <SortIndicator field="reliability" />
-              </th>
+              
               <th className="p-2 border border-gray-200">Actions</th>
             </tr>
           </thead>
@@ -306,6 +307,15 @@ export const ManageVendors = () => {
                     isNonReliable ? "bg-red-50" : "hover:bg-gray-50"
                   }`}
                 >
+                   <td className={`p-2 border border-gray-200 capitalize ${isNonReliable ? "text-red-700" : ""}`}>
+                    <span
+                      className={`inline-block px-2 py-0.5 text-[10px] rounded ${
+                        isNonReliable ? "bg-red-600 text-white" : "bg-green-600 text-white"
+                      }`}
+                    >
+                      {v.reliability || "Reliable"}
+                    </span>
+                  </td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
                     {v.vendorName}
                   </td>
@@ -338,15 +348,7 @@ export const ManageVendors = () => {
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.bankName}</td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.accountNumber}</td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.ifscCode}</td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    <span
-                      className={`inline-block px-2 py-0.5 text-[10px] rounded ${
-                        isNonReliable ? "bg-red-600 text-white" : "bg-green-600 text-white"
-                      }`}
-                    >
-                      {v.reliability || "reliable"}
-                    </span>
-                  </td>
+                 
                   <td className="p-2 border border-gray-200">
                     <Dropdown>
                       <Dropdown.Toggle

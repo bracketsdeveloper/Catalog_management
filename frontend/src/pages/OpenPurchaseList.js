@@ -1,10 +1,19 @@
 "use client";
-
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
-import { TrashIcon } from "@heroicons/react/24/solid";
 import * as XLSX from "xlsx";
 import JobSheetGlobal from "../components/jobsheet/globalJobsheet";
+
+/* ---------------- Small helpers ---------------- */
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "");
+const toISODate = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+};
 
 function HeaderFilters({ headerFilters, onFilterChange }) {
   const cols = [
@@ -13,6 +22,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     "clientCompanyName",
     "eventName",
     "product",
+    "productPrice",
     "size",
     "qtyRequired",
     "qtyOrdered",
@@ -52,6 +62,21 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="__empty__">No Status</option>
         </select>
       </th>
+      {/* Follow-Up filter cell */}
+      <th className="p-1 border"></th>
+      {/* PO Status filter cell */}
+      <th className="p-1 border">
+        <select
+          className="w-full p-1 text-xs border rounded"
+          value={headerFilters.__poStatus || ""}
+          onChange={(e) => onFilterChange("__poStatus", e.target.value)}
+        >
+          <option value="">All</option>
+          <option value="generated">Generated</option>
+          <option value="not">Not generated</option>
+        </select>
+      </th>
+      {/* Actions filter cell */}
       <th className="p-1 border"></th>
     </tr>
   );
@@ -81,7 +106,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-1 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40">
       <div className="bg-white p-6 rounded w-full max-w-lg text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
@@ -113,9 +138,8 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
           {local.map((fu, i) => (
             <div
               key={i}
-              className={`flex justify-between items-center border-b py-1 ${
-                !fu.done && fu.followUpDate < today ? "bg-red-200" : ""
-              }`}
+              className={`flex justify-between items-center border-b py-1 ${!fu.done && fu.followUpDate < today ? "bg-red-200" : ""
+                }`}
             >
               <span>
                 {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
@@ -144,6 +168,191 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 }
 
 const statusOptions = ["", "pending", "received", "alert"];
+
+/* ---------------- Vendor Typeahead ---------------- */
+function VendorTypeahead({
+  value,
+  onChange,
+  disableNonReliable = false,
+  placeholder = "Search vendor by company/name/location…",
+}) {
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `${process.env.REACT_APP_BACKEND_URL}/api/admin/vendors`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = Array.isArray(res.data) ? res.data : [];
+        setVendors(data.filter((v) => !v.deleted));
+      } catch (e) {
+        console.error("Fetch vendors failed:", e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const onClick = (e) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const onKeyDown = (e) => {
+    if (!open) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlight >= 0 && filtered[highlight]) {
+        selectVendor(filtered[highlight]);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return vendors.slice(0, 50);
+    return vendors
+      .filter((v) => {
+        const hay = [
+          v.vendorCompany,
+          v.vendorName,
+          v.brandDealing,
+          v.location,
+          v.gst,
+          v.postalCode,
+          v.reliability,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(term);
+      })
+      .slice(0, 50);
+  }, [vendors, q]);
+
+  const selected = vendors.find((v) => String(v._id) === String(value)) || null;
+
+  const selectVendor = (v) => {
+    if (disableNonReliable && (v.reliability || "reliable") === "non-reliable") {
+      return;
+    }
+    setQ((v.vendorCompany || v.vendorName || "").toString());
+    setOpen(false);
+    setHighlight(-1);
+    onChange && onChange(String(v._id), v);
+  };
+
+  const badge = (rel) => {
+    const isBad = (rel || "reliable") === "non-reliable";
+    return (
+      <span
+        className={
+          "text-[10px] px-1 py-[1px] rounded " +
+          (isBad ? "bg-red-600 text-white" : "bg-green-600 text-white")
+        }
+      >
+        {isBad ? "NON-RELIABLE" : "RELIABLE"}
+      </span>
+    );
+  };
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <input
+        ref={inputRef}
+        type="text"
+        className="w-full border p-2 rounded"
+        placeholder={loading ? "Loading vendors…" : placeholder}
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+          setHighlight(-1);
+          if (!e.target.value) onChange && onChange("", null);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+        disabled={loading}
+      />
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-white border rounded shadow">
+          {filtered.length === 0 && (
+            <div className="px-3 py-2 text-xs text-gray-500">No matches</div>
+          )}
+          {filtered.map((v, idx) => {
+            const isHi = idx === highlight;
+            const nonRel = (v.reliability || "reliable") === "non-reliable";
+            return (
+              <div
+                key={v._id}
+                onMouseEnter={() => setHighlight(idx)}
+                onMouseLeave={() => setHighlight(-1)}
+                onClick={() => selectVendor(v)}
+                className={
+                  "px-3 py-2 text-xs cursor-pointer " +
+                  (isHi ? "bg-gray-100" : "") +
+                  (disableNonReliable && nonRel ? " opacity-60" : "")
+                }
+                title={disableNonReliable && nonRel ? "Selection disabled for non-reliable vendors" : ""}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-medium">
+                    {v.vendorCompany || v.vendorName || "(Unnamed Vendor)"}
+                  </div>
+                  {badge(v.reliability)}
+                </div>
+                <div className="text-[11px] text-gray-600">
+                  {v.vendorName ? `${v.vendorName} • ` : ""}
+                  {v.location || "-"}
+                  {v.brandDealing ? ` • ${v.brandDealing}` : ""}
+                </div>
+                <div className="text-[10px] text-gray-500">
+                  {v.gst ? `GST: ${v.gst}` : ""} {v.postalCode ? ` • ${v.postalCode}` : ""}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {selected && (
+        <div className="mt-1 text-xs text-gray-600">
+          <div>
+            <span className="font-medium">Selected:</span>{" "}
+            {selected.vendorCompany || selected.vendorName || "-"}{" "}
+            {badge(selected.reliability)}
+          </div>
+          <div>
+            <span className="font-medium">Location:</span> {selected.location || "-"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Edit Purchase Modal ---------------- */
 function EditPurchaseModal({ purchase, onClose, onSave }) {
   const [data, setData] = useState({ ...purchase });
   const [fuModal, setFuModal] = useState(false);
@@ -153,15 +362,19 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
     if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
       return;
     const payload = { ...data };
-    if (payload.status === "") {
-      delete payload.status;
+    if (payload.status === "") delete payload.status;
+
+    // Ensure numeric price (empty -> 0)
+    if (payload.productPrice !== undefined && payload.productPrice !== null && payload.productPrice !== "") {
+      payload.productPrice = Number(payload.productPrice) || 0;
     }
+
     onSave(payload);
   };
 
   return (
     <>
-      <div className="fixed inset-0 z-1 flex items-center justify-center bg-black/40">
+      <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40">
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
@@ -182,6 +395,18 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               <div><label className="font-bold">Size:</label> {data.size || "N/A"}</div>
             </div>
             <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="font-bold">Product Price:</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-full border p-1"
+                  value={data.productPrice ?? ""}
+                  onChange={(e) =>
+                    change("productPrice", e.target.value === "" ? "" : parseFloat(e.target.value))
+                  }
+                />
+              </div>
               <div><label className="font-bold">Sourced From:</label> {data.sourcingFrom}</div>
               <div>
                 <label className="font-bold">Delivery Date:</label>{" "}
@@ -199,7 +424,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                   value={data.qtyOrdered || ""}
                   onChange={(e) =>
-                    change("qtyOrdered", parseInt(e.target.value) || 0)
+                    change("qtyOrdered", parseInt(e.target.value, 10) || 0)
                   }
                 />
               </div>
@@ -302,6 +527,165 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   );
 }
 
+/* ---------------- Generate PO Modal (uses VendorTypeahead) ---------------- */
+function GeneratePOModal({ row, onClose, onCreated }) {
+  const [vendorId, setVendorId] = useState("");
+  const [selectedVendor, setSelectedVendor] = useState(null);
+
+  const [productCode, setProductCode] = useState("");
+  const [issueDate, setIssueDate] = useState(toISODate(new Date()));
+  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState(
+    toISODate(row?.deliveryDateTime)
+  );
+  const [deliveryAddress, setDeliveryAddress] = useState("Ace Gifting Solutions");
+  const [remarks, setRemarks] = useState("");
+  const [terms, setTerms] = useState("");
+
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!vendorId) {
+      alert("Please select a vendor.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const payload = {
+        vendorId,
+        productCode: productCode || undefined,
+        issueDate: issueDate || undefined,
+        requiredDeliveryDate: requiredDeliveryDate || undefined,
+        deliveryAddress: deliveryAddress || undefined,
+        remarks,
+        terms: terms || undefined,
+      };
+      const res = await axios.post(
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${row._id}/generate-po`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const po = res.data && res.data.po;
+      alert(`PO created: ${po && po.poNumber ? po.poNumber : "(no number)"}`);
+      if (onCreated) onCreated(po);
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert(
+        (e && e.response && e.response.data && e.response.data.message) ||
+        "Failed to generate PO"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+      <div className="bg-white p-6 rounded w-full max-w-2xl text-xs">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-bold text-purple-700">Generate Purchase Order</h3>
+          <button onClick={onClose} className="text-2xl">×</button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="font-bold">Job Sheet #</label>
+            <div className="border rounded p-2">{row.jobSheetNumber}</div>
+          </div>
+          <div>
+            <label className="font-bold">Product</label>
+            <div className="border rounded p-2">
+              {row.product}
+              {row.size ? ` — ${row.size}` : ""}
+            </div>
+          </div>
+
+          <div className="col-span-2">
+            <label className="font-bold">Vendor</label>
+            <VendorTypeahead
+              value={vendorId}
+              onChange={(id, v) => {
+                setVendorId(id);
+                setSelectedVendor(v || null);
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="font-bold">Product Code (optional)</label>
+            <input
+              type="text"
+              className="w-full border p-2 rounded"
+              value={productCode}
+              onChange={(e) => setProductCode(e.target.value)}
+              placeholder="Matches Product.productId"
+            />
+          </div>
+          <div>
+            <label className="font-bold">Issue Date</label>
+            <input
+              type="date"
+              className="w-full border p-2 rounded"
+              value={issueDate}
+              onChange={(e) => setIssueDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="font-bold">Required Delivery Date</label>
+            <input
+              type="date"
+              className="w-full border p-2 rounded"
+              value={requiredDeliveryDate}
+              onChange={(e) => setRequiredDeliveryDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="font-bold">Delivery Address</label>
+            <input
+              type="text"
+              className="w-full border p-2 rounded"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              placeholder="Ace Gifting Solutions"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="font-bold">Remarks</label>
+            <input
+              type="text"
+              className="w-full border p-2 rounded"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="font-bold">Terms</label>
+            <textarea
+              className="w-full border p-2 rounded min-h-[80px]"
+              value={terms}
+              onChange={(e) => setTerms(e.target.value)}
+              placeholder="Leave blank to use default terms on the server."
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-2 border rounded">Cancel</button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-3 py-2 bg-[#Ff8045] text-white rounded disabled:opacity-60"
+          >
+            {loading ? "Creating…" : "Create PO"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Advanced date filter init ---------------- */
 const initAdv = {
   jobSheetNumber: { from: "", to: "" },
   jobSheetCreatedDate: { from: "", to: "" },
@@ -329,6 +713,10 @@ export default function OpenPurchaseList() {
   const [editModal, setEditModal] = useState(false);
   const [currentEdit, setCurrentEdit] = useState(null);
 
+  // Kebab dropdown + PO modal
+  const [menuOpenFor, setMenuOpenFor] = useState(null);
+  const [poModalRow, setPoModalRow] = useState(null);
+
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
     setIsModalOpen(true);
@@ -348,28 +736,31 @@ export default function OpenPurchaseList() {
     }
   }, []);
 
+  const loadPurchases = async (cfg = sortConfig) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            sortKey: cfg.key,
+            sortDirection: cfg.direction,
+          },
+        }
+      );
+      setPurchases(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: {
-              sortKey: sortConfig.key,
-              sortDirection: sortConfig.direction,
-            },
-          }
-        );
-        setPurchases(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadPurchases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortConfig]);
 
   const filteredPurchases = useMemo(() => {
@@ -412,6 +803,10 @@ export default function OpenPurchaseList() {
           if (v === "__empty__") return !r.status;
           return (r.status || "").toLowerCase() === v.toLowerCase();
         }
+        if (k === "__poStatus") {
+          const generated = !!(r.poId || r.poNumber);
+          return v === "generated" ? generated : v === "not" ? !generated : true;
+        }
         const cell = r[k]
           ? k.includes("Date")
             ? new Date(r[k]).toLocaleDateString()
@@ -423,7 +818,9 @@ export default function OpenPurchaseList() {
   }, [globalFiltered, headerFilters]);
 
   const advFiltered = useMemo(() => {
-    const inRange = (d, { from, to }) => {
+    const inRange = (d, range) => {
+      const from = range.from;
+      const to = range.to;
       if (!from && !to) return true;
       if (!d) return false;
       const dt = new Date(d);
@@ -475,30 +872,24 @@ export default function OpenPurchaseList() {
     const ws = XLSX.utils.json_to_sheet(
       rows.map((r) => ({
         "Job Sheet #": r.jobSheetNumber,
-        "Job Sheet Date": new Date(r.jobSheetCreatedDate).toLocaleDateString(),
+        "Job Sheet Date": fmtDate(r.jobSheetCreatedDate),
         Client: r.clientCompanyName,
         Event: r.eventName,
         Product: r.product,
+        "Product Price": typeof r.productPrice === "number" ? r.productPrice : "",
         Size: r.size || "N/A",
         "Qty Required": r.qtyRequired,
         "Qty Ordered": r.qtyOrdered,
         "Sourced By": r.sourcedBy || "",
         "Sourced From": r.sourcingFrom,
-        "Delivery Date": r.deliveryDateTime
-          ? new Date(r.deliveryDateTime).toLocaleDateString()
-          : "",
+        "Delivery Date": fmtDate(r.deliveryDateTime),
         "Vendor Contact": r.vendorContactNumber,
-        "Order Confirmed": r.orderConfirmedDate
-          ? new Date(r.orderConfirmedDate).toLocaleDateString()
-          : "",
-        "Expected Receive": r.expectedReceiveDate
-          ? new Date(r.expectedReceiveDate).toLocaleDateString()
-          : "",
-        "Schedule PickUp": r.schedulePickUp
-          ? new Date(r.schedulePickUp).toLocaleDateString()
-          : "",
+        "Order Confirmed": fmtDate(r.orderConfirmedDate),
+        "Expected Receive": fmtDate(r.expectedReceiveDate),
+        "Schedule PickUp": fmtDate(r.schedulePickUp),
         Remarks: r.remarks,
         Status: r.status,
+        "PO Status": r.poId || r.poNumber ? "Generated" : "Not generated",
       }))
     );
     XLSX.utils.book_append_sheet(wb, ws, "OpenPurchases");
@@ -551,96 +942,6 @@ export default function OpenPurchaseList() {
           </button>
         )}
       </div>
-      {showFilters && (
-        <div className="border p-4 mb-4 bg-gray-50 rounded text-xs">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div>
-              <label className="block mb-1 font-semibold">
-                Job Sheet # From
-              </label>
-              <input
-                type="text"
-                className="w-full border p-1 rounded"
-                value={advFilters.jobSheetNumber.from}
-                onChange={(e) =>
-                  setAdvFilters((p) => ({
-                    ...p,
-                    jobSheetNumber: { ...p.jobSheetNumber, from: e.target.value },
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-semibold">
-                Job Sheet # To
-              </label>
-              <input
-                type="text"
-                className="w-full border p-1 rounded"
-                value={advFilters.jobSheetNumber.to}
-                onChange={(e) =>
-                  setAdvFilters((p) => ({
-                    ...p,
-                    jobSheetNumber: { ...p.jobSheetNumber, to: e.target.value },
-                  }))
-                }
-              />
-            </div>
-            {[
-              ["jobSheetCreatedDate", "Job Sheet Created Date"],
-              ["deliveryDateTime", "Delivery Date"],
-              ["orderConfirmedDate", "Order Confirmed Date"],
-              ["expectedReceiveDate", "Expected Receive Date"],
-              ["schedulePickUp", "Schedule PickUp"],
-            ].map(([k, label]) => (
-              <React.Fragment key={k}>
-                <div>
-                  <label className="block mb-1 font-semibold">{label} From</label>
-                  <input
-                    type={k === "schedulePickUp" ? "datetime-local" : "date"}
-                    className="w-full border p-1 rounded"
-                    value={advFilters[k].from}
-                    onChange={(e) =>
-                      setAdvFilters((p) => ({
-                        ...p,
-                        [k]: { ...p[k], from: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold">{label} To</label>
-                  <input
-                    type={k === "schedulePickUp" ? "datetime-local" : "date"}
-                    className="w-full border p-1 rounded"
-                    value={advFilters[k].to}
-                    onChange={(e) =>
-                      setAdvFilters((p) => ({
-                        ...p,
-                        [k]: { ...p[k], to: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-              </React.Fragment>
-            ))}
-          </div>,
-          <div className="flex gap-2 mt-4">
-            <button
-              onClick={() => setShowFilters(false)}
-              className="bg-purple-600 text-white px-3 py-1 rounded text-xs"
-            >
-              Apply
-            </button>
-            <button
-              onClick={() => setAdvFilters(initAdv)}
-              className="bg-gray-400 text-white px-3 py-1 rounded text-xs"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
       <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
         <thead className="bg-gray-50">
           <tr>
@@ -650,6 +951,7 @@ export default function OpenPurchaseList() {
               { key: "clientCompanyName", label: "Client" },
               { key: "eventName", label: "Event" },
               { key: "product", label: "Product" },
+              { key: "productPrice", label: "Cost" },
               { key: "size", label: "Size" },
               { key: "qtyRequired", label: "Qty Req" },
               { key: "qtyOrdered", label: "Qty Ordered" },
@@ -673,12 +975,13 @@ export default function OpenPurchaseList() {
                   ? sortConfig.direction === "asc"
                     ? " ▲"
                     : sortConfig.direction === "desc"
-                    ? " ▼"
-                    : ""
+                      ? " ▼"
+                      : ""
                   : ""}
               </th>
             ))}
             <th className="p-2 border">Follow-Up</th>
+            <th className="p-2 border">PO Status</th>
             <th className="p-2 border">Actions</th>
           </tr>
           <HeaderFilters
@@ -695,6 +998,10 @@ export default function OpenPurchaseList() {
                   new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
                 )
               : null;
+
+            const menuOpen = menuOpenFor === p._id;
+            const poGenerated = !!(p.poId || p.poNumber);
+
             return (
               <tr
                 key={`${p._id}_${p.product}_${p.size || ""}`}
@@ -702,15 +1009,13 @@ export default function OpenPurchaseList() {
                   p.status === "alert"
                     ? "bg-red-200"
                     : p.status === "pending"
-                    ? "bg-orange-200"
-                    : p.status === "received"
-                    ? "bg-green-200"
-                    : ""
+                      ? "bg-orange-200"
+                      : p.status === "received"
+                        ? "bg-green-200"
+                        : ""
                 }
               >
-                <td className="p-2 border">
-                  {new Date(p.jobSheetCreatedDate).toLocaleDateString()}
-                </td>
+                <td className="p-2 border">{fmtDate(p.jobSheetCreatedDate)}</td>
                 <td className="p-2 border">
                   <button
                     className="border-b text-blue-500 hover:text-blue-700"
@@ -725,50 +1030,45 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{p.clientCompanyName}</td>
                 <td className="p-2 border">{p.eventName}</td>
                 <td className="p-2 border">{p.product}</td>
+                <td className="p-2 border">
+                  {typeof p.productPrice === "number" ? p.productPrice.toFixed(2) : "—"}
+                </td>
                 <td className="p-2 border">{p.size || "N/A"}</td>
                 <td className="p-2 border">{p.qtyRequired}</td>
                 <td className="p-2 border">{p.qtyOrdered}</td>
                 <td className="p-2 border">{p.sourcedBy || ""}</td>
                 <td className="p-2 border">{p.sourcingFrom}</td>
-                <td className="p-2 border">
-                  {p.deliveryDateTime
-                    ? new Date(p.deliveryDateTime).toLocaleDateString()
-                    : ""
-                  }
-                </td>
+                <td className="p-2 border">{fmtDate(p.deliveryDateTime)}</td>
                 <td className="p-2 border">{p.vendorContactNumber}</td>
-                <td className="p-2 border">
-                  {p.orderConfirmedDate
-                    ? new Date(p.orderConfirmedDate).toLocaleDateString()
-                    : ""
-                  }
-                </td>
-                <td className="p-2 border">
-                  {p.expectedReceiveDate
-                    ? new Date(p.expectedReceiveDate).toLocaleDateString()
-                    : ""
-                  }
-                </td>
-                <td className="p-2 border">
-                  {p.schedulePickUp
-                    ? new Date(p.schedulePickUp).toLocaleDateString()
-                    : ""
-                  }
-                </td>
+                <td className="p-2 border">{fmtDate(p.orderConfirmedDate)}</td>
+                <td className="p-2 border">{fmtDate(p.expectedReceiveDate)}</td>
+                <td className="p-2 border">{fmtDate(p.schedulePickUp)}</td>
                 <td className="p-2 border">{p.remarks}</td>
                 <td className="p-2 border">{p.status || "N/A"}</td>
                 <td className="p-2 border">{latest ? latest.note : "—"}</td>
-                <td className="p-2 border space-y-1">
+
+                {/* PO Status */}
+                <td className="p-2 border">
+                  {poGenerated ? (
+                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
+                      Generated
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-gray-400 text-white">
+                      Not generated
+                    </span>
+                  )}
+                </td>
+
+                {/* Actions */}
+                <td className="p-2 border space-y-1 relative">
+                  {/* Quick buttons */}
                   <button
                     disabled={
                       !perms.includes("write-purchase") || p.status === "received"
                     }
                     onClick={() => {
-                      if (
-                        !perms.includes("write-purchase") ||
-                        p.status === "received"
-                      )
-                        return;
+                      if (!perms.includes("write-purchase") || p.status === "received") return;
                       setCurrentEdit(p);
                       setEditModal(true);
                     }}
@@ -776,23 +1076,19 @@ export default function OpenPurchaseList() {
                   >
                     Edit
                   </button>
+
                   <button
                     disabled={!perms.includes("write-purchase")}
                     onClick={async () => {
-                      if (
-                        !perms.includes("write-purchase") ||
-                        !window.confirm("Delete this purchase?")
-                      )
-                        return;
+                      if (!perms.includes("write-purchase") || !window.confirm("Delete this purchase?")) return;
                       try {
                         const token = localStorage.getItem("token");
                         await axios.delete(
                           `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
                           { headers: { Authorization: `Bearer ${token}` } }
                         );
-                        setPurchases((prev) =>
-                          prev.filter((x) => x._id !== p._id)
-                        );
+                        // Reload to ensure prices & aggregation remain correct
+                        await loadPurchases();
                       } catch {
                         alert("Error deleting.");
                       }
@@ -801,17 +1097,94 @@ export default function OpenPurchaseList() {
                   >
                     Delete
                   </button>
+
+                  {/* Kebab menu */}
+                  <div className="mt-1">
+                    <button
+                      className="w-full border rounded py-0.5 text-[10px]"
+                      onClick={() =>
+                        setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
+                      }
+                    >
+                      ⋮
+                    </button>
+                    {menuOpen && (
+                      <div className="absolute right-0 z-10 mt-1 w-44 bg-white border rounded shadow">
+                        {/* Edit in menu */}
+                        <button
+                          className={
+                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
+                            (!perms.includes("write-purchase") || p.status === "received"
+                              ? "opacity-50 cursor-not-allowed"
+                              : "")
+                          }
+                          onClick={() => {
+                            if (!perms.includes("write-purchase") || p.status === "received") return;
+                            setMenuOpenFor(null);
+                            setCurrentEdit(p);
+                            setEditModal(true);
+                          }}
+                        >
+                          Edit
+                        </button>
+
+                        {/* Delete in menu */}
+                        <button
+                          className={
+                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
+                            (!perms.includes("write-purchase") ? "opacity-50 cursor-not-allowed" : "")
+                          }
+                          onClick={async () => {
+                            if (!perms.includes("write-purchase")) return;
+                            setMenuOpenFor(null);
+                            if (!window.confirm("Delete this purchase?")) return;
+                            try {
+                              const token = localStorage.getItem("token");
+                              await axios.delete(
+                                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
+                                { headers: { Authorization: `Bearer ${token}` } }
+                              );
+                              await loadPurchases();
+                            } catch {
+                              alert("Error deleting.");
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+
+                        {/* Generate PO (hidden once generated) */}
+                        {!poGenerated && (
+                          <button
+                            className={
+                              "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
+                              (!perms.includes("write-purchase") ? "opacity-50 cursor-not-allowed" : "")
+                            }
+                            onClick={() => {
+                              if (!perms.includes("write-purchase")) return;
+                              setMenuOpenFor(null);
+                              setPoModalRow(p);
+                            }}
+                          >
+                            Generate PO
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
       <JobSheetGlobal
         jobSheetNumber={selectedJobSheetNumber}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
+
       {editModal && currentEdit && (
         <EditPurchaseModal
           purchase={currentEdit}
@@ -820,42 +1193,42 @@ export default function OpenPurchaseList() {
             try {
               const token = localStorage.getItem("token");
               const headers = { Authorization: `Bearer ${token}` };
-              let updatedPurchase;
-              if (u._id && u._id.startsWith("temp_")) {
+
+              if (u._id && String(u._id).startsWith("temp_")) {
                 const { _id, isTemporary, ...data } = u;
-                const response = await axios.post(
+                await axios.post(
                   `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
                   data,
                   { headers }
                 );
-                updatedPurchase = response.data.purchase;
               } else {
-                const response = await axios.put(
+                await axios.put(
                   `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
                   u,
                   { headers }
                 );
-                updatedPurchase = response.data.purchase;
               }
-              setPurchases((prev) => {
-                const newPurchases = prev.filter(
-                  (x) =>
-                    !(
-                      x.jobSheetId?.toString() ===
-                        updatedPurchase.jobSheetId?.toString() &&
-                      x.product === updatedPurchase.product &&
-                      (x.size || "") === (updatedPurchase.size || "")
-                    )
-                );
-                newPurchases.push(updatedPurchase);
-                return newPurchases;
-              });
+
+              // IMPORTANT: Re-fetch after save so the grid shows the *latest* price rule:
+              // - If row.productPrice is now set -> show that
+              // - Else -> fetch from Products
+              await loadPurchases();
             } catch (error) {
               console.error("Error saving purchase:", error);
-              // alert("Error saving purchase");
             } finally {
               setEditModal(false);
             }
+          }}
+        />
+      )}
+
+      {poModalRow && (
+        <GeneratePOModal
+          row={poModalRow}
+          onClose={() => setPoModalRow(null)}
+          onCreated={async () => {
+            // After PO creation, reload to show updated poId/poNumber & recalculated prices if needed
+            await loadPurchases();
           }}
         />
       )}

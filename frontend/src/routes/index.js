@@ -81,6 +81,7 @@ import AttendancePage from "../pages/AttendancePage";
 import WfhPage from "../pages/WfhPage";
 import LeavesPage from "../pages/LeavesPage";
 import SalaryPage from "../pages/SalaryPage";
+import PurchaseOrdersList from "../pages/PurchaseOrdersList";
 
 
 const router = createBrowserRouter([
@@ -419,6 +420,10 @@ const router = createBrowserRouter([
                     {
                         path : "hrms/salary",
                         element:<SalaryPage/>
+                    },
+                    {
+                        path: "purchase-orders",
+                        element:<PurchaseOrdersList/>
                     }
                 ]
             }

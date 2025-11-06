@@ -87,6 +87,14 @@ const groupedPermissions = {
     "Sales" : [
       "manage-dc",
       "manage-einvoice"
+    ],
+    "HRMS" : [
+      "hrms-employees",
+      "hrms-attendance",
+      "hrms-wfh",
+      "hrms-leaves",
+      "hrms-salary",
+      "hrms-leaves-export"
     ]
   
 };

@@ -7,6 +7,7 @@ const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
+/* ---------------- utils ---------------- */
 function isEqual(a, b) {
   if (a === b) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
@@ -31,6 +32,11 @@ function createLogEntry(req, action, field, oldValue, newValue) {
   };
 }
 
+// Helper function to escape special regex characters
+function escapeRegex(string) {
+  return String(string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function generateOpportunityCode() {
   const counter = await Counter.findOneAndUpdate(
     { id: "opportunityCode" },
@@ -39,6 +45,8 @@ async function generateOpportunityCode() {
   );
   return counter.seq.toString().padStart(4, "0");
 }
+
+/* ---------------- routes ---------------- */
 
 router.post("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -96,7 +104,7 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     if (searchTerm) {
-      const regex = new RegExp(searchTerm, "i");
+      const regex = new RegExp(escapeRegex(searchTerm), "i");
       andConditions.push({
         $or: [
           { opportunityCode: regex },
@@ -116,10 +124,7 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
 
     const query = andConditions.length ? { $and: andConditions } : {};
 
-    const opportunities = await Opportunity.find(query)
-      .sort({ createdAt: -1 })
-      .lean();
-
+    const opportunities = await Opportunity.find(query).sort({ createdAt: -1 }).lean();
     res.json(opportunities);
   } catch (error) {
     console.error("Error fetching opportunities:", error);
@@ -129,83 +134,94 @@ router.get("/opportunities", authenticate, authorizeAdmin, async (req, res) => {
 
 router.get("/opportunities-export", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { filter, searchTerm, userName } = req.query;
-    const currentUserName = req.user.name;
-
-    const andConditions = [];
-
-    if (userName && req.user.isSuperAdmin) {
-      andConditions.push({ opportunityOwner: userName });
-    } else {
-      switch (filter) {
-        case "my":
-          andConditions.push({ opportunityOwner: currentUserName });
-          break;
-        case "team":
-          andConditions.push(
-            { "teamMembers.userName": currentUserName },
-            { opportunityOwner: { $ne: currentUserName } }
-          );
-          break;
-      }
-    }
-
-    if (searchTerm) {
-      const regex = new RegExp(escapeRegex(searchTerm), "i"); // Use escapeRegex for safe regex
-      andConditions.push({
-        $or: [
-          { opportunityCode: regex },
-          { opportunityName: regex },
-          { account: regex },
-          { contact: regex },
-          { opportunityStage: regex },
-          { opportunityStatus: regex },
-          { opportunityDetail: regex },
-          { opportunityOwner: regex },
-          { createdBy: regex },
-          { dealRegistrationNumber: regex },
-          { freeTextField: regex },
-        ],
-      });
-    }
-
-    const query = andConditions.length ? { $and: andConditions } : {};
-
-    const opportunities = await Opportunity.find(query)
-      .select("opportunityCode createdAt account opportunityName opportunityDetail opportunityOwner opportunityValue closureDate opportunityStage opportunityStatus") // Select only needed fields
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({ opportunities });
-  } catch (error) {
-    console.error("Error fetching opportunities:", error);
-    res.status(500).json({ message: "Server error fetching opportunities" });
-  }
-});
-
-// Helper function to escape special regex characters
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-
-router.get("/opportunities-pages", authenticate, authorizeAdmin, async (req, res) => {
-  try {
     const {
       filter,
       searchTerm,
       userName,
-      page = 1,
-      limit = 100,
       opportunityStage,
       closureFromDate,
       closureToDate,
       createdFilter,
     } = req.query;
-    const currentUserName = req.user.name;
 
+    // ---- helpers ----
+    const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    function getCreatedRange(label) {
+      if (!label || label === "All") return null;
+
+      const now = new Date();
+      const startOfDay = (d) => {
+        const x = new Date(d);
+        x.setHours(0, 0, 0, 0);
+        return x;
+      };
+      const endOfDay = (d) => {
+        const x = new Date(d);
+        x.setHours(23, 59, 59, 999);
+        return x;
+      };
+
+      const firstDayOfWeek = () => {
+        const d = new Date();
+        // Assuming week starts on Monday; adjust if you use Sunday
+        const day = d.getDay() || 7; // 1..7
+        if (day !== 1) d.setDate(d.getDate() - (day - 1));
+        return startOfDay(d);
+      };
+      const lastWeekRange = () => {
+        const startThisWeek = firstDayOfWeek();
+        const startLastWeek = new Date(startThisWeek);
+        startLastWeek.setDate(startLastWeek.getDate() - 7);
+        const endLastWeek = new Date(startThisWeek);
+        endLastWeek.setMilliseconds(-1); // day before this week start
+        return { $gte: startLastWeek, $lte: endLastWeek };
+      };
+      const firstDayOfMonth = (d = new Date()) =>
+        new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+      const lastMonthRange = () => {
+        const firstThisMonth = firstDayOfMonth();
+        const firstLastMonth = new Date(firstThisMonth);
+        firstLastMonth.setMonth(firstLastMonth.getMonth() - 1);
+        const endLastMonth = new Date(firstThisMonth.getTime() - 1);
+        return { $gte: firstLastMonth, $lte: endLastMonth };
+      };
+      const firstDayOfYear = (y = new Date().getFullYear()) =>
+        new Date(y, 0, 1, 0, 0, 0, 0);
+
+      switch (label) {
+        case "Today":
+          return { $gte: startOfDay(now), $lte: endOfDay(now) };
+        case "Yesterday": {
+          const y = new Date(now);
+          y.setDate(y.getDate() - 1);
+          return { $gte: startOfDay(y), $lte: endOfDay(y) };
+        }
+        case "This Week":
+          return { $gte: firstDayOfWeek(), $lte: endOfDay(now) };
+        case "Last Week":
+          return lastWeekRange();
+        case "This Month":
+          return { $gte: firstDayOfMonth(), $lte: endOfDay(now) };
+        case "Last Month":
+          return lastMonthRange();
+        case "This Year":
+          return { $gte: firstDayOfYear(), $lte: endOfDay(now) };
+        case "Last Year": {
+          const lastYear = now.getFullYear() - 1;
+          const start = firstDayOfYear(lastYear);
+          const end = new Date(firstDayOfYear(now.getFullYear()) - 1);
+          return { $gte: start, $lte: end };
+        }
+        default:
+          return null;
+      }
+    }
+
+    const currentUserName = req.user.name;
     const andConditions = [];
 
+    // Ownership / scope
     if (userName && req.user.isSuperAdmin) {
       andConditions.push({ opportunityOwner: userName });
     } else {
@@ -219,9 +235,11 @@ router.get("/opportunities-pages", authenticate, authorizeAdmin, async (req, res
             { opportunityOwner: { $ne: currentUserName } }
           );
           break;
+        // default: all
       }
     }
 
+    // Search
     if (searchTerm) {
       const regex = new RegExp(escapeRegex(searchTerm), "i");
       andConditions.push({
@@ -241,26 +259,164 @@ router.get("/opportunities-pages", authenticate, authorizeAdmin, async (req, res
       });
     }
 
-    // ... other filter conditions (opportunityStage, closureFromDate, etc.)
+    // Stage filter
+    if (opportunityStage && opportunityStage !== "All") {
+      andConditions.push({ opportunityStage });
+    }
+
+    // Closure date range (yyyy-mm-dd)
+    if (closureFromDate || closureToDate) {
+      const range = {};
+      if (closureFromDate) range.$gte = new Date(closureFromDate);
+      if (closureToDate) {
+        const to = new Date(closureToDate);
+        to.setHours(23, 59, 59, 999);
+        range.$lte = to;
+      }
+      andConditions.push({ closureDate: range });
+    }
+
+    // Created filter (matches your FilterPanel options)
+    const createdRange = getCreatedRange(createdFilter);
+    if (createdRange) {
+      andConditions.push({ createdAt: createdRange });
+    }
 
     const query = andConditions.length ? { $and: andConditions } : {};
 
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
+    const opportunities = await Opportunity.find(query)
+      .select(
+        "opportunityCode createdAt account opportunityName opportunityDetail opportunityOwner opportunityValue closureDate opportunityStage opportunityStatus"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ opportunities });
+  } catch (error) {
+    console.error("Error fetching opportunities (export):", error);
+    res.status(500).json({ message: "Server error fetching opportunities" });
+  }
+});
+
+
+router.get("/opportunities-pages", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const {
+      filter,
+      searchTerm,
+      userName,
+      opportunityStage,
+      closureFromDate,
+      closureToDate,
+      createdFilter,
+    } = req.query;
+
+    // Strict parse & clamp page/limit
+    const parsedPage = parseInt(String(req.query.page ?? ""), 10);
+    const parsedLimit = parseInt(String(req.query.limit ?? ""), 10);
+    let pageNum = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    let limitNum =
+      Number.isFinite(parsedLimit) && parsedLimit > 0 && parsedLimit <= 500 ? parsedLimit : 100;
+
     const skip = (pageNum - 1) * limitNum;
 
+    const currentUserName = req.user.name;
+    const andConditions = [];
+
+    // Ownership filter
+    if (userName && req.user.isSuperAdmin) {
+      andConditions.push({ opportunityOwner: userName });
+    } else {
+      switch (filter) {
+        case "my":
+          andConditions.push({ opportunityOwner: currentUserName });
+          break;
+        case "team":
+          andConditions.push(
+            { "teamMembers.userName": currentUserName },
+            { opportunityOwner: { $ne: currentUserName } }
+          );
+          break;
+      }
+    }
+
+    // Search term
+    if (searchTerm) {
+      const regex = new RegExp(escapeRegex(searchTerm), "i");
+      andConditions.push({
+        $or: [
+          { opportunityCode: regex },
+          { opportunityName: regex },
+          { account: regex },
+          { contact: regex },
+          { opportunityStage: regex },
+          { opportunityStatus: regex },
+          { opportunityDetail: regex },
+          { opportunityOwner: regex },
+          { createdBy: regex },
+          { dealRegistrationNumber: regex },
+          { freeTextField: regex },
+        ],
+      });
+    }
+
+    // Stage filter
+    if (opportunityStage && opportunityStage !== "All") {
+      andConditions.push({ opportunityStage });
+    }
+
+    // Closure date range (expecting yyyy-mm-dd)
+    if (closureFromDate || closureToDate) {
+      const range = {};
+      if (closureFromDate) {
+        range.$gte = new Date(closureFromDate);
+      }
+      if (closureToDate) {
+        const to = new Date(closureToDate);
+        to.setHours(23, 59, 59, 999);
+        range.$lte = to;
+      }
+      andConditions.push({ closureDate: range });
+    }
+
+    // Created filter (Today / 7days / 30days / ...)
+    if (createdFilter && createdFilter !== "All") {
+      const now = new Date();
+      let from;
+      switch (createdFilter) {
+        case "Today":
+          from = new Date();
+          from.setHours(0, 0, 0, 0);
+          break;
+        case "7days":
+          from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case "30days":
+          from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+      }
+      if (from) {
+        andConditions.push({ createdAt: { $gte: from } });
+      }
+    }
+
+    const query = andConditions.length ? { $and: andConditions } : {};
+
+    // Deterministic sort (stable paging)
+    const sortSpec = { createdAt: -1, _id: -1 };
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[/opportunities-pages] page:", pageNum, "limit:", limitNum, "skip:", skip);
+    }
+
     const [opportunities, total] = await Promise.all([
-      Opportunity.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
+      Opportunity.find(query).sort(sortSpec).skip(skip).limit(limitNum).lean(),
       Opportunity.countDocuments(query),
     ]);
 
     res.json({
       opportunities,
-      totalPages: Math.ceil(total / limitNum),
+      totalPages: Math.max(1, Math.ceil(total / limitNum)),
       currentPage: pageNum,
       totalOpportunities: total,
     });
@@ -269,11 +425,6 @@ router.get("/opportunities-pages", authenticate, authorizeAdmin, async (req, res
     res.status(500).json({ message: "Server error fetching opportunities" });
   }
 });
-
-// Helper function to escape special regex characters
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 router.get("/opportunities/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -403,8 +554,8 @@ router.post("/opportunities/logs/latest", authenticate, authorizeAdmin, async (r
     }
 
     const objectIds = opportunityIds
-      .filter(id => mongoose.Types.ObjectId.isValid(id))
-      .map(id => new mongoose.Types.ObjectId(id));
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
 
     if (objectIds.length === 0) {
       return res.status(400).json({ message: "No valid opportunity IDs provided" });

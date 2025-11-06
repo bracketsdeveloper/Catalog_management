@@ -77,7 +77,7 @@ function ManageOpportunity() {
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, _setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [filterCriteria, setFilterCriteria] = useState({
     opportunityStage: "All",
@@ -118,6 +118,34 @@ function ManageOpportunity() {
     return d.toLocaleDateString("en-GB");
   };
 
+  // --------- GUARDED SETTERS (prevent unwanted page reset) ---------
+  const setSearchTermGuarded = (term) => {
+    _setSearchTerm((prev) => {
+      if (prev === term) return prev; // no change -> don't reset page
+      setCurrentPage(1);
+      return term;
+    });
+  };
+
+  const setActiveTabGuarded = (tab) => {
+    setActiveTab((prev) => {
+      if (prev === tab) return prev; // no change
+      setCurrentPage(1);
+      return tab;
+    });
+  };
+
+  const handleFilterChangeGuarded = (e) => {
+    const { name, value } = e.target;
+    setFilterCriteria((prev) => {
+      if (prev[name] === value) return prev; // no change
+      const next = { ...prev, [name]: value };
+      setCurrentPage(1);
+      return next;
+    });
+  };
+  // ---------------------------------------------------------------
+
   // ===== FETCH LIST (with cache-buster & clean params) =====
   useEffect(() => {
     const fetchData = async () => {
@@ -147,7 +175,6 @@ function ManageOpportunity() {
           _t: Date.now(), // cache buster to avoid stale page 1 payloads
         };
 
-        // strip undefined keys so axios sends a clean querystring
         const params = Object.fromEntries(
           Object.entries(rawParams).filter(([, v]) => v !== undefined && v !== null)
         );
@@ -161,10 +188,7 @@ function ManageOpportunity() {
         setTotalPages(res.data.totalPages || 1);
         setTotalOpportunities(res.data.totalOpportunities || 0);
 
-        // If backend returns currentPage, sync to it so UI reflects server paging
-        if (res.data.currentPage) {
-          setCurrentPage(res.data.currentPage);
-        }
+        // Do NOT override currentPage from server; trust local state.
       } catch (error) {
         console.error("Error fetching opportunities:", error);
         setError("Failed to fetch opportunities");
@@ -312,9 +336,9 @@ function ManageOpportunity() {
           opportunityStage: op.opportunityStage,
           opportunityStatus: op.opportunityStatus,
           latestAction: latestAction.action
-            ? `${latestAction.action}${latestAction.field ? ` (${latestAction.field})` : ""} by ${
-                latestAction.performedBy?.name || "N/A"
-              } at ${
+            ? `${latestAction.action}${
+                latestAction.field ? ` (${latestAction.field})` : ""
+              } by ${latestAction.performedBy?.name || "N/A"} at ${
                 latestAction.performedAt
                   ? new Date(latestAction.performedAt).toLocaleString()
                   : "Unknown date"
@@ -335,7 +359,7 @@ function ManageOpportunity() {
   const renderPagination = () => (
     <div className="flex justify-center items-center mt-4 space-x-2">
       <button
-        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+        onClick={() => setCurrentPage((prev) => Math.max(Number(prev) - 1, 1))}
         disabled={currentPage === 1 || loading}
         className="px-3 py-1 border rounded disabled:opacity-50"
       >
@@ -345,7 +369,7 @@ function ManageOpportunity() {
         Page {currentPage} of {totalPages} (Total: {totalOpportunities})
       </span>
       <button
-        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+        onClick={() => setCurrentPage((prev) => Math.min(Number(prev) + 1, totalPages))}
         disabled={currentPage === totalPages || loading}
         className="px-3 py-1 border rounded disabled:opacity-50"
       >
@@ -360,10 +384,7 @@ function ManageOpportunity() {
       <div className="flex items-center justify-between mb-4">
         <OpportunityTabs
           activeTab={activeTab}
-          setActiveTab={(tab) => {
-            setActiveTab(tab);
-            setCurrentPage(1);
-          }}
+          setActiveTab={setActiveTabGuarded}
           isSuperAdmin={isSuperAdmin}
           canViewAllOpp={canViewAllOpp}
         />
@@ -433,10 +454,7 @@ function ManageOpportunity() {
           </div>
           <SearchBar
             searchTerm={searchTerm}
-            setSearchTerm={(term) => {
-              setSearchTerm(term);
-              setCurrentPage(1);
-            }}
+            setSearchTerm={setSearchTermGuarded}
           />
           <button
             onClick={() => setShowFilter(!showFilter)}
@@ -474,11 +492,7 @@ function ManageOpportunity() {
       {showFilter && (
         <FilterPanel
           filterCriteria={filterCriteria}
-          handleFilterChange={(e) => {
-            const { name, value } = e.target;
-            setFilterCriteria((prev) => ({ ...prev, [name]: value }));
-            setCurrentPage(1);
-          }}
+          handleFilterChange={handleFilterChangeGuarded}
           setShowFilter={setShowFilter}
           stages={stages}
         />
