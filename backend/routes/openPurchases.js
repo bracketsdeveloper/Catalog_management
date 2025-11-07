@@ -17,7 +17,8 @@ const User = require("../models/User");
 /* ---------------- Helpers ---------------- */
 
 async function isNewVendor(vendorId) {
-  if (!vendorId) return true;
+  // If vendor not chosen yet, DON'T treat as "new" -> skip PO rule
+  if (!vendorId) return false;
   const count = await PurchaseOrder.countDocuments({ "vendor.vendorId": vendorId });
   return count === 0;
 }
@@ -112,7 +113,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     // Helper normalizers
     const norm = (s) =>
       String(s || "")
-        .replace(/\s+/g, " ") // collapse multi-space
+        .replace(/\s+/g, " ")
         .trim()
         .toLowerCase();
 
@@ -129,12 +130,10 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     );
 
     // 4) Query Product model for any matching names; grab multiple price fields
-    // Try to project several possible fields where your price might live.
     const prodDocs = await Product.find({ name: { $in: nameRegexes } })
       .select("name productCost purchasePrice unitPrice price MRP")
       .lean();
 
-    // Choose the first > 0 among candidate fields
     const pickPrice = (p) => {
       const candidates = [
         p.productCost,
@@ -150,7 +149,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       return null;
     };
 
-    // Map normalized Product.name -> usable price (> 0) or null
     const priceByName = new Map(
       prodDocs.map((p) => [norm(p.name), pickPrice(p)])
     );
@@ -165,16 +163,12 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         return true;
       })
       .map((rec) => {
-        // Treat 0/<=0/NaN/empty as "no row price" so fallback from Product applies
         const rowNum = Number(rec.productPrice);
-        const hasUsableRowPrice =
-          Number.isFinite(rowNum) && rowNum > 0; // <-- IMPORTANT: 0 is NOT considered set
-
+        const hasUsableRowPrice = Number.isFinite(rowNum) && rowNum > 0;
         const fallback = priceByName.get(norm(rec.product)) ?? null;
-
         return {
           ...rec,
-          productPrice: hasUsableRowPrice ? rowNum : fallback, // may be null if Product not found
+          productPrice: hasUsableRowPrice ? rowNum : fallback,
         };
       });
 
@@ -187,7 +181,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       if (aVal == null) return sortDirection === 1 ? 1 : -1;
       if (bVal == null) return sortDirection === 1 ? -1 : 1;
 
-      // Dates
       if (
         sortKey.includes("Date") ||
         sortKey === "schedulePickUp" ||
@@ -198,12 +191,10 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
       }
 
-      // Numbers
       if (typeof aVal === "number" && typeof bVal === "number") {
         return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
       }
 
-      // Strings
       aVal = String(aVal).toLowerCase();
       bVal = String(bVal).toLowerCase();
       if (aVal < bVal) return -sortDirection;
@@ -217,9 +208,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     res.status(500).json({ message: "Server error fetching open purchases" });
   }
 });
-
-
-
 
 /* ---------------- GET ONE ---------------- */
 router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
@@ -242,7 +230,6 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     const data = { ...req.body };
     if (data._id && data._id.startsWith("temp_")) delete data._id;
 
-    // Normalize numeric price if provided
     if (data.productPrice !== undefined && data.productPrice !== null && data.productPrice !== "") {
       data.productPrice = Number(data.productPrice) || 0;
     }
@@ -256,7 +243,6 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     const newPurchase = new OpenPurchase(data);
     await newPurchase.save();
 
-    // Close when all received (preserved)
     if (newPurchase.status === "received") {
       const jobSheetId = newPurchase.jobSheetId;
       const jobSheet = await JobSheet.findById(jobSheetId);
@@ -319,7 +305,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 
 /* ---------------- UPDATE ----------------
    - Accepts productPrice edits
-   - Enforces PO rule for new vendors when marking 'received'
+   - Enforces PO rule for new vendors ONLY if a vendorId is known
 ----------------------------------------- */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -328,7 +314,6 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     const updateData = { ...req.body };
 
-    // Normalize numeric price if present
     if (updateData.productPrice !== undefined && updateData.productPrice !== null && updateData.productPrice !== "") {
       updateData.productPrice = Number(updateData.productPrice) || 0;
     }
@@ -339,15 +324,17 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       if (js.deliveryDate) updateData.deliveryDateTime = new Date(js.deliveryDate);
     }
 
-    // PO mandatory on move to 'received' for new vendors
+    // Only enforce when moving to 'received' AND we have a vendorId
     const nextStatus = updateData.status ?? before.status;
     if (nextStatus === "received") {
-      const vendorId = updateData.vendorId || before.vendorId;
-      const newVendor = await isNewVendor(vendorId);
-      if (newVendor && !before.poId) {
-        return res
-          .status(400)
-          .json({ message: "PO is mandatory for a new vendor. Generate a PO first." });
+      const effectiveVendorId = updateData.vendorId || before.vendorId;
+      if (effectiveVendorId) {
+        const newVendor = await isNewVendor(effectiveVendorId);
+        if (newVendor && !before.poId) {
+          return res
+            .status(400)
+            .json({ message: "PO is mandatory for a new vendor. Generate a PO first." });
+        }
       }
     }
 
@@ -360,7 +347,6 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(404).json({ message: "Open purchase not found" });
     }
 
-    // Close when all received (preserved)
     if (updatedPurchase.status === "received") {
       const jobSheetId = updatedPurchase.jobSheetId;
       const jobSheet = await JobSheet.findById(jobSheetId);
