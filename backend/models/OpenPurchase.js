@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
  * OpenPurchase model
  * - Includes editable `productPrice`
  * - `poId` link to generated PO
+ * - `invoiceRemarks` added (prints on PO / carries to Closed)
  * - `strict: false` to coexist with any extra fields you already store
  */
 const openPurchaseSchema = new mongoose.Schema(
@@ -47,8 +48,11 @@ const openPurchaseSchema = new mongoose.Schema(
     // Attached PO
     poId: { type: mongoose.Schema.Types.ObjectId, ref: "PurchaseOrder", index: true },
 
-    // Misc
-    remarks: { type: String, default: "" },
+    // Remarks
+    remarks: { type: String, default: "" },           // general notes
+    invoiceRemarks: { type: String, default: "" },    // NEW: prints on PO / flows to Closed
+
+    // Audit
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },

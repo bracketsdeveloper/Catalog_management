@@ -33,6 +33,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     "orderConfirmedDate",
     "expectedReceiveDate",
     "schedulePickUp",
+    "invoiceRemarks", // NEW filter
     "remarks",
   ];
 
@@ -138,8 +139,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
           {local.map((fu, i) => (
             <div
               key={i}
-              className={`flex justify-between items-center border-b py-1 ${!fu.done && fu.followUpDate < today ? "bg-red-200" : ""
-                }`}
+              className={`flex justify-between items-center border-b py-1 ${!fu.done && fu.followUpDate < today ? "bg-red-200" : ""}`}
             >
               <span>
                 {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
@@ -369,6 +369,13 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
       payload.productPrice = Number(payload.productPrice) || 0;
     }
 
+    // Ensure invoiceRemarks is a string
+    if (payload.invoiceRemarks === undefined || payload.invoiceRemarks === null) {
+      payload.invoiceRemarks = "";
+    } else {
+      payload.invoiceRemarks = String(payload.invoiceRemarks);
+    }
+
     onSave(payload);
   };
 
@@ -416,6 +423,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               </div>
               <div><label className="font-bold">Qty Req'd:</label> {data.qtyRequired}</div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="font-bold">Qty Ordered:</label>
@@ -438,9 +446,10 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="font-bold">Remarks:</label>
+                <label className="font-bold">General Remarks:</label>
                 <input
                   type="text"
                   className="w-full border p-1"
@@ -449,27 +458,34 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
               <div>
+                <label className="font-bold">Invoice Remarks:</label>
+                <input
+                  type="text"
+                  className="w-full border p-1"
+                  value={data.invoiceRemarks || ""}
+                  onChange={(e) => change("invoiceRemarks", e.target.value)}
+                  placeholder="Shown on PO / flows to Closed"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
                 <label className="font-bold">Order Confirmed:</label>
                 <input
                   type="date"
                   className="w-full border p-1"
                   value={data.orderConfirmedDate?.substring(0, 10) || ""}
-                  onChange={(e) =>
-                    change("orderConfirmedDate", e.target.value)
-                  }
+                  onChange={(e) => change("orderConfirmedDate", e.target.value)}
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="font-bold">Expected Recv':</label>
                 <input
                   type="date"
                   className="w-full border p-1"
                   value={data.expectedReceiveDate?.substring(0, 10) || ""}
-                  onChange={(e) =>
-                    change("expectedReceiveDate", e.target.value)
-                  }
+                  onChange={(e) => change("expectedReceiveDate", e.target.value)}
                 />
               </div>
               <div>
@@ -496,6 +512,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 </select>
               </div>
             </div>
+
             <div className="flex justify-end">
               <button
                 type="button"
@@ -530,8 +547,6 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
 /* ---------------- Generate PO Modal (uses VendorTypeahead) ---------------- */
 function GeneratePOModal({ row, onClose, onCreated }) {
   const [vendorId, setVendorId] = useState("");
-  const [selectedVendor, setSelectedVendor] = useState(null);
-
   const [productCode, setProductCode] = useState("");
   const [issueDate, setIssueDate] = useState(toISODate(new Date()));
   const [requiredDeliveryDate, setRequiredDeliveryDate] = useState(
@@ -540,7 +555,6 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   const [deliveryAddress, setDeliveryAddress] = useState("Ace Gifting Solutions");
   const [remarks, setRemarks] = useState("");
   const [terms, setTerms] = useState("");
-
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -605,10 +619,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
             <label className="font-bold">Vendor</label>
             <VendorTypeahead
               value={vendorId}
-              onChange={(id, v) => {
-                setVendorId(id);
-                setSelectedVendor(v || null);
-              }}
+              onChange={(id) => setVendorId(id)}
             />
           </div>
 
@@ -651,12 +662,13 @@ function GeneratePOModal({ row, onClose, onCreated }) {
             />
           </div>
           <div className="col-span-2">
-            <label className="font-bold">Remarks</label>
+            <label className="font-bold">PO Remarks</label>
             <input
               type="text"
               className="w-full border p-2 rounded"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
+              placeholder="Header-level PO remarks (optional)"
             />
           </div>
           <div className="col-span-2">
@@ -667,6 +679,13 @@ function GeneratePOModal({ row, onClose, onCreated }) {
               onChange={(e) => setTerms(e.target.value)}
               placeholder="Leave blank to use default terms on the server."
             />
+          </div>
+
+          <div className="col-span-2">
+            <div className="text-[11px] text-gray-600">
+              <b>Line Item Invoice Remarks:</b> {row.invoiceRemarks || "(none)"}<br />
+              This will be added to the PO item automatically.
+            </div>
           </div>
         </div>
 
@@ -713,7 +732,6 @@ export default function OpenPurchaseList() {
   const [editModal, setEditModal] = useState(false);
   const [currentEdit, setCurrentEdit] = useState(null);
 
-  // Kebab dropdown + PO modal
   const [menuOpenFor, setMenuOpenFor] = useState(null);
   const [poModalRow, setPoModalRow] = useState(null);
 
@@ -744,10 +762,7 @@ export default function OpenPurchaseList() {
         `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
         {
           headers: { Authorization: `Bearer ${token}` },
-          params: {
-            sortKey: cfg.key,
-            sortDirection: cfg.direction,
-          },
+          params: { sortKey: cfg.key, sortDirection: cfg.direction },
         }
       );
       setPurchases(res.data);
@@ -791,6 +806,8 @@ export default function OpenPurchaseList() {
         "size",
         "sourcingFrom",
         "vendorContactNumber",
+        "remarks",
+        "invoiceRemarks",
       ].some((f) => (p[f] || "").toLowerCase().includes(s))
     );
   }, [filteredPurchases, search]);
@@ -887,7 +904,8 @@ export default function OpenPurchaseList() {
         "Order Confirmed": fmtDate(r.orderConfirmedDate),
         "Expected Receive": fmtDate(r.expectedReceiveDate),
         "Schedule PickUp": fmtDate(r.schedulePickUp),
-        Remarks: r.remarks,
+        "Invoice Remarks": r.invoiceRemarks || "", // NEW in export
+        Remarks: r.remarks || "",
         Status: r.status,
         "PO Status": r.poId || r.poNumber ? "Generated" : "Not generated",
       }))
@@ -933,7 +951,7 @@ export default function OpenPurchaseList() {
         >
           Filters
         </button>
-        {canExport && (
+        {(isSuperAdmin || canExport) && (
           <button
             onClick={exportToExcel}
             className="bg-green-600 text-white px-4 py-2 rounded text-xs"
@@ -962,6 +980,7 @@ export default function OpenPurchaseList() {
               { key: "orderConfirmedDate", label: "Order Conf." },
               { key: "expectedReceiveDate", label: "Expected Recv." },
               { key: "schedulePickUp", label: "Pick-Up" },
+              { key: "invoiceRemarks", label: "Invoice Remarks" }, // NEW column
               { key: "remarks", label: "Remarks" },
               { key: "status", label: "Status" },
             ].map(({ key, label }) => (
@@ -1043,6 +1062,7 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{fmtDate(p.orderConfirmedDate)}</td>
                 <td className="p-2 border">{fmtDate(p.expectedReceiveDate)}</td>
                 <td className="p-2 border">{fmtDate(p.schedulePickUp)}</td>
+                <td className="p-2 border">{p.invoiceRemarks || ""}</td>
                 <td className="p-2 border">{p.remarks}</td>
                 <td className="p-2 border">{p.status || "N/A"}</td>
                 <td className="p-2 border">{latest ? latest.note : "—"}</td>
@@ -1062,43 +1082,8 @@ export default function OpenPurchaseList() {
 
                 {/* Actions */}
                 <td className="p-2 border space-y-1 relative">
-                  {/* Quick buttons */}
-                  <button
-                    disabled={
-                      !perms.includes("write-purchase") || p.status === "received"
-                    }
-                    onClick={() => {
-                      if (!perms.includes("write-purchase") || p.status === "received") return;
-                      setCurrentEdit(p);
-                      setEditModal(true);
-                    }}
-                    className="bg-blue-700 text-white w-full rounded py-0.5 text-[10px]"
-                  >
-                    Edit
-                  </button>
+                  
 
-                  <button
-                    disabled={!perms.includes("write-purchase")}
-                    onClick={async () => {
-                      if (!perms.includes("write-purchase") || !window.confirm("Delete this purchase?")) return;
-                      try {
-                        const token = localStorage.getItem("token");
-                        await axios.delete(
-                          `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
-                          { headers: { Authorization: `Bearer ${token}` } }
-                        );
-                        // Reload to ensure prices & aggregation remain correct
-                        await loadPurchases();
-                      } catch {
-                        alert("Error deleting.");
-                      }
-                    }}
-                    className="bg-red-700 text-white w-full rounded py-0.5 text-[10px]"
-                  >
-                    Delete
-                  </button>
-
-                  {/* Kebab menu */}
                   <div className="mt-1">
                     <button
                       className="w-full border rounded py-0.5 text-[10px]"
@@ -1110,7 +1095,6 @@ export default function OpenPurchaseList() {
                     </button>
                     {menuOpen && (
                       <div className="absolute right-0 z-10 mt-1 w-44 bg-white border rounded shadow">
-                        {/* Edit in menu */}
                         <button
                           className={
                             "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
@@ -1128,7 +1112,6 @@ export default function OpenPurchaseList() {
                           Edit
                         </button>
 
-                        {/* Delete in menu */}
                         <button
                           className={
                             "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
@@ -1153,7 +1136,6 @@ export default function OpenPurchaseList() {
                           Delete
                         </button>
 
-                        {/* Generate PO (hidden once generated) */}
                         {!poGenerated && (
                           <button
                             className={
@@ -1209,9 +1191,6 @@ export default function OpenPurchaseList() {
                 );
               }
 
-              // IMPORTANT: Re-fetch after save so the grid shows the *latest* price rule:
-              // - If row.productPrice is now set -> show that
-              // - Else -> fetch from Products
               await loadPurchases();
             } catch (error) {
               console.error("Error saving purchase:", error);
@@ -1227,7 +1206,6 @@ export default function OpenPurchaseList() {
           row={poModalRow}
           onClose={() => setPoModalRow(null)}
           onCreated={async () => {
-            // After PO creation, reload to show updated poId/poNumber & recalculated prices if needed
             await loadPurchases();
           }}
         />

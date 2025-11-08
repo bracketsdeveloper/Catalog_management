@@ -17,7 +17,6 @@ const User = require("../models/User");
 /* ---------------- Helpers ---------------- */
 
 async function isNewVendor(vendorId) {
-  // If vendor not chosen yet, DON'T treat as "new" -> skip PO rule
   if (!vendorId) return false;
   const count = await PurchaseOrder.countDocuments({ "vendor.vendorId": vendorId });
   return count === 0;
@@ -50,21 +49,15 @@ async function nextPO(sequenceKey = "PO-GC") {
   return `PO-GC-${year}-${seqStr}`;
 }
 
-/* ---------------- LIST ----------------
-   Initial productPrice comes from Product model when the row's price is
-   empty/undefined/NaN/<=0. We attempt multiple Product fields in priority:
-   productCost -> purchasePrice -> unitPrice -> price -> MRP (first > 0 wins).
---------------------------------------- */
+/* ---------------- LIST ---------------- */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sortKey = req.query.sortKey || "deliveryDateTime";
     const sortDirection = req.query.sortDirection === "desc" ? -1 : 1;
 
-    // 1) Load JobSheets (non-draft) + saved OpenPurchases
     const jobSheets = await JobSheet.find({ isDraft: false });
     const dbRecords = await OpenPurchase.find({});
 
-    // 2) Build aggregated view (JobSheet items as temp rows + DB rows)
     let aggregated = [];
     jobSheets.forEach((js) => {
       js.items.forEach((item, index) => {
@@ -88,6 +81,7 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           schedulePickUp: null,
           followUp: [],
           remarks: "",
+          invoiceRemarks: "", // NEW default for temp rows
           status: "",
           jobSheetId: js._id,
           isTemporary: true,
@@ -95,7 +89,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       });
     });
 
-    // Prefer DB rows over temp (same jobSheetId+product+size)
     dbRecords.forEach((db) => {
       const idx = aggregated.findIndex(
         (rec) =>
@@ -110,38 +103,18 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
-    // Helper normalizers
-    const norm = (s) =>
-      String(s || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
+    const norm = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const escapeRegex = (str = "") => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const escapeRegex = (str = "") =>
-      str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const productNames = [...new Set(aggregated.map((r) => norm(r.product)).filter(Boolean))];
+    const nameRegexes = productNames.map((n) => new RegExp(`^${escapeRegex(n)}$`, "i"));
 
-    // 3) Build a case-insensitive exact-match set of product names
-    const productNames = [
-      ...new Set(aggregated.map((r) => norm(r.product)).filter(Boolean)),
-    ];
-
-    const nameRegexes = productNames.map(
-      (n) => new RegExp(`^${escapeRegex(n)}$`, "i")
-    );
-
-    // 4) Query Product model for any matching names; grab multiple price fields
     const prodDocs = await Product.find({ name: { $in: nameRegexes } })
       .select("name productCost purchasePrice unitPrice price MRP")
       .lean();
 
     const pickPrice = (p) => {
-      const candidates = [
-        p.productCost,
-        p.purchasePrice,
-        p.unitPrice,
-        p.price,
-        p.MRP,
-      ];
+      const candidates = [p.productCost, p.purchasePrice, p.unitPrice, p.price, p.MRP];
       for (const c of candidates) {
         const n = Number(c);
         if (Number.isFinite(n) && n > 0) return n;
@@ -149,11 +122,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       return null;
     };
 
-    const priceByName = new Map(
-      prodDocs.map((p) => [norm(p.name), pickPrice(p)])
-    );
+    const priceByName = new Map(prodDocs.map((p) => [norm(p.name), pickPrice(p)]));
 
-    // 5) Deduplicate by (jobSheetNumber, product, size) and attach productPrice
     const seen = new Set();
     const finalAggregated = aggregated
       .filter((rec) => {
@@ -172,7 +142,6 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
         };
       });
 
-    // 6) Sorting
     finalAggregated.sort((a, b) => {
       let aVal = a[sortKey];
       let bVal = b[sortKey];
@@ -233,6 +202,9 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     if (data.productPrice !== undefined && data.productPrice !== null && data.productPrice !== "") {
       data.productPrice = Number(data.productPrice) || 0;
     }
+    if (typeof data.invoiceRemarks === "string" || data.invoiceRemarks === undefined) {
+      data.invoiceRemarks = data.invoiceRemarks || "";
+    }
 
     if (data.jobSheetId) {
       const js = await JobSheet.findById(data.jobSheetId);
@@ -243,6 +215,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     const newPurchase = new OpenPurchase(data);
     await newPurchase.save();
 
+    // If newly created row is already received, propagate to Closed
     if (newPurchase.status === "received") {
       const jobSheetId = newPurchase.jobSheetId;
       const jobSheet = await JobSheet.findById(jobSheetId);
@@ -272,6 +245,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               schedulePickUp: p.schedulePickUp,
               followUp: p.followUp,
               remarks: p.remarks,
+              invoiceRemarks: p.invoiceRemarks || "", // NEW: carry forward
               status: p.status,
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
@@ -303,10 +277,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/* ---------------- UPDATE ----------------
-   - Accepts productPrice edits
-   - Enforces PO rule for new vendors ONLY if a vendorId is known
------------------------------------------ */
+/* ---------------- UPDATE ---------------- */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const before = await OpenPurchase.findById(req.params.id);
@@ -316,6 +287,11 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     if (updateData.productPrice !== undefined && updateData.productPrice !== null && updateData.productPrice !== "") {
       updateData.productPrice = Number(updateData.productPrice) || 0;
+    }
+    if (updateData.invoiceRemarks === undefined) {
+      // do nothing
+    } else if (typeof updateData.invoiceRemarks !== "string") {
+      updateData.invoiceRemarks = String(updateData.invoiceRemarks || "");
     }
 
     if (updateData.jobSheetId) {
@@ -347,6 +323,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       return res.status(404).json({ message: "Open purchase not found" });
     }
 
+    // If received, sync to ClosedPurchase (includes invoiceRemarks)
     if (updatedPurchase.status === "received") {
       const jobSheetId = updatedPurchase.jobSheetId;
       const jobSheet = await JobSheet.findById(jobSheetId);
@@ -376,6 +353,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               schedulePickUp: p.schedulePickUp,
               followUp: p.followUp,
               remarks: p.remarks,
+              invoiceRemarks: p.invoiceRemarks || "", // NEW: carry forward
               status: p.status,
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
@@ -400,7 +378,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // Alert email (preserved)
+    // Alert email (unchanged)
     if (updatedPurchase.status === "alert") {
       const purchaseObj = updatedPurchase.toObject();
       let mailBody = "";
@@ -503,6 +481,7 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
       total: qty * unitPrice,
       hsnCode,
       gstPercent,
+      itemRemarks: row.invoiceRemarks || "", // NEW: push invoice remarks into PO line
     };
 
     const { subTotal, gstTotal, grandTotal } = computeTotals([item]);

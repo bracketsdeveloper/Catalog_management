@@ -88,17 +88,19 @@ export const ManageVendors = () => {
 
   const displayedVendors = useMemo(() => {
     const filtered = vendors.filter((v) => {
+      const primaryGst = (v.gstNumbers || []).find((g) => g.isPrimary)?.gst || v.gst || "";
+      const primaryBank = (v.bankAccounts || []).find((b) => b.isPrimary) || {};
       const hay = [
         v.vendorName,
         v.vendorCompany,
         v.brandDealing,
         v.location,
-        v.gst,
-        v.bankName,
-        v.accountNumber,
-        v.ifscCode,
         v.postalCode,
         v.reliability,
+        primaryGst,
+        primaryBank.bankName,
+        primaryBank.accountNumber,
+        primaryBank.ifscCode,
         ...(v.clients || []).flatMap((c) => [c.name, c.contactNumber]),
       ]
         .filter(Boolean)
@@ -121,11 +123,26 @@ export const ManageVendors = () => {
     return sortConfig.direction === "desc" ? sorted.reverse() : sorted;
   }, [vendors, searchTerm, sortConfig]);
 
-  // Export: default to non-reliable if missing/unknown
+  // Export: include all GSTs and all bank accounts (pipe-separated rows)
   const exportToExcel = () => {
     const data = displayedVendors.map((v) => {
       const rel = String(v.reliability || "").toLowerCase();
       const safeReliability = rel === "reliable" ? "reliable" : "non-reliable";
+      const gstJoined = (v.gstNumbers || [])
+        .map((g) => `${g.isPrimary ? "[P] " : ""}${g.gst}${g.label ? " (" + g.label + ")" : ""}`)
+        .join(" | ") || (v.gst || ""); // legacy fallback
+      const bankJoined =
+        (v.bankAccounts || [])
+          .map(
+            (b) =>
+              `${b.isPrimary ? "[P] " : ""}${b.bankName || "-"} / ${b.accountNumber || "-"} / ${
+                b.ifscCode || "-"
+              }`
+          )
+          .join(" | ") ||
+        // legacy fallback
+        [v.bankName, v.accountNumber, v.ifscCode].filter(Boolean).join(" / ");
+
       return {
         "Vendor Name": v.vendorName,
         Company: v.vendorCompany,
@@ -134,10 +151,8 @@ export const ManageVendors = () => {
         "Postal Code": v.postalCode,
         "Contact Person":
           v.clients?.map((c) => `${c.name} | ${c.contactNumber}`).join(", ") || "-",
-        GST: v.gst,
-        "Bank Name": v.bankName,
-        "Account Number": v.accountNumber,
-        IFSC: v.ifscCode,
+        GSTs: gstJoined,
+        "Bank Accounts": bankJoined,
         Reliability: safeReliability,
       };
     });
@@ -148,38 +163,11 @@ export const ManageVendors = () => {
     XLSX.writeFile(workbook, "Vendors.xlsx");
   };
 
-  const dropdownStyle = {
-    backgroundColor: "transparent",
-    border: "none",
-    boxShadow: "none",
-    padding: "0",
-  };
-
-  const dropdownMenuStyle = {
-    minWidth: "120px",
-    padding: "0",
-    borderRadius: "4px",
-    border: "1px solid #e2e8f0",
-  };
-
-  const dropdownItemStyle = {
-    fontSize: "0.875rem",
-    padding: "0.5rem 1rem",
-    color: "#4a5568",
-    transition: "all 0.2s ease",
-    cursor: "pointer",
-  };
-
-  const dropdownEditStyle = {
-    ...dropdownItemStyle,
-    backgroundColor: "white",
-  };
-
-  const dropdownDeleteStyle = {
-    ...dropdownItemStyle,
-    color: "#e53e3e",
-    backgroundColor: "white",
-  };
+  const dropdownStyle = { backgroundColor: "transparent", border: "none", boxShadow: "none", padding: "0" };
+  const dropdownMenuStyle = { minWidth: "120px", padding: "0", borderRadius: "4px", border: "1px solid #e2e8f0" };
+  const dropdownItemStyle = { fontSize: "0.875rem", padding: "0.5rem 1rem", color: "#4a5568", cursor: "pointer" };
+  const dropdownEditStyle = { ...dropdownItemStyle, backgroundColor: "white" };
+  const dropdownDeleteStyle = { ...dropdownItemStyle, color: "#e53e3e", backgroundColor: "white" };
 
   if (loading) return <div className="p-6 text-xs">Loading...</div>;
   if (error) return <div className="p-6 text-xs text-red-600">{error}</div>;
@@ -197,23 +185,14 @@ export const ManageVendors = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="border px-2 py-1 rounded text-xs"
           />
-          <button
-            onClick={openModal}
-            className="bg-orange-500 text-white px-3 py-1 rounded"
-          >
+          <button onClick={openModal} className="bg-orange-500 text-white px-3 py-1 rounded">
             Add Vendor
           </button>
-          <button
-            onClick={openBulkModal}
-            className="bg-green-500 text-white px-3 py-1 rounded"
-          >
+          <button onClick={openBulkModal} className="bg-green-500 text-white px-3 py-1 rounded">
             Bulk Upload
           </button>
           {(isSuperAdmin || canExportPurchase) && (
-            <button
-              onClick={exportToExcel}
-              className="bg-blue-500 text-white px-3 py-1 rounded"
-            >
+            <button onClick={exportToExcel} className="bg-blue-500 text-white px-3 py-1 rounded">
               Export to Excel
             </button>
           )}
@@ -225,97 +204,48 @@ export const ManageVendors = () => {
         <table className="min-w-full border-collapse border border-gray-200">
           <thead>
             <tr className="bg-gray-50 text-left">
-              <th
-                onClick={() => handleSort("reliability")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Reliability
-                <SortIndicator field="reliability" />
+              <th onClick={() => handleSort("reliability")} className="p-2 cursor-pointer border border-gray-200">
+                Reliability <SortIndicator field="reliability" />
               </th>
-              <th
-                onClick={() => handleSort("vendorName")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                WhatsApp Group
-                <SortIndicator field="vendorName" />
+              <th onClick={() => handleSort("vendorName")} className="p-2 cursor-pointer border border-gray-200">
+                WhatsApp Group <SortIndicator field="vendorName" />
               </th>
-              <th
-                onClick={() => handleSort("vendorCompany")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Company
-                <SortIndicator field="vendorCompany" />
+              <th onClick={() => handleSort("vendorCompany")} className="p-2 cursor-pointer border border-gray-200">
+                Company <SortIndicator field="vendorCompany" />
               </th>
-              <th
-                onClick={() => handleSort("brandDealing")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Specialises In
-                <SortIndicator field="brandDealing" />
+              <th onClick={() => handleSort("brandDealing")} className="p-2 cursor-pointer border border-gray-200">
+                Specialises In <SortIndicator field="brandDealing" />
               </th>
-              <th
-                onClick={() => handleSort("location")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Location
-                <SortIndicator field="location" />
+              <th onClick={() => handleSort("location")} className="p-2 cursor-pointer border border-gray-200">
+                Location <SortIndicator field="location" />
               </th>
-              <th
-                onClick={() => handleSort("postalCode")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Postal Code
-                <SortIndicator field="postalCode" />
+              <th onClick={() => handleSort("postalCode")} className="p-2 cursor-pointer border border-gray-200">
+                Postal Code <SortIndicator field="postalCode" />
               </th>
               <th className="p-2 border border-gray-200">Contact Person</th>
-              <th
-                onClick={() => handleSort("gst")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                GST#
-                <SortIndicator field="gst" />
-              </th>
-              <th
-                onClick={() => handleSort("bankName")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                Bank
-                <SortIndicator field="bankName" />
-              </th>
-              <th
-                onClick={() => handleSort("accountNumber")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                A/C No.
-                <SortIndicator field="accountNumber" />
-              </th>
-              <th
-                onClick={() => handleSort("ifscCode")}
-                className="p-2 cursor-pointer border border-gray-200"
-              >
-                IFSC
-                <SortIndicator field="ifscCode" />
-              </th>
+              <th className="p-2 border border-gray-200">GSTs</th>
+              <th className="p-2 border border-gray-200">Bank Accounts</th>
               <th className="p-2 border border-gray-200">Actions</th>
             </tr>
           </thead>
           <tbody>
             {displayedVendors.map((v) => {
               const rel = String(v.reliability || "").toLowerCase();
-              // DISPLAY DEFAULT: non-reliable when missing/unknown
               const isNonReliable = !rel || rel === "non-reliable";
               const relLabel = isNonReliable ? "Non-Reliable" : "Reliable";
+              const gstList = v.gstNumbers && v.gstNumbers.length ? v.gstNumbers : (v.gst ? [{ gst: v.gst, isPrimary: true }] : []);
+              const bankList = v.bankAccounts && v.bankAccounts.length
+                ? v.bankAccounts
+                : (v.bankName || v.accountNumber || v.ifscCode
+                  ? [{ bankName: v.bankName, accountNumber: v.accountNumber, ifscCode: v.ifscCode, isPrimary: true }]
+                  : []);
+
+              const primaryGst = gstList.find((g) => g.isPrimary) || gstList[0];
+              const primaryBank = bankList.find((b) => b.isPrimary) || bankList[0];
 
               return (
-                <tr
-                  key={v._id}
-                  className={`${isNonReliable ? "bg-red-50" : "hover:bg-gray-50"}`}
-                >
-                  <td
-                    className={`p-2 border border-gray-200 capitalize ${
-                      isNonReliable ? "text-red-700" : ""
-                    }`}
-                  >
+                <tr key={v._id} className={`${isNonReliable ? "bg-red-50" : "hover:bg-gray-50"}`}>
+                  <td className={`p-2 border border-gray-200 capitalize ${isNonReliable ? "text-red-700" : ""}`}>
                     <span
                       className={`inline-block px-2 py-0.5 text-[10px] rounded ${
                         isNonReliable ? "bg-red-600 text-white" : "bg-green-600 text-white"
@@ -324,47 +254,59 @@ export const ManageVendors = () => {
                       {relLabel}
                     </span>
                   </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.vendorName}
-                  </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.vendorCompany}
-                  </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.brandDealing}
-                  </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.location}
-                  </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.postalCode}
-                  </td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.vendorName}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.vendorCompany}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.brandDealing}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.location}</td>
+                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>{v.postalCode}</td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
                     {v.clients?.length ? (
                       <ul>
                         {v.clients.map((c, i) => (
-                          <li key={i}>
-                            {c.name} | {c.contactNumber}
-                          </li>
+                          <li key={i}>{c.name} | {c.contactNumber}</li>
                         ))}
                       </ul>
-                    ) : (
-                      "-"
-                    )}
+                    ) : "-"}
                   </td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.gst}
+                    {gstList.length ? (
+                      <div className="space-y-1">
+                        <div>
+                          <span className="font-semibold">{primaryGst?.gst || "-"}</span>
+                          {primaryGst?.label ? ` (${primaryGst.label})` : ""}
+                          <span className="text-[10px] ml-2 bg-gray-200 px-1 rounded">
+                            primary
+                          </span>
+                        </div>
+                        {gstList.length > 1 && (
+                          <div className="text-[11px] text-gray-600">
+                            +{gstList.length - 1} more
+                          </div>
+                        )}
+                      </div>
+                    ) : "-"}
                   </td>
                   <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.bankName}
+                    {bankList.length ? (
+                      <div className="space-y-1">
+                        <div>
+                          <span className="font-semibold">{primaryBank?.bankName || "-"}</span>
+                          {" / "}
+                          {primaryBank?.accountNumber || "-"}
+                          {" / "}
+                          {primaryBank?.ifscCode || "-"}
+                          <span className="text-[10px] ml-2 bg-gray-200 px-1 rounded">
+                            primary
+                          </span>
+                        </div>
+                        {bankList.length > 1 && (
+                          <div className="text-[11px] text-gray-600">
+                            +{bankList.length - 1} more
+                          </div>
+                        )}
+                      </div>
+                    ) : "-"}
                   </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.accountNumber}
-                  </td>
-                  <td className={`p-2 border border-gray-200 ${isNonReliable ? "text-red-700" : ""}`}>
-                    {v.ifscCode}
-                  </td>
-
                   <td className="p-2 border border-gray-200">
                     <Dropdown>
                       <Dropdown.Toggle

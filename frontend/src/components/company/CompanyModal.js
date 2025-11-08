@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 export default function CompanyModal({
@@ -22,8 +22,22 @@ export default function CompanyModal({
     vendorCode: company?.vendorCode || "",
     paymentTerms: company?.paymentTerms || "",
     portalUpload: company?.portalUpload || "",
-    remarks: company?.remarks || "", // <-- NEW
+    remarks: company?.remarks || "",
   });
+
+  // CRM multi-select state
+  const [selectedCrms, setSelectedCrms] = useState(
+    (company?.crmIncharge || []).map((u) => ({
+      _id: u?._id || u,
+      name: u?.name || "",
+      email: u?.email || "",
+    }))
+  );
+  const [crmQuery, setCrmQuery] = useState("");
+  const [crmSuggest, setCrmSuggest] = useState([]);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const debounceRef = useRef(null);
+
   const [clientTmp, setClientTmp] = useState({
     name: "",
     department: "",
@@ -47,6 +61,32 @@ export default function CompanyModal({
     }
     fetchSegments();
   }, [BACKEND_URL]);
+
+  // Debounced CRM suggest fetch
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        setCrmLoading(true);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `${BACKEND_URL}/api/admin/companies/crm-suggest`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { q: crmQuery },
+          }
+        );
+        // filter out already selected
+        const selectedIds = new Set(selectedCrms.map((u) => String(u._id)));
+        setCrmSuggest(res.data.filter((u) => !selectedIds.has(String(u._id))));
+      } catch (e) {
+        setCrmSuggest([]);
+      } finally {
+        setCrmLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(debounceRef.current);
+  }, [crmQuery, selectedCrms, BACKEND_URL]);
 
   const sanitiseContacts = (clients) =>
     clients
@@ -73,6 +113,18 @@ export default function CompanyModal({
       return { ...p, clients: list };
     });
 
+  const addCrm = (u) => {
+    setSelectedCrms((prev) => {
+      if (prev.some((x) => String(x._id) === String(u._id))) return prev;
+      return [...prev, u];
+    });
+    setCrmQuery("");
+    setCrmSuggest([]);
+  };
+  const removeCrm = (id) => {
+    setSelectedCrms((prev) => prev.filter((u) => String(u._id) !== String(id)));
+  };
+
   const submit = async () => {
     setErr("");
     if (!form.companyName.trim() || !form.pincode.trim()) {
@@ -86,8 +138,9 @@ export default function CompanyModal({
       GSTIN: (form.GSTIN || "").trim(),
       brandName: (form.brandName || "").trim(),
       companyAddress: (form.companyAddress || "").trim(),
-      remarks: (form.remarks || "").trim(), // ensure trimmed
+      remarks: (form.remarks || "").trim(),
       clients: sanitiseContacts(form.clients),
+      crmIncharge: selectedCrms.map((u) => u._id), // <-- NEW
     };
     try {
       setSaving(true);
@@ -100,11 +153,7 @@ export default function CompanyModal({
           config
         );
       } else {
-        await axios.post(
-          `${BACKEND_URL}/api/admin/companies`,
-          payload,
-          config
-        );
+        await axios.post(`${BACKEND_URL}/api/admin/companies`, payload, config);
       }
       onSuccess();
     } catch (e) {
@@ -128,15 +177,11 @@ export default function CompanyModal({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Company Basics */}
           <div className="col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Company Name *
-            </label>
+            <label className="block text-sm font-medium mb-1">Company Name *</label>
             <input
               className="w-full p-2 border rounded"
               value={form.companyName}
-              onChange={(e) =>
-                setForm({ ...form, companyName: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, companyName: e.target.value })}
             />
           </div>
           <div>
@@ -161,15 +206,11 @@ export default function CompanyModal({
               rows={3}
               className="w-full p-2 border rounded"
               value={form.companyAddress}
-              onChange={(e) =>
-                setForm({ ...form, companyAddress: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, companyAddress: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Pincode *
-            </label>
+            <label className="block text-sm font-medium mb-1">Pincode *</label>
             <input
               className="w-full p-2 border rounded"
               value={form.pincode}
@@ -194,39 +235,27 @@ export default function CompanyModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Vendor Code
-            </label>
+            <label className="block text-sm font-medium mb-1">Vendor Code</label>
             <input
               className="w-full p-2 border rounded"
               value={form.vendorCode}
-              onChange={(e) =>
-                setForm({ ...form, vendorCode: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, vendorCode: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Payment Terms
-            </label>
+            <label className="block text-sm font-medium mb-1">Payment Terms</label>
             <input
               className="w-full p-2 border rounded"
               value={form.paymentTerms}
-              onChange={(e) =>
-                setForm({ ...form, paymentTerms: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Portal Upload
-            </label>
+            <label className="block text-sm font-medium mb-1">Portal Upload</label>
             <input
               className="w-full p-2 border rounded"
               value={form.portalUpload}
-              onChange={(e) =>
-                setForm({ ...form, portalUpload: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, portalUpload: e.target.value })}
             />
           </div>
 
@@ -241,6 +270,66 @@ export default function CompanyModal({
             />
           </div>
 
+          {/* CRM Incharge (Multi-select with suggest) */}
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-1">CRM Incharge</label>
+            <div className="border rounded p-2">
+              {/* Selected chips */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {selectedCrms.map((u) => (
+                  <span
+                    key={String(u._id)}
+                    className="inline-flex items-center gap-2 bg-gray-100 border rounded px-2 py-1 text-xs"
+                  >
+                    {u.name || u.email}
+                    <button
+                      type="button"
+                      className="text-red-600"
+                      onClick={() => removeCrm(u._id)}
+                      aria-label="Remove"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              {/* Input + suggestions */}
+              <input
+                className="w-full p-2 border rounded"
+                placeholder="Type name, email, or phone to add CRM"
+                value={crmQuery}
+                onChange={(e) => setCrmQuery(e.target.value)}
+              />
+              {crmQuery && (
+                <div className="mt-2 max-h-48 overflow-y-auto border rounded">
+                  {crmLoading ? (
+                    <div className="p-2 text-sm text-gray-500">Searching…</div>
+                  ) : crmSuggest.length ? (
+                    crmSuggest.map((u) => (
+                      <button
+                        key={String(u._id)}
+                        type="button"
+                        onClick={() =>
+                          addCrm({
+                            _id: u._id,
+                            name: u.name,
+                            email: u.email,
+                          })
+                        }
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
+                      >
+                        <div className="font-medium">{u.name}</div>
+                        <div className="text-gray-600">{u.email}</div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-2 text-sm text-gray-500">No matches</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Clients Section */}
           <div className="col-span-2 border-t pt-4">
             <label className="block text-sm font-medium mb-2">Clients</label>
@@ -248,22 +337,13 @@ export default function CompanyModal({
               {["name", "department", "email", "contactNumber"].map((f) => (
                 <input
                   key={f}
-                  placeholder={
-                    f === "contactNumber"
-                      ? "Contact"
-                      : f.charAt(0).toUpperCase() + f.slice(1)
-                  }
+                  placeholder={f === "contactNumber" ? "Contact" : f.charAt(0).toUpperCase() + f.slice(1)}
                   className="flex-1 min-w-[120px] p-2 border rounded"
                   value={clientTmp[f]}
-                  onChange={(e) =>
-                    setClientTmp({ ...clientTmp, [f]: e.target.value })
-                  }
+                  onChange={(e) => setClientTmp({ ...clientTmp, [f]: e.target.value })}
                 />
               ))}
-              <button
-                onClick={addClient}
-                className="bg-green-600 text-white px-4 py-2 rounded"
-              >
+              <button onClick={addClient} className="bg-green-600 text-white px-4 py-2 rounded">
                 Add
               </button>
             </div>
@@ -282,24 +362,17 @@ export default function CompanyModal({
                   <tbody>
                     {form.clients.map((cl, idx) => (
                       <tr key={idx}>
-                        {["name", "department", "email", "contactNumber"].map(
-                          (f) => (
-                            <td key={f} className="border p-1">
-                              <input
-                                className="w-full p-1 border rounded"
-                                value={cl[f] || ""}
-                                onChange={(e) =>
-                                  updateClientField(idx, f, e.target.value)
-                                }
-                              />
-                            </td>
-                          )
-                        )}
+                        {["name", "department", "email", "contactNumber"].map((f) => (
+                          <td key={f} className="border p-1">
+                            <input
+                              className="w-full p-1 border rounded"
+                              value={cl[f] || ""}
+                              onChange={(e) => updateClientField(idx, f, e.target.value)}
+                            />
+                          </td>
+                        ))}
                         <td className="border p-1 text-center">
-                          <button
-                            onClick={() => removeClient(idx)}
-                            className="text-red-600"
-                          >
+                          <button onClick={() => removeClient(idx)} className="text-red-600">
                             ×
                           </button>
                         </td>
@@ -320,9 +393,7 @@ export default function CompanyModal({
           <button
             onClick={submit}
             disabled={saving}
-            className={`px-4 py-2 text-white rounded ${
-              saving ? "bg-blue-400" : "bg-blue-600"
-            }`}
+            className={`px-4 py-2 text-white rounded ${saving ? "bg-blue-400" : "bg-blue-600"}`}
           >
             {saving ? "Saving…" : isEdit ? "Update" : "Create"}
           </button>

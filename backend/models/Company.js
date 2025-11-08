@@ -28,7 +28,8 @@ const companySchema = new mongoose.Schema({
   vendorCode: { type: String },
   paymentTerms: { type: String },
   portalUpload: { type: String },
-  remarks: { type: String }, // <-- NEW
+  remarks: { type: String },
+  crmIncharge: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // <-- NEW
   createdAt: { type: Date, default: Date.now },
   updatedAt: Date,
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },

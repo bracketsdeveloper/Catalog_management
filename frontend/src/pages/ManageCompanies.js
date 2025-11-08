@@ -4,36 +4,28 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import CompanyModal from "../components/company/CompanyModal.js";
-import { TrashIcon } from "@heroicons/react/24/solid";
 import * as XLSX from "xlsx";
 
 export default function ManageCompanies() {
   const navigate = useNavigate();
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-  /* ------------ state ------------ */
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  /* modal */
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); // 'add' | 'edit'
   const [selectedCompany, setSelectedCompany] = useState(null);
 
-  /* logs dropdown */
   const [commonLogs, setCommonLogs] = useState([]);
   const [showLogsDropdown, setShowLogsDropdown] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
 
-  /* actions dropdown */
   const [showActionsDropdown, setShowActionsDropdown] = useState(null);
 
-  // Check if the user is a superadmin (from localStorage)
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
-
-  // Add permissions check
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("export-crm");
 
@@ -63,7 +55,6 @@ export default function ManageCompanies() {
     setSelectedCompany(null);
     setModalOpen(true);
   };
-
   const openEditModal = (company) => {
     setModalMode("edit");
     setSelectedCompany(company);
@@ -85,29 +76,28 @@ export default function ManageCompanies() {
 
   const filteredCompanies = companies.filter((c) => {
     const s = searchTerm.toLowerCase();
+    const crmNames = (c.crmIncharge || [])
+      .map((u) => (u?.name || "").toLowerCase())
+      .join(" ");
     return (
       c.companyName.toLowerCase().includes(s) ||
       (c.brandName && c.brandName.toLowerCase().includes(s)) ||
       (c.GSTIN && c.GSTIN.toLowerCase().includes(s)) ||
       (c.companyAddress && c.companyAddress.toLowerCase().includes(s)) ||
       (c.remarks && c.remarks.toLowerCase().includes(s)) ||
+      crmNames.includes(s) ||
       c.clients?.some(
         (cl) =>
           cl.name.toLowerCase().includes(s) ||
           (cl.email && cl.email.toLowerCase().includes(s)) ||
-          cl.contactNumber.includes(searchTerm)
+          (cl.contactNumber || "").includes(searchTerm)
       )
     );
   });
 
   const getDotColor = (action) =>
-    action === "create"
-      ? "bg-green-400"
-      : action === "update"
-      ? "bg-orange-500"
-      : "bg-red-600";
+    action === "create" ? "bg-green-400" : action === "update" ? "bg-orange-500" : "bg-red-600";
 
-  // Load all logs when the dropdown is opened
   useEffect(() => {
     if (!showLogsDropdown) return;
     (async () => {
@@ -126,13 +116,12 @@ export default function ManageCompanies() {
     })();
   }, [showLogsDropdown, BACKEND_URL]);
 
-  /* =============================
-     ✅ ONE-SHEET MERGED EXPORT
-     ============================= */
+  /* ===== Export: single merged sheet, includes CRM column ===== */
   const exportCompaniesToExcel = () => {
     const mergedData = [];
 
     filteredCompanies.forEach((company) => {
+      const crmNames = (company.crmIncharge || []).map((u) => u?.name || "").filter(Boolean).join(", ");
       if (company.clients && company.clients.length > 0) {
         company.clients.forEach((cl, idx) => {
           mergedData.push({
@@ -146,6 +135,7 @@ export default function ManageCompanies() {
             "Payment Terms": company.paymentTerms || "-",
             "Portal Upload": company.portalUpload || "-",
             Remarks: company.remarks || "-",
+            "CRM Incharge": crmNames || "-", // <-- NEW
             "Client #": idx + 1,
             "Client Name": cl?.name ?? "-",
             Department: cl?.department ?? "-",
@@ -154,7 +144,6 @@ export default function ManageCompanies() {
           });
         });
       } else {
-        // still export companies with no clients
         mergedData.push({
           "Company Name": company.companyName || "-",
           "Brand Name": company.brandName || "-",
@@ -166,6 +155,7 @@ export default function ManageCompanies() {
           "Payment Terms": company.paymentTerms || "-",
           "Portal Upload": company.portalUpload || "-",
           Remarks: company.remarks || "-",
+          "CRM Incharge": crmNames || "-", // <-- NEW
           "Client #": "-",
           "Client Name": "-",
           Department: "-",
@@ -192,9 +182,7 @@ export default function ManageCompanies() {
             onMouseEnter={() => setShowLogsDropdown(true)}
             onMouseLeave={() => setShowLogsDropdown(false)}
           >
-            <button className="bg-cyan-600 text-white px-4 py-2 rounded">
-              Logs
-            </button>
+            <button className="bg-cyan-600 text-white px-4 py-2 rounded">Logs</button>
             {showLogsDropdown && (
               <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border rounded shadow z-50 p-2">
                 {logsLoading ? (
@@ -202,19 +190,10 @@ export default function ManageCompanies() {
                 ) : commonLogs.length ? (
                   commonLogs.map((l, i) => (
                     <div key={i} className="border-b py-1 text-sm">
-                      <span
-                        className={`inline-block w-2 h-2 rounded-full mr-2 ${getDotColor(
-                          l.action
-                        )}`}
-                      />
-                      <b className="capitalize">{l.action}</b> on{" "}
-                      {l.field || "record"}{" "}
-                      <span className="text-xs text-gray-500">
-                        ({new Date(l.performedAt).toLocaleString()})
-                      </span>
-                      <div className="text-xs text-gray-600">
-                        Company: {l.companyName}
-                      </div>
+                      <span className={`inline-block w-2 h-2 rounded-full mr-2 ${getDotColor(l.action)}`} />
+                      <b className="capitalize">{l.action}</b> on {l.field || "record"}{" "}
+                      <span className="text-xs text-gray-500">({new Date(l.performedAt).toLocaleString()})</span>
+                      <div className="text-xs text-gray-600">Company: {l.companyName}</div>
                     </div>
                   ))
                 ) : (
@@ -224,17 +203,11 @@ export default function ManageCompanies() {
             )}
           </div>
           {(isSuperAdmin || canExportCRM) && (
-            <button
-              onClick={exportCompaniesToExcel} // merged export
-              className="bg-green-600 text-white px-4 py-2 rounded"
-            >
+            <button onClick={exportCompaniesToExcel} className="bg-green-600 text-white px-4 py-2 rounded">
               Export to Excel
             </button>
           )}
-          <button
-            onClick={openAddModal}
-            className="bg-orange-500 text-white px-4 py-2 rounded"
-          >
+          <button onClick={openAddModal} className="bg-orange-500 text-white px-4 py-2 rounded">
             Add Company
           </button>
         </div>
@@ -262,6 +235,7 @@ export default function ManageCompanies() {
                 <th className="p-3">Company</th>
                 <th className="p-3">Brand</th>
                 <th className="p-3">Segment</th>
+                <th className="p-3">CRM Incharge</th> {/* NEW */}
                 <th className="p-3">Clients</th>
                 <th className="p-3">Address</th>
                 <th className="p-3">GSTIN</th>
@@ -280,11 +254,15 @@ export default function ManageCompanies() {
                   <td className="p-3">{c.brandName || "-"}</td>
                   <td className="p-3">{c.segment || "-"}</td>
                   <td className="p-3">
+                    {(c.crmIncharge || []).length
+                      ? c.crmIncharge.map((u) => u?.name || u?.email).join(", ")
+                      : "-"}
+                  </td>
+                  <td className="p-3">
                     {c.clients?.length
                       ? c.clients.map((cl, i) => (
                           <div key={i} className="text-xs">
-                            {cl.name} | {cl.department || "-"} | {cl.email || "-"} |{" "}
-                            {cl.contactNumber}
+                            {cl.name} | {cl.department || "-"} | {cl.email || "-"} | {cl.contactNumber}
                           </div>
                         ))
                       : "-"}

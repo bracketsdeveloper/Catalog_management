@@ -5,6 +5,7 @@ const multer = require("multer");
 const Company = require("../models/Company");
 const PotentialClient = require("../models/PotentialClient");
 const Vendor = require("../models/Vendor");
+const User = require("../models/User"); // <-- NEW
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
 /* ===== Multer ===== */
@@ -13,14 +14,10 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
     if (
-      file.mimetype ===
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
       file.mimetype === "application/vnd.ms-excel"
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error("Invalid file type. Only Excel files allowed."), false);
-    }
+    ) cb(null, true);
+    else cb(new Error("Invalid file type. Only Excel files allowed."), false);
   },
 });
 
@@ -40,8 +37,13 @@ function createLogEntry(req, action, field = null, oldValue = null, newValue = n
 function isEqual(a, b) {
   if (a === b) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const sa = [...a].map(String).sort();
+    const sb = [...b].map(String).sort();
+    return sa.every((v, i) => v === sb[i]);
+  }
   if (!a || !b || typeof a !== "object" || typeof b !== "object") return a === b;
-  if (a.prototype !== b.prototype) return false;
   const ka = Object.keys(a);
   if (ka.length !== Object.keys(b).length) return false;
   return ka.every((k) => isEqual(a[k], b[k]));
@@ -60,9 +62,54 @@ function sanitiseClients(raw = []) {
     : [];
 }
 
+function sanitiseCrmIds(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  return [String(raw)].filter(Boolean);
+}
+
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/* ===== CRM Suggest ===== */
+router.get(
+  "/companies/crm-suggest",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const q = (req.query.q || "").trim();
+      const findQuery = q
+        ? {
+            $or: [
+              { name: { $regex: q, $options: "i" } },
+              { email: { $regex: q, $options: "i" } },
+              { phone: { $regex: q, $options: "i" } },
+            ],
+          }
+        : {};
+      const users = await User.find(findQuery)
+        .select("name email phone role isSuperAdmin")
+        .limit(15)
+        .lean();
+
+      res.json(
+        users.map((u) => ({
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          role: u.role,
+          isSuperAdmin: u.isSuperAdmin,
+        }))
+      );
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ message: "Suggest failed" });
+    }
+  }
+);
 
 /* ===== Search Companies Across Collections ===== */
 router.get(
@@ -132,20 +179,15 @@ router.post(
         paymentTerms,
         companyAddress,
         pincode,
-        remarks, // <-- NEW
+        remarks,
         clients: rawClients = [],
+        crmIncharge: rawCrm = [], // <-- NEW
       } = req.body;
 
       if (!companyName || !pincode)
-        return res
-          .status(400)
-          .json({ message: "Company name and pincode are required" });
+        return res.status(400).json({ message: "Company name and pincode are required" });
 
-      if (
-        await Company.findOne({
-          companyName: new RegExp(`^${companyName}$`, "i"),
-        })
-      )
+      if (await Company.findOne({ companyName: new RegExp(`^${companyName}$`, "i") }))
         return res.status(400).json({ message: "Company already exists" });
 
       const doc = await Company.create({
@@ -158,13 +200,19 @@ router.post(
         paymentTerms,
         companyAddress,
         pincode,
-        remarks, // <-- NEW
+        remarks,
         clients: sanitiseClients(rawClients),
+        crmIncharge: sanitiseCrmIds(rawCrm),
         createdBy: req.user.id,
         logs: [createLogEntry(req, "create")],
       });
 
-      res.status(201).json({ message: "Company created", company: doc });
+      const populated = await Company.findById(doc._id)
+        .populate("createdBy", "name email")
+        .populate("updatedBy", "name email")
+        .populate("crmIncharge", "name email");
+
+      res.status(201).json({ message: "Company created", company: populated });
     } catch (e) {
       console.error(e);
       res.status(500).json({ message: "Create failed" });
@@ -190,7 +238,8 @@ router.get(
       const companies = await Company.find(query)
         .sort({ createdAt: -1 })
         .populate("createdBy", "name email")
-        .populate("updatedBy", "name email");
+        .populate("updatedBy", "name email")
+        .populate("crmIncharge", "name email");
 
       res.json(companies);
     } catch (e) {
@@ -210,7 +259,8 @@ router.get(
       const c = await Company.findById(req.params.id)
         .populate("createdBy", "name email")
         .populate("updatedBy", "name email")
-        .populate("deletedBy", "name email");
+        .populate("deletedBy", "name email")
+        .populate("crmIncharge", "name email");
       if (!c) return res.status(404).json({ message: "Not found" });
       res.json(c);
     } catch (e) {
@@ -237,8 +287,9 @@ router.put(
         paymentTerms,
         companyAddress,
         pincode,
-        remarks, // <-- NEW
+        remarks,
         clients: rawClients,
+        crmIncharge: rawCrm, // <-- NEW
       } = req.body;
 
       const doc = await Company.findById(req.params.id);
@@ -258,9 +309,14 @@ router.put(
       const logs = [];
 
       const check = (field, value) => {
-        if (value !== undefined && !isEqual(value, doc[field])) {
-          updates[field] = value;
-          logs.push(createLogEntry(req, "update", field, doc[field], value));
+        if (value !== undefined) {
+          const v = field === "clients" ? sanitiseClients(value)
+            : field === "crmIncharge" ? sanitiseCrmIds(value)
+            : value;
+          if (!isEqual(v, doc[field])) {
+            updates[field] = v;
+            logs.push(createLogEntry(req, "update", field, doc[field], v));
+          }
         }
       };
 
@@ -273,8 +329,9 @@ router.put(
       check("GSTIN", GSTIN);
       check("companyAddress", companyAddress);
       check("pincode", pincode);
-      check("remarks", remarks); // <-- NEW
-      if (rawClients !== undefined) check("clients", sanitiseClients(rawClients));
+      check("remarks", remarks);
+      check("clients", rawClients);
+      check("crmIncharge", rawCrm); // <-- NEW
 
       if (!Object.keys(updates).length)
         return res.json({ message: "No changes", company: doc });
@@ -288,7 +345,8 @@ router.put(
         { new: true, runValidators: true }
       )
         .populate("createdBy", "name email")
-        .populate("updatedBy", "name email");
+        .populate("updatedBy", "name email")
+        .populate("crmIncharge", "name email");
 
       res.json({ message: "Updated", company: updated, changes: logs });
     } catch (e) {
@@ -333,7 +391,8 @@ router.get(
         .populate("logs.performedBy", "name email")
         .populate("createdBy", "name email")
         .populate("updatedBy", "name email")
-        .populate("deletedBy", "name email");
+        .populate("deletedBy", "name email")
+        .populate("crmIncharge", "name email");
       if (!c) return res.status(404).json({ message: "Not found" });
 
       res.json({
@@ -350,6 +409,7 @@ router.get(
           deleted: c.deleted,
           deletedAt: c.deletedAt,
           deletedBy: c.deletedBy,
+          crmIncharge: c.crmIncharge,
         },
         logs: c.logs,
       });
@@ -394,7 +454,8 @@ router.get(
           GSTIN: "22AAAAA0000A1Z5",
           "Company Address": "123 Main St",
           "Pincode*": "560001",
-          "Remarks": "Priority client", // <-- NEW COLUMN
+          Remarks: "Priority client",
+          "CRM Incharge Emails (comma)": "jane@acme.com,john@acme.com", // <-- NEW
           "Client 1 Name": "Alice",
           "Client 1 Department": "Procurement",
           "Client 1 Email": "alice@example.com",
@@ -407,8 +468,7 @@ router.get(
       const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
       res
         .set({
-          "Content-Type":
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": "attachment; filename=companies_template.xlsx",
         })
         .send(buf);
@@ -436,10 +496,11 @@ router.post(
       const toCreate = [];
       const errors = [];
 
-      rows.forEach((r, i) => {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
         if (!r["Company Name*"] || !r["Pincode*"]) {
           errors.push(`Row ${i + 2}: Company Name and Pincode required`);
-          return;
+          continue;
         }
 
         const clients = [];
@@ -458,26 +519,38 @@ router.post(
           }
         }
 
+        // map CRM emails -> user ids (best-effort)
+        let crmIncharge = [];
+        if (r["CRM Incharge Emails (comma)"]) {
+          const emails = String(r["CRM Incharge Emails (comma)"])
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (emails.length) {
+            const foundUsers = await User.find({ email: { $in: emails } }).select("_id email");
+            const mapSet = new Set(foundUsers.map((u) => String(u._id)));
+            crmIncharge = Array.from(mapSet);
+          }
+        }
+
         toCreate.push({
           companyName: r["Company Name*"],
           brandName: r["Brand Name"] || "",
           GSTIN: r["GSTIN"] || "",
           companyAddress: r["Company Address"] || "",
           pincode: r["Pincode*"].toString(),
-          remarks: r["Remarks"] || "", // <-- NEW
+          remarks: r["Remarks"] || "",
+          crmIncharge, // <-- NEW
           clients,
           createdBy: req.user.id,
           logs: [createLogEntry(req, "create")],
         });
-      });
+      }
 
-      if (errors.length)
-        return res.status(400).json({ message: "Errors", errors });
+      if (errors.length) return res.status(400).json({ message: "Errors", errors });
 
       const inserted = await Company.insertMany(toCreate);
-      res
-        .status(201)
-        .json({ message: "Bulk upload done", count: inserted.length });
+      res.status(201).json({ message: "Bulk upload done", count: inserted.length });
     } catch (e) {
       console.error(e);
       res.status(500).json({ message: "Bulk upload failed" });
@@ -485,6 +558,7 @@ router.post(
   }
 );
 
+/* ===== Add Contact (by companyName) ===== */
 router.put(
   "/companies/:companyName/add-contact",
   authenticate,
@@ -493,18 +567,14 @@ router.put(
     try {
       const { companyName, contact } = req.body;
       if (!contact.name || !contact.contactNumber) {
-        return res
-          .status(400)
-          .json({ message: "Contact name and number are required" });
+        return res.status(400).json({ message: "Contact name and number are required" });
       }
       const doc = await Company.findOne({
         companyName: new RegExp(`^${escapeRegex(companyName)}$`, "i"),
       });
       if (!doc) return res.status(404).json({ message: "Company not found" });
       doc.clients.push(contact);
-      doc.logs.push(
-        createLogEntry(req, "add-contact", "clients", null, contact)
-      );
+      doc.logs.push(createLogEntry(req, "add-contact", "clients", null, contact));
       await doc.save();
       res.json({ message: "Contact added", contact });
     } catch (e) {
