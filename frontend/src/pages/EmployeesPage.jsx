@@ -1,4 +1,3 @@
-// src/pages/hrms/EmployeesPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "../components/common/PageHeader";
 import FiltersBar from "../components/common/FiltersBar";
@@ -8,29 +7,88 @@ import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import EmployeeModal from "../components/hrms/EmployeeModal.jsx";
 
+/* Small helpers */
+function fmtISO(d) {
+  if (!d) return "";
+  try {
+    const x = new Date(d);
+    if (Number.isNaN(+x)) return "";
+    return x.toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+function clampStr(v) {
+  return (v || "").toString().trim();
+}
+
 export default function EmployeesPage() {
   const [rows, setRows] = useState([]);
+
+  /* filters */
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
   const [dept, setDept] = useState("");
   const [active, setActive] = useState("true");
+  const [dojFrom, setDojFrom] = useState("");
+  const [dojTo, setDojTo] = useState("");
+  const [hasBiometric, setHasBiometric] = useState(""); // "", "yes", "no"
+  const [hasMappedUser, setHasMappedUser] = useState(""); // "", "yes", "no"
 
+  /* sorting */
+  const [sortBy, setSortBy] = useState("personal.name"); // default A-Z by name
+  const [dir, setDir] = useState("asc");
+
+  /* modals */
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+
   const fileInputRef = useRef(null);
 
+  /* fetch */
   const refresh = () => {
-    HRMS.listEmployees({ q, role, dept, active, limit: 200 })
+    HRMS.listEmployees({ q, role, dept, active, limit: 200, sortBy, dir })
       .then((r) => setRows(r.data.rows || []))
       .catch(() => setRows([]));
   };
 
   useEffect(() => {
     refresh();
-  }, [q, role, dept, active]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, role, dept, active, sortBy, dir]);
 
-  const displayed = useMemo(() => rows, [rows]);
+  /* client-side post filters (fields not supported by API yet) */
+  const displayed = useMemo(() => {
+    let out = rows || [];
 
-  /* ----------------------------- TEMPLATE ----------------------------- */
+    if (dojFrom) {
+      out = out.filter((e) => {
+        const d = e?.personal?.dateOfJoining;
+        return d && fmtISO(d) >= dojFrom;
+      });
+    }
+    if (dojTo) {
+      out = out.filter((e) => {
+        const d = e?.personal?.dateOfJoining;
+        return d && fmtISO(d) <= dojTo;
+      });
+    }
+    if (hasBiometric === "yes") {
+      out = out.filter((e) => clampStr(e?.biometricId).length > 0);
+    } else if (hasBiometric === "no") {
+      out = out.filter((e) => !clampStr(e?.biometricId).length);
+    }
+    if (hasMappedUser === "yes") {
+      out = out.filter((e) => !!e?.mappedUser);
+    } else if (hasMappedUser === "no") {
+      out = out.filter((e) => !e?.mappedUser);
+    }
+
+    return out;
+  }, [rows, dojFrom, dojTo, hasBiometric, hasMappedUser]);
+
+  /* template download */
   const downloadTemplate = () => {
     const headers = [
       "employeeId",
@@ -54,7 +112,9 @@ export default function EmployeesPage() {
       "currentCTC",
       "currentTakeHome",
       "lastRevisedSalaryAt(YYYY-MM-DD)",
-      "nextAppraisalOn(YYYY-MM-DD)"
+      "nextAppraisalOn(YYYY-MM-DD)",
+      "biometricId",
+      "mappedUser(ObjectId)"
     ];
 
     const wb = XLSX.utils.book_new();
@@ -63,7 +123,7 @@ export default function EmployeesPage() {
     XLSX.writeFile(wb, "HRMS_Employees_Template.xlsx");
   };
 
-  /* --------------------------- BULK UPLOAD ---------------------------- */
+  /* bulk upload */
   const handleBulkUploadClick = () => fileInputRef.current?.click();
 
   const handleBulkFile = async (e) => {
@@ -73,14 +133,13 @@ export default function EmployeesPage() {
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws, { defval: "" }); // rows as objects
+      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
       if (!json.length) {
         toast.warn("No rows found in uploaded file.");
         return;
       }
 
-      // Map each row -> payload for API
       const toDate = (v) => (v ? new Date(v) : undefined);
       const toBool = (v) => String(v).toLowerCase() === "true";
       const toNum = (v) => (v === "" || v === null ? undefined : Number(v));
@@ -91,6 +150,8 @@ export default function EmployeesPage() {
         if (!employeeId || !name) {
           throw new Error(`Row ${idx + 2}: 'employeeId' and 'name' are required.`);
         }
+        const mappedUser = r["mappedUser(ObjectId)"] ? String(r["mappedUser(ObjectId)"]).trim() : undefined;
+
         return {
           personal: {
             employeeId,
@@ -101,9 +162,7 @@ export default function EmployeesPage() {
             emergencyPhone: r["emergencyPhone"] || "",
             aadhar: r["aadhar"] || "",
             bloodGroup: r["bloodGroup"] || "",
-            dateOfJoining: r["dateOfJoining(YYYY-MM-DD)"]
-              ? toDate(r["dateOfJoining(YYYY-MM-DD)"])
-              : undefined,
+            dateOfJoining: r["dateOfJoining(YYYY-MM-DD)"] ? toDate(r["dateOfJoining(YYYY-MM-DD)"]) : undefined,
             medicalIssues: r["medicalIssues"] || ""
           },
           org: {
@@ -121,13 +180,11 @@ export default function EmployeesPage() {
             bankAccountNumber: r["bankAccountNumber"] || "",
             currentCTC: toNum(r["currentCTC"]),
             currentTakeHome: toNum(r["currentTakeHome"]),
-            lastRevisedSalaryAt: r["lastRevisedSalaryAt(YYYY-MM-DD)"]
-              ? toDate(r["lastRevisedSalaryAt(YYYY-MM-DD)"])
-              : undefined,
-            nextAppraisalOn: r["nextAppraisalOn(YYYY-MM-DD)"]
-              ? toDate(r["nextAppraisalOn(YYYY-MM-DD)"])
-              : undefined
-          }
+            lastRevisedSalaryAt: r["lastRevisedSalaryAt(YYYY-MM-DD)"] ? toDate(r["lastRevisedSalaryAt(YYYY-MM-DD)"]) : undefined,
+            nextAppraisalOn: r["nextAppraisalOn(YYYY-MM-DD)"] ? toDate(r["nextAppraisalOn(YYYY-MM-DD)"]) : undefined
+          },
+          biometricId: r["biometricId"] || "",
+          mappedUser
         };
       });
 
@@ -144,9 +201,41 @@ export default function EmployeesPage() {
       console.error(err);
       toast.error(err.message || "Failed to process file.");
     } finally {
-      // reset the input so selecting the same file again re-fires onChange
       e.target.value = "";
     }
+  };
+
+  /* delete row */
+  const handleDelete = async (employeeId) => {
+    if (!window.confirm("Delete this employee?")) return;
+    try {
+      await HRMS.deleteEmployee(employeeId);
+      toast.success("Deleted");
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e.message || "Failed to delete");
+    }
+  };
+
+  /* header sorting widgets */
+  const SortHead = ({ label, field, className = "" }) => {
+    const active = sortBy === field;
+    const nextDir = active && dir === "asc" ? "desc" : "asc";
+    const arrow = !active ? "↕" : dir === "asc" ? "↑" : "↓";
+    return (
+      <th
+        className={`border px-2 py-1 text-left cursor-pointer select-none ${className}`}
+        onClick={() => {
+          setSortBy(field);
+          setDir(nextDir);
+        }}
+        title={`Sort by ${label} (${nextDir})`}
+      >
+        <span className="inline-flex items-center gap-1">
+          {label} <span className="text-gray-500 text-[10px]">{arrow}</span>
+        </span>
+      </th>
+    );
   };
 
   return (
@@ -155,20 +244,17 @@ export default function EmployeesPage() {
         title="Employees"
         actions={
           <div className="flex gap-2">
-            <button
-              onClick={downloadTemplate}
-              className="px-3 py-1 text-xs rounded border"
-            >
+            <button onClick={downloadTemplate} className="px-3 py-1 text-xs rounded border">
               Download Template
             </button>
-            <button
-              onClick={handleBulkUploadClick}
-              className="px-3 py-1 text-xs rounded bg-indigo-600 text-white"
-            >
+            <button onClick={handleBulkUploadClick} className="px-3 py-1 text-xs rounded bg-indigo-600 text-white">
               Bulk Upload
             </button>
             <button
-              onClick={() => setCreateOpen(true)}
+              onClick={() => {
+                setCreateOpen(true);
+                setEditing(null);
+              }}
               className="px-3 py-1 text-xs rounded bg-emerald-600 text-white"
             >
               + Create Employee
@@ -184,6 +270,7 @@ export default function EmployeesPage() {
         }
       />
 
+      {/* Filters */}
       <FiltersBar>
         <div>
           <div className="text-xs">Search</div>
@@ -191,6 +278,7 @@ export default function EmployeesPage() {
             className="border rounded px-2 py-1 text-sm"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            placeholder="name, phone, role…"
           />
         </div>
         <div>
@@ -199,6 +287,7 @@ export default function EmployeesPage() {
             className="border rounded px-2 py-1 text-sm"
             value={role}
             onChange={(e) => setRole(e.target.value)}
+            placeholder="e.g. Designer"
           />
         </div>
         <div>
@@ -207,6 +296,7 @@ export default function EmployeesPage() {
             className="border rounded px-2 py-1 text-sm"
             value={dept}
             onChange={(e) => setDept(e.target.value)}
+            placeholder="e.g. Operations"
           />
         </div>
         <div>
@@ -221,18 +311,67 @@ export default function EmployeesPage() {
             <option value="false">Inactive</option>
           </select>
         </div>
+
+        <div>
+          <div className="text-xs">DOJ From</div>
+          <input
+            type="date"
+            className="border rounded px-2 py-1 text-sm"
+            value={dojFrom}
+            onChange={(e) => setDojFrom(e.target.value)}
+          />
+        </div>
+        <div>
+          <div className="text-xs">DOJ To</div>
+          <input
+            type="date"
+            className="border rounded px-2 py-1 text-sm"
+            value={dojTo}
+            onChange={(e) => setDojTo(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div className="text-xs">Biometric</div>
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={hasBiometric}
+            onChange={(e) => setHasBiometric(e.target.value)}
+          >
+            <option value="">Any</option>
+            <option value="yes">Has ID</option>
+            <option value="no">Missing</option>
+          </select>
+        </div>
+
+        <div>
+          <div className="text-xs">Mapped User</div>
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={hasMappedUser}
+            onChange={(e) => setHasMappedUser(e.target.value)}
+          >
+            <option value="">Any</option>
+            <option value="yes">Mapped</option>
+            <option value="no">Unmapped</option>
+          </select>
+        </div>
       </FiltersBar>
 
+      {/* Table */}
       <div className="overflow-x-auto border rounded">
         <table className="table-auto w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="border px-2 py-1 text-left">Employee ID</th>
-              <th className="border px-2 py-1 text-left">Name</th>
-              <th className="border px-2 py-1 text-left">Role</th>
-              <th className="border px-2 py-1 text-left">Department</th>
-              <th className="border px-2 py-1 text-left">DOJ</th>
-              <th className="border px-2 py-1"></th>
+              <SortHead label="Employee ID" field="personal.employeeId" />
+              <SortHead label="Name" field="personal.name" />
+              <SortHead label="Role" field="org.role" />
+              <SortHead label="Department" field="org.department" />
+              <SortHead label="DOJ" field="personal.dateOfJoining" />
+              <SortHead label="Biometric ID" field="biometricId" />
+              <th className="border px-2 py-1 text-left">Mapped User</th>
+              <SortHead label="Active" field="isActive" className="w-20" />
+              <th className="border px-2 py-1 w-40"></th>
             </tr>
           </thead>
           <tbody>
@@ -241,26 +380,41 @@ export default function EmployeesPage() {
                 <td className="border px-2 py-1">{e.personal.employeeId}</td>
                 <td className="border px-2 py-1">{e.personal.name}</td>
                 <td className="border px-2 py-1">{e.org?.role || "-"}</td>
-                <td className="border px-2 py-1">{e.org?.department || "-"}</td>
+                <td className="border px-2 py-1">{e.org?.department || "-"} </td>
                 <td className="border px-2 py-1">
                   {e.personal?.dateOfJoining?.slice?.(0, 10) || ""}
                 </td>
+                <td className="border px-2 py-1">{e.biometricId || "-"}</td>
                 <td className="border px-2 py-1">
-                  <Link
-                    to={`/admin-dashboard/hrms/employees/${e.personal.employeeId}`}
-                    className="text-blue-600 text-xs underline"
-                  >
-                    View / Edit
-                  </Link>
+                  {e.mappedUser
+                    ? `${e.mappedUser.name} (${e.mappedUser.email || e.mappedUser.phone || ""})`
+                    : "-"}
+                </td>
+                <td className="border px-2 py-1">{e.isActive ? "Yes" : "No"}</td>
+                <td className="border px-2 py-1">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEditing(e);
+                        setEditOpen(true);
+                      }}
+                      className="text-indigo-600 text-xs underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(e.personal.employeeId)}
+                      className="text-red-600 text-xs underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
             {!displayed.length && (
               <tr>
-                <td
-                  className="border px-2 py-4 text-center text-sm text-gray-500"
-                  colSpan={6}
-                >
+                <td className="border px-2 py-4 text-center text-sm text-gray-500" colSpan={9}>
                   No employees
                 </td>
               </tr>
@@ -276,6 +430,21 @@ export default function EmployeesPage() {
             setCreateOpen(false);
             refresh();
           }}
+          initial={null}
+        />
+      )}
+      {editOpen && editing && (
+        <EmployeeModal
+          onClose={() => {
+            setEditOpen(false);
+            setEditing(null);
+          }}
+          onSaved={() => {
+            setEditOpen(false);
+            setEditing(null);
+            refresh();
+          }}
+          initial={editing}
         />
       )}
     </div>

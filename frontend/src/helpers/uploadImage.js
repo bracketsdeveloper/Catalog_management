@@ -2,8 +2,8 @@
 import axios from "axios";
 
 // Cloudinary unsigned upload endpoint (change if your cloud name/preset differ)
-const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dxwax6pir/image/upload";
-const UPLOAD_PRESET = "ace-catalog";
+const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dqi1kwv6x/image/upload";
+const UPLOAD_PRESET = "acecatalog";
 
 /**
  * Upload a single image file to Cloudinary.

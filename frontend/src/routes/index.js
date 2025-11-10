@@ -82,6 +82,9 @@ import WfhPage from "../pages/WfhPage";
 import LeavesPage from "../pages/LeavesPage";
 import SalaryPage from "../pages/SalaryPage";
 import PurchaseOrdersList from "../pages/PurchaseOrdersList";
+import HolidaysPage from "../pages/HolidaysPage";
+import MyProfile from "../pages/MyProfile";
+import LeavesSuperAdminPage from "../pages/LeavesSuperAdminPage";
 
 
 const router = createBrowserRouter([
@@ -424,6 +427,18 @@ const router = createBrowserRouter([
                     {
                         path: "purchase-orders",
                         element:<PurchaseOrdersList/>
+                    },
+                    {
+                        path: "holidays",
+                        element:<HolidaysPage/>
+                    },
+                    {
+                        path: "my-profile",
+                        element:<MyProfile/>
+                    },
+                    {
+                        path: "leaves-super-admin",
+                        element:<LeavesSuperAdminPage/>
                     }
                 ]
             }

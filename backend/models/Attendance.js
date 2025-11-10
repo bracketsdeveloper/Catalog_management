@@ -1,3 +1,4 @@
+// models/Attendance.js
 const mongoose = require("mongoose");
 
 // One row per employee per day (normalized import from your attendance software)

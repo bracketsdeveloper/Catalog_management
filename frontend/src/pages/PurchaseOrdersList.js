@@ -782,8 +782,8 @@ const exportRowToPdf = (r) => {
   const brandBlock = `
     <div class="topbar">
       <div class="brand">
-        <h1>ACE GIFTING SOLUTIONS</h1>
-        <div>#1, 1st Floor, 147, Vasavi Complex, Seshadripuram Main Road, Bangalore 560020</div>
+        <h1>ACE PRINT PACK</h1>
+        <div># 61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore 560018</div>
         <div>Phone: +91 9945261108 | Email: accounts@aceprintpack.com</div>
         <div>GSTIN: 29AACF4992A1ZL</div>
       </div>

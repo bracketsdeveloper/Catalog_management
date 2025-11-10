@@ -9,7 +9,143 @@ import { StatCard } from "../components/common/StatCard";
 import { HRMS } from "../api/hrmsClient";
 import { toast } from "react-toastify";
 
-/* ========================= Mark Attendance Modal ========================= */
+/* ========================= Upload Attendance Modal ========================= */
+function UploadAttendanceModal({ onClose, onImported }) {
+  const dialogRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null); // {imported, skipped, errors[]}
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const ae = document.activeElement;
+    if (!ae || ae === document.body) dialogRef.current?.focus({ preventScroll: true });
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const onBackdrop = (e) => {
+    if (e.target === e.currentTarget) onClose?.();
+  };
+
+  const upload = async () => {
+    if (!file) {
+      toast.error("Pick a .xls, .xlsx or .csv file.");
+      return;
+    }
+    const api = process.env.REACT_APP_BACKEND_URL;
+    const token = localStorage.getItem("token");
+    const form = new FormData();
+    form.append("file", file);
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${api}/api/hrms/attendance/import-file`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Upload failed");
+      setResult(data);
+      toast.success(`Imported: ${data.imported}, Skipped: ${data.skipped}`);
+      onImported && onImported();
+    } catch (e) {
+      toast.error(e.message || "Upload failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-2 sm:p-4"
+      onClick={onBackdrop}
+      aria-modal="true"
+      role="dialog"
+      aria-labelledby="upload-attendance-title"
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="bg-white rounded-lg w-full max-w-lg outline-none shadow-lg
+                   max-h-[92vh] sm:max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <h2 id="upload-attendance-title" className="text-base sm:text-lg font-semibold">
+            Upload daily attendance
+          </h2>
+          <button className="text-sm text-gray-600 hover:underline" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-4 sm:px-5 py-4 space-y-4 overflow-y-auto">
+          <div className="text-xs text-gray-600">
+            Accepted formats: .xls, .xlsx, .csv. The column “E Code” will be used as Employee ID. 
+            Include columns for Date, In Time, Out Time, and (optionally) Hours.
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-700 mb-1">Select file</label>
+            <input
+              type="file"
+              accept=".xls,.xlsx,.csv"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm border rounded px-2 py-1"
+            />
+          </div>
+
+          {result && (
+            <div className="border rounded p-3 bg-gray-50 text-xs">
+              <div className="font-semibold mb-2">Import summary</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>Imported: <b>{result.imported}</b></div>
+                <div>Skipped: <b>{result.skipped}</b></div>
+              </div>
+              {result.errors && result.errors.length > 0 && (
+                <div className="mt-2">
+                  <div className="font-semibold">Errors</div>
+                  <ul className="list-disc list-inside">
+                    {result.errors.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 sm:px-5 py-3 border-t">
+          <div className="flex justify-end gap-2">
+            <button className="px-3 py-1 text-xs rounded border" onClick={onClose} disabled={submitting}>
+              Close
+            </button>
+            <button
+              className="px-3 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-60"
+              onClick={upload}
+              disabled={submitting || !file}
+            >
+              {submitting ? "Uploading…" : "Upload & Import"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========================= Mark Attendance Modal (manual) ========================= */
 function MarkAttendanceModal({ onClose, onSaved }) {
   const dialogRef = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -19,7 +155,6 @@ function MarkAttendanceModal({ onClose, onSaved }) {
   const [filterQ, setFilterQ] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // fetch all active employees
   useEffect(() => {
     const load = async () => {
       try {
@@ -28,7 +163,7 @@ function MarkAttendanceModal({ onClose, onSaved }) {
           employeeId: e?.personal?.employeeId || "",
           name: e?.personal?.name || "",
           dept: e?.org?.department || "",
-          status: "Present", // default
+          status: "Present",
         }));
         setRows(list);
       } catch {
@@ -38,7 +173,6 @@ function MarkAttendanceModal({ onClose, onSaved }) {
     load();
   }, []);
 
-  // accessibility + scroll lock + esc
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose?.();
     window.addEventListener("keydown", onKey);
@@ -81,7 +215,7 @@ function MarkAttendanceModal({ onClose, onSaved }) {
 
   const save = async () => {
     const records = rows
-      .filter((r) => r.employeeId) // sanity
+      .filter((r) => r.employeeId)
       .map((r) => ({ employeeId: r.employeeId, status: r.status }));
 
     if (!date) {
@@ -95,8 +229,6 @@ function MarkAttendanceModal({ onClose, onSaved }) {
 
     setSaving(true);
     try {
-      // Implement this on your API side:
-      // POST /hrms/attendance/bulk { date, records: [{employeeId, status}] }
       await HRMS.markAttendanceBulk({ date, records });
       toast.success("Attendance saved.");
       onSaved && onSaved(date);
@@ -132,7 +264,7 @@ function MarkAttendanceModal({ onClose, onSaved }) {
           </button>
         </div>
 
-        {/* Controls (sticky subheader) */}
+        {/* Controls */}
         <div className="px-4 sm:px-5 py-3 border-b sticky top-[48px] sm:top-[52px] bg-white z-10">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
             <div className="flex flex-col">
@@ -171,7 +303,7 @@ function MarkAttendanceModal({ onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Body (scrollable) */}
+        {/* Body */}
         <div className="px-4 sm:px-5 py-3 overflow-y-auto">
           <div className="overflow-x-auto border rounded">
             <table className="table-auto w-full text-xs">
@@ -241,6 +373,7 @@ export default function AttendancePage() {
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [data, setData] = useState(null);
   const [markOpen, setMarkOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const fetchData = () => {
     if (!employeeId) return;
@@ -263,6 +396,13 @@ export default function AttendancePage() {
       <PageHeader
         title="Attendance"
         actions={[
+          <button
+            key="upload"
+            className="px-3 py-1 text-xs rounded border"
+            onClick={() => setUploadOpen(true)}
+          >
+            Upload attendance
+          </button>,
           <button
             key="mark"
             className="px-3 py-1 text-xs rounded bg-emerald-600 text-white"
@@ -338,12 +478,20 @@ export default function AttendancePage() {
         </table>
       </div>
 
+      {uploadOpen && (
+        <UploadAttendanceModal
+          onClose={() => setUploadOpen(false)}
+          onImported={() => {
+            if (employeeId) fetchData();
+          }}
+        />
+      )}
+
       {markOpen && (
         <MarkAttendanceModal
           onClose={() => setMarkOpen(false)}
           onSaved={() => {
             setMarkOpen(false);
-            // Optional: if the selected employee is part of this bulk save, refresh view
             fetchData();
           }}
         />

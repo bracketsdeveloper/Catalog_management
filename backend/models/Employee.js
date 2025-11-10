@@ -57,9 +57,21 @@ const employeeSchema = new mongoose.Schema({
   org: { type: orgSchema, default: {} },
   assets: { type: assetsSchema, default: {} },
   financial: { type: financialSchema, default: {} },
+
+  biometricId: { type: String, index: true, default: "" }, // eSSL Biometric ID
+  mappedUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
 employeeSchema.index({ "personal.name": "text", "org.role": "text", "org.department": "text" });
+
+// normalize employeeId before save to avoid join mismatches
+employeeSchema.pre("save", function(next) {
+  if (this?.personal?.employeeId) {
+    this.personal.employeeId = String(this.personal.employeeId).trim();
+  }
+  next();
+});
 
 module.exports = mongoose.model("Employee", employeeSchema);

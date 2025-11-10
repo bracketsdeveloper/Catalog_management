@@ -146,10 +146,18 @@ app.use('/api/admin', require('./routes/userTrackingRoutes'));
 
 app.use("/api/admin", require("./routes/adminInvoices"));
 
+// server/index.js (or registerRoutes)
+app.use("/api/admin", require("./routes/admin/holidays"));
+
+
 // server.js or index.js
 const invoicesEinvoiceRoutes = require("./routes/invoices.einvoice");
 app.use("/api/admin", invoicesEinvoiceRoutes);
 
+const meRoutes = require("./routes/meRoutes");
+
+// ...
+app.use("/api", meRoutes);
 
 app.use('/api', require('./routes/hrms'));
 

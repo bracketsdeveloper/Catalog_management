@@ -621,23 +621,43 @@ export default function ProductManagementPage() {
           </div>
         )}
 
-        <div className="flex justify-center items-center mt-6 space-x-4">
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            disabled={currentPage <= 1 || isFetching}
-            className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span>Page {currentPage} of {totalPages}</span>
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            disabled={currentPage >= totalPages || isFetching}
-            className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
+        {/* Pagination with manual input */}
+<div className="flex justify-center items-center mt-6 space-x-4">
+  <button
+    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+    disabled={currentPage <= 1 || isFetching}
+    className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
+  >
+    Previous
+  </button>
+
+  <div className="flex items-center gap-2">
+    <span>Page</span>
+    <input
+      type="number"
+      min={1}
+      max={totalPages}
+      value={currentPage}
+      onChange={(e) => {
+        const val = parseInt(e.target.value);
+        if (!isNaN(val) && val >= 1 && val <= totalPages) {
+          setCurrentPage(val);
+        }
+      }}
+      className="w-16 text-center border rounded py-1"
+    />
+    <span>of {totalPages}</span>
+  </div>
+
+  <button
+    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+    disabled={currentPage >= totalPages || isFetching}
+    className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
+
       </div>
 
       {singleModalOpen && (

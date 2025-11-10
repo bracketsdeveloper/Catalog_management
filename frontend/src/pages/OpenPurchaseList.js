@@ -33,7 +33,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
     "orderConfirmedDate",
     "expectedReceiveDate",
     "schedulePickUp",
-    "invoiceRemarks", // NEW filter
+    "invoiceRemarks",
     "remarks",
   ];
 
@@ -63,9 +63,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="__empty__">No Status</option>
         </select>
       </th>
-      {/* Follow-Up filter cell */}
-      <th className="p-1 border"></th>
-      {/* PO Status filter cell */}
+      <th className="p-1 border" />
       <th className="p-1 border">
         <select
           className="w-full p-1 text-xs border rounded"
@@ -77,88 +75,168 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="not">Not generated</option>
         </select>
       </th>
-      {/* Actions filter cell */}
-      <th className="p-1 border"></th>
+      <th className="p-1 border" />
     </tr>
   );
 }
 
+/* ===================== FollowUpModal (with remarks) ===================== */
 function FollowUpModal({ followUps, onUpdate, onClose }) {
-  const [local, setLocal] = useState(followUps || []);
+  const [local, setLocal] = useState(
+    Array.isArray(followUps)
+      ? followUps.map((f) => ({
+          updatedAt: f.updatedAt ? new Date(f.updatedAt) : new Date(),
+          followUpDate: f.followUpDate || "",
+          note: f.note || "",
+          remarks: f.remarks || "",
+          done: !!f.done,
+          updatedBy: f.updatedBy || "admin",
+        }))
+      : []
+  );
+
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
+  const [remarks, setRemarks] = useState("");
   const today = new Date().toISOString().split("T")[0];
 
   const add = () => {
-    if (!date.trim() || !note.trim()) return;
+    if (!date.trim() || (!note.trim() && !remarks.trim())) return;
     setLocal((p) => [
       ...p,
-      { updatedAt: new Date(), followUpDate: date, note, done: false, updatedBy: "admin" },
+      {
+        updatedAt: new Date(),
+        followUpDate: date,
+        note,
+        remarks,
+        done: false,
+        updatedBy: "admin",
+      },
     ]);
     setDate("");
     setNote("");
+    setRemarks("");
   };
+
   const remove = (i) => setLocal((p) => p.filter((_, idx) => idx !== i));
   const markDone = (i) =>
     setLocal((p) => p.map((fu, idx) => (idx === i ? { ...fu, done: true } : fu)));
+
+  const editField = (i, field, value) =>
+    setLocal((p) =>
+      p.map((fu, idx) =>
+        idx === i ? { ...fu, [field]: value, updatedAt: new Date() } : fu
+      )
+    );
+
   const close = () => {
     onUpdate(local);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40">
-      <div className="bg-white p-6 rounded w-full max-w-lg text-xs">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+      <div className="bg-white p-6 rounded w-full max-w-xl text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
           <button onClick={close} className="text-2xl">×</button>
         </div>
+
         <div className="mb-4 space-y-2">
-          <label className="font-bold">Add New Follow-Up:</label>
-          <div className="flex gap-2">
+          <label className="font-bold">Add New Follow-Up</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               type="date"
-              className="p-1 border rounded flex-none"
+              className="p-1 border rounded"
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
             <input
               type="text"
-              className="p-1 border rounded flex-grow"
-              placeholder="Enter note"
+              className="p-1 border rounded"
+              placeholder="Note (optional)"
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
-            <button onClick={add} className="bg-blue-600 text-white px-2 py-1 rounded">
+            <input
+              type="text"
+              className="p-1 border rounded"
+              placeholder="Remarks"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end">
+            <button onClick={add} className="bg-blue-600 text-white px-3 py-1 rounded">
               Add
             </button>
           </div>
         </div>
+
         <div className="max-h-64 overflow-y-auto border p-2 mb-4">
           {local.length === 0 && <p className="text-gray-600">No follow-ups.</p>}
-          {local.map((fu, i) => (
-            <div
-              key={i}
-              className={`flex justify-between items-center border-b py-1 ${!fu.done && fu.followUpDate < today ? "bg-red-200" : ""}`}
-            >
-              <span>
-                {fu.followUpDate} – {fu.note} {fu.done && "(Done)"}
-              </span>
-              <div className="flex gap-2">
-                {!fu.done && (
-                  <button onClick={() => markDone(i)} className="bg-green-600 text-white px-2 rounded">
-                    Done
-                  </button>
-                )}
-                <button onClick={() => remove(i)} className="text-red-600">
-                  Remove
-                </button>
+          {local.map((fu, i) => {
+            const overdue = !fu.done && fu.followUpDate && fu.followUpDate < today;
+            return (
+              <div
+                key={i}
+                className={`border rounded p-2 mb-2 ${
+                  overdue ? "bg-red-200" : "bg-gray-50"
+                }`}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <input
+                    type="date"
+                    className="p-1 border rounded"
+                    value={fu.followUpDate || ""}
+                    onChange={(e) => editField(i, "followUpDate", e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="p-1 border rounded"
+                    placeholder="Note"
+                    value={fu.note || ""}
+                    onChange={(e) => editField(i, "note", e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="p-1 border rounded"
+                    placeholder="Remarks"
+                    value={fu.remarks || ""}
+                    onChange={(e) => editField(i, "remarks", e.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    {!fu.done && (
+                      <button
+                        onClick={() => markDone(i)}
+                        className="bg-green-600 text-white px-2 py-1 rounded"
+                      >
+                        Done
+                      </button>
+                    )}
+                    <button
+                      onClick={() => remove(i)}
+                      className="text-red-600 px-2 py-1"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-1 text-[10px] text-gray-600">
+                  Updated {new Date(fu.updatedAt).toLocaleString()} by{" "}
+                  {fu.updatedBy || "admin"}
+                  {fu.done ? " • (Done)" : ""}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+
         <div className="flex justify-end">
-          <button onClick={close} className="bg-green-700 text-white px-4 py-1 rounded">
+          <button
+            onClick={close}
+            className="bg-green-700 text-white px-4 py-1 rounded"
+          >
             Close
           </button>
         </div>
@@ -297,7 +375,7 @@ function VendorTypeahead({
         disabled={loading}
       />
       {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-white border rounded shadow">
+        <div className="absolute z-[120] mt-1 w-full max-h-60 overflow-auto bg-white border rounded shadow">
           {filtered.length === 0 && (
             <div className="px-3 py-2 text-xs text-gray-500">No matches</div>
           )}
@@ -315,7 +393,11 @@ function VendorTypeahead({
                   (isHi ? "bg-gray-100" : "") +
                   (disableNonReliable && nonRel ? " opacity-60" : "")
                 }
-                title={disableNonReliable && nonRel ? "Selection disabled for non-reliable vendors" : ""}
+                title={
+                  disableNonReliable && nonRel
+                    ? "Selection disabled for non-reliable vendors"
+                    : ""
+                }
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-medium">
@@ -340,8 +422,7 @@ function VendorTypeahead({
         <div className="mt-1 text-xs text-gray-600">
           <div>
             <span className="font-medium">Selected:</span>{" "}
-            {selected.vendorCompany || selected.vendorName || "-"}{" "}
-            {badge(selected.reliability)}
+            {selected.vendorCompany || selected.vendorName || "-"} {badge(selected.reliability)}
           </div>
           <div>
             <span className="font-medium">Location:</span> {selected.location || "-"}
@@ -359,17 +440,14 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
 
   const change = (f, v) => setData((p) => ({ ...p, [f]: v }));
   const save = () => {
-    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
-      return;
+    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?")) return;
     const payload = { ...data };
     if (payload.status === "") delete payload.status;
 
-    // Ensure numeric price (empty -> 0)
     if (payload.productPrice !== undefined && payload.productPrice !== null && payload.productPrice !== "") {
       payload.productPrice = Number(payload.productPrice) || 0;
     }
 
-    // Ensure invoiceRemarks is a string
     if (payload.invoiceRemarks === undefined || payload.invoiceRemarks === null) {
       payload.invoiceRemarks = "";
     } else {
@@ -381,7 +459,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
@@ -417,9 +495,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               <div><label className="font-bold">Sourced From:</label> {data.sourcingFrom}</div>
               <div>
                 <label className="font-bold">Delivery Date:</label>{" "}
-                {data.deliveryDateTime
-                  ? new Date(data.deliveryDateTime).toLocaleDateString()
-                  : "N/A"}
+                {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : "N/A"}
               </div>
               <div><label className="font-bold">Qty Req'd:</label> {data.qtyRequired}</div>
             </div>
@@ -431,9 +507,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   type="number"
                   className="w-full border p-1"
                   value={data.qtyOrdered || ""}
-                  onChange={(e) =>
-                    change("qtyOrdered", parseInt(e.target.value, 10) || 0)
-                  }
+                  onChange={(e) => change("qtyOrdered", parseInt(e.target.value, 10) || 0)}
                 />
               </div>
               <div>
@@ -524,12 +598,8 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             </div>
           </form>
           <div className="flex justify-end gap-4 mt-6">
-            <button onClick={onClose} className="px-4 py-2 border rounded">
-              Cancel
-            </button>
-            <button onClick={save} className="px-4 py-2 bg-green-700 text-white rounded">
-              Save
-            </button>
+            <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+            <button onClick={save} className="px-4 py-2 bg-green-700 text-white rounded">Save</button>
           </div>
         </div>
       </div>
@@ -544,7 +614,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   );
 }
 
-/* ---------------- Generate PO Modal (uses VendorTypeahead) ---------------- */
+/* ---------------- Generate PO Modal ---------------- */
 function GeneratePOModal({ row, onClose, onCreated }) {
   const [vendorId, setVendorId] = useState("");
   const [productCode, setProductCode] = useState("");
@@ -586,8 +656,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
     } catch (e) {
       console.error(e);
       alert(
-        (e && e.response && e.response.data && e.response.data.message) ||
-        "Failed to generate PO"
+        (e && e.response && e.response.data && e.response.data.message) || "Failed to generate PO"
       );
     } finally {
       setLoading(false);
@@ -595,7 +664,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       <div className="bg-white p-6 rounded w-full max-w-2xl text-xs">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-bold text-purple-700">Generate Purchase Order</h3>
@@ -617,10 +686,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
 
           <div className="col-span-2">
             <label className="font-bold">Vendor</label>
-            <VendorTypeahead
-              value={vendorId}
-              onChange={(id) => setVendorId(id)}
-            />
+            <VendorTypeahead value={vendorId} onChange={(id) => setVendorId(id)} />
           </div>
 
           <div>
@@ -790,9 +856,7 @@ export default function OpenPurchaseList() {
       }
     });
 
-    return purchases.filter(
-      (rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived
-    );
+    return purchases.filter((rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived);
   }, [purchases]);
 
   const globalFiltered = useMemo(() => {
@@ -904,7 +968,7 @@ export default function OpenPurchaseList() {
         "Order Confirmed": fmtDate(r.orderConfirmedDate),
         "Expected Receive": fmtDate(r.expectedReceiveDate),
         "Schedule PickUp": fmtDate(r.schedulePickUp),
-        "Invoice Remarks": r.invoiceRemarks || "", // NEW in export
+        "Invoice Remarks": r.invoiceRemarks || "",
         Remarks: r.remarks || "",
         Status: r.status,
         "PO Status": r.poId || r.poNumber ? "Generated" : "Not generated",
@@ -917,9 +981,7 @@ export default function OpenPurchaseList() {
   if (loading)
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">
-          Open Purchases
-        </h1>
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-300 rounded"></div>
           <div className="h-64 bg-gray-300 rounded"></div>
@@ -934,9 +996,7 @@ export default function OpenPurchaseList() {
           You don't have permission to edit purchase records.
         </div>
       )}
-      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
-        Open Purchases
-      </h1>
+      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Open Purchases</h1>
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           type="text"
@@ -980,8 +1040,8 @@ export default function OpenPurchaseList() {
               { key: "orderConfirmedDate", label: "Order Conf." },
               { key: "expectedReceiveDate", label: "Expected Recv." },
               { key: "schedulePickUp", label: "Pick-Up" },
-              { key: "invoiceRemarks", label: "Invoice Remarks" }, // NEW column
-              { key: "remarks", label: "Remarks" },
+              { key: "invoiceRemarks", label: "Invoice Remarks" },
+              { key: "remarks", label: "Order Remarks" },
               { key: "status", label: "Status" },
             ].map(({ key, label }) => (
               <th
@@ -1065,9 +1125,15 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{p.invoiceRemarks || ""}</td>
                 <td className="p-2 border">{p.remarks}</td>
                 <td className="p-2 border">{p.status || "N/A"}</td>
-                <td className="p-2 border">{latest ? latest.note : "—"}</td>
 
-                {/* PO Status */}
+                <td className="p-2 border">
+                  {latest
+                    ? (latest.remarks && latest.remarks.trim()
+                        ? latest.remarks
+                        : latest.note || "—")
+                    : "—"}
+                </td>
+
                 <td className="p-2 border">
                   {poGenerated ? (
                     <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
@@ -1080,10 +1146,7 @@ export default function OpenPurchaseList() {
                   )}
                 </td>
 
-                {/* Actions */}
                 <td className="p-2 border space-y-1 relative">
-                  
-
                   <div className="mt-1">
                     <button
                       className="w-full border rounded py-0.5 text-[10px]"
@@ -1094,7 +1157,7 @@ export default function OpenPurchaseList() {
                       ⋮
                     </button>
                     {menuOpen && (
-                      <div className="absolute right-0 z-10 mt-1 w-44 bg-white border rounded shadow">
+                      <div className="absolute right-0 z-[120] mt-1 w-44 bg-white border rounded shadow">
                         <button
                           className={
                             "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +

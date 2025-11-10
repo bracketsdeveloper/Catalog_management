@@ -8,7 +8,7 @@ const leaveSchema = new mongoose.Schema({
   endDate: { type: Date, required: true },
   days: { type: Number, required: true }, // auto calc (inclusive business days or calendar? we’ll use calendar)
   purpose: { type: String, default: "" },
-  status: { type: String, enum: ["pending","approved","rejected"], default: "pending", index: true },
+  status: { type: String, enum: ["applied", "pending", "approved", "rejected", "cancelled"], default: "pending", index: true },
   requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });

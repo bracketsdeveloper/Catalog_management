@@ -1,177 +1,221 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 
+/* Canonical alphabetical roles */
+const ROLE_OPTIONS_ASC = [
+  "ACCOUNTS",
+  "ADMIN",
+  "CRM",
+  "DESIGN",
+  "HR",
+  "PROCESS",
+  "PRODUCTION",
+  "PURCHASE",
+  "SALES",
+];
+
 export default function UserManagement() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
   const [users, setUsers] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
-  const [updatedRole, setUpdatedRole] = useState("");
+
+  // account status (legacy single 'role')
+  const [updatedAccountStatus, setUpdatedAccountStatus] = useState("GENERAL");
+
+  // multi roles
+  const [updatedRoles, setUpdatedRoles] = useState([]);
+
   const [updatedSuperAdmin, setUpdatedSuperAdmin] = useState(false);
-  const [updatedHandles, setUpdatedHandles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [roleFilter, setRoleFilter] = useState("ALL");
+
+  // filters + sorting
+  const [statusFilter, setStatusFilter] = useState("ALL"); // 'ALL' | 'GENERAL' | 'ADMIN' | 'VIEWER'
+  const [nameSort, setNameSort] = useState("asc"); // 'asc' | 'desc'
+  const [roleSortDir, setRoleSortDir] = useState("asc"); // 'asc' | 'desc'
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
 
-  // Available handles options
-  const handleOptions = ["CRM", "PURCHASE", "PRODUCTION", "SALES"];
+  /* compute role options based on sort dir */
+  const roleOptions = useMemo(() => {
+    const arr = [...ROLE_OPTIONS_ASC];
+    if (roleSortDir === "desc") arr.reverse();
+    return arr;
+  }, [roleSortDir]);
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${BACKEND_URL}/api/user/users`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
+        const response = await axios.get(
+          `${BACKEND_URL}/api/user/users?sortName=${nameSort}`,
+          {
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          }
+        );
         setUsers(response.data);
         setError(null);
       } catch (err) {
-        console.error("Error fetching users:", err.response || err.message);
-        setError(
-          err.response?.data?.message || "Failed to load users. Please try again later."
-        );
+        setError(err.response?.data?.message || "Failed to load users");
       } finally {
         setLoading(false);
       }
     };
     fetchUsers();
-  }, []);
+  }, [BACKEND_URL, nameSort]);
 
-  const handleUpdateUser = async (userId) => {
+  const filteredUsers = useMemo(() => {
+    if (statusFilter === "ALL") return users;
+    return users.filter((u) => u.role === statusFilter);
+  }, [users, statusFilter]);
+
+  function openEditModal(user) {
+    setEditingUser(user._id);
+    setUpdatedAccountStatus(user.role || "GENERAL");
+    setUpdatedSuperAdmin(!!user.isSuperAdmin);
+    setUpdatedRoles(Array.isArray(user.roles) ? user.roles : []);
+  }
+
+  function closeEditModal() {
+    setEditingUser(null);
+    setUpdatedAccountStatus("GENERAL");
+    setUpdatedSuperAdmin(false);
+    setUpdatedRoles([]);
+  }
+
+  async function handleUpdateUser(userId) {
     try {
-      // Update role
+      const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+
+      // Update legacy account status
       await axios.put(
         `${BACKEND_URL}/api/user/users/${userId}/role`,
-        { role: updatedRole },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
+        { role: updatedAccountStatus },
+        { headers }
       );
 
-      // Update SuperAdmin status if user is SuperAdmin
+      // Update SuperAdmin if caller is superadmin
       if (isSuperAdmin) {
         await axios.put(
           `${BACKEND_URL}/api/user/users/${userId}/superadmin`,
           { isSuperAdmin: updatedSuperAdmin },
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
+          { headers }
         );
       }
 
-      // Update handles
+      // Update multi roles
       await axios.put(
-        `${BACKEND_URL}/api/user/users/${userId}/handles`,
-        { handles: updatedHandles },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
+        `${BACKEND_URL}/api/user/users/${userId}/roles`,
+        { roles: updatedRoles },
+        { headers }
       );
 
+      // reflect locally
       setUsers((prev) =>
         prev.map((u) =>
           u._id === userId
             ? {
                 ...u,
-                role: updatedRole,
+                role: updatedAccountStatus,
                 isSuperAdmin: isSuperAdmin ? updatedSuperAdmin : u.isSuperAdmin,
-                handles: updatedHandles,
+                roles: [...updatedRoles].sort((a, b) => a.localeCompare(b)),
               }
             : u
         )
       );
-      setEditingUser(null);
+
+      closeEditModal();
     } catch (err) {
-      console.error("Error updating user:", err.response || err.message);
-      alert("Failed to update user. Please try again.");
+      alert(
+        err.response?.data?.message || "Failed to update user. Please try again."
+      );
     }
-  };
+  }
 
-  const openEditModal = (user) => {
-    setEditingUser(user._id);
-    setUpdatedRole(user.role);
-    setUpdatedSuperAdmin(user.isSuperAdmin);
-    setUpdatedHandles(Array.isArray(user.handles) ? user.handles : []);
-  };
+  function toggleRole(role) {
+    setUpdatedRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    );
+  }
 
-  const closeEditModal = () => {
-    setEditingUser(null);
-    setUpdatedRole("");
-    setUpdatedSuperAdmin(false);
-    setUpdatedHandles([]);
-  };
-
-  const filteredUsers =
-    roleFilter === "ALL"
-      ? users
-      : users.filter((user) => user.role === roleFilter);
-
-  const handleExportExcel = () => {
-    if (!filteredUsers.length) {
-      alert("No users to export!");
-      return;
-    }
-    const dataForExcel = filteredUsers.map((u) => ({
+  function handleExportExcel() {
+    const data = filteredUsers.map((u) => ({
       Name: u.name,
       Phone: u.phone || "N/A",
+      Email: u.email,
+      AccountStatus: u.role || "GENERAL",
+      Roles: Array.isArray(u.roles) ? u.roles.join(", ") : "",
+      SuperAdmin: u.isSuperAdmin ? "Yes" : "No",
+      Permissions: Array.isArray(u.permissions) ? u.permissions.join(", ") : "",
       DateOfBirth: u.dateOfBirth
         ? new Date(u.dateOfBirth).toLocaleDateString("en-GB")
-        : "N/A",
+        : "",
       Address: u.address || "",
-      Email: u.email,
-      Role: u.role === "GENERAL" ? "DEACTIVE" : u.role,
-      Handles: Array.isArray(u.handles) ? u.handles.join(", ") : "N/A",
-      SuperAdmin: u.isSuperAdmin ? "Yes" : "No",
     }));
+
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(dataForExcel);
-    XLSX.utils.book_append_sheet(wb, ws, "FilteredUsers");
-    XLSX.writeFile(wb, "filtered_users.xlsx");
-  };
-
-  if (loading) {
-    return <div className="text-gray-900">Loading users...</div>;
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
+    XLSX.writeFile(wb, "users_export.xlsx");
   }
 
-  if (error) {
-    return <div className="text-pink-600">{error}</div>;
-  }
+  if (loading) return <div className="text-gray-900 p-6">Loading users...</div>;
+  if (error) return <div className="text-pink-600 p-6">{error}</div>;
 
   return (
     <div className="p-6 bg-white text-gray-900 rounded-md shadow-md">
-      <h1 className="text-2xl font-bold mb-4 text-[#Ff8045]">User Management</h1>
-      <div className="flex items-center mb-4 gap-2">
-        <label htmlFor="roleFilter" className="text-sm font-medium">
-          Filter by Role:
-        </label>
-        <select
-          id="roleFilter"
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          className="bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
-        >
-          <option value="ALL">ALL</option>
-          <option value="GENERAL">DEACTIVE</option>
-          <option value="ADMIN">ADMIN</option>
-        </select>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 mb-4">
+        <h1 className="text-2xl font-bold text-[#Ff8045]">User Management</h1>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Filter by Account Status</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+          >
+            <option value="ALL">ALL</option>
+            <option value="GENERAL">DEACTIVE</option>
+            <option value="ADMIN">ADMIN</option>
+            <option value="VIEWER">VIEWER</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Sort Names</label>
+          <select
+            value={nameSort}
+            onChange={(e) => setNameSort(e.target.value)}
+            className="bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+          >
+            <option value="asc">A–Z</option>
+            <option value="desc">Z–A</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Sort Role List</label>
+          <select
+            value={roleSortDir}
+            onChange={(e) => setRoleSortDir(e.target.value)}
+            className="bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+          >
+            <option value="asc">A–Z</option>
+            <option value="desc">Z–A</option>
+          </select>
+        </div>
+
         <button
           onClick={handleExportExcel}
-          className="ml-auto bg-[#44b977] text-white px-4 py-1 rounded-lg hover:bg-blue-700 text-sm"
+          className="ml-auto bg-[#44b977] text-white px-4 py-1 rounded-lg hover:bg-[#44b977]/90 text-sm"
         >
           Export to Excel
         </button>
       </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white border border-purple-200 rounded-lg">
           <thead>
@@ -179,7 +223,7 @@ export default function UserManagement() {
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Name</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Phone</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Email</th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Handles</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Roles</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Account Status</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">SuperAdmin</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Actions</th>
@@ -192,16 +236,16 @@ export default function UserManagement() {
                 <td className="px-6 py-4 text-sm">{user.phone || "N/A"}</td>
                 <td className="px-6 py-4 text-sm">{user.email}</td>
                 <td className="px-6 py-4 text-sm">
-                  {Array.isArray(user.handles) ? user.handles.join(", ") : "N/A"}
+                  {Array.isArray(user.roles) && user.roles.length
+                    ? [...user.roles].sort((a, b) => a.localeCompare(b)).join(", ")
+                    : "—"}
                 </td>
-                <td className="px-6 py-4 text-sm">
-                  {user.role === "GENERAL" ? "DEACTIVE" : user.role}
-                </td>
+                <td className="px-6 py-4 text-sm">{user.role || "GENERAL"}</td>
                 <td className="px-6 py-4 text-sm">{user.isSuperAdmin ? "Yes" : "No"}</td>
                 <td className="px-6 py-4 text-sm">
                   <button
                     onClick={() => openEditModal(user)}
-                    className="bg-[#66C3D0] text-white px-3 py-1 rounded-md hover:bg-[#44b977]/70"
+                    className="bg-[#66C3D0] text-white px-3 py-1 rounded-md hover:bg-[#66C3D0]/80"
                   >
                     Edit
                   </button>
@@ -215,48 +259,90 @@ export default function UserManagement() {
       {/* Edit Modal */}
       {editingUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
             <h2 className="text-xl font-bold mb-4 text-[#Ff8045]">Edit User</h2>
+
+            {/* Account Status */}
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Role</label>
+              <label className="block text-sm font-medium mb-1">
+                Account Status (legacy)
+              </label>
               <select
-                value={updatedRole}
-                onChange={(e) => setUpdatedRole(e.target.value)}
-                className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+                value={updatedAccountStatus}
+                onChange={(e) => setUpdatedAccountStatus(e.target.value)}
+                className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-2"
               >
                 <option value="GENERAL">DEACTIVATE</option>
                 <option value="ADMIN">ADMIN</option>
+                <option value="VIEWER">VIEWER</option>
               </select>
             </div>
+
+            {/* SuperAdmin */}
             {isSuperAdmin && (
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">SuperAdmin</label>
                 <select
-                  value={updatedSuperAdmin}
+                  value={String(updatedSuperAdmin)}
                   onChange={(e) => setUpdatedSuperAdmin(e.target.value === "true")}
-                  className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+                  className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-2"
                 >
-                  <option value={false}>No</option>
-                  <option value={true}>Yes</option>
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
                 </select>
               </div>
             )}
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Handles</label>
-              <select
-                value={updatedHandles[0] || ""}
-                onChange={(e) => setUpdatedHandles([e.target.value])}
-                className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
-              >
-                <option value="" disabled>Select handle</option>
-                {handleOptions.map((handle) => (
-                  <option key={handle} value={handle}>
-                    {handle}
-                  </option>
-                ))}
-              </select>
+
+            {/* Roles (multi) */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium">Roles</label>
+                <div className="text-xs">
+                  Sort:
+                  <button
+                    onClick={() => setRoleSortDir("asc")}
+                    className={`ml-2 px-2 py-0.5 rounded ${
+                      roleSortDir === "asc" ? "bg-purple-600 text-white" : "bg-gray-200"
+                    }`}
+                  >
+                    A–Z
+                  </button>
+                  <button
+                    onClick={() => setRoleSortDir("desc")}
+                    className={`ml-2 px-2 py-0.5 rounded ${
+                      roleSortDir === "desc" ? "bg-purple-600 text-white" : "bg-gray-200"
+                    }`}
+                  >
+                    Z–A
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {roleOptions.map((r) => {
+                  const checked = updatedRoles.includes(r);
+                  return (
+                    <label
+                      key={r}
+                      className={`flex items-center gap-2 border rounded px-2 py-2 text-sm cursor-pointer ${
+                        checked ? "bg-pink-600 text-white border-pink-600" : "bg-gray-50"
+                      }`}
+                      onClick={() => toggleRole(r)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleRole(r)}
+                        className="accent-pink-600"
+                      />
+                      {r}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex justify-end space-x-2">
+
+            <div className="flex justify-end gap-2">
               <button
                 onClick={closeEditModal}
                 className="bg-gray-300 text-gray-900 px-4 py-2 rounded-md hover:bg-gray-400"
