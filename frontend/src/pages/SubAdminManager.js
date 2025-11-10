@@ -94,7 +94,9 @@ const groupedPermissions = {
       "hrms-wfh",
       "hrms-leaves",
       "hrms-salary",
-      "hrms-leaves-export"
+      "hrms-leaves-export",
+      "holidays",
+      "leaves"
     ]
   
 };
