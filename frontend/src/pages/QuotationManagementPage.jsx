@@ -39,6 +39,7 @@ export default function QuotationManagementPage() {
   const [opportunityOwnerFilter, setOpportunityOwnerFilter] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: "quotationNumber", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
   const [totalPages, setTotalPages] = useState(1);
   const [totalQuotations, setTotalQuotations] = useState(0);
   const [userEmail, setUserEmail] = useState("");
@@ -71,7 +72,17 @@ export default function QuotationManagementPage() {
     fetchOpportunities();
     if (id) fetchQuotation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, currentPage, approvalFilter, fromDateFilter, toDateFilter, companyFilter, opportunityOwnerFilter, searchQuery, headerSearch]);
+  }, [
+    id,
+    currentPage,
+    approvalFilter,
+    fromDateFilter,
+    toDateFilter,
+    companyFilter,
+    opportunityOwnerFilter,
+    searchQuery,
+    headerSearch,
+  ]);
 
   useEffect(() => {
     if (quotations.length > 0) {
@@ -80,6 +91,11 @@ export default function QuotationManagementPage() {
       setLatestActions({});
     }
   }, [quotations]);
+
+  // keep page input in sync
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
 
   // Auto-fetch drafts whenever the window opens
   useEffect(() => {
@@ -226,7 +242,6 @@ export default function QuotationManagementPage() {
       setDraftLoading(true);
       setDraftError(null);
       const token = localStorage.getItem("token");
-      // Pull only drafts. Use pages or plain list; plain list is fine for <=100.
       const res = await axios.get(`${BACKEND_URL}/api/admin/quotations`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { draft: true, page: 1, limit: 100 },
@@ -251,7 +266,6 @@ export default function QuotationManagementPage() {
         {},
         { headers: { Authorization: `Bearer ${token}` }, timeout: 20000 }
       );
-      // Refresh both lists
       fetchDrafts();
       fetchData();
       alert("Draft published successfully!");
@@ -385,7 +399,9 @@ export default function QuotationManagementPage() {
           "Remarks": q.remarks || "",
           "Approve Status": q.approveStatus ? "Approved" : "Not Approved",
           "Latest Action": latestAction.action
-            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown date"}`
+            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${
+                latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown date"
+              }`
             : "No action recorded",
         };
       });
@@ -412,7 +428,7 @@ export default function QuotationManagementPage() {
       const token = localStorage.getItem("token");
       const res = await axios.put(
         `${BACKEND_URL}/api/admin/quotations/${q._id}`,
-        {}, // no overrides -> pure clone
+        {},
         { headers: { Authorization: `Bearer ${token}` }, timeout: 30000 }
       );
 
@@ -479,23 +495,67 @@ export default function QuotationManagementPage() {
     </div>
   );
 
+  const clampPage = (n) => {
+    const num = Number(n);
+    if (Number.isNaN(num)) return currentPage;
+    return Math.min(Math.max(1, num), Math.max(1, totalPages));
+  };
+
+  const goToPage = (n) => {
+    const target = clampPage(n);
+    setCurrentPage(target);
+  };
+
   const renderPagination = () => (
-    <div className="flex justify-center items-center mt-4 space-x-2">
-      <button
-        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-        disabled={currentPage === 1 || loading}
-        className="px-3 py-1 border rounded disabled:opacity-50"
-      >
-        Previous
-      </button>
-      <span>Page {currentPage} of {totalPages} (Total: {totalQuotations})</span>
-      <button
-        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-        disabled={currentPage === totalPages || loading}
-        className="px-3 py-1 border rounded disabled:opacity-50"
-      >
-        Next
-      </button>
+    <div className="flex flex-col sm:flex-row sm:justify-center sm:items-center gap-2 mt-4">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1 || loading}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Previous
+        </button>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm">Page</span>
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, totalPages)}
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onBlur={() => goToPage(pageInput)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                goToPage(pageInput);
+              }
+            }}
+            disabled={loading}
+            className="w-20 px-2 py-1 border rounded"
+            aria-label="Go to page"
+          />
+          <span className="text-sm">
+            of {totalPages} (Total: {totalQuotations})
+          </span>
+          <button
+            onClick={() => goToPage(pageInput)}
+            disabled={loading}
+            className="px-3 py-1 border rounded bg-gray-50 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Go
+          </button>
+        </div>
+
+        <button
+          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages || loading}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 
@@ -747,10 +807,12 @@ export default function QuotationManagementPage() {
                       <td className="p-2">{q.customerName || "N/A"}</td>
                       <td className="p-2">{q.catalogName || "N/A"}</td>
                       <td className="p-2">{q.items?.length || 0}</td>
-                      <td className="p-2">{format(new Date(q.createdAt), "dd/MM/yyyy")}</td>
+                      <td className="p-2">{q.createdAt ? format(new Date(q.createdAt), "dd/MM/yyyy") : "—"}</td>
                       <td className="p-2">
                         {latestAction.action
-                          ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown"}`
+                          ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${
+                              latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown"
+                            }`
                           : "No action recorded"}
                       </td>
                       <td className="p-2">
@@ -858,7 +920,7 @@ export default function QuotationManagementPage() {
               </div>
             </div>
 
-            <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+            <div className="px-4 pb-4 max-h=[60vh] sm:max-h-[60vh] overflow-y-auto">
               {draftLoading ? (
                 <div className="p-4 text-sm text-gray-600">Loading drafts…</div>
               ) : draftError ? (

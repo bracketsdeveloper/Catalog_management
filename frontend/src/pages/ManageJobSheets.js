@@ -41,10 +41,18 @@ export default function ManageJobSheets() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalJobSheets, setTotalJobSheets] = useState(0);
 
+  // NEW: page jump input state
+  const [pageInput, setPageInput] = useState("1");
+
   const permissions = JSON.parse(localStorage.getItem("permissions") || "[]");
   const canExportCRM = permissions.includes("crm-export");
 
   const dateFilterRef = useRef(null);
+
+  // keep pageInput in sync if currentPage changes externally
+  useEffect(() => {
+    setPageInput(String(currentPage || 1));
+  }, [currentPage]);
 
   // Close date filter when clicking outside
   useEffect(() => {
@@ -339,25 +347,59 @@ export default function ManageJobSheets() {
     </div>
   );
 
+  // NEW: page jump logic
+  const goToPage = () => {
+    const n = parseInt(pageInput, 10);
+    if (isNaN(n)) return;
+    const clamped = Math.min(Math.max(n, 1), Math.max(totalPages, 1));
+    setCurrentPage(clamped);
+  };
+
   const renderPagination = () => (
-    <div className="flex justify-center items-center mt-4 space-x-2">
-      <button
-        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-        disabled={currentPage === 1 || loading}
-        className="px-3 py-1 border rounded disabled:opacity-50"
-      >
-        Previous
-      </button>
-      <span>
-        Page {currentPage} of {totalPages} (Total: {totalJobSheets})
-      </span>
-      <button
-        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-        disabled={currentPage === totalPages || loading}
-        className="px-3 py-1 border rounded disabled:opacity-50"
-      >
-        Next
-      </button>
+    <div className="flex flex-col sm:flex-row justify-center sm:justify-between items-center mt-4 gap-3">
+      <div className="flex items-center space-x-2">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1 || loading}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Previous
+        </button>
+        <span>
+          Page {currentPage} of {totalPages} (Total: {totalJobSheets})
+        </span>
+        <button
+          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages || loading}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* NEW: Go to page input */}
+      <div className="flex items-center space-x-2">
+        <label className="text-sm text-gray-600">Go to page</label>
+        <input
+          type="number"
+          min={1}
+          max={Math.max(totalPages, 1)}
+          value={pageInput}
+          onChange={(e) => setPageInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") goToPage();
+          }}
+          disabled={loading}
+          className="w-20 px-2 py-1 border rounded"
+        />
+        <button
+          onClick={goToPage}
+          disabled={loading}
+          className="px-3 py-1 border rounded bg-gray-50 hover:bg-gray-100 disabled:opacity-50"
+        >
+          Go
+        </button>
+      </div>
     </div>
   );
 

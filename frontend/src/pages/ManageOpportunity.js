@@ -90,6 +90,7 @@ function ManageOpportunity() {
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "" });
   const [latestActions, setLatestActions] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1"); // input for direct page nav
   const [totalPages, setTotalPages] = useState(1);
   const [totalOpportunities, setTotalOpportunities] = useState(0);
 
@@ -118,10 +119,15 @@ function ManageOpportunity() {
     return d.toLocaleDateString("en-GB");
   };
 
+  // Keep pageInput in sync if currentPage or totalPages changes
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
+
   // --------- GUARDED SETTERS (prevent unwanted page reset) ---------
   const setSearchTermGuarded = (term) => {
     _setSearchTerm((prev) => {
-      if (prev === term) return prev; // no change -> don't reset page
+      if (prev === term) return prev;
       setCurrentPage(1);
       return term;
     });
@@ -129,7 +135,7 @@ function ManageOpportunity() {
 
   const setActiveTabGuarded = (tab) => {
     setActiveTab((prev) => {
-      if (prev === tab) return prev; // no change
+      if (prev === tab) return prev;
       setCurrentPage(1);
       return tab;
     });
@@ -138,7 +144,7 @@ function ManageOpportunity() {
   const handleFilterChangeGuarded = (e) => {
     const { name, value } = e.target;
     setFilterCriteria((prev) => {
-      if (prev[name] === value) return prev; // no change
+      if (prev[name] === value) return prev;
       const next = { ...prev, [name]: value };
       setCurrentPage(1);
       return next;
@@ -172,7 +178,7 @@ function ManageOpportunity() {
             filterCriteria.createdFilter !== "All"
               ? filterCriteria.createdFilter
               : undefined,
-          _t: Date.now(), // cache buster to avoid stale page 1 payloads
+          _t: Date.now(),
         };
 
         const params = Object.fromEntries(
@@ -187,8 +193,6 @@ function ManageOpportunity() {
         setOpportunities(res.data.opportunities || []);
         setTotalPages(res.data.totalPages || 1);
         setTotalOpportunities(res.data.totalOpportunities || 0);
-
-        // Do NOT override currentPage from server; trust local state.
       } catch (error) {
         console.error("Error fetching opportunities:", error);
         setError("Failed to fetch opportunities");
@@ -296,6 +300,13 @@ function ManageOpportunity() {
     }
   };
 
+  const goToPage = (n) => {
+    const num = Number(n);
+    if (Number.isNaN(num)) return;
+    const clamped = Math.min(Math.max(1, num), Math.max(1, totalPages));
+    setCurrentPage(clamped);
+  };
+
   const exportToExcel = async () => {
     try {
       const rawParams = {
@@ -357,24 +368,62 @@ function ManageOpportunity() {
   };
 
   const renderPagination = () => (
-    <div className="flex justify-center items-center mt-4 space-x-2">
-      <button
-        onClick={() => setCurrentPage((prev) => Math.max(Number(prev) - 1, 1))}
-        disabled={currentPage === 1 || loading}
-        className="px-3 py-1 border rounded disabled:opacity-50"
-      >
-        Previous
-      </button>
-      <span>
-        Page {currentPage} of {totalPages} (Total: {totalOpportunities})
-      </span>
-      <button
-        onClick={() => setCurrentPage((prev) => Math.min(Number(prev) + 1, totalPages))}
-        disabled={currentPage === totalPages || loading}
-        className="px-3 py-1 border rounded disabled:opacity-50"
-      >
-        Next
-      </button>
+    <div className="flex flex-col sm:flex-row sm:justify-center sm:items-center gap-2 mt-4">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            const prev = Math.max(Number(currentPage) - 1, 1);
+            setCurrentPage(prev);
+          }}
+          disabled={currentPage === 1 || loading}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Previous
+        </button>
+
+        {/* Direct page input */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm">Page</span>
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, totalPages)}
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onBlur={() => goToPage(pageInput)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                goToPage(pageInput);
+              }
+            }}
+            disabled={loading}
+            className="w-20 px-2 py-1 border rounded"
+            aria-label="Go to page"
+          />
+          <span className="text-sm">
+            of {totalPages} (Total: {totalOpportunities})
+          </span>
+          <button
+            onClick={() => goToPage(pageInput)}
+            disabled={loading}
+            className="px-3 py-1 border rounded bg-gray-50 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Go
+          </button>
+        </div>
+
+        <button
+          onClick={() => {
+            const next = Math.min(Number(currentPage) + 1, totalPages);
+            setCurrentPage(next);
+          }}
+          disabled={currentPage === totalPages || loading}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 
