@@ -808,7 +808,6 @@ const exportRowToPdf = (r) => {
         <div class="kv"><span class="l">PO #:</span><span>${r.poNumber || "—"}</span></div>
         <div class="kv"><span class="l">Issue Date:</span><span>${fmtDateShort(r.issueDate || r.raw?.createdAt)}</span></div>
         <div class="kv"><span class="l">Job Sheet #:</span><span>${r.jobSheetNumber || "—"}</span></div>
-        <div class="kv"><span class="l">Client:</span><span>${r.clientCompanyName || "—"}</span></div>
         <div class="kv"><span class="l">Event:</span><span>${r.eventName || "—"}</span></div>
       </div>
     </div>

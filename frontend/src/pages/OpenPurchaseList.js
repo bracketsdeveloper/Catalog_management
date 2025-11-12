@@ -614,6 +614,22 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   );
 }
 
+/* ---------------- DEFAULT PO TERMS (prefill) ---------------- */
+const DEFAULT_PO_TERMS = `Terms & Conditions (Editable)
+The Vendor warrants that all goods supplied shall strictly confirm to the specifications, samples (pre-approved or otherwise), drawings, and/or standards explicitly referenced in this Purchase Order.
+Quality Standards: All materials must be new, defect-free, and of first-class quality, suitable for the intended use as premium corporate gifts. This includes specific requirements on durability, colorfastness, finish, and safety standards (e.g., non-toxic, food-safe, etc.).
+Right to Inspect and Reject: We reserve the right to inspect all goods upon delivery. If, upon inspection, any item is found to be defective, non-conforming, or of unacceptable quality, we may reject the entire shipment or the non-conforming portion at the Vendor's risk and expense. The Vendor shall bear all costs of return and shall, either provide a full refund or replace the rejected goods within agreed days.
+Proofing: For custom or branded items, the Vendor must submit a pre-production sample/proof for written approval before mass production begins. Production without written approval is at the Vendor's sole risk.
+Firm Delivery Date: The Required Delivery Date specified in the Header Details is firm and of the essence. The Vendor must ensure delivery to the specified address on or before this date.
+Notification of Delay: The Vendor must immediately notify us in writing of any potential delay, providing the reasons and a revised expected delivery date.
+Late Delivery Penalty (Liquidated Damages): Should the Vendor fail to deliver the goods by the Required Delivery Date, we reserve the right to assess a penalty for Liquidated Damages.
+Cancellation Rights: If delivery is delayed by more than committed days beyond the Required Delivery Date, we may, without prejudice to any other rights or remedies, cancel the entire Purchase Order without penalty and secure the goods from an alternate source, holding the original Vendor responsible for any additional costs incurred.
+Payment Terms: Net 30 days from the later of (a) the invoice date or (b) the date of acceptance of the goods by Ace
+Shipping Terms: Specify the shipping responsibility
+The Vendor agrees not to disclose or use any specific branding, client details, or product designs related to this PO for any other purpose without the prior written consent of Ace Gifting Solutions
+The Vendor's acceptance of this Purchase Order is deemed to occur upon the earliest of (a) written acknowledgment, (b) shipment of the goods, or (c) commencement of work on the goods.
+PO is subject to Bangalore Jurisdiction`;
+
 /* ---------------- Generate PO Modal ---------------- */
 function GeneratePOModal({ row, onClose, onCreated }) {
   const [vendorId, setVendorId] = useState("");
@@ -624,54 +640,53 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   );
   const [deliveryAddress, setDeliveryAddress] = useState("Ace Gifting Solutions");
   const [remarks, setRemarks] = useState("");
-  const [terms, setTerms] = useState("");
+  // Prefill Terms with default text, user can edit freely
+  const [terms, setTerms] = useState(DEFAULT_PO_TERMS);
   const [loading, setLoading] = useState(false);
 
-  // inside GeneratePOModal component
-const handleSubmit = async () => {
-  if (!vendorId) {
-    alert("Please select a vendor.");
-    return;
-  }
-  if (!row || !row._id || String(row._id).startsWith("temp_")) {
-    alert("This row hasn't been saved yet. Save it first, then generate a PO.");
-    return;
-  }
+  const handleSubmit = async () => {
+    if (!vendorId) {
+      alert("Please select a vendor.");
+      return;
+    }
+    if (!row || !row._id || String(row._id).startsWith("temp_")) {
+      alert("This row hasn't been saved yet. Save it first, then generate a PO.");
+      return;
+    }
 
-  setLoading(true);
-  try {
-    const token = localStorage.getItem("token");
-    const payload = {
-      vendorId,
-      productCode: productCode || undefined,
-      issueDate: issueDate || undefined,
-      requiredDeliveryDate: requiredDeliveryDate || undefined,
-      deliveryAddress: deliveryAddress || undefined,
-      remarks,
-      terms: terms || undefined,
-    };
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const payload = {
+        vendorId,
+        productCode: productCode || undefined,
+        issueDate: issueDate || undefined,
+        requiredDeliveryDate: requiredDeliveryDate || undefined,
+        deliveryAddress: deliveryAddress || undefined,
+        remarks,
+        terms: terms || undefined,
+      };
 
-    // Canonical route (new)
-    const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchase-orders/from-open/${row._id}`;
-    const res = await axios.post(url, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      // Canonical route (new)
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchase-orders/from-open/${row._id}`;
+      const res = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const po = res.data && res.data.po;
-    alert(`PO created: ${po && po.poNumber ? po.poNumber : "(no number)"}`);
-    if (onCreated) onCreated(po);
-    onClose();
-  } catch (e) {
-    console.error(e);
-    alert(
-      (e && e.response && e.response.data && e.response.data.message) ||
-        "Failed to generate PO"
-    );
-  } finally {
-    setLoading(false);
-  }
-};
-
+      const po = res.data && res.data.po;
+      alert(`PO created: ${po && po.poNumber ? po.poNumber : "(no number)"}`);
+      if (onCreated) onCreated(po);
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert(
+        (e && e.response && e.response.data && e.response.data.message) ||
+          "Failed to generate PO"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
@@ -750,11 +765,19 @@ const handleSubmit = async () => {
           <div className="col-span-2">
             <label className="font-bold">Terms</label>
             <textarea
-              className="w-full border p-2 rounded min-h-[80px]"
+              className="w-full border p-2 rounded min-h-[120px]"
               value={terms}
               onChange={(e) => setTerms(e.target.value)}
-              placeholder="Leave blank to use default terms on the server."
             />
+            <div className="mt-1">
+              <button
+                type="button"
+                className="text-[11px] underline"
+                onClick={() => setTerms(DEFAULT_PO_TERMS)}
+              >
+                Reset to default terms
+              </button>
+            </div>
           </div>
 
           <div className="col-span-2">
