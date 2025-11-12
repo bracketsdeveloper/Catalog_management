@@ -1002,6 +1002,85 @@ router.post(
   }
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+/** Update ONLY operationsBreakdown (in place, no new quotation) */
+// ─────────────────────────────────────────────────────────────────────────────
+router.put(
+  "/quotations/:id/operations-breakdown",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const { operationsBreakdown } = req.body;
+      if (!Array.isArray(operationsBreakdown)) {
+        return res.status(400).json({ message: "operationsBreakdown must be an array" });
+      }
+
+      // Normalize + recalc like create() does
+      const builtOperationsBreakdown = operationsBreakdown.map((row, idx) => {
+        const slNo = row.slNo || idx + 1;
+        const product = row.product || "";
+        const quantity = toNum(row.quantity);
+        const ourCost = toNum(row.ourCost);
+        const brandingCost = toNum(row.brandingCost);
+        const deliveryCost = toNum(row.deliveryCost);
+        const markUpCost = toNum(row.markUpCost);
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost; // l
+        const rate = finalTotal; // d
+        const amount = quantity * rate; // e
+        const gstStr = row.gst || "";
+        const gstPct = parseGstPercent(gstStr); // f
+        const total = amount * (1 + gstPct / 100); // g
+
+        return {
+          slNo,
+          product,
+          quantity,
+          rate,
+          amount,
+          gst: gstStr,
+          total,
+          ourCost,
+          brandingCost,
+          deliveryCost,
+          markUpCost,
+          finalTotal,
+          vendor: row.vendor || "",
+        };
+      });
+
+      const updated = await Quotation.findByIdAndUpdate(
+        req.params.id,
+        { $set: { operationsBreakdown: builtOperationsBreakdown } },
+        { new: true }
+      )
+        .populate("items.productId", "images name productCost category subCategory hsnCode")
+        .lean();
+
+      if (!updated) return res.status(404).json({ message: "Quotation not found" });
+
+      await createLog(
+        "update operationsBreakdown",
+        null,
+        updated,
+        req.user,
+        req.ip
+      );
+
+      return res.json({
+        message: "Operations breakdown updated",
+        quotation: updated,
+      });
+    } catch (err) {
+      console.error("Error updating operationsBreakdown:", err);
+      return res
+        .status(400)
+        .json({ message: err.message || "Server error updating operationsBreakdown" });
+    }
+  }
+);
+
+
 router.put(
   "/quotations/:id/operations/:opId",
   authenticate,

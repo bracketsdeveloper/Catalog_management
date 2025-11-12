@@ -240,64 +240,65 @@ export default function QuotationView() {
   }, [editableQuotation, opRows.length]); // only operations section behavior
 
   // NEW: Save ONLY operationsBreakdown to current quotation (no new quotation)
-  async function handleSaveOperationsBreakdownOnly() {
-    try {
-      const payload = {
-        operationsBreakdown: opRows.map((r) => ({
-          slNo: r.slNo,
-          product: r.product,
-          quantity: num(r.quantity),
-          rate: num(r.rate),
-          amount: num(r.amount),
-          gst: r.gst,
-          total: num(r.total),
-          ourCost: num(r.ourCost),
-          brandingCost: num(r.brandingCost),
-          deliveryCost: num(r.deliveryCost),
-          markUpCost: num(r.markUpCost),
-          finalTotal: num(r.finalTotal),
-          vendor: r.vendor,
-        })),
-      };
+async function handleSaveOperationsBreakdownOnly() {
+  try {
+    const payload = {
+      operationsBreakdown: opRows.map((r) => ({
+        slNo: r.slNo,
+        product: r.product,
+        quantity: num(r.quantity),
+        rate: num(r.rate),
+        amount: num(r.amount),
+        gst: r.gst,
+        total: num(r.total),
+        ourCost: num(r.ourCost),
+        brandingCost: num(r.brandingCost),
+        deliveryCost: num(r.deliveryCost),
+        markUpCost: num(r.markUpCost),
+        finalTotal: num(r.finalTotal),
+        vendor: r.vendor,
+      })),
+    };
 
-      const res = await axios.put(`${BACKEND_URL}/api/admin/quotations/${id}`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const res = await axios.put(
+      `${BACKEND_URL}/api/admin/quotations/${id}/operations-breakdown`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
-      // refresh local state from server response if available
-      if (res?.data?.quotation) {
-        setEditableQuotation(res.data.quotation);
-        setQuotation(res.data.quotation);
+    if (res?.data?.quotation) {
+      // refresh local state from server response
+      setEditableQuotation(res.data.quotation);
+      setQuotation(res.data.quotation);
 
-        const fresh = (res.data.quotation.operationsBreakdown || []).map((r, idx) =>
-          recalcRow({
-            slNo: r.slNo || idx + 1,
-            product: r.product || "",
-            quantity: Number(r.quantity) || 0,
-            rate: Number(r.rate) || 0,
-            amount: Number(r.amount) || 0,
-            gst: r.gst || "",
-            total: Number(r.total) || 0,
-            ourCost: Number(r.ourCost) || 0,
-            brandingCost: Number(r.brandingCost) || 0,
-            deliveryCost: Number(r.deliveryCost) || 0,
-            markUpCost: Number(r.markUpCost) || 0,
-            finalTotal: Number(r.finalTotal) || 0,
-            vendor: r.vendor || "",
-          })
-        );
-        setOpRows(fresh);
-      }
-
-      alert("Operations breakdown saved to this quotation (no new quotation created).");
-    } catch (err) {
-      console.error("Save operations breakdown only error:", err);
-      alert(
-        "Failed to save operations breakdown on this quotation: " +
-        (err.response?.data?.message || err.message)
-      );
+      const fresh = (res.data.quotation.operationsBreakdown || []).map((r, idx) => ({
+        slNo: r.slNo || idx + 1,
+        product: r.product || "",
+        quantity: Number(r.quantity) || 0,
+        rate: Number(r.rate) || 0,
+        amount: Number(r.amount) || 0,
+        gst: r.gst || "",
+        total: Number(r.total) || 0,
+        ourCost: Number(r.ourCost) || 0,
+        brandingCost: Number(r.brandingCost) || 0,
+        deliveryCost: Number(r.deliveryCost) || 0,
+        markUpCost: Number(r.markUpCost) || 0,
+        finalTotal: Number(r.finalTotal) || 0,
+        vendor: r.vendor || "",
+      }));
+      setOpRows(fresh);
     }
+
+    alert("Operations breakdown saved to this quotation (no new quotation created).");
+  } catch (err) {
+    console.error("Save operations breakdown only error:", err);
+    alert(
+      "Failed to save operations breakdown on this quotation: " +
+        (err.response?.data?.message || err.message)
+    );
   }
+}
+
 
   async function handleAuthenticate() {
     try {
