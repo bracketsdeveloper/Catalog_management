@@ -4,6 +4,7 @@ const router = express.Router();
 const dayjs = require("dayjs");
 const XLSX = require("xlsx");
 const PDFDocument = require("pdfkit");
+const mongoose = require("mongoose");
 
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const Counter = require("../models/PoCounter");
@@ -17,7 +18,6 @@ const sendMail = require("../utils/sendMail");
 async function nextPO(sequenceKey = "PO-GC") {
   const year = dayjs().format("YYYY");
   const key = `${sequenceKey}:${year}`;
-  // PoCounter schema MUST have { key: String, seq: Number } or use _id instead
   const doc = await Counter.findOneAndUpdate(
     { key },
     { $inc: { seq: 1 } },
@@ -40,17 +40,131 @@ function computeTotals(items) {
     subTotal += line;
     gstTotal += gstAmt;
   }
-  return { subTotal, gstTotal, grandTotal: Math.round(subTotal + gstTotal) };
+  const grand = subTotal + gstTotal;
+  return {
+    subTotal: Math.round(subTotal * 100) / 100,
+    gstTotal: Math.round(gstTotal * 100) / 100,
+    grandTotal: Math.round(grand)
+  };
 }
 
 const DEFAULT_TERMS = `
-The Vendor warrants that all goods supplied shall strictly conform...
-(Use your provided T&C block verbatim here)
+The Vendor warrants that all goods supplied shall strictly conform to specifications, quality, and delivery timelines agreed with Ace Gifting Solutions. Any deviations or delays may result in rejection or penalties as per company policy. Payment shall be made as per agreed terms post receipt and inspection. Transit damages or shortages will be at vendor's risk. Jurisdiction: Bengaluru, India.
 `;
 
-/** ---- LIST: GET /api/admin/purchase-orders ----
- * Query (optional): q, sortKey, sortDirection
- */
+/** Small guard */
+function ensureValidMongoId(id) {
+  if (!id || String(id).startsWith("temp_")) return false;
+  return mongoose.Types.ObjectId.isValid(id);
+}
+
+/** Shared handler: create PO from an OpenPurchase row */
+async function handleCreateFromOpenPurchase(req, res) {
+  try {
+    const { openId } = req.params;
+
+    // Validate OpenPurchase id
+    if (!ensureValidMongoId(openId)) {
+      return res.status(400).json({ message: "Invalid OpenPurchase id (temp or malformed)" });
+    }
+
+    const {
+      vendorId,
+      issueDate,
+      requiredDeliveryDate,
+      deliveryAddress,
+      remarks = "",
+      terms = "",
+      productCode,
+    } = req.body || {};
+
+    if (!ensureValidMongoId(vendorId)) {
+      return res.status(400).json({ message: "Invalid vendor id" });
+    }
+
+    const open = await OpenPurchase.findById(openId);
+    if (!open) return res.status(404).json({ message: "OpenPurchase not found" });
+
+    // Resolve product
+    let product = null;
+    if (productCode) {
+      // Try Product.productId first; if not found, fall back to hsnCode
+      product =
+        (await Product.findOne({ productId: productCode }).lean()) ||
+        (await Product.findOne({ hsnCode: productCode }).lean());
+      if (!product) {
+        return res.status(400).json({ message: "Product code not found in productId/hsnCode" });
+      }
+    } else {
+      // Best-effort by name
+      product = await Product.findOne({ name: open.product }).lean();
+    }
+
+    const unitPrice = product?.productCost || product?.MRP || 0;
+    const gstPercent = product?.productGST || 0;
+
+    // Vendor
+    const vendor = await Vendor.findOne({ _id: vendorId, deleted: false }).lean();
+    if (!vendor) return res.status(400).json({ message: "Invalid vendor" });
+
+    // Item from OpenPurchase row
+    const qty = open.qtyOrdered || open.qtyRequired || 0;
+    const item = {
+      itemNo: 1,
+      productName: open.product,
+      productDescription: open.size || open.invoiceRemarks || "",
+      quantity: qty,
+      unitPrice,
+      total: qty * unitPrice,
+      hsnCode: product?.hsnCode || "",
+      gstPercent,
+    };
+
+    const { subTotal, gstTotal, grandTotal } = computeTotals([item]);
+    const mustHavePO = grandTotal > 100000 || (await isNewVendor(vendor._id));
+
+    const poNumber = await nextPO();
+    const po = await PurchaseOrder.create({
+      poNumber,
+      issueDate: issueDate ? new Date(issueDate) : new Date(),
+      requiredDeliveryDate: requiredDeliveryDate
+        ? new Date(requiredDeliveryDate)
+        : open.deliveryDateTime || null,
+      deliveryAddress: deliveryAddress || "Ace Gifting Solutions",
+      vendor: {
+        vendorId: vendor._id,
+        vendorCompany: vendor.vendorCompany || "",
+        vendorName: vendor.vendorName || "",
+        address: vendor.address || "",
+        phone: vendor.phone || "",
+        email: vendor.email || "",
+      },
+      items: [item],
+      openPurchaseId: open._id,
+      jobSheetId: open.jobSheetId || null,
+      jobSheetNumber: open.jobSheetNumber || "",
+      clientCompanyName: open.clientCompanyName || "",
+      eventName: open.eventName || "",
+      subTotal,
+      gstTotal,
+      grandTotal,
+      remarks,
+      terms: terms?.trim() || DEFAULT_TERMS,
+      status: "draft",
+    });
+
+    // Link back to OpenPurchase
+    await OpenPurchase.updateOne({ _id: open._id }, { $set: { poId: po._id, poNumber: po.poNumber } });
+
+    // Important: return { po } so your frontend's res.data.po works
+    return res.status(201).json({ ok: true, po, mustHavePO });
+  } catch (err) {
+    console.error("Create PO error:", err);
+    return res.status(500).json({ message: "Server error generating PO" });
+  }
+}
+
+/** ---- LIST: GET /api/admin/purchase-orders ---- */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { q = "", sortKey = "createdAt", sortDirection = "desc" } = req.query;
@@ -80,96 +194,16 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/** ---- CREATE FROM OPEN PURCHASE: POST /from-open/:openId ----
- * Body: { vendorId, issueDate?, requiredDeliveryDate?, deliveryAddress?, remarks?, terms?, productCode? }
+/** ---- CREATE FROM OPEN PURCHASE (canonical): POST /from-open/:openId ---- */
+router.post("/from-open/:openId", authenticate, authorizeAdmin, handleCreateFromOpenPurchase);
+
+/** ---- ROUTE ALIAS to match your existing frontend call:
+ * POST /api/admin/openPurchases/:openId/generate-po
+ * Keep this so older clients keep working.
  */
-router.post("/from-open/:openId", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const { openId } = req.params;
-    const {
-      vendorId,
-      issueDate,
-      requiredDeliveryDate,
-      deliveryAddress,
-      remarks = "",
-      terms = "",
-      productCode,
-    } = req.body;
+router.post("/openPurchases/:openId/generate-po", authenticate, authorizeAdmin, handleCreateFromOpenPurchase);
 
-    const open = await OpenPurchase.findById(openId);
-    if (!open) return res.status(404).json({ message: "OpenPurchase not found" });
-
-    // Product
-    let product = null;
-    if (productCode) {
-      product = await Product.findOne({ productId: productCode }).lean();
-      if (!product) return res.status(400).json({ message: "Product code not found" });
-    } else {
-      product = await Product.findOne({ name: open.product }).lean();
-    }
-
-    const unitPrice = product?.productCost || product?.MRP || 0;
-    const gstPercent = product?.productGST || 0;
-
-    // Vendor
-    const vendor = await Vendor.findOne({ _id: vendorId, deleted: false }).lean();
-    if (!vendor) return res.status(400).json({ message: "Invalid vendor" });
-
-    // Items
-    const qty = open.qtyOrdered || open.qtyRequired || 0;
-    const item = {
-      itemNo: 1,
-      productName: open.product,
-      productDescription: open.size || "",
-      quantity: qty,
-      unitPrice,
-      total: qty * unitPrice,
-      hsnCode: product?.hsnCode || "",
-      gstPercent,
-    };
-    const { subTotal, gstTotal, grandTotal } = computeTotals([item]);
-
-    const mustHavePO = grandTotal > 100000 || (await isNewVendor(vendor._id));
-
-    const poNumber = await nextPO();
-    const po = await PurchaseOrder.create({
-      poNumber,
-      issueDate: issueDate ? new Date(issueDate) : new Date(),
-      requiredDeliveryDate: requiredDeliveryDate ? new Date(requiredDeliveryDate) : open.deliveryDateTime,
-      deliveryAddress: deliveryAddress || "Ace Gifting Solutions",
-      vendor: {
-        vendorId: vendor._id,
-        vendorCompany: vendor.vendorCompany || "",
-        vendorName: vendor.vendorName || "",
-        address: vendor.address || "",
-        phone: vendor.phone || "",
-        email: vendor.email || "",
-      },
-      items: [item],
-      openPurchaseId: open._id,
-      jobSheetId: open.jobSheetId,
-      jobSheetNumber: open.jobSheetNumber,
-      clientCompanyName: open.clientCompanyName,
-      eventName: open.eventName,
-      subTotal,
-      gstTotal,
-      grandTotal,
-      remarks,
-      terms: terms?.trim() || DEFAULT_TERMS,
-      status: "draft", // optional, if your schema has it
-    });
-
-    // Link back to OpenPurchase (requires poId field in its schema)
-    await OpenPurchase.updateOne({ _id: open._id }, { $set: { poId: po._id } });
-
-    res.status(201).json({ message: "PO created", purchaseOrder: po, mustHavePO });
-  } catch (err) {
-    console.error("Create PO error:", err);
-    res.status(500).json({ message: "Server error creating PO" });
-  }
-});
-
-/** ---- EXPORTS: keep before /:id ---- */
+/** ---- EXPORT XLSX ---- */
 router.get("/:id/export.xlsx", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const po = await PurchaseOrder.findById(req.params.id).lean();
@@ -216,6 +250,7 @@ router.get("/:id/export.xlsx", authenticate, authorizeAdmin, async (req, res) =>
   }
 });
 
+/** ---- EXPORT PDF ---- */
 router.get("/:id/export.pdf", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const po = await PurchaseOrder.findById(req.params.id).lean();
@@ -287,7 +322,7 @@ router.post("/:id/email", authenticate, authorizeAdmin, async (req, res) => {
       res.json({ message: "PO emailed" });
     });
 
-    // Minimal PDF for email body
+    // Minimal PDF content
     doc.fontSize(18).text("PURCHASE ORDER", { align: "center" }).moveDown(0.5);
     doc.fontSize(12).text(`PO Number: ${po.poNumber}`);
     doc.text(`Issue Date: ${dayjs(po.issueDate).format("MMM D, YYYY")}`);
@@ -301,7 +336,7 @@ router.post("/:id/email", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/** ---- GET ONE: /:id ---- */
+/** ---- GET ONE ---- */
 router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const po = await PurchaseOrder.findById(req.params.id).lean();
@@ -313,7 +348,7 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/** ---- UPDATE: PUT /:id ---- */
+/** ---- UPDATE ---- */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const updates = req.body || {};
@@ -330,13 +365,12 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-/** ---- DELETE: /:id ---- */
+/** ---- DELETE ---- */
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const del = await PurchaseOrder.findByIdAndDelete(req.params.id);
     if (!del) return res.status(404).json({ message: "PO not found" });
-    // optional: unlink open purchase
-    await OpenPurchase.updateMany({ poId: del._id }, { $unset: { poId: 1 } });
+    await OpenPurchase.updateMany({ poId: del._id }, { $unset: { poId: 1, poNumber: 1 } });
     res.json({ ok: true });
   } catch (err) {
     console.error("Delete PO error:", err);

@@ -627,41 +627,51 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   const [terms, setTerms] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!vendorId) {
-      alert("Please select a vendor.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const payload = {
-        vendorId,
-        productCode: productCode || undefined,
-        issueDate: issueDate || undefined,
-        requiredDeliveryDate: requiredDeliveryDate || undefined,
-        deliveryAddress: deliveryAddress || undefined,
-        remarks,
-        terms: terms || undefined,
-      };
-      const res = await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${row._id}/generate-po`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const po = res.data && res.data.po;
-      alert(`PO created: ${po && po.poNumber ? po.poNumber : "(no number)"}`);
-      if (onCreated) onCreated(po);
-      onClose();
-    } catch (e) {
-      console.error(e);
-      alert(
-        (e && e.response && e.response.data && e.response.data.message) || "Failed to generate PO"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  // inside GeneratePOModal component
+const handleSubmit = async () => {
+  if (!vendorId) {
+    alert("Please select a vendor.");
+    return;
+  }
+  if (!row || !row._id || String(row._id).startsWith("temp_")) {
+    alert("This row hasn't been saved yet. Save it first, then generate a PO.");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const token = localStorage.getItem("token");
+    const payload = {
+      vendorId,
+      productCode: productCode || undefined,
+      issueDate: issueDate || undefined,
+      requiredDeliveryDate: requiredDeliveryDate || undefined,
+      deliveryAddress: deliveryAddress || undefined,
+      remarks,
+      terms: terms || undefined,
+    };
+
+    // Canonical route (new)
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchase-orders/from-open/${row._id}`;
+    const res = await axios.post(url, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const po = res.data && res.data.po;
+    alert(`PO created: ${po && po.poNumber ? po.poNumber : "(no number)"}`);
+    if (onCreated) onCreated(po);
+    onClose();
+  } catch (e) {
+    console.error(e);
+    alert(
+      (e && e.response && e.response.data && e.response.data.message) ||
+        "Failed to generate PO"
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
