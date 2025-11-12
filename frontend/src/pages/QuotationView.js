@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -27,7 +27,8 @@ export default function QuotationView() {
   const [errorMessage, setErrorMessage] = useState("");
   const [jsonView, setJsonView] = useState("json");
   const token = localStorage.getItem("token");
-  // NEW: Operations Breakdown table state
+
+  // Operations Breakdown table state
   const [opRows, setOpRows] = useState([]);
 
   const fieldNameMapping = {
@@ -121,21 +122,23 @@ export default function QuotationView() {
       }));
 
       // init operationsBreakdown table
-      const initialOps = (data.operationsBreakdown || []).map((r, idx) => ({
-        slNo: r.slNo || idx + 1,
-        product: r.product || "",
-        quantity: Number(r.quantity) || 0,
-        rate: Number(r.rate) || 0,
-        amount: Number(r.amount) || 0,
-        gst: r.gst || "",
-        total: Number(r.total) || 0,
-        ourCost: Number(r.ourCost) || 0,
-        brandingCost: Number(r.brandingCost) || 0,
-        deliveryCost: Number(r.deliveryCost) || 0,
-        markUpCost: Number(r.markUpCost) || 0,
-        finalTotal: Number(r.finalTotal) || 0,
-        vendor: r.vendor || "",
-      }));
+      const initialOps = (data.operationsBreakdown || []).map((r, idx) =>
+        recalcRow({
+          slNo: r.slNo || idx + 1,
+          product: r.product || "",
+          quantity: Number(r.quantity) || 0,
+          rate: Number(r.rate) || 0,
+          amount: Number(r.amount) || 0,
+          gst: r.gst || "",
+          total: Number(r.total) || 0,
+          ourCost: Number(r.ourCost) || 0,
+          brandingCost: Number(r.brandingCost) || 0,
+          deliveryCost: Number(r.deliveryCost) || 0,
+          markUpCost: Number(r.markUpCost) || 0,
+          finalTotal: Number(r.finalTotal) || 0,
+          vendor: r.vendor || "",
+        })
+      );
 
       setQuotation({ ...data, items: sanitizedItems });
       setEditableQuotation({ ...data, items: sanitizedItems });
@@ -149,7 +152,7 @@ export default function QuotationView() {
     }
   }
 
-  // --- Ops table helpers (calculations) ---
+  // ---------- Numbers + Row calc ----------
   const num = (v) => {
     const n = parseFloat(v);
     return isNaN(n) ? 0 : n;
@@ -160,7 +163,7 @@ export default function QuotationView() {
     const n = parseFloat(s.replace("%", ""));
     return isNaN(n) ? 0 : n;
   };
-  const recalcRow = (row) => {
+  function recalcRow(row) {
     const h = num(row.ourCost);
     const i = num(row.brandingCost);
     const j = num(row.deliveryCost);
@@ -171,8 +174,45 @@ export default function QuotationView() {
     const e = c * d;                        // amount
     const fPct = parseGstPercent(row.gst);  // GST %
     const g = e * (1 + fPct / 100);         // total including GST
-    return { ...row, finalTotal: l, rate: d, amount: e, total: g };
-  };
+    return {
+      ...row,
+      finalTotal: l,
+      rate: d,
+      amount: e,
+      total: g,
+    };
+  }
+
+  // ---------- Prefill Operations from quotation items if empty ----------
+  useEffect(() => {
+    if (!editableQuotation) return;
+    // If operationsBreakdown already exists (loaded into opRows), skip prefill
+    if (opRows && opRows.length > 0) return;
+
+    const items = editableQuotation.items || [];
+    if (items.length === 0) return;
+
+    const prefilled = items.map((it, idx) =>
+      recalcRow({
+        slNo: idx + 1,
+        product: it.product || "",
+        quantity: num(it.quantity) || 0,
+        rate: 0,
+        amount: 0,
+        gst: it.productGST != null ? String(it.productGST) : "",
+        total: 0,
+        ourCost: 0,
+        brandingCost: 0,
+        deliveryCost: 0,
+        markUpCost: 0,
+        finalTotal: 0,
+        vendor: "",
+      })
+    );
+    setOpRows(prefilled);
+  }, [editableQuotation, opRows.length]); // run after quotation load
+
+  // --- Ops table helpers (state updates) ---
   const addOpRow = () => {
     const nextSl = (opRows[opRows.length - 1]?.slNo || 0) + 1;
     setOpRows((prev) => [
@@ -213,7 +253,42 @@ export default function QuotationView() {
     );
   };
 
-  // NEW: Save ONLY operationsBreakdown to current quotation (no new quotation)
+  // ---------- Column Totals (vertical calculations) ----------
+  const opTotals = useMemo(() => {
+    const sums = {
+      quantity: 0,
+      amount: 0,
+      total: 0,
+      ourCost: 0,
+      brandingCost: 0,
+      deliveryCost: 0,
+      markUpCost: 0,
+      finalTotal: 0,
+    };
+    for (const r of opRows) {
+      sums.quantity += num(r.quantity);
+      sums.amount += num(r.amount);
+      sums.total += num(r.total);
+      sums.ourCost += num(r.ourCost);
+      sums.brandingCost += num(r.brandingCost);
+      sums.deliveryCost += num(r.deliveryCost);
+      sums.markUpCost += num(r.markUpCost);
+      sums.finalTotal += num(r.finalTotal);
+    }
+    return {
+      ...sums,
+      quantity: Number(sums.quantity.toFixed(2)),
+      amount: Number(sums.amount.toFixed(2)),
+      total: Number(sums.total.toFixed(2)),
+      ourCost: Number(sums.ourCost.toFixed(2)),
+      brandingCost: Number(sums.brandingCost.toFixed(2)),
+      deliveryCost: Number(sums.deliveryCost.toFixed(2)),
+      markUpCost: Number(sums.markUpCost.toFixed(2)),
+      finalTotal: Number(sums.finalTotal.toFixed(2)),
+    };
+  }, [opRows]);
+
+  // --- Save ONLY operationsBreakdown to current quotation (no new quotation)
   async function handleSaveOperationsBreakdownOnly() {
     try {
       const payload = {
@@ -238,7 +313,6 @@ export default function QuotationView() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // refresh local state from server response if available
       if (res?.data?.quotation) {
         setEditableQuotation(res.data.quotation);
         setQuotation(res.data.quotation);
@@ -402,13 +476,14 @@ export default function QuotationView() {
                   type="text"
                   value={parsedJson[key][subKey] || ""}
                   onChange={(e) => handleFormFieldChange(subKey, e.target.value, key)}
-                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${key === "RefDtls" &&
-                      subKey === "InvRm" &&
-                      (parsedJson[key][subKey]?.length < 3 ||
-                        parsedJson[key][subKey]?.length > 100)
+                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    key === "RefDtls" &&
+                    subKey === "InvRm" &&
+                    (parsedJson[key][subKey]?.length < 3 ||
+                      parsedJson[key][subKey]?.length > 100)
                       ? "border-red-500"
                       : "border-gray-300"
-                    }`}
+                  }`}
                 />
                 {key === "RefDtls" &&
                   subKey === "InvRm" &&
@@ -478,8 +553,8 @@ export default function QuotationView() {
                 item.productGST != null
                   ? parseFloat(item.productGST)
                   : editableQuotation.gst
-                    ? parseFloat(editableQuotation.gst)
-                    : 0;
+                  ? parseFloat(editableQuotation.gst)
+                  : 0;
               const total = (
                 parseFloat(amount) +
                 (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
@@ -547,7 +622,7 @@ export default function QuotationView() {
         try {
           const list = JSON.parse(detail);
           detail = list.map((e) => e.ErrorMessage).join("\n");
-        } catch { }
+        } catch {}
       }
       setErrorMessage("Failed to generate IRN: " + detail);
     }
@@ -604,8 +679,8 @@ export default function QuotationView() {
           item.productGST != null
             ? parseFloat(item.productGST)
             : gst
-              ? parseFloat(gst)
-              : 0;
+            ? parseFloat(gst)
+            : 0;
         const gstAmount =
           gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
         const total = parseFloat((amount + gstAmount).toFixed(2));
@@ -713,12 +788,10 @@ export default function QuotationView() {
     try {
       const res = await axios.post(
         `${BACKEND_URL}/api/admin/invoices/from-quotation/${id}`,
-        // Pass optional format string; fallback is APP/{FY}/{SEQ4}
         format ? { format } : {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
       alert(`Invoice created: ${res.data.invoice.invoiceDetails.invoiceNumber}`);
-      // Navigate to your invoice page (adjust route as per your app)
       navigate(`/admin-dashboard/invoices/${res.data.invoice._id}`);
     } catch (error) {
       console.error("Error creating invoice:", error);
@@ -727,7 +800,6 @@ export default function QuotationView() {
       );
     }
   }
-
 
   function handleHeaderBlur(field, e) {
     setEditableQuotation((prev) => ({
@@ -806,7 +878,6 @@ export default function QuotationView() {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
-  // Add the missing handleViewOperation function
   const handleViewOperation = (operation) => {
     console.log("View/Edit operation:", operation);
     alert(`Operation details: ${JSON.stringify(operation, null, 2)}`);
@@ -820,7 +891,7 @@ export default function QuotationView() {
     return <div className="p-6 text-gray-400">Quotation not found.</div>;
 
   return (
-    <div className="p-6 bg-white text-black min-h-screen" id="quotation-content">
+    <div className="p-6 bg-white text-black min-h-screen overflow-x-hidden" id="quotation-content">
       <div className="flex justify-between items-center mb-4">
         <button
           onClick={handleExportPDF}
@@ -829,7 +900,7 @@ export default function QuotationView() {
           Export to PDF
         </button>
 
-        <div className="flex space-x-4">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => {
               const defFmt = "APP/{FY}/{SEQ4}";
@@ -837,33 +908,13 @@ export default function QuotationView() {
                 `Enter invoice number format (tokens: {FY}, {SEQn}).\nExample: ${defFmt}`,
                 defFmt
               );
-              if (fmt === null) return; // user cancelled
+              if (fmt === null) return;
               handleCreateInvoice(fmt.trim());
             }}
             className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-xs"
           >
             Create Invoice
           </button>
-
-          {/* <button
-            onClick={async () => {
-              try {
-                const res = await axios.post(
-                  `${BACKEND_URL}/api/admin/dc/${id}`,
-                  {},
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
-                alert("Delivery Challan created successfully!");
-                navigate(`/admin-delivery-challan/${res.data.deliveryChallan._id}`);
-              } catch (error) {
-                console.error("Error generating delivery challan:", error);
-                alert("Failed to generate delivery challan.");
-              }
-            }}
-            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-xs"
-          >
-            Generate Delivery Challan
-          </button> */}
 
           <button
             onClick={handleSaveQuotation}
@@ -903,164 +954,212 @@ export default function QuotationView() {
         </div>
       </div>
 
-      <div
-        id="op-breakdown-panel"
-        className="sticky top-16 z-30 bg-white border border-gray-300 shadow p-3 rounded mb-6"
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs font-semibold">Operations Cost — Detailed Table</div>
+     {/* OPERATIONS COST PANEL */}
+<div
+  id="op-breakdown-panel"
+  className="sticky top-16 z-30 bg-white border border-gray-300 shadow p-4 rounded mb-6"
+>
+  <div className="flex items-center justify-between mb-3">
+    <div className="text-sm font-semibold">Operations Cost — Detailed Table</div>
 
-          {/* NEW: Save-only button for operationsBreakdown */}
-          <button
-            onClick={handleSaveOperationsBreakdownOnly}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs"
-            title="Save operations breakdown to this quotation without creating a new one"
-          >
-            Save Operations Breakdown
-          </button>
-        </div>
+    <button
+      onClick={handleSaveOperationsBreakdownOnly}
+      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs"
+      title="Save operations breakdown to this quotation without creating a new one"
+    >
+      Save Operations Breakdown
+    </button>
+  </div>
 
-        <div className="overflow-auto">
-          <table className="table-auto w-3/4 text-[11px] border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border px-2 py-1">slno</th>
-                <th className="border px-2 py-1">product</th>
-                <th className="border px-2 py-1">quantity</th>
-                <th className="border px-2 py-1">rate</th>
-                <th className="border px-2 py-1">amount</th>
-                <th className="border px-2 py-1">gst</th>
-                <th className="border px-2 py-1">total</th>
-                <th className="border px-2 py-1">our cost</th>
-                <th className="border px-2 py-1">branding cost</th>
-                <th className="border px-2 py-1">delivery cost</th>
-                <th className="border px-2 py-1">mark up cost</th>
-                <th className="border px-2 py-1">Final Total</th>
-                <th className="border px-2 py-1">Vendor</th>
-                <th className="border px-2 py-1">Action</th>
-              </tr>
+  {/* Prefill rows from quotation items */}
+  {opRows.length === 0 && editableQuotation?.items?.length > 0 && (
+    <button
+      onClick={() => {
+        const newRows = editableQuotation.items.map((item, idx) =>
+          recalcRow({
+            slNo: idx + 1,
+            product: item.product || "",
+            quantity: Number(item.quantity) || 0,
+            rate: 0,
+            amount: 0,
+            gst: item.productGST != null ? String(item.productGST) : "",
+            total: 0,
+            ourCost: 0,
+            brandingCost: 0,
+            deliveryCost: 0,
+            markUpCost: 0,
+            finalTotal: 0,
+            vendor: "",
+          })
+        );
+        setOpRows(newRows);
+      }}
+      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-xs mb-3"
+    >
+      Prefill from Quotation Products
+    </button>
+  )}
 
-            </thead>
-            <tbody>
-              {opRows.map((r, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="border px-2 py-1">{r.slNo}</td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.product}
-                      onChange={(e) => updateOpRow(idx, "product", e.target.value)}
-                      className="w-60 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      type="number"
-                      value={r.quantity}
-                      onChange={(e) => updateOpRow(idx, "quantity", e.target.value)}
-                      className="w-10 border px-1 py-0.5 rounded"
-                      min="0"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.rate}
-                      disabled
-                      className="w-10 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.amount.toFixed(2)}
-                      disabled
-                      className="w-10 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.gst}
-                      onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
-                      placeholder="e.g., 18 or 18%"
-                      className="w-10 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.total.toFixed(2)}
-                      disabled
-                      className="w-20 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      type="number"
-                      value={r.ourCost}
-                      onChange={(e) => updateOpRow(idx, "ourCost", e.target.value)}
-                      className="w-10 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      type="number"
-                      value={r.brandingCost}
-                      onChange={(e) => updateOpRow(idx, "brandingCost", e.target.value)}
-                      className="w-10 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      type="number"
-                      value={r.deliveryCost}
-                      onChange={(e) => updateOpRow(idx, "deliveryCost", e.target.value)}
-                      className="w-10 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      type="number"
-                      value={r.markUpCost}
-                      onChange={(e) => updateOpRow(idx, "markUpCost", e.target.value)}
-                      className="w-10 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.finalTotal.toFixed(2)}
-                      disabled
-                      className="w-25 border px-1 py-0.5 rounded bg-gray-100 text-gray-600"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <input
-                      value={r.vendor}
-                      onChange={(e) => updateOpRow(idx, "vendor", e.target.value)}
-                      className="w-40 border px-1 py-0.5 rounded"
-                    />
-                  </td>
-                  <td className="border px-2 py-1">
-                    <button
-                      onClick={() => removeOpRow(idx)}
-                      className="text-red-600 text-xs hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              <tr>
-                <td colSpan={14} className="border px-2 py-2 text-right">
-                  <button
-                    onClick={addOpRow}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs"
-                  >
-                    + Add Row
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+  {/* No horizontal scroll, wrap everything */}
+  <div className="overflow-visible">
+    <table className="table-auto w-full max-w-full text-[12px] border-collapse">
+      <thead>
+        <tr className="bg-gray-100">
+          <th className="border px-2 py-1 align-top">Sl</th>
+          <th className="border px-2 py-1 align-top">Product</th>
+          <th className="border px-2 py-1 align-top">Qty</th>
+          <th className="border px-2 py-1 align-top">Rate</th>
+          <th className="border px-2 py-1 align-top">Amount</th>
+          <th className="border px-2 py-1 align-top">GST</th>
+          <th className="border px-2 py-1 align-top">Total</th>
+          <th className="border px-2 py-1 align-top">Our Cost</th>
+          <th className="border px-2 py-1 align-top">Branding Cost</th>
+          <th className="border px-2 py-1 align-top">Delivery Cost</th>
+          <th className="border px-2 py-1 align-top">Markup</th>
+          <th className="border px-2 py-1 align-top">Final Total</th>
+          <th className="border px-2 py-1 align-top">Vendor</th>
+          <th className="border px-2 py-1 align-top">Action</th>
+        </tr>
+      </thead>
 
+      <tbody>
+        {opRows.map((r, idx) => (
+          <tr key={idx} className="hover:bg-gray-50">
+            <td className="border px-2 py-1 text-center whitespace-nowrap">{r.slNo}</td>
+
+            <td className="border px-2 py-1">
+              <input
+                value={r.product}
+                onChange={(e) => updateOpRow(idx, "product", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded whitespace-normal break-words box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                type="number"
+                value={r.quantity}
+                onChange={(e) => updateOpRow(idx, "quantity", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+                min="0"
+              />
+            </td>
+
+            <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
+              {r.rate.toFixed(2)}
+            </td>
+
+            <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
+              {r.amount.toFixed(2)}
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                value={r.gst}
+                onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
+                placeholder="18 or 18%"
+                className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
+              {r.total.toFixed(2)}
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                type="number"
+                value={r.ourCost}
+                onChange={(e) => updateOpRow(idx, "ourCost", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                type="number"
+                value={r.brandingCost}
+                onChange={(e) => updateOpRow(idx, "brandingCost", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                type="number"
+                value={r.deliveryCost}
+                onChange={(e) => updateOpRow(idx, "deliveryCost", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                type="number"
+                value={r.markUpCost}
+                onChange={(e) => updateOpRow(idx, "markUpCost", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
+              {r.finalTotal.toFixed(2)}
+            </td>
+
+            <td className="border px-2 py-1">
+              <input
+                value={r.vendor}
+                onChange={(e) => updateOpRow(idx, "vendor", e.target.value)}
+                className="block w-full min-w-0 border px-2 py-1 rounded whitespace-normal break-words box-border"
+              />
+            </td>
+
+            <td className="border px-2 py-1 text-center">
+              <button
+                onClick={() => removeOpRow(idx)}
+                className="text-red-600 text-xs hover:underline"
+              >
+                Remove
+              </button>
+            </td>
+          </tr>
+        ))}
+
+        <tr>
+          <td colSpan={14} className="border px-2 py-2 text-right">
+            <button
+              onClick={addOpRow}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs"
+            >
+              + Add Row
+            </button>
+          </td>
+        </tr>
+      </tbody>
+
+      <tfoot>
+        <tr className="bg-gray-50 font-semibold text-right">
+          <td colSpan={2} className="border px-2 py-2 text-left">Totals:</td>
+          <td className="border px-2 py-2">{opTotals.quantity}</td>
+          <td className="border px-2 py-2">{opRows.reduce((s, r) => s + num(r.rate), 0).toFixed(2)}</td>
+          <td className="border px-2 py-2">{opTotals.amount.toFixed(2)}</td>
+          <td className="border px-2 py-2"></td>
+          <td className="border px-2 py-2">{opTotals.total.toFixed(2)}</td>
+          <td className="border px-2 py-2">{opTotals.ourCost.toFixed(2)}</td>
+          <td className="border px-2 py-2">{opTotals.brandingCost.toFixed(2)}</td>
+          <td className="border px-2 py-2">{opTotals.deliveryCost.toFixed(2)}</td>
+          <td className="border px-2 py-2">{opTotals.markUpCost.toFixed(2)}</td>
+          <td className="border px-2 py-2">{opTotals.finalTotal.toFixed(2)}</td>
+          <td colSpan={2} className="border"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+
+
+      {/* Customer header */}
       <div className="mb-4 space-y-2 text-xs">
         {editableQuotation.customerName && (
           <div>
@@ -1121,6 +1220,7 @@ export default function QuotationView() {
         </button>
       </div>
 
+      {/* Terms */}
       <div className="mb-6">
         <button
           onClick={() => setTermModalOpen(true)}
@@ -1142,57 +1242,7 @@ export default function QuotationView() {
         ))}
       </div>
 
-      {termModalOpen && (
-        <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50">
-          <div className="bg-white p-6 rounded w-1/3">
-            <h2 className="text-xl font-semibold mb-4">
-              {editingTermIdx !== null ? "Edit Term" : "Add Term"}
-            </h2>
-            <div className="mb-4">
-              <input
-                type="text"
-                value={newTerm.heading}
-                placeholder="Term Heading"
-                onChange={(e) =>
-                  setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
-                }
-                className="border p-2 w-full text-xs"
-                readOnly={editingTermIdx !== null}
-              />
-            </div>
-            <div className="mb-4">
-              <textarea
-                value={newTerm.content}
-                placeholder="Term Content"
-                onChange={(e) =>
-                  setNewTerm((prev) => ({ ...prev, content: e.target.value }))
-                }
-                className="border p-2 w-full text-xs"
-                rows="4"
-              />
-            </div>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => {
-                  setTermModalOpen(false);
-                  setNewTerm({ heading: "", content: "" });
-                  setEditingTermIdx(null);
-                }}
-                className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
-              >
-                {editingTermIdx !== null ? "Update Term" : "Add Term"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* E-Invoice modal */}
       {eInvoiceModalOpen && (
         <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50 z-50">
           <div className="bg-white p-8 rounded-lg w-3/4 max_h-[80vh] overflow-y-auto shadow-xl">
@@ -1246,7 +1296,7 @@ export default function QuotationView() {
             {customerDetails && (
               <div className="mb-6">
                 {renderProductTable()}
-                <div className="flex space-x-2 mb-4">
+                <div className="flex gap-2 mb-4">
                   <button
                     onClick={handleGenerateReferenceJson}
                     className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-xs"
@@ -1278,7 +1328,8 @@ export default function QuotationView() {
                         <textarea
                           value={referenceJson}
                           onChange={(e) => setReferenceJson(e.target.value)}
-                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${referenceJson &&
+                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            referenceJson &&
                             (() => {
                               try {
                                 const parsed = JSON.parse(referenceJson);
@@ -1290,7 +1341,7 @@ export default function QuotationView() {
                                 return "border-red-500";
                               }
                             })()
-                            }`}
+                          }`}
                         />
                         {referenceJson &&
                           (() => {
@@ -1353,18 +1404,6 @@ export default function QuotationView() {
               </div>
             )}
 
-            {eInvoiceData?.irn && (
-              <div className="mb-6">
-                <button
-                  onClick={handleCancelEInvoice}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-xs"
-                  disabled={eInvoiceData?.cancelled}
-                >
-                  {eInvoiceData?.cancelled ? "E-Invoice Cancelled" : "Cancel E-Invoice"}
-                </button>
-              </div>
-            )}
-
             <div className="flex justify-end">
               <button
                 onClick={() => setEInvoiceModalOpen(false)}
@@ -1377,6 +1416,7 @@ export default function QuotationView() {
         </div>
       )}
 
+      {/* Legacy operations (if any) */}
       {editableQuotation.operations?.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-4 text-xs">Operations Costs</h3>
@@ -1420,6 +1460,7 @@ export default function QuotationView() {
         </div>
       )}
 
+      {/* Items table */}
       <table className="w-full border-collapse mb-6 text-xs">
         <thead>
           <tr className="border-b">
@@ -1448,8 +1489,8 @@ export default function QuotationView() {
               item.productGST != null
                 ? parseFloat(item.productGST)
                 : editableQuotation.gst
-                  ? parseFloat(editableQuotation.gst)
-                  : 0;
+                ? parseFloat(editableQuotation.gst)
+                : 0;
             const total = (
               parseFloat(amount) +
               (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
@@ -1559,8 +1600,8 @@ export default function QuotationView() {
                   item.productGST != null
                     ? parseFloat(item.productGST)
                     : editableQuotation.gst
-                      ? parseFloat(editableQuotation.gst)
-                      : 0;
+                    ? parseFloat(editableQuotation.gst)
+                    : 0;
                 return sum + (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0));
               }, 0)
               .toFixed(2)}
