@@ -1168,55 +1168,63 @@ export default function QuotationView() {
       </div>
 
       {termModalOpen && (
-        <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50">
-          <div className="bg-white p-6 rounded w-1/3">
-            <h2 className="text-xl font-semibold mb-4">
-              {editingTermIdx !== null ? "Edit Term" : "Add Term"}
-            </h2>
-            <div className="mb-4">
-              <input
-                type="text"
-                value={newTerm.heading}
-                placeholder="Term Heading"
-                onChange={(e) =>
-                  setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
-                }
-                className="border p-2 w-full text-xs"
-                readOnly={editingTermIdx !== null}
-              />
-            </div>
-            <div className="mb-4">
-              <textarea
-                value={newTerm.content}
-                placeholder="Term Content"
-                onChange={(e) =>
-                  setNewTerm((prev) => ({ ...prev, content: e.target.value }))
-                }
-                className="border p-2 w-full text-xs"
-                rows="4"
-              />
-            </div>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => {
-                  setTermModalOpen(false);
-                  setNewTerm({ heading: "", content: "" });
-                  setEditingTermIdx(null);
-                }}
-                className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
-              >
-                {editingTermIdx !== null ? "Update Term" : "Add Term"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    {/* Backdrop */}
+    <div className="absolute inset-0 bg-black/40" />
+
+    {/* Modal */}
+    <div className="relative z-[70] bg-white p-6 rounded w-full max-w-lg shadow-xl">
+      <h2 className="text-xl font-semibold mb-4">
+        {editingTermIdx !== null ? "Edit Term" : "Add Term"}
+      </h2>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          value={newTerm.heading}
+          placeholder="Term Heading"
+          onChange={(e) =>
+            setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
+          }
+          className="border p-2 w-full text-xs"
+          readOnly={editingTermIdx !== null}
+        />
+      </div>
+
+      <div className="mb-4">
+        <textarea
+          value={newTerm.content}
+          placeholder="Term Content"
+          onChange={(e) =>
+            setNewTerm((prev) => ({ ...prev, content: e.target.value }))
+          }
+          className="border p-2 w-full text-xs"
+          rows={4}
+        />
+      </div>
+
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={() => {
+            setTermModalOpen(false);
+            setNewTerm({ heading: "", content: "" });
+            setEditingTermIdx(null);
+          }}
+          className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+        >
+          {editingTermIdx !== null ? "Update Term" : "Add Term"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
       {eInvoiceModalOpen && (
         <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50 z-50">
