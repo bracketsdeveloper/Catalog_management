@@ -23,7 +23,8 @@ async function isNewVendor(vendorId) {
 }
 
 function computeTotals(items) {
-  let subTotal = 0, gstTotal = 0;
+  let subTotal = 0,
+    gstTotal = 0;
   for (const it of items) {
     const line = (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0);
     const gst = line * ((Number(it.gstPercent) || 0) / 100);
@@ -37,16 +38,44 @@ function computeTotals(items) {
   };
 }
 
-async function nextPO(sequenceKey = "PO-GC") {
-  const year = dayjs().format("YYYY");
-  const key = `${sequenceKey}:${year}`;
+/**
+ * nextPO
+ * Format: PO-APP-YYYY-SEQ
+ * where YYYY is the "financial year start" number:
+ * - From 1 Apr 2025 to 31 Mar 2026 => 2025
+ * - From 1 Apr 2026 to 31 Mar 2027 => 2026
+ * and so on.
+ */
+async function nextPO(sequenceKey = "PO-APP") {
+  const now = dayjs();
+  // dayjs().month() is 0-based (0 = Jan, 3 = Apr)
+  const calendarYear = now.year();
+  const monthIndex = now.month();
+
+  // If month >= April (3), use current calendar year as the FY label
+  // Else use previous year
+  const fyYear = monthIndex >= 3 ? calendarYear : calendarYear - 1;
+
+  const key = `${sequenceKey}:${fyYear}`;
   const doc = await Counter.findOneAndUpdate(
     { key },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
   const seqStr = String(doc.seq).padStart(3, "0");
-  return `PO-GC-${year}-${seqStr}`;
+  // Final number: PO-APP-<FY_YEAR>-<SEQ>
+  return `PO-APP-${fyYear}-${seqStr}`;
+}
+
+/** Pick vendor GST from new gstNumbers array or legacy gst field */
+function pickVendorGst(vendorDoc) {
+  if (!vendorDoc) return "";
+  const v = vendorDoc;
+  if (Array.isArray(v.gstNumbers) && v.gstNumbers.length) {
+    const primary = v.gstNumbers.find((g) => g.isPrimary) || v.gstNumbers[0];
+    return (primary.gst || "").trim();
+  }
+  return (v.gst || "").trim();
 }
 
 /* ---------------- LIST ---------------- */
@@ -103,18 +132,33 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
-    const norm = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
-    const escapeRegex = (str = "") => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const norm = (s) =>
+      String(s || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+    const escapeRegex = (str = "") =>
+      str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const productNames = [...new Set(aggregated.map((r) => norm(r.product)).filter(Boolean))];
-    const nameRegexes = productNames.map((n) => new RegExp(`^${escapeRegex(n)}$`, "i"));
+    const productNames = [
+      ...new Set(aggregated.map((r) => norm(r.product)).filter(Boolean)),
+    ];
+    const nameRegexes = productNames.map(
+      (n) => new RegExp(`^${escapeRegex(n)}$`, "i")
+    );
 
     const prodDocs = await Product.find({ name: { $in: nameRegexes } })
       .select("name productCost purchasePrice unitPrice price MRP")
       .lean();
 
     const pickPrice = (p) => {
-      const candidates = [p.productCost, p.purchasePrice, p.unitPrice, p.price, p.MRP];
+      const candidates = [
+        p.productCost,
+        p.purchasePrice,
+        p.unitPrice,
+        p.price,
+        p.MRP,
+      ];
       for (const c of candidates) {
         const n = Number(c);
         if (Number.isFinite(n) && n > 0) return n;
@@ -122,7 +166,9 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       return null;
     };
 
-    const priceByName = new Map(prodDocs.map((p) => [norm(p.name), pickPrice(p)]));
+    const priceByName = new Map(
+      prodDocs.map((p) => [norm(p.name), pickPrice(p)])
+    );
 
     const seen = new Set();
     const finalAggregated = aggregated
@@ -174,7 +220,9 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
     res.json(finalAggregated);
   } catch (error) {
     console.error("Error fetching open purchases:", error);
-    res.status(500).json({ message: "Server error fetching open purchases" });
+    res
+      .status(500)
+      .json({ message: "Server error fetching open purchases" });
   }
 });
 
@@ -189,7 +237,9 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.json(row);
   } catch (error) {
     console.error("Error fetching open purchase:", error);
-    res.status(500).json({ message: "Server error fetching open purchase" });
+    res
+      .status(500)
+      .json({ message: "Server error fetching open purchase" });
   }
 });
 
@@ -199,10 +249,17 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     const data = { ...req.body };
     if (data._id && data._id.startsWith("temp_")) delete data._id;
 
-    if (data.productPrice !== undefined && data.productPrice !== null && data.productPrice !== "") {
+    if (
+      data.productPrice !== undefined &&
+      data.productPrice !== null &&
+      data.productPrice !== ""
+    ) {
       data.productPrice = Number(data.productPrice) || 0;
     }
-    if (typeof data.invoiceRemarks === "string" || data.invoiceRemarks === undefined) {
+    if (
+      typeof data.invoiceRemarks === "string" ||
+      data.invoiceRemarks === undefined
+    ) {
       data.invoiceRemarks = data.invoiceRemarks || "";
     }
 
@@ -226,7 +283,10 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
         }));
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          $or: products.map((p) => ({ product: p.product, size: p.size })),
+          $or: products.map((p) => ({
+            product: p.product,
+            size: p.size,
+          })),
         });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
@@ -245,7 +305,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               schedulePickUp: p.schedulePickUp,
               followUp: p.followUp,
               remarks: p.remarks,
-              invoiceRemarks: p.invoiceRemarks || "", // NEW: carry forward
+              invoiceRemarks: p.invoiceRemarks || "", // carry forward
               status: p.status,
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
@@ -270,10 +330,14 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    res.status(201).json({ message: "Open purchase created", purchase: newPurchase });
+    res
+      .status(201)
+      .json({ message: "Open purchase created", purchase: newPurchase });
   } catch (error) {
     console.error("Error creating open purchase:", error);
-    res.status(500).json({ message: "Server error creating open purchase" });
+    res
+      .status(500)
+      .json({ message: "Server error creating open purchase" });
   }
 });
 
@@ -285,7 +349,11 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     const updateData = { ...req.body };
 
-    if (updateData.productPrice !== undefined && updateData.productPrice !== null && updateData.productPrice !== "") {
+    if (
+      updateData.productPrice !== undefined &&
+      updateData.productPrice !== null &&
+      updateData.productPrice !== ""
+    ) {
       updateData.productPrice = Number(updateData.productPrice) || 0;
     }
     if (updateData.invoiceRemarks === undefined) {
@@ -307,9 +375,9 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       if (effectiveVendorId) {
         const newVendor = await isNewVendor(effectiveVendorId);
         if (newVendor && !before.poId) {
-          return res
-            .status(400)
-            .json({ message: "PO is mandatory for a new vendor. Generate a PO first." });
+          return res.status(400).json({
+            message: "PO is mandatory for a new vendor. Generate a PO first.",
+          });
         }
       }
     }
@@ -334,7 +402,10 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         }));
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          $or: products.map((p) => ({ product: p.product, size: p.size })),
+          $or: products.map((p) => ({
+            product: p.product,
+            size: p.size,
+          })),
         });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
@@ -353,7 +424,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               schedulePickUp: p.schedulePickUp,
               followUp: p.followUp,
               remarks: p.remarks,
-              invoiceRemarks: p.invoiceRemarks || "", // NEW: carry forward
+              invoiceRemarks: p.invoiceRemarks || "",
               status: p.status,
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
@@ -396,7 +467,10 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       ];
       fields.forEach((field) => {
         let value = purchaseObj[field];
-        if (value && (field.includes("Date") || field === "deliveryDateTime")) {
+        if (
+          value &&
+          (field.includes("Date") || field === "deliveryDateTime")
+        ) {
           value = new Date(value).toLocaleString();
         }
         mailBody += `<b>${field}:</b> ${value}<br/>`;
@@ -413,24 +487,33 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    res.json({ message: "Open purchase updated", purchase: updatedPurchase });
+    res.json({
+      message: "Open purchase updated",
+      purchase: updatedPurchase,
+    });
   } catch (error) {
     console.error("Error updating open purchase:", error);
-    res.status(500).json({ message: "Server error updating open purchase" });
+    res
+      .status(500)
+      .json({ message: "Server error updating open purchase" });
   }
 });
 
 /* ---------------- DELETE ---------------- */
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const deletedPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
+    const deletedPurchase = await OpenPurchase.findByIdAndDelete(
+      req.params.id
+    );
     if (!deletedPurchase) {
       return res.status(404).json({ message: "Open purchase not found" });
     }
     res.json({ message: "Open purchase deleted" });
   } catch (error) {
     console.error("Error deleting open purchase:", error);
-    res.status(500).json({ message: "Server error deleting open purchase" });
+    res
+      .status(500)
+      .json({ message: "Server error deleting open purchase" });
   }
 });
 
@@ -454,21 +537,26 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
     const vendor = await Vendor.findOne({ _id: vendorId, deleted: false }).lean();
     if (!vendor) return res.status(400).json({ message: "Invalid vendor" });
 
+    const vendorGst = pickVendorGst(vendor);
+
     // Product lookup by code first, else by name
     let product = null;
     if (productCode) {
       product = await Product.findOne({ productId: productCode }).lean();
       if (!product) {
-        return res.status(400).json({ message: "Product code not found in Manage Products" });
+        return res
+          .status(400)
+          .json({ message: "Product code not found in Manage Products" });
       }
     } else {
       product = await Product.findOne({ name: row.product }).lean();
     }
 
     const qty = row.qtyOrdered || row.qtyRequired || 0;
-    const unitPrice = (row.productPrice || row.productPrice === 0)
-      ? Number(row.productPrice) || 0
-      : Number(product?.productCost ?? product?.MRP ?? 0) || 0;
+    const unitPrice =
+      row.productPrice || row.productPrice === 0
+        ? Number(row.productPrice) || 0
+        : Number(product?.productCost ?? product?.MRP ?? 0) || 0;
     const gstPercent = product?.productGST ?? 0;
     const hsnCode = product?.hsnCode ?? row.hsnCode ?? "";
 
@@ -481,7 +569,7 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
       total: qty * unitPrice,
       hsnCode,
       gstPercent,
-      itemRemarks: row.invoiceRemarks || "", // NEW: push invoice remarks into PO line
+      itemRemarks: row.invoiceRemarks || "",
     };
 
     const { subTotal, gstTotal, grandTotal } = computeTotals([item]);
@@ -501,6 +589,7 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
         address: vendor.address || "",
         phone: vendor.phone || "",
         email: vendor.email || "",
+        gstNumber: vendorGst || "",
       },
       items: [item],
       openPurchaseId: row._id,

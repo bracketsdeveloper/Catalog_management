@@ -15,7 +15,7 @@ const Vendor = require("../models/Vendor");
 const sendMail = require("../utils/sendMail");
 
 /** ---- Helpers ---- */
-async function nextPO(sequenceKey = "PO-GC") {
+async function nextPO(sequenceKey = "PO-APP") {
   const year = dayjs().format("YYYY");
   const key = `${sequenceKey}:${year}`;
   const doc = await Counter.findOneAndUpdate(
@@ -24,16 +24,19 @@ async function nextPO(sequenceKey = "PO-GC") {
     { new: true, upsert: true }
   );
   const seqStr = String(doc.seq).padStart(3, "0");
-  return `PO-GC-${year}-${seqStr}`;
+  return `PO-APP-${year}-${seqStr}`;
 }
 
 async function isNewVendor(vendorId) {
-  const count = await PurchaseOrder.countDocuments({ "vendor.vendorId": vendorId });
+  const count = await PurchaseOrder.countDocuments({
+    "vendor.vendorId": vendorId,
+  });
   return count === 0;
 }
 
 function computeTotals(items) {
-  let subTotal = 0, gstTotal = 0;
+  let subTotal = 0,
+    gstTotal = 0;
   for (const it of items || []) {
     const line = (it.quantity || 0) * (it.unitPrice || 0);
     const gstAmt = line * ((it.gstPercent || 0) / 100);
@@ -44,7 +47,7 @@ function computeTotals(items) {
   return {
     subTotal: Math.round(subTotal * 100) / 100,
     gstTotal: Math.round(gstTotal * 100) / 100,
-    grandTotal: Math.round(grand)
+    grandTotal: Math.round(grand),
   };
 }
 
@@ -58,6 +61,17 @@ function ensureValidMongoId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
+/** Pick vendor GST from new gstNumbers array or legacy gst field */
+function pickVendorGst(vendorDoc) {
+  if (!vendorDoc) return "";
+  const v = vendorDoc;
+  if (Array.isArray(v.gstNumbers) && v.gstNumbers.length) {
+    const primary = v.gstNumbers.find((g) => g.isPrimary) || v.gstNumbers[0];
+    return (primary.gst || "").trim();
+  }
+  return (v.gst || "").trim();
+}
+
 /** Shared handler: create PO from an OpenPurchase row */
 async function handleCreateFromOpenPurchase(req, res) {
   try {
@@ -65,7 +79,9 @@ async function handleCreateFromOpenPurchase(req, res) {
 
     // Validate OpenPurchase id
     if (!ensureValidMongoId(openId)) {
-      return res.status(400).json({ message: "Invalid OpenPurchase id (temp or malformed)" });
+      return res
+        .status(400)
+        .json({ message: "Invalid OpenPurchase id (temp or malformed)" });
     }
 
     const {
@@ -93,7 +109,9 @@ async function handleCreateFromOpenPurchase(req, res) {
         (await Product.findOne({ productId: productCode }).lean()) ||
         (await Product.findOne({ hsnCode: productCode }).lean());
       if (!product) {
-        return res.status(400).json({ message: "Product code not found in productId/hsnCode" });
+        return res
+          .status(400)
+          .json({ message: "Product code not found in productId/hsnCode" });
       }
     } else {
       // Best-effort by name
@@ -107,6 +125,8 @@ async function handleCreateFromOpenPurchase(req, res) {
     const vendor = await Vendor.findOne({ _id: vendorId, deleted: false }).lean();
     if (!vendor) return res.status(400).json({ message: "Invalid vendor" });
 
+    const vendorGst = pickVendorGst(vendor);
+
     // Item from OpenPurchase row
     const qty = open.qtyOrdered || open.qtyRequired || 0;
     const item = {
@@ -118,6 +138,7 @@ async function handleCreateFromOpenPurchase(req, res) {
       total: qty * unitPrice,
       hsnCode: product?.hsnCode || "",
       gstPercent,
+      itemRemarks: open.invoiceRemarks || "",
     };
 
     const { subTotal, gstTotal, grandTotal } = computeTotals([item]);
@@ -138,6 +159,7 @@ async function handleCreateFromOpenPurchase(req, res) {
         address: vendor.address || "",
         phone: vendor.phone || "",
         email: vendor.email || "",
+        gstNumber: vendorGst || "",
       },
       items: [item],
       openPurchaseId: open._id,
@@ -154,7 +176,10 @@ async function handleCreateFromOpenPurchase(req, res) {
     });
 
     // Link back to OpenPurchase
-    await OpenPurchase.updateOne({ _id: open._id }, { $set: { poId: po._id, poNumber: po.poNumber } });
+    await OpenPurchase.updateOne(
+      { _id: open._id },
+      { $set: { poId: po._id, poNumber: po.poNumber } }
+    );
 
     // Important: return { po } so your frontend's res.data.po works
     return res.status(201).json({ ok: true, po, mustHavePO });
@@ -184,7 +209,9 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       : {};
 
     const sort = {};
-    if (sortKey) sort[sortKey] = String(sortDirection).toLowerCase() === "asc" ? 1 : -1;
+    if (sortKey)
+      sort[sortKey] =
+        String(sortDirection).toLowerCase() === "asc" ? 1 : -1;
 
     const rows = await PurchaseOrder.find(filter).sort(sort).lean();
     res.json(rows);
@@ -195,60 +222,126 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
 });
 
 /** ---- CREATE FROM OPEN PURCHASE (canonical): POST /from-open/:openId ---- */
-router.post("/from-open/:openId", authenticate, authorizeAdmin, handleCreateFromOpenPurchase);
+router.post(
+  "/from-open/:openId",
+  authenticate,
+  authorizeAdmin,
+  handleCreateFromOpenPurchase
+);
 
 /** ---- ROUTE ALIAS to match your existing frontend call:
  * POST /api/admin/openPurchases/:openId/generate-po
  * Keep this so older clients keep working.
  */
-router.post("/openPurchases/:openId/generate-po", authenticate, authorizeAdmin, handleCreateFromOpenPurchase);
+router.post(
+  "/openPurchases/:openId/generate-po",
+  authenticate,
+  authorizeAdmin,
+  handleCreateFromOpenPurchase
+);
 
 /** ---- EXPORT XLSX ---- */
-router.get("/:id/export.xlsx", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const po = await PurchaseOrder.findById(req.params.id).lean();
-    if (!po) return res.status(404).json({ message: "PO not found" });
+router.get(
+  "/:id/export.xlsx",
+  authenticate,
+  authorizeAdmin,
+  async (req, res) => {
+    try {
+      const po = await PurchaseOrder.findById(req.params.id).lean();
+      if (!po) return res.status(404).json({ message: "PO not found" });
 
-    const header = [[
-      "PO Number","Issue Date","Required Delivery Date","Delivery Address",
-      "Vendor","Vendor Email","Vendor Phone","Client","Event","Job Sheet #",
-      "Subtotal","GST Total","Grand Total"
-    ]];
-    const headerRow = [[
-      po.poNumber,
-      dayjs(po.issueDate).format("MMM D, YYYY"),
-      po.requiredDeliveryDate ? dayjs(po.requiredDeliveryDate).format("MMM D, YYYY") : "",
-      po.deliveryAddress || "",
-      `${po.vendor.vendorCompany} (${po.vendor.vendorName})`,
-      po.vendor.email || "", po.vendor.phone || "",
-      po.clientCompanyName || "", po.eventName || "", po.jobSheetNumber || "",
-      po.subTotal || 0, po.gstTotal || 0, po.grandTotal || 0
-    ]];
+      const header = [
+        [
+          "PO Number",
+          "Issue Date",
+          "Required Delivery Date",
+          "Delivery Address",
+          "Vendor",
+          "Vendor Email",
+          "Vendor Phone",
+          "Client",
+          "Event",
+          "Job Sheet #",
+          "Subtotal",
+          "GST Total",
+          "Grand Total",
+        ],
+      ];
+      const headerRow = [
+        [
+          po.poNumber,
+          dayjs(po.issueDate).format("MMM D, YYYY"),
+          po.requiredDeliveryDate
+            ? dayjs(po.requiredDeliveryDate).format("MMM D, YYYY")
+            : "",
+          po.deliveryAddress || "",
+          `${po.vendor.vendorCompany} (${po.vendor.vendorName})`,
+          po.vendor.email || "",
+          po.vendor.phone || "",
+          po.clientCompanyName || "",
+          po.eventName || "",
+          po.jobSheetNumber || "",
+          po.subTotal || 0,
+          po.gstTotal || 0,
+          po.grandTotal || 0,
+        ],
+      ];
 
-    const itemsHeader = [["Item No","Product Name","Description","Qty","Unit Price","GST %","Line Total"]];
-    const itemsRows = (po.items || []).map(it => [
-      it.itemNo, it.productName, it.productDescription || "",
-      it.quantity, it.unitPrice, it.gstPercent || 0, it.total
-    ]);
+      const itemsHeader = [
+        [
+          "Item No",
+          "Product Name",
+          "Description",
+          "Qty",
+          "Unit Price",
+          "GST %",
+          "Line Total",
+          "Item Remarks",
+        ],
+      ];
+      const itemsRows = (po.items || []).map((it) => [
+        it.itemNo,
+        it.productName,
+        it.productDescription || "",
+        it.quantity,
+        it.unitPrice,
+        it.gstPercent || 0,
+        it.total,
+        it.itemRemarks || "",
+      ]);
 
-    const wb = XLSX.utils.book_new();
-    const ws1 = XLSX.utils.aoa_to_sheet([
-      ...header, ...headerRow, [],
-      ...itemsHeader, ...itemsRows, [],
-      ["Remarks"], [po.remarks || ""], [],
-      ["Terms"], [po.terms || ""]
-    ]);
-    XLSX.utils.book_append_sheet(wb, ws1, "PO");
-    const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+      const wb = XLSX.utils.book_new();
+      const ws1 = XLSX.utils.aoa_to_sheet([
+        ...header,
+        ...headerRow,
+        [],
+        ...itemsHeader,
+        ...itemsRows,
+        [],
+        ["Remarks"],
+        [po.remarks || ""],
+        [],
+        ["Terms"],
+        [po.terms || ""],
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws1, "PO");
+      const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
 
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${po.poNumber}.xlsx"`);
-    res.send(buf);
-  } catch (err) {
-    console.error("Export XLSX error:", err);
-    res.status(500).json({ message: "Server error exporting XLSX" });
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${po.poNumber}.xlsx"`
+      );
+      res.send(buf);
+    } catch (err) {
+      console.error("Export XLSX error:", err);
+      res.status(500).json({ message: "Server error exporting XLSX" });
+    }
   }
-});
+);
 
 /** ---- EXPORT PDF ---- */
 router.get("/:id/export.pdf", authenticate, authorizeAdmin, async (req, res) => {
@@ -258,35 +351,66 @@ router.get("/:id/export.pdf", authenticate, authorizeAdmin, async (req, res) => 
 
     const doc = new PDFDocument({ margin: 40 });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${po.poNumber}.pdf"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${po.poNumber}.pdf"`
+    );
 
     doc.fontSize(18).text("PURCHASE ORDER", { align: "center" }).moveDown(0.5);
     doc.fontSize(12).text(`PO Number: ${po.poNumber}`);
     doc.text(`Issue Date: ${dayjs(po.issueDate).format("MMM D, YYYY")}`);
-    doc.text(`Required Delivery Date: ${po.requiredDeliveryDate ? dayjs(po.requiredDeliveryDate).format("MMM D, YYYY") : "-"}`);
+    doc.text(
+      `Required Delivery Date: ${
+        po.requiredDeliveryDate
+          ? dayjs(po.requiredDeliveryDate).format("MMM D, YYYY")
+          : "-"
+      }`
+    );
     doc.text(`Delivery Address: ${po.deliveryAddress || "-"}`).moveDown(0.5);
 
-    doc.text(`Vendor: ${po.vendor.vendorCompany} (${po.vendor.vendorName})`);
+    // Vendor block: name, address, GST
+    doc.text(
+      `Vendor: ${po.vendor.vendorCompany || ""} (${po.vendor.vendorName || ""})`
+    );
     if (po.vendor.address) doc.text(`Address: ${po.vendor.address}`);
+    if (po.vendor.gstNumber)
+      doc.text(`GST: ${po.vendor.gstNumber}`);
     if (po.vendor.email) doc.text(`Email: ${po.vendor.email}`);
     if (po.vendor.phone) doc.text(`Phone: ${po.vendor.phone}`);
     doc.moveDown(0.5);
 
     doc.text("Items:", { underline: true }).moveDown(0.3);
-    (po.items || []).forEach(it => {
+    (po.items || []).forEach((it) => {
       doc.text(`${it.itemNo}. ${it.productName}`);
       doc.text(`   Desc: ${it.productDescription || "-"}`);
-      doc.text(`   Qty: ${it.quantity}  Unit: ₹${Number(it.unitPrice || 0).toFixed(2)}  GST: ${it.gstPercent || 0}%  Line: ₹${Number(it.total || 0).toFixed(2)}`);
+      if (it.itemRemarks) {
+        doc.text(`   Remarks: ${it.itemRemarks}`);
+      }
+      doc.text(
+        `   Qty: ${it.quantity}  Unit: ₹${Number(
+          it.unitPrice || 0
+        ).toFixed(2)}  GST: ${it.gstPercent || 0}%  Line: ₹${Number(
+          it.total || 0
+        ).toFixed(2)}`
+      );
       doc.moveDown(0.2);
     });
 
     doc.moveDown(0.5);
     doc.text(`Subtotal: ₹${Number(po.subTotal || 0).toFixed(2)}`);
     doc.text(`GST: ₹${Number(po.gstTotal || 0).toFixed(2)}`);
-    doc.text(`Grand Total: ₹${Number(po.grandTotal || 0).toFixed(2)}`, { underline: true });
+    doc.text(`Grand Total: ₹${Number(po.grandTotal || 0).toFixed(2)}`, {
+      underline: true,
+    });
 
-    if (po.remarks) { doc.moveDown(0.8).text("Remarks:", { underline: true }); doc.text(po.remarks); }
-    if (po.terms) { doc.moveDown(0.8).text("Terms & Conditions:", { underline: true }); doc.text(po.terms); }
+    if (po.remarks) {
+      doc.moveDown(0.8).text("Remarks:", { underline: true });
+      doc.text(po.remarks);
+    }
+    if (po.terms) {
+      doc.moveDown(0.8).text("Terms & Conditions:", { underline: true });
+      doc.text(po.terms);
+    }
 
     doc.end();
     doc.pipe(res);
@@ -314,7 +438,9 @@ router.post("/:id/email", authenticate, authorizeAdmin, async (req, res) => {
         cc: req.body.cc || "",
         bcc: req.body.bcc || "",
         subject: `Purchase Order ${po.poNumber}`,
-        html: `<p>Dear ${po.vendor.vendorName || po.vendor.vendorCompany},</p>
+        html: `<p>Dear ${
+          po.vendor.vendorName || po.vendor.vendorCompany
+        },</p>
                <p>Please find attached Purchase Order <b>${po.poNumber}</b>.</p>
                <p>Regards,<br/>Ace Gifting Solutions</p>`,
         attachments: [{ filename: `${po.poNumber}.pdf`, content: pdfBuffer }],
@@ -322,13 +448,27 @@ router.post("/:id/email", authenticate, authorizeAdmin, async (req, res) => {
       res.json({ message: "PO emailed" });
     });
 
-    // Minimal PDF content
+    // Minimal PDF content for email (now also shows address + GST)
     doc.fontSize(18).text("PURCHASE ORDER", { align: "center" }).moveDown(0.5);
     doc.fontSize(12).text(`PO Number: ${po.poNumber}`);
     doc.text(`Issue Date: ${dayjs(po.issueDate).format("MMM D, YYYY")}`);
-    doc.text(`Required Delivery Date: ${po.requiredDeliveryDate ? dayjs(po.requiredDeliveryDate).format("MMM D, YYYY") : "-"}`);
-    doc.text(`Vendor: ${po.vendor.vendorCompany} (${po.vendor.vendorName})`);
-    doc.text(`Grand Total: ₹${Number(po.grandTotal || 0).toFixed(2)}`, { underline: true });
+    doc.text(
+      `Required Delivery Date: ${
+        po.requiredDeliveryDate
+          ? dayjs(po.requiredDeliveryDate).format("MMM D, YYYY")
+          : "-"
+      }`
+    );
+    doc.text(
+      `Vendor: ${po.vendor.vendorCompany || ""} (${po.vendor.vendorName || ""})`
+    );
+    if (po.vendor.address) doc.text(`Address: ${po.vendor.address}`);
+    if (po.vendor.gstNumber)
+      doc.text(`GST: ${po.vendor.gstNumber}`);
+    doc.text(
+      `Grand Total: ₹${Number(po.grandTotal || 0).toFixed(2)}`,
+      { underline: true }
+    );
     doc.end();
   } catch (err) {
     console.error("Email PO error:", err);
@@ -356,7 +496,9 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       const totals = computeTotals(updates.items);
       Object.assign(updates, totals);
     }
-    const po = await PurchaseOrder.findByIdAndUpdate(req.params.id, updates, { new: true });
+    const po = await PurchaseOrder.findByIdAndUpdate(req.params.id, updates, {
+      new: true,
+    });
     if (!po) return res.status(404).json({ message: "PO not found" });
     res.json({ message: "PO updated", purchaseOrder: po });
   } catch (err) {
@@ -370,7 +512,10 @@ router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const del = await PurchaseOrder.findByIdAndDelete(req.params.id);
     if (!del) return res.status(404).json({ message: "PO not found" });
-    await OpenPurchase.updateMany({ poId: del._id }, { $unset: { poId: 1, poNumber: 1 } });
+    await OpenPurchase.updateMany(
+      { poId: del._id },
+      { $unset: { poId: 1, poNumber: 1 } }
+    );
     res.json({ ok: true });
   } catch (err) {
     console.error("Delete PO error:", err);

@@ -139,7 +139,9 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
       <div className="bg-white p-6 rounded w-full max-w-xl text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
-          <button onClick={close} className="text-2xl">×</button>
+          <button onClick={close} className="text-2xl">
+            ×
+          </button>
         </div>
 
         <div className="mb-4 space-y-2">
@@ -411,7 +413,8 @@ function VendorTypeahead({
                   {v.brandDealing ? ` • ${v.brandDealing}` : ""}
                 </div>
                 <div className="text-[10px] text-gray-500">
-                  {v.gst ? `GST: ${v.gst}` : ""} {v.postalCode ? ` • ${v.postalCode}` : ""}
+                  {v.gst ? `GST: ${v.gst}` : ""}{" "}
+                  {v.postalCode ? ` • ${v.postalCode}` : ""}
                 </div>
               </div>
             );
@@ -422,10 +425,12 @@ function VendorTypeahead({
         <div className="mt-1 text-xs text-gray-600">
           <div>
             <span className="font-medium">Selected:</span>{" "}
-            {selected.vendorCompany || selected.vendorName || "-"} {badge(selected.reliability)}
+            {selected.vendorCompany || selected.vendorName || "-"}{" "}
+            {badge(selected.reliability)}
           </div>
           <div>
-            <span className="font-medium">Location:</span> {selected.location || "-"}
+            <span className="font-medium">Location:</span>{" "}
+            {selected.location || "-"}
           </div>
         </div>
       )}
@@ -444,7 +449,11 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
     const payload = { ...data };
     if (payload.status === "") delete payload.status;
 
-    if (payload.productPrice !== undefined && payload.productPrice !== null && payload.productPrice !== "") {
+    if (
+      payload.productPrice !== undefined &&
+      payload.productPrice !== null &&
+      payload.productPrice !== ""
+    ) {
       payload.productPrice = Number(payload.productPrice) || 0;
     }
 
@@ -463,21 +472,33 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-2xl">×</button>
+            <button onClick={onClose} className="text-2xl">
+              ×
+            </button>
           </div>
           <form className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
-              <div><label className="font-bold">Job Sheet #:</label> {data.jobSheetNumber}</div>
+              <div>
+                <label className="font-bold">Job Sheet #:</label> {data.jobSheetNumber}
+              </div>
               <div>
                 <label className="font-bold">Job Sheet Date:</label>{" "}
                 {new Date(data.jobSheetCreatedDate).toLocaleDateString()}
               </div>
-              <div><label className="font-bold">Client:</label> {data.clientCompanyName}</div>
+              <div>
+                <label className="font-bold">Client:</label> {data.clientCompanyName}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <div><label className="font-bold">Event:</label> {data.eventName}</div>
-              <div><label className="font-bold">Product:</label> {data.product}</div>
-              <div><label className="font-bold">Size:</label> {data.size || "N/A"}</div>
+              <div>
+                <label className="font-bold">Event:</label> {data.eventName}
+              </div>
+              <div>
+                <label className="font-bold">Product:</label> {data.product}
+              </div>
+              <div>
+                <label className="font-bold">Size:</label> {data.size || "N/A"}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
@@ -488,16 +509,25 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   className="w-full border p-1"
                   value={data.productPrice ?? ""}
                   onChange={(e) =>
-                    change("productPrice", e.target.value === "" ? "" : parseFloat(e.target.value))
+                    change(
+                      "productPrice",
+                      e.target.value === "" ? "" : parseFloat(e.target.value)
+                    )
                   }
                 />
               </div>
-              <div><label className="font-bold">Sourced From:</label> {data.sourcingFrom}</div>
+              <div>
+                <label className="font-bold">Sourced From:</label> {data.sourcingFrom}
+              </div>
               <div>
                 <label className="font-bold">Delivery Date:</label>{" "}
-                {data.deliveryDateTime ? new Date(data.deliveryDateTime).toLocaleDateString() : "N/A"}
+                {data.deliveryDateTime
+                  ? new Date(data.deliveryDateTime).toLocaleDateString()
+                  : "N/A"}
               </div>
-              <div><label className="font-bold">Qty Req'd:</label> {data.qtyRequired}</div>
+              <div>
+                <label className="font-bold">Qty Req'd:</label> {data.qtyRequired}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -507,7 +537,9 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   type="number"
                   className="w-full border p-1"
                   value={data.qtyOrdered || ""}
-                  onChange={(e) => change("qtyOrdered", parseInt(e.target.value, 10) || 0)}
+                  onChange={(e) =>
+                    change("qtyOrdered", parseInt(e.target.value, 10) || 0)
+                  }
                 />
               </div>
               <div>
@@ -598,8 +630,15 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             </div>
           </form>
           <div className="flex justify-end gap-4 mt-6">
-            <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
-            <button onClick={save} className="px-4 py-2 bg-green-700 text-white rounded">Save</button>
+            <button onClick={onClose} className="px-4 py-2 border rounded">
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              className="px-4 py-2 bg-green-700 text-white rounded"
+            >
+              Save
+            </button>
           </div>
         </div>
       </div>
@@ -615,8 +654,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
 }
 
 /* ---------------- DEFAULT PO TERMS (prefill) ---------------- */
-const DEFAULT_PO_TERMS = `Terms & Conditions (Editable)
-The Vendor warrants that all goods supplied shall strictly confirm to the specifications, samples (pre-approved or otherwise), drawings, and/or standards explicitly referenced in this Purchase Order.
+const DEFAULT_PO_TERMS = `The Vendor warrants that all goods supplied shall strictly confirm to the specifications, samples (pre-approved or otherwise), drawings, and/or standards explicitly referenced in this Purchase Order.
 Quality Standards: All materials must be new, defect-free, and of first-class quality, suitable for the intended use as premium corporate gifts. This includes specific requirements on durability, colorfastness, finish, and safety standards (e.g., non-toxic, food-safe, etc.).
 Right to Inspect and Reject: We reserve the right to inspect all goods upon delivery. If, upon inspection, any item is found to be defective, non-conforming, or of unacceptable quality, we may reject the entire shipment or the non-conforming portion at the Vendor's risk and expense. The Vendor shall bear all costs of return and shall, either provide a full refund or replace the rejected goods within agreed days.
 Proofing: For custom or branded items, the Vendor must submit a pre-production sample/proof for written approval before mass production begins. Production without written approval is at the Vendor's sole risk.
@@ -639,8 +677,12 @@ function GeneratePOModal({ row, onClose, onCreated }) {
     toISODate(row?.deliveryDateTime)
   );
   const [deliveryAddress, setDeliveryAddress] = useState("Ace Gifting Solutions");
+
+  // NEW: editable vendor GSTIN + vendor address
+  const [vendorGst, setVendorGst] = useState("");
+  const [vendorAddress, setVendorAddress] = useState("");
+
   const [remarks, setRemarks] = useState("");
-  // Prefill Terms with default text, user can edit freely
   const [terms, setTerms] = useState(DEFAULT_PO_TERMS);
   const [loading, setLoading] = useState(false);
 
@@ -665,9 +707,13 @@ function GeneratePOModal({ row, onClose, onCreated }) {
         deliveryAddress: deliveryAddress || undefined,
         remarks,
         terms: terms || undefined,
+        // vendor overrides sent to backend (same style as PO edit)
+        vendor: {
+          gstNumber: vendorGst || undefined,
+          address: vendorAddress || undefined,
+        },
       };
 
-      // Canonical route (new)
       const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchase-orders/from-open/${row._id}`;
       const res = await axios.post(url, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -680,7 +726,10 @@ function GeneratePOModal({ row, onClose, onCreated }) {
     } catch (e) {
       console.error(e);
       alert(
-        (e && e.response && e.response.data && e.response.data.message) ||
+        (e &&
+          e.response &&
+          e.response.data &&
+          e.response.data.message) ||
           "Failed to generate PO"
       );
     } finally {
@@ -692,8 +741,12 @@ function GeneratePOModal({ row, onClose, onCreated }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       <div className="bg-white p-6 rounded w-full max-w-2xl text-xs">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-purple-700">Generate Purchase Order</h3>
-          <button onClick={onClose} className="text-2xl">×</button>
+          <h3 className="text-lg font-bold text-purple-700">
+            Generate Purchase Order
+          </h3>
+          <button onClick={onClose} className="text-2xl">
+            ×
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
@@ -711,7 +764,44 @@ function GeneratePOModal({ row, onClose, onCreated }) {
 
           <div className="col-span-2">
             <label className="font-bold">Vendor</label>
-            <VendorTypeahead value={vendorId} onChange={(id) => setVendorId(id)} />
+            <VendorTypeahead
+              value={vendorId}
+              onChange={(id, v) => {
+                setVendorId(id || "");
+                if (v) {
+                  setVendorGst(v.gst || "");
+                  // try proper address if present, else fall back to location
+                  setVendorAddress(
+                    v.address || v.location || ""
+                  );
+                } else {
+                  setVendorGst("");
+                  setVendorAddress("");
+                }
+              }}
+            />
+          </div>
+
+          {/* NEW: editable GSTIN + Vendor Address */}
+          <div>
+            <label className="font-bold">Vendor GSTIN</label>
+            <input
+              type="text"
+              className="w-full border p-2 rounded"
+              value={vendorGst}
+              onChange={(e) => setVendorGst(e.target.value)}
+              placeholder="Override / confirm vendor GSTIN"
+            />
+          </div>
+          <div>
+            <label className="font-bold">Vendor Address</label>
+            <input
+              type="text"
+              className="w-full border p-2 rounded"
+              value={vendorAddress}
+              onChange={(e) => setVendorAddress(e.target.value)}
+              placeholder="Override / confirm vendor address"
+            />
           </div>
 
           <div>
@@ -782,14 +872,18 @@ function GeneratePOModal({ row, onClose, onCreated }) {
 
           <div className="col-span-2">
             <div className="text-[11px] text-gray-600">
-              <b>Line Item Invoice Remarks:</b> {row.invoiceRemarks || "(none)"}<br />
+              <b>Line Item Invoice Remarks:</b>{" "}
+              {row.invoiceRemarks || "(none)"}
+              <br />
               This will be added to the PO item automatically.
             </div>
           </div>
         </div>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-2 border rounded">Cancel</button>
+          <button onClick={onClose} className="px-3 py-2 border rounded">
+            Cancel
+          </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
@@ -820,7 +914,10 @@ export default function OpenPurchaseList() {
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({
+    key: "deliveryDateTime",
+    direction: "asc",
+  });
 
   const [perms, setPerms] = useState([]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
@@ -990,7 +1087,8 @@ export default function OpenPurchaseList() {
         Client: r.clientCompanyName,
         Event: r.eventName,
         Product: r.product,
-        "Product Price": typeof r.productPrice === "number" ? r.productPrice : "",
+        "Product Price":
+          typeof r.productPrice === "number" ? r.productPrice : "",
         Size: r.size || "N/A",
         "Qty Required": r.qtyRequired,
         "Qty Ordered": r.qtyOrdered,
@@ -1014,7 +1112,9 @@ export default function OpenPurchaseList() {
   if (loading)
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">
+          Open Purchases
+        </h1>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-300 rounded"></div>
           <div className="h-64 bg-gray-300 rounded"></div>
@@ -1143,7 +1243,9 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{p.eventName}</td>
                 <td className="p-2 border">{p.product}</td>
                 <td className="p-2 border">
-                  {typeof p.productPrice === "number" ? p.productPrice.toFixed(2) : "—"}
+                  {typeof p.productPrice === "number"
+                    ? p.productPrice.toFixed(2)
+                    : "—"}
                 </td>
                 <td className="p-2 border">{p.size || "N/A"}</td>
                 <td className="p-2 border">{p.qtyRequired}</td>
@@ -1153,7 +1255,9 @@ export default function OpenPurchaseList() {
                 <td className="p-2 border">{fmtDate(p.deliveryDateTime)}</td>
                 <td className="p-2 border">{p.vendorContactNumber}</td>
                 <td className="p-2 border">{fmtDate(p.orderConfirmedDate)}</td>
-                <td className="p-2 border">{fmtDate(p.expectedReceiveDate)}</td>
+                <td className="p-2 border">
+                  {fmtDate(p.expectedReceiveDate)}
+                </td>
                 <td className="p-2 border">{fmtDate(p.schedulePickUp)}</td>
                 <td className="p-2 border">{p.invoiceRemarks || ""}</td>
                 <td className="p-2 border">{p.remarks}</td>
@@ -1161,9 +1265,9 @@ export default function OpenPurchaseList() {
 
                 <td className="p-2 border">
                   {latest
-                    ? (latest.remarks && latest.remarks.trim()
-                        ? latest.remarks
-                        : latest.note || "—")
+                    ? latest.remarks && latest.remarks.trim()
+                      ? latest.remarks
+                      : latest.note || "—"
                     : "—"}
                 </td>
 
@@ -1194,12 +1298,17 @@ export default function OpenPurchaseList() {
                         <button
                           className={
                             "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                            (!perms.includes("write-purchase") || p.status === "received"
+                            (!perms.includes("write-purchase") ||
+                            p.status === "received"
                               ? "opacity-50 cursor-not-allowed"
                               : "")
                           }
                           onClick={() => {
-                            if (!perms.includes("write-purchase") || p.status === "received") return;
+                            if (
+                              !perms.includes("write-purchase") ||
+                              p.status === "received"
+                            )
+                              return;
                             setMenuOpenFor(null);
                             setCurrentEdit(p);
                             setEditModal(true);
@@ -1211,7 +1320,9 @@ export default function OpenPurchaseList() {
                         <button
                           className={
                             "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
-                            (!perms.includes("write-purchase") ? "opacity-50 cursor-not-allowed" : "")
+                            (!perms.includes("write-purchase")
+                              ? "opacity-50 cursor-not-allowed"
+                              : "")
                           }
                           onClick={async () => {
                             if (!perms.includes("write-purchase")) return;
@@ -1236,7 +1347,9 @@ export default function OpenPurchaseList() {
                           <button
                             className={
                               "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                              (!perms.includes("write-purchase") ? "opacity-50 cursor-not-allowed" : "")
+                              (!perms.includes("write-purchase")
+                                ? "opacity-50 cursor-not-allowed"
+                                : "")
                             }
                             onClick={() => {
                               if (!perms.includes("write-purchase")) return;

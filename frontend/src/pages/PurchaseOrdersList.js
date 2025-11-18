@@ -44,6 +44,7 @@ function normalizePO(po) {
     vendorAddress: v.address || "",
     vendorEmail: v.email || "",
     vendorPhone: v.phone || "",
+    vendorGst: v.gstNumber || v.gst || "",
 
     // first item (for table row)
     firstItem: {
@@ -118,13 +119,14 @@ function EditPOModal({ po, onClose, onSave }) {
   const [vendorAddress, setVendorAddress] = useState(po.vendorAddress || "");
   const [vendorEmail, setVendorEmail] = useState(po.vendorEmail || "");
   const [vendorPhone, setVendorPhone] = useState(po.vendorPhone || "");
+  const [vendorGst, setVendorGst] = useState(po.vendorGst || "");
 
   // items
   const [items, setItems] = useState(po.items || []);
 
   const computeTotalsLocal = (list) => {
-    let sub = 0,
-      gst = 0;
+    let sub = 0;
+    let gst = 0;
     for (const it of list) {
       const line = fmtNum(it.quantity) * fmtNum(it.unitPrice);
       const g = line * (fmtNum(it.gstPercent) / 100);
@@ -184,6 +186,7 @@ function EditPOModal({ po, onClose, onSave }) {
         address: vendorAddress,
         phone: vendorPhone,
         email: vendorEmail,
+        gstNumber: vendorGst,
       },
       items: items.map((it, i) => ({
         itemNo: i + 1,
@@ -192,7 +195,9 @@ function EditPOModal({ po, onClose, onSave }) {
         quantity: Number.isFinite(+it.quantity) ? +it.quantity : 0,
         unitPrice: Number.isFinite(+it.unitPrice) ? +it.unitPrice : 0,
         gstPercent: Number.isFinite(+it.gstPercent) ? +it.gstPercent : 0,
-        total: (Number.isFinite(+it.quantity) ? +it.quantity : 0) * (Number.isFinite(+it.unitPrice) ? +it.unitPrice : 0),
+        total:
+          (Number.isFinite(+it.quantity) ? +it.quantity : 0) *
+          (Number.isFinite(+it.unitPrice) ? +it.unitPrice : 0),
         hsnCode: it.hsnCode || "",
       })),
     };
@@ -205,7 +210,9 @@ function EditPOModal({ po, onClose, onSave }) {
         {/* header (non-scrolling) */}
         <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-bold text-purple-700">Edit Purchase Order</h2>
-          <button onClick={onClose} className="text-2xl leading-none px-2">×</button>
+          <button onClick={onClose} className="text-2xl leading-none px-2">
+            ×
+          </button>
         </div>
 
         {/* body (scrollable) */}
@@ -218,41 +225,80 @@ function EditPOModal({ po, onClose, onSave }) {
             </div>
             <div>
               <label className="font-bold">Issue Date</label>
-              <input type="date" className="w-full border p-2 rounded" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+              <input
+                type="date"
+                className="w-full border p-2 rounded"
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+              />
             </div>
             <div>
               <label className="font-bold">Required Delivery</label>
-              <input type="date" className="w-full border p-2 rounded" value={requiredDeliveryDate} onChange={(e) => setRequiredDeliveryDate(e.target.value)} />
+              <input
+                type="date"
+                className="w-full border p-2 rounded"
+                value={requiredDeliveryDate}
+                onChange={(e) => setRequiredDeliveryDate(e.target.value)}
+              />
             </div>
 
             <div>
               <label className="font-bold">Client</label>
-              <input type="text" className="w-full border p-2 rounded" value={clientCompanyName} onChange={(e) => setClientCompanyName(e.target.value)} />
+              <input
+                type="text"
+                className="w-full border p-2 rounded"
+                value={clientCompanyName}
+                onChange={(e) => setClientCompanyName(e.target.value)}
+              />
             </div>
             <div>
               <label className="font-bold">Event</label>
-              <input type="text" className="w-full border p-2 rounded" value={eventName} onChange={(e) => setEventName(e.target.value)} />
+              <input
+                type="text"
+                className="w-full border p-2 rounded"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+              />
             </div>
             <div>
               <label className="font-bold">Job Sheet #</label>
-              <input type="text" className="w-full border p-2 rounded" value={jobSheetNumber} onChange={(e) => setJobSheetNumber(e.target.value)} />
+              <input
+                type="text"
+                className="w-full border p-2 rounded"
+                value={jobSheetNumber}
+                onChange={(e) => setJobSheetNumber(e.target.value)}
+              />
             </div>
           </div>
 
           {/* Delivery & Notes */}
           <div className="mt-3">
             <label className="font-bold">Delivery Address</label>
-            <input type="text" className="w-full border p-2 rounded" value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} />
+            <input
+              type="text"
+              className="w-full border p-2 rounded"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <div>
               <label className="font-bold">Remarks</label>
-              <input type="text" className="w-full border p-2 rounded" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+              <input
+                type="text"
+                className="w-full border p-2 rounded"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+              />
             </div>
             <div>
               <label className="font-bold">Terms</label>
-              <textarea className="w-full border p-2 rounded min-h-[96px]" value={terms} onChange={(e) => setTerms(e.target.value)} />
+              <textarea
+                className="w-full border p-2 rounded min-h-[96px]"
+                value={terms}
+                onChange={(e) => setTerms(e.target.value)}
+              />
             </div>
           </div>
 
@@ -262,23 +308,51 @@ function EditPOModal({ po, onClose, onSave }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="font-bold">Company</label>
-                <input className="w-full border p-2 rounded" value={vendorCompany} onChange={(e) => setVendorCompany(e.target.value)} />
+                <input
+                  className="w-full border p-2 rounded"
+                  value={vendorCompany}
+                  onChange={(e) => setVendorCompany(e.target.value)}
+                />
               </div>
               <div>
                 <label className="font-bold">Contact Name</label>
-                <input className="w-full border p-2 rounded" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+                <input
+                  className="w-full border p-2 rounded"
+                  value={vendorName}
+                  onChange={(e) => setVendorName(e.target.value)}
+                />
               </div>
               <div>
                 <label className="font-bold">Phone</label>
-                <input className="w-full border p-2 rounded" value={vendorPhone} onChange={(e) => setVendorPhone(e.target.value)} />
+                <input
+                  className="w-full border p-2 rounded"
+                  value={vendorPhone}
+                  onChange={(e) => setVendorPhone(e.target.value)}
+                />
               </div>
               <div>
                 <label className="font-bold">Email</label>
-                <input className="w-full border p-2 rounded" value={vendorEmail} onChange={(e) => setVendorEmail(e.target.value)} />
+                <input
+                  className="w-full border p-2 rounded"
+                  value={vendorEmail}
+                  onChange={(e) => setVendorEmail(e.target.value)}
+                />
               </div>
-              <div className="md:col-span-2">
+              <div>
+                <label className="font-bold">GSTIN</label>
+                <input
+                  className="w-full border p-2 rounded"
+                  value={vendorGst}
+                  onChange={(e) => setVendorGst(e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-1 md:col-start-1 md:row-start-3 md:col-span-3">
                 <label className="font-bold">Address</label>
-                <input className="w-full border p-2 rounded" value={vendorAddress} onChange={(e) => setVendorAddress(e.target.value)} />
+                <input
+                  className="w-full border p-2 rounded"
+                  value={vendorAddress}
+                  onChange={(e) => setVendorAddress(e.target.value)}
+                />
               </div>
             </div>
           </div>
@@ -287,7 +361,12 @@ function EditPOModal({ po, onClose, onSave }) {
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold text-purple-700">Items</div>
-              <button onClick={addItem} className="px-2 py-1 bg-blue-600 text-white rounded">+ Add Item</button>
+              <button
+                onClick={addItem}
+                className="px-2 py-1 bg-blue-600 text-white rounded"
+              >
+                + Add Item
+              </button>
             </div>
 
             <div className="overflow-x-auto">
@@ -312,26 +391,70 @@ function EditPOModal({ po, onClose, onSave }) {
                       <tr key={idx} className="hover:bg-gray-50">
                         <td className="p-2 border text-center">{idx + 1}</td>
                         <td className="p-2 border">
-                          <input className="w-full border p-1 rounded" value={it.productName} onChange={(e) => changeItem(idx, "productName", e.target.value)} />
+                          <input
+                            className="w-full border p-1 rounded"
+                            value={it.productName}
+                            onChange={(e) =>
+                              changeItem(idx, "productName", e.target.value)
+                            }
+                          />
                         </td>
                         <td className="p-2 border">
-                          <input className="w-full border p-1 rounded" value={it.productDescription} onChange={(e) => changeItem(idx, "productDescription", e.target.value)} />
+                          <input
+                            className="w-full border p-1 rounded"
+                            value={it.productDescription}
+                            onChange={(e) =>
+                              changeItem(idx, "productDescription", e.target.value)
+                            }
+                          />
                         </td>
                         <td className="p-2 border">
-                          <input className="w-full border p-1 rounded" value={it.hsnCode || ""} onChange={(e) => changeItem(idx, "hsnCode", e.target.value)} />
+                          <input
+                            className="w-full border p-1 rounded"
+                            value={it.hsnCode || ""}
+                            onChange={(e) => changeItem(idx, "hsnCode", e.target.value)}
+                          />
                         </td>
                         <td className="p-2 border">
-                          <input type="number" className="w-24 border p-1 rounded text-right" value={it.quantity} onChange={(e) => changeItem(idx, "quantity", e.target.value)} />
+                          <input
+                            type="number"
+                            className="w-24 border p-1 rounded text-right"
+                            value={it.quantity}
+                            onChange={(e) =>
+                              changeItem(idx, "quantity", e.target.value)
+                            }
+                          />
                         </td>
                         <td className="p-2 border">
-                          <input type="number" className="w-28 border p-1 rounded text-right" value={it.unitPrice} onChange={(e) => changeItem(idx, "unitPrice", e.target.value)} />
+                          <input
+                            type="number"
+                            className="w-28 border p-1 rounded text-right"
+                            value={it.unitPrice}
+                            onChange={(e) =>
+                              changeItem(idx, "unitPrice", e.target.value)
+                            }
+                          />
                         </td>
                         <td className="p-2 border">
-                          <input type="number" className="w-20 border p-1 rounded text-right" value={it.gstPercent} onChange={(e) => changeItem(idx, "gstPercent", e.target.value)} />
+                          <input
+                            type="number"
+                            className="w-20 border p-1 rounded text-right"
+                            value={it.gstPercent}
+                            onChange={(e) =>
+                              changeItem(idx, "gstPercent", e.target.value)
+                            }
+                          />
                         </td>
-                        <td className="p-2 border text-right">{line.toFixed(2)}</td>
+                        <td className="p-2 border text-right">
+                          {line.toFixed(2)}
+                        </td>
                         <td className="p-2 border">
-                          <button className="px-2 py-1 bg-red-600 text-white rounded" onClick={() => removeItem(idx)}>Remove</button>
+                          <button
+                            className="px-2 py-1 bg-red-600 text-white rounded"
+                            onClick={() => removeItem(idx)}
+                          >
+                            Remove
+                          </button>
                         </td>
                       </tr>
                     );
@@ -347,18 +470,39 @@ function EditPOModal({ po, onClose, onSave }) {
                 {items.length > 0 && (
                   <tfoot>
                     <tr>
-                      <td className="p-2 border text-right font-semibold" colSpan={7}>Subtotal</td>
-                      <td className="p-2 border text-right">{subTotal.toFixed(2)}</td>
+                      <td
+                        className="p-2 border text-right font-semibold"
+                        colSpan={7}
+                      >
+                        Subtotal
+                      </td>
+                      <td className="p-2 border text-right">
+                        {subTotal.toFixed(2)}
+                      </td>
                       <td className="p-2 border"></td>
                     </tr>
                     <tr>
-                      <td className="p-2 border text-right font-semibold" colSpan={7}>GST</td>
-                      <td className="p-2 border text-right">{gstTotal.toFixed(2)}</td>
+                      <td
+                        className="p-2 border text-right font-semibold"
+                        colSpan={7}
+                      >
+                        GST
+                      </td>
+                      <td className="p-2 border text-right">
+                        {gstTotal.toFixed(2)}
+                      </td>
                       <td className="p-2 border"></td>
                     </tr>
                     <tr>
-                      <td className="p-2 border text-right font-semibold" colSpan={7}>Grand Total</td>
-                      <td className="p-2 border text-right">{grandTotal.toFixed(2)}</td>
+                      <td
+                        className="p-2 border text-right font-semibold"
+                        colSpan={7}
+                      >
+                        Grand Total
+                      </td>
+                      <td className="p-2 border text-right">
+                        {grandTotal.toFixed(2)}
+                      </td>
                       <td className="p-2 border"></td>
                     </tr>
                   </tfoot>
@@ -370,8 +514,15 @@ function EditPOModal({ po, onClose, onSave }) {
 
         {/* footer (sticky) */}
         <div className="px-6 py-3 border-t sticky bottom-0 bg-white flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-2 border rounded">Cancel</button>
-          <button onClick={save} className="px-3 py-2 bg-green-700 text-white rounded">Save</button>
+          <button onClick={onClose} className="px-3 py-2 border rounded">
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            className="px-3 py-2 bg-green-700 text-white rounded"
+          >
+            Save
+          </button>
         </div>
       </div>
     </div>
@@ -388,12 +539,17 @@ function KebabMenu({ anchorRef, onClose, children, width = 176 }) {
       if (!anchorRef?.current) return;
       const rect = anchorRef.current.getBoundingClientRect();
       const pad = 4;
-      const estimatedHeight = 140; // rough guess; we’ll correct after render
+      const estimatedHeight = 140;
       const spaceBelow = window.innerHeight - rect.bottom;
-      const above = spaceBelow < estimatedHeight + 12; // flip if not enough
+      const above = spaceBelow < estimatedHeight + 12;
 
-      const top = above ? Math.max(8, rect.top - estimatedHeight - pad) : Math.min(window.innerHeight - 8, rect.bottom + pad);
-      const left = Math.min(window.innerWidth - width - 8, rect.right - width); // right-align to button
+      const top = above
+        ? Math.max(8, rect.top - estimatedHeight - pad)
+        : Math.min(window.innerHeight - 8, rect.bottom + pad);
+      const left = Math.min(
+        window.innerWidth - width - 8,
+        rect.right - width
+      );
       setPos({ top, left, above });
     };
 
@@ -446,7 +602,7 @@ export default function PurchaseOrdersList() {
 
   // kebab menu state: which row is open + ref to anchor button
   const [openMenuId, setOpenMenuId] = useState(null);
-  const anchorRefs = useRef({}); // map of id -> ref
+  const anchorRefs = useRef({});
 
   // header filters per-column
   const [filters, setFilters] = useState({
@@ -540,7 +696,11 @@ export default function PurchaseOrdersList() {
         [filters.grandTotal, String(r.grandTotal)],
       ];
       return checks.every(([needle, hay]) =>
-        !needle ? true : String(hay || "").toLowerCase().includes(String(needle).toLowerCase())
+        !needle
+          ? true
+          : String(hay || "")
+              .toLowerCase()
+              .includes(String(needle).toLowerCase())
       );
     });
   }, [globallySearched, filters]);
@@ -636,58 +796,63 @@ export default function PurchaseOrdersList() {
   };
 
   // export to PDF (client-side print to PDF) in requested layout
-  // --- REPLACE just this function ---
-const exportRowToPdf = (r) => {
-  const items =
-    Array.isArray(r.items) && r.items.length
-      ? r.items.map((it, i) => ({
-          itemNo: it.itemNo ?? i + 1,
-          productName: it.productName || "",
-          productDescription: it.productDescription || "",
-          hsnCode: it.hsnCode || "",
-          quantity: isNaN(+it.quantity) ? 0 : +it.quantity,
-          unitPrice: isNaN(+it.unitPrice) ? 0 : +it.unitPrice,
-          gstPercent: isNaN(+it.gstPercent) ? 0 : +it.gstPercent,
-        }))
-      : [
-          {
-            itemNo: 1,
-            productName: r.firstItem?.productName || "",
-            productDescription: r.firstItem?.productDescription || "",
-            hsnCode: r.firstItem?.hsnCode || "",
-            quantity: isNaN(+r.firstItem?.quantity) ? 0 : +r.firstItem.quantity,
-            unitPrice: isNaN(+r.firstItem?.unitPrice) ? 0 : +r.firstItem.unitPrice,
-            gstPercent: isNaN(+r.firstItem?.gstPercent) ? 0 : +r.firstItem.gstPercent,
-          },
-        ].filter(Boolean);
+  const exportRowToPdf = (r) => {
+    const items =
+      Array.isArray(r.items) && r.items.length
+        ? r.items.map((it, i) => ({
+            itemNo: it.itemNo ?? i + 1,
+            productName: it.productName || "",
+            productDescription: it.productDescription || "",
+            hsnCode: it.hsnCode || "",
+            quantity: isNaN(+it.quantity) ? 0 : +it.quantity,
+            unitPrice: isNaN(+it.unitPrice) ? 0 : +it.unitPrice,
+            gstPercent: isNaN(+it.gstPercent) ? 0 : +it.gstPercent,
+          }))
+        : [
+            {
+              itemNo: 1,
+              productName: r.firstItem?.productName || "",
+              productDescription: r.firstItem?.productDescription || "",
+              hsnCode: r.firstItem?.hsnCode || "",
+              quantity: isNaN(+r.firstItem?.quantity) ? 0 : +r.firstItem.quantity,
+              unitPrice: isNaN(+r.firstItem?.unitPrice)
+                ? 0
+                : +r.firstItem.unitPrice,
+              gstPercent: isNaN(+r.firstItem?.gstPercent)
+                ? 0
+                : +r.firstItem.gstPercent,
+            },
+          ].filter(Boolean);
 
-  const fmtAmt = (n) =>
-    (Number.isFinite(+n) ? +n : 0).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    const fmtAmt = (n) =>
+      (Number.isFinite(+n) ? +n : 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    const fmtDateShort = (d) => {
+      if (!d) return "—";
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return "—";
+      return dt.toLocaleDateString("en-GB");
+    };
+
+    let subTotal = 0,
+      gstTotal = 0,
+      grandTotal = 0;
+    const rowsCalc = items.map((it) => {
+      const line = (it.quantity || 0) * (it.unitPrice || 0);
+      const gstAmt = line * ((it.gstPercent || 0) / 100);
+      const total = line + gstAmt;
+      subTotal += line;
+      gstTotal += gstAmt;
+      grandTotal += total;
+      return { ...it, line, gstAmt, total };
     });
-  const fmtDateShort = (d) => {
-    if (!d) return "—";
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return "—";
-    return dt.toLocaleDateString("en-GB");
-  };
 
-  let subTotal = 0, gstTotal = 0, grandTotal = 0;
-  const rows = items.map((it) => {
-    const line = (it.quantity || 0) * (it.unitPrice || 0);
-    const gstAmt = line * ((it.gstPercent || 0) / 100);
-    const total = line + gstAmt;
-    subTotal += line;
-    gstTotal += gstAmt;
-    grandTotal += total;
-    return { ...it, line, gstAmt, total };
-  });
+    const win = window.open("", "_blank");
+    if (!win) return;
 
-  const win = window.open("", "_blank");
-  if (!win) return;
-
-  const style = `
+    const style = `
     <style>
       @page { size: A4; margin: 5mm; }
       * { box-sizing: border-box; }
@@ -701,7 +866,6 @@ const exportRowToPdf = (r) => {
         display: flex; flex-direction: column;
       }
 
-      /* Absolute logo: real top-right */
       .logo {
         position: absolute;
         top: 6px; right: 10px;
@@ -762,9 +926,8 @@ const exportRowToPdf = (r) => {
       }
       .totLTable tr:last-child td, .totTable tr:last-child td { border-bottom:0; }
 
-      /* NEW: Single full-width Terms row at the very end */
       .termsRow {
-        border: 1px solid #000; border-top: 1px solid #000; /* cap */
+        border: 1px solid #000; border-top: 1px solid #000;
         padding: 0; margin: 0;
       }
       .termsHead {
@@ -778,8 +941,7 @@ const exportRowToPdf = (r) => {
     </style>
   `;
 
-  // brand block (no logo here; logo is absolute to the sheet)
-  const brandBlock = `
+    const brandBlock = `
     <div class="topbar">
       <div class="brand">
         <h1>ACE PRINT PACK</h1>
@@ -790,30 +952,43 @@ const exportRowToPdf = (r) => {
     </div>
   `;
 
-  const headerGrid = `
+    const headerGrid = `
     <div class="grid3">
       <div class="cell">
         <h4 class="secHead">Vendor</h4>
-        <div class="fw">${(r.vendorCompany || r.vendorName || "-")}</div>
+        <div class="fw">${r.vendorCompany || r.vendorName || "-"}</div>
         <div>${r.vendorAddress || ""}</div>
-        <div>${r.vendorPhone || ""}${r.vendorEmail ? " | " + r.vendorEmail : ""}</div>
+        <div>${r.vendorPhone || ""}${
+          r.vendorEmail ? " | " + r.vendorEmail : ""
+        }</div>
+        <div>${r.vendorGst ? "GSTIN: " + r.vendorGst : ""}</div>
       </div>
       <div class="cell">
         <h4 class="secHead">Delivery Address</h4>
         <div>${r.deliveryAddress || "—"}</div>
-        <div class="kv"><span class="l">Required By:</span><span>${fmtDateShort(r.requiredDeliveryDate)}</span></div>
+        <div class="kv"><span class="l">Required By:</span><span>${fmtDateShort(
+          r.requiredDeliveryDate
+        )}</span></div>
       </div>
       <div class="cell">
         <h4 class="secHead">PO Details</h4>
-        <div class="kv"><span class="l">PO #:</span><span>${r.poNumber || "—"}</span></div>
-        <div class="kv"><span class="l">Issue Date:</span><span>${fmtDateShort(r.issueDate || r.raw?.createdAt)}</span></div>
-        <div class="kv"><span class="l">Job Sheet #:</span><span>${r.jobSheetNumber || "—"}</span></div>
-        <div class="kv"><span class="l">Event:</span><span>${r.eventName || "—"}</span></div>
+        <div class="kv"><span class="l">PO #:</span><span>${
+          r.poNumber || "—"
+        }</span></div>
+        <div class="kv"><span class="l">Issue Date:</span><span>${fmtDateShort(
+          r.issueDate || r.raw?.createdAt
+        )}</span></div>
+        <div class="kv"><span class="l">Job Sheet #:</span><span>${
+          r.jobSheetNumber || "—"
+        }</span></div>
+        <div class="kv"><span class="l">Event:</span><span>${
+          r.eventName || "—"
+        }</span></div>
       </div>
     </div>
   `;
 
-  const itemsTable = `
+    const itemsTable = `
     <table class="itemsTable">
       <thead>
         <tr>
@@ -829,8 +1004,10 @@ const exportRowToPdf = (r) => {
       </thead>
       <tbody>
         ${
-          rows.length
-            ? rows.map(it => `
+          rowsCalc.length
+            ? rowsCalc
+                .map(
+                  (it) => `
               <tr>
                 <td class="center">${it.itemNo}</td>
                 <td>${it.productName}</td>
@@ -840,11 +1017,13 @@ const exportRowToPdf = (r) => {
                 <td class="right">${fmtAmt(it.unitPrice)}</td>
                 <td class="center">${Number(it.gstPercent || 0)}%</td>
                 <td class="right">${fmtAmt(it.total)}</td>
-              </tr>`).join("")
+              </tr>`
+                )
+                .join("")
             : `<tr><td class="center" colspan="8">No items</td></tr>`
         }
         ${
-          rows.length
+          rowsCalc.length
             ? `
           <tr class="totRowBorderTop">
             <td colspan="5" class="center fw">Totals</td>
@@ -858,8 +1037,7 @@ const exportRowToPdf = (r) => {
     </table>
   `;
 
-  // Upper totals: keep Remarks ONLY; remove Terms from here
-  const totalsBlock = `
+    const totalsBlock = `
     <div class="totbox">
       <div class="totL">
         <table class="totLTable">
@@ -892,15 +1070,14 @@ const exportRowToPdf = (r) => {
     </div>
   `;
 
-  // NEW: Final single-row Terms & Conditions (replaces old 3-col footer)
-  const termsFullWidth = `
+    const termsFullWidth = `
     <div class="termsRow">
       <div class="termsHead">Terms & Conditions</div>
       <div class="termsBody">${(r.terms && r.terms.trim()) || "—"}</div>
     </div>
   `;
 
-  const html = `
+    const html = `
     <!doctype html>
     <html>
       <head>
@@ -919,23 +1096,23 @@ const exportRowToPdf = (r) => {
           ${termsFullWidth}
         </div>
         <script>
-          // In the print dialog, uncheck "Headers and footers" for a clean export.
           window.onload = function(){ window.print(); }
         </script>
       </body>
     </html>
   `;
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-};
-
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  };
 
   if (loading) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">Purchase Orders</h1>
+        <h1 className="text-2xl font-bold text-purple-700 mb-4">
+          Purchase Orders
+        </h1>
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-300 rounded"></div>
           <div className="h-64 bg-gray-300 rounded"></div>
@@ -944,7 +1121,6 @@ const exportRowToPdf = (r) => {
     );
   }
 
-  // header cell helper
   const H = ({ id, label }) => (
     <th
       className="p-2 border cursor-pointer select-none"
@@ -952,13 +1128,21 @@ const exportRowToPdf = (r) => {
       title="Click to sort"
     >
       {label}
-      {sort.key === id ? (sort.dir === "asc" ? " ▲" : sort.dir === "desc" ? " ▼" : "") : ""}
+      {sort.key === id
+        ? sort.dir === "asc"
+          ? " ▲"
+          : sort.dir === "desc"
+          ? " ▼"
+          : ""
+        : ""}
     </th>
   );
 
   return (
     <div className="p-6 text-xs">
-      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Purchase Orders</h1>
+      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
+        Purchase Orders
+      </h1>
       <div className="flex gap-2 mb-4">
         <input
           className="border p-2 rounded flex-1"
@@ -966,7 +1150,10 @@ const exportRowToPdf = (r) => {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <button onClick={exportToExcel} className="bg-green-600 text-white px-4 py-2 rounded">
+        <button
+          onClick={exportToExcel}
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
           Export Excel
         </button>
       </div>
@@ -992,7 +1179,6 @@ const exportRowToPdf = (r) => {
               <H id="grandTotal" label="Grand Total" />
               <th className="p-2 border">Actions</th>
             </tr>
-            {/* Filter Row */}
             <tr className="bg-gray-100">
               {[
                 ["poNumber", "Filter PO #"],
@@ -1017,7 +1203,9 @@ const exportRowToPdf = (r) => {
                     className="w-full p-1 text-xs border rounded"
                     placeholder={ph}
                     value={filters[k]}
-                    onChange={(e) => setFilters((f) => ({ ...f, [k]: e.target.value }))}
+                    onChange={(e) =>
+                      setFilters((f) => ({ ...f, [k]: e.target.value }))
+                    }
                   />
                 </th>
               ))}
@@ -1026,8 +1214,8 @@ const exportRowToPdf = (r) => {
           </thead>
           <tbody>
             {sorted.map((r) => {
-              // ensure a ref exists for this row's action button
-              if (!anchorRefs.current[r._id]) anchorRefs.current[r._id] = React.createRef();
+              if (!anchorRefs.current[r._id])
+                anchorRefs.current[r._id] = React.createRef();
 
               return (
                 <tr key={r._id} className="hover:bg-gray-50">
@@ -1037,29 +1225,38 @@ const exportRowToPdf = (r) => {
                   <td className="p-2 border">{r.eventName}</td>
 
                   <td className="p-2 border">
-                    <div className="font-semibold">{r.firstItem.productName || "-"}</div>
-                    <div className="text-[11px] text-gray-600">{r.firstItem.productDescription || ""}</div>
+                    <div className="font-semibold">
+                      {r.firstItem.productName || "-"}
+                    </div>
+                    <div className="text-[11px] text-gray-600">
+                      {r.firstItem.productDescription || ""}
+                    </div>
                   </td>
                   <td className="p-2 border">{r.firstItem.quantity}</td>
                   <td className="p-2 border">{r.firstItem.unitPrice}</td>
                   <td className="p-2 border">{r.firstItem.gstPercent}</td>
                   <td className="p-2 border">{r.firstItem.total}</td>
 
-                  <td className="p-2 border">{r.vendorCompany || r.vendorName || ""}</td>
+                  <td className="p-2 border">
+                    {r.vendorCompany || r.vendorName || ""}
+                  </td>
                   <td className="p-2 border">{fmtDate(r.issueDate)}</td>
-                  <td className="p-2 border">{fmtDate(r.requiredDeliveryDate)}</td>
+                  <td className="p-2 border">
+                    {fmtDate(r.requiredDeliveryDate)}
+                  </td>
 
                   <td className="p-2 border">{r.subTotal}</td>
                   <td className="p-2 border">{r.gstTotal}</td>
                   <td className="p-2 border font-semibold">{r.grandTotal}</td>
 
-                  {/* Actions (anchor only; menu is rendered in a portal) */}
                   <td className="p-2 border relative">
                     <button
                       ref={anchorRefs.current[r._id]}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenMenuId((prev) => (prev === r._id ? null : r._id));
+                        setOpenMenuId((prev) =>
+                          prev === r._id ? null : r._id
+                        );
                       }}
                       className="w-full border rounded py-0.5 hover:bg-gray-100"
                       aria-haspopup="menu"
@@ -1089,7 +1286,9 @@ const exportRowToPdf = (r) => {
                           disabled={!canWrite}
                           className={
                             "w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                            (!canWrite ? "opacity-50 cursor-not-allowed" : "")
+                            (!canWrite
+                              ? "opacity-50 cursor-not-allowed"
+                              : "")
                           }
                           onClick={() => {
                             if (!canWrite) return;
@@ -1104,7 +1303,9 @@ const exportRowToPdf = (r) => {
                           disabled={!canWrite}
                           className={
                             "w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
-                            (!canWrite ? "opacity-50 cursor-not-allowed" : "")
+                            (!canWrite
+                              ? "opacity-50 cursor-not-allowed"
+                              : "")
                           }
                           onClick={async () => {
                             if (!canWrite) return;
@@ -1114,7 +1315,9 @@ const exportRowToPdf = (r) => {
                                 `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchase-orders/${r._id}`,
                                 { headers }
                               );
-                              setRows((prev) => prev.filter((x) => x._id !== r._id));
+                              setRows((prev) =>
+                                prev.filter((x) => x._id !== r._id)
+                              );
                             } catch (e) {
                               alert("Delete failed");
                             } finally {
@@ -1132,7 +1335,10 @@ const exportRowToPdf = (r) => {
             })}
             {sorted.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-gray-500" colSpan={16}>
+                <td
+                  className="p-4 text-center text-gray-500"
+                  colSpan={16}
+                >
                   No purchase orders found.
                 </td>
               </tr>
@@ -1153,9 +1359,12 @@ const exportRowToPdf = (r) => {
                 { headers }
               );
               const updatedRaw =
-                (res.data && (res.data.purchaseOrder || res.data.po)) || res.data;
+                (res.data && (res.data.purchaseOrder || res.data.po)) ||
+                res.data;
               const updated = normalizePO(updatedRaw);
-              setRows((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+              setRows((prev) =>
+                prev.map((x) => (x._id === updated._id ? updated : x))
+              );
               setEditPo(null);
             } catch (e) {
               console.error(e);
