@@ -981,9 +981,7 @@ export default function PurchaseOrdersList() {
         <div class="kv"><span class="l">Job Sheet #:</span><span>${
           r.jobSheetNumber || "—"
         }</span></div>
-        <div class="kv"><span class="l">Event:</span><span>${
-          r.eventName || "—"
-        }</span></div>
+        
       </div>
     </div>
   `;
