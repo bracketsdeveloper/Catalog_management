@@ -23,7 +23,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
 
-  // account status (legacy single 'role')
+  // account status (legacy single "role")
   const [updatedAccountStatus, setUpdatedAccountStatus] = useState("GENERAL");
 
   // multi roles
@@ -34,10 +34,13 @@ export default function UserManagement() {
   const [error, setError] = useState(null);
 
   // filters + sorting
-  const [statusFilter, setStatusFilter] = useState("ALL"); // 'ALL' | 'GENERAL' | 'ADMIN' | 'VIEWER'
-  const [nameSort, setNameSort] = useState("asc"); // 'asc' | 'desc'
-  const [roleSortDir, setRoleSortDir] = useState("asc"); // 'asc' | 'desc'
+  const [statusFilter, setStatusFilter] = useState("ALL"); // "ALL" | "GENERAL" | "ADMIN" | "VIEWER"
+  const [nameSort, setNameSort] = useState("asc"); // "asc" | "desc"
+  const [roleSortDir, setRoleSortDir] = useState("asc"); // "asc" | "desc"
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+
+  // for per row actions dropdown
+  const [openMenuFor, setOpenMenuFor] = useState(null); // userId or null
 
   /* compute role options based on sort dir */
   const roleOptions = useMemo(() => {
@@ -77,6 +80,7 @@ export default function UserManagement() {
     setUpdatedAccountStatus(user.role || "GENERAL");
     setUpdatedSuperAdmin(!!user.isSuperAdmin);
     setUpdatedRoles(Array.isArray(user.roles) ? user.roles : []);
+    setOpenMenuFor(null);
   }
 
   function closeEditModal() {
@@ -135,6 +139,34 @@ export default function UserManagement() {
     }
   }
 
+  async function handleDeleteUser(userId) {
+    if (!isSuperAdmin) {
+      alert("Only SuperAdmins can delete users.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this user? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    try {
+      const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+      await axios.delete(`${BACKEND_URL}/api/user/users/${userId}`, { headers });
+
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
+
+      if (editingUser === userId) {
+        closeEditModal();
+      }
+      setOpenMenuFor(null);
+    } catch (err) {
+      alert(
+        err.response?.data?.message || "Failed to delete user. Please try again."
+      );
+    }
+  }
+
   function toggleRole(role) {
     setUpdatedRoles((prev) =>
       prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
@@ -160,6 +192,10 @@ export default function UserManagement() {
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, "Users");
     XLSX.writeFile(wb, "users_export.xlsx");
+  }
+
+  function toggleMenu(userId) {
+    setOpenMenuFor((prev) => (prev === userId ? null : userId));
   }
 
   if (loading) return <div className="text-gray-900 p-6">Loading users...</div>;
@@ -224,9 +260,15 @@ export default function UserManagement() {
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Phone</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Email</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Roles</th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Account Status</th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">SuperAdmin</th>
-              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
+                Account Status
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
+                SuperAdmin
+              </th>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -241,14 +283,36 @@ export default function UserManagement() {
                     : "—"}
                 </td>
                 <td className="px-6 py-4 text-sm">{user.role || "GENERAL"}</td>
-                <td className="px-6 py-4 text-sm">{user.isSuperAdmin ? "Yes" : "No"}</td>
                 <td className="px-6 py-4 text-sm">
+                  {user.isSuperAdmin ? "Yes" : "No"}
+                </td>
+                <td className="px-6 py-4 text-sm relative">
                   <button
-                    onClick={() => openEditModal(user)}
-                    className="bg-[#66C3D0] text-white px-3 py-1 rounded-md hover:bg-[#66C3D0]/80"
+                    onClick={() => toggleMenu(user._id)}
+                    className="px-2 py-1 rounded-full border border-gray-300 hover:bg-gray-100"
+                    title="Actions"
                   >
-                    Edit
+                    ⋮
                   </button>
+
+                  {openMenuFor === user._id && (
+                    <div className="absolute right-4 mt-1 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-20">
+                      <button
+                        className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+                        onClick={() => openEditModal(user)}
+                      >
+                        Edit
+                      </button>
+                      {isSuperAdmin && (
+                        <button
+                          className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteUser(user._id)}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
