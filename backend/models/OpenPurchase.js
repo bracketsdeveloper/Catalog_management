@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
  * - Includes editable `productPrice`
  * - `poId` link to generated PO
  * - `invoiceRemarks` added (prints on PO / carries to Closed)
+ * - `completionState` added for Partially/Fully
  * - `strict: false` to coexist with any extra fields you already store
  */
 const openPurchaseSchema = new mongoose.Schema(
@@ -41,16 +42,32 @@ const openPurchaseSchema = new mongoose.Schema(
     // Status
     status: {
       type: String,
-      enum: ["open", "ordered", "in-progress", "received", "closed", "cancelled", "pending", "alert"],
+      enum: [
+        "open",
+        "ordered",
+        "in-progress",
+        "received",
+        "closed",
+        "cancelled",
+        "pending",
+        "alert",
+      ],
       default: "open",
+    },
+
+    // NEW: completion state for the row
+    completionState: {
+      type: String,
+      enum: ["", "Partially", "Fully"],
+      default: "",
     },
 
     // Attached PO
     poId: { type: mongoose.Schema.Types.ObjectId, ref: "PurchaseOrder", index: true },
 
     // Remarks
-    remarks: { type: String, default: "" },           // general notes
-    invoiceRemarks: { type: String, default: "" },    // NEW: prints on PO / flows to Closed
+    remarks: { type: String, default: "" },        // general notes
+    invoiceRemarks: { type: String, default: "" }, // prints on PO / flows to Closed
 
     // Audit
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

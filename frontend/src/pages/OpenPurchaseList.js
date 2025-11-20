@@ -39,6 +39,19 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
 
   return (
     <tr className="bg-gray-100">
+      {/* Completion filter */}
+      <th className="p-1 border">
+        <select
+          className="w-full p-1 text-xs border rounded"
+          value={headerFilters.completionState || ""}
+          onChange={(e) => onFilterChange("completionState", e.target.value)}
+        >
+          <option value="">All</option>
+          <option value="Partially">Partially</option>
+          <option value="Fully">Fully</option>
+        </select>
+      </th>
+
       {cols.map((c) => (
         <th key={c} className="p-1 border">
           <input
@@ -292,24 +305,6 @@ function VendorTypeahead({
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  const onKeyDown = (e) => {
-    if (!open) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlight((h) => Math.max(h - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (highlight >= 0 && filtered[highlight]) {
-        selectVendor(filtered[highlight]);
-      }
-    } else if (e.key === "Escape") {
-      setOpen(false);
-    }
-  };
-
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return vendors.slice(0, 50);
@@ -331,6 +326,24 @@ function VendorTypeahead({
       })
       .slice(0, 50);
   }, [vendors, q]);
+
+  const onKeyDown = (e) => {
+    if (!open) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlight >= 0 && filtered[highlight]) {
+        selectVendor(filtered[highlight]);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
 
   const selected = vendors.find((v) => String(v._id) === String(value)) || null;
 
@@ -445,7 +458,9 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
 
   const change = (f, v) => setData((p) => ({ ...p, [f]: v }));
   const save = () => {
-    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?")) return;
+    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
+      return;
+
     const payload = { ...data };
     if (payload.status === "") delete payload.status;
 
@@ -461,6 +476,13 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
       payload.invoiceRemarks = "";
     } else {
       payload.invoiceRemarks = String(payload.invoiceRemarks);
+    }
+
+    if (payload.completionState === undefined || payload.completionState === null) {
+      payload.completionState = "";
+    } else {
+      const v = String(payload.completionState).trim();
+      payload.completionState = v === "Partially" || v === "Fully" ? v : "";
     }
 
     onSave(payload);
@@ -479,14 +501,18 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
           <form className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="font-bold">Job Sheet #:</label> {data.jobSheetNumber}
+                <label className="font-bold">Job Sheet #:</label>{" "}
+                {data.jobSheetNumber}
               </div>
               <div>
                 <label className="font-bold">Job Sheet Date:</label>{" "}
-                {new Date(data.jobSheetCreatedDate).toLocaleDateString()}
+                {data.jobSheetCreatedDate
+                  ? new Date(data.jobSheetCreatedDate).toLocaleDateString()
+                  : "N/A"}
               </div>
               <div>
-                <label className="font-bold">Client:</label> {data.clientCompanyName}
+                <label className="font-bold">Client:</label>{" "}
+                {data.clientCompanyName}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -517,7 +543,8 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
               <div>
-                <label className="font-bold">Sourced From:</label> {data.sourcingFrom}
+                <label className="font-bold">Sourced From:</label>{" "}
+                {data.sourcingFrom}
               </div>
               <div>
                 <label className="font-bold">Delivery Date:</label>{" "}
@@ -530,7 +557,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="font-bold">Qty Ordered:</label>
                 <input
@@ -550,6 +577,18 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   value={data.vendorContactNumber || ""}
                   onChange={(e) => change("vendorContactNumber", e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="font-bold">Completion:</label>
+                <select
+                  className="w-full border p-1"
+                  value={data.completionState || ""}
+                  onChange={(e) => change("completionState", e.target.value)}
+                >
+                  <option value="">--</option>
+                  <option value="Partially">Partially</option>
+                  <option value="Fully">Fully</option>
+                </select>
               </div>
             </div>
 
@@ -678,7 +717,6 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   );
   const [deliveryAddress, setDeliveryAddress] = useState("Ace Gifting Solutions");
 
-  // NEW: editable vendor GSTIN + vendor address
   const [vendorGst, setVendorGst] = useState("");
   const [vendorAddress, setVendorAddress] = useState("");
 
@@ -707,7 +745,6 @@ function GeneratePOModal({ row, onClose, onCreated }) {
         deliveryAddress: deliveryAddress || undefined,
         remarks,
         terms: terms || undefined,
-        // vendor overrides sent to backend (same style as PO edit)
         vendor: {
           gstNumber: vendorGst || undefined,
           address: vendorAddress || undefined,
@@ -770,10 +807,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
                 setVendorId(id || "");
                 if (v) {
                   setVendorGst(v.gst || "");
-                  // try proper address if present, else fall back to location
-                  setVendorAddress(
-                    v.address || v.location || ""
-                  );
+                  setVendorAddress(v.address || v.location || "");
                 } else {
                   setVendorGst("");
                   setVendorAddress("");
@@ -782,7 +816,6 @@ function GeneratePOModal({ row, onClose, onCreated }) {
             />
           </div>
 
-          {/* NEW: editable GSTIN + Vendor Address */}
           <div>
             <label className="font-bold">Vendor GSTIN</label>
             <input
@@ -946,7 +979,9 @@ export default function OpenPurchaseList() {
     if (str) {
       try {
         setPerms(JSON.parse(str));
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
   }, []);
 
@@ -1010,19 +1045,28 @@ export default function OpenPurchaseList() {
     return globalFiltered.filter((r) =>
       Object.entries(headerFilters).every(([k, v]) => {
         if (!v) return true;
+
         if (k === "status") {
           if (v === "__empty__") return !r.status;
           return (r.status || "").toLowerCase() === v.toLowerCase();
         }
+
+        if (k === "completionState") {
+          return (r.completionState || "") === v;
+        }
+
         if (k === "__poStatus") {
           const generated = !!(r.poId || r.poNumber);
           return v === "generated" ? generated : v === "not" ? !generated : true;
         }
-        const cell = r[k]
+
+        const raw = r[k];
+        const cell = raw
           ? k.includes("Date")
-            ? new Date(r[k]).toLocaleDateString()
-            : String(r[k])
+            ? new Date(raw).toLocaleDateString()
+            : String(raw)
           : "";
+
         return cell.toLowerCase().includes(v.toLowerCase());
       })
     );
@@ -1067,10 +1111,13 @@ export default function OpenPurchaseList() {
 
   const sortBy = (key) => {
     setSortConfig((prev) => {
-      let dir = "asc";
-      if (prev.key === key && prev.direction === "asc") dir = "desc";
-      else if (prev.key === key && prev.direction === "desc") dir = "";
-      return { key, direction: dir };
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
     });
   };
 
@@ -1082,6 +1129,7 @@ export default function OpenPurchaseList() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(
       rows.map((r) => ({
+        Completion: r.completionState || "",
         "Job Sheet #": r.jobSheetNumber,
         "Job Sheet Date": fmtDate(r.jobSheetCreatedDate),
         Client: r.clientCompanyName,
@@ -1153,10 +1201,102 @@ export default function OpenPurchaseList() {
           </button>
         )}
       </div>
+
+      {/* Advanced filters toggle content */}
+      {showFilters && (
+        <div className="mb-4 border rounded p-3 text-xs bg-gray-50 space-y-2">
+          <div className="font-bold mb-1">Advanced Filters</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div>
+              <label className="block">Job Sheet # From</label>
+              <input
+                type="text"
+                className="border p-1 rounded w-full"
+                value={advFilters.jobSheetNumber.from}
+                onChange={(e) =>
+                  setAdvFilters((p) => ({
+                    ...p,
+                    jobSheetNumber: {
+                      ...p.jobSheetNumber,
+                      from: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block">Job Sheet # To</label>
+              <input
+                type="text"
+                className="border p-1 rounded w-full"
+                value={advFilters.jobSheetNumber.to}
+                onChange={(e) =>
+                  setAdvFilters((p) => ({
+                    ...p,
+                    jobSheetNumber: {
+                      ...p.jobSheetNumber,
+                      to: e.target.value,
+                    },
+                  }))
+                }
+              />
+            </div>
+
+            {[
+              ["jobSheetCreatedDate", "Job Sheet Date"],
+              ["deliveryDateTime", "Delivery Date"],
+              ["orderConfirmedDate", "Order Confirmed"],
+              ["expectedReceiveDate", "Expected Receive"],
+              ["schedulePickUp", "Pick-Up"],
+            ].map(([key, label]) => (
+              <React.Fragment key={key}>
+                <div>
+                  <label className="block">{label} From</label>
+                  <input
+                    type="date"
+                    className="border p-1 rounded w-full"
+                    value={advFilters[key].from}
+                    onChange={(e) =>
+                      setAdvFilters((p) => ({
+                        ...p,
+                        [key]: { ...p[key], from: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block">{label} To</label>
+                  <input
+                    type="date"
+                    className="border p-1 rounded w-full"
+                    value={advFilters[key].to}
+                    onChange={(e) =>
+                      setAdvFilters((p) => ({
+                        ...p,
+                        [key]: { ...p[key], to: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <button
+              className="px-3 py-1 border rounded"
+              onClick={() => setAdvFilters(initAdv)}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
         <thead className="bg-gray-50">
           <tr>
             {[
+              { key: "completionState", label: "Completion" }, // first column
               { key: "jobSheetCreatedDate", label: "Job Sheet Date" },
               { key: "jobSheetNumber", label: "Job Sheet #" },
               { key: "clientCompanyName", label: "Client" },
@@ -1186,9 +1326,7 @@ export default function OpenPurchaseList() {
                 {sortConfig.key === key
                   ? sortConfig.direction === "asc"
                     ? " ▲"
-                    : sortConfig.direction === "desc"
-                      ? " ▼"
-                      : ""
+                    : " ▼"
                   : ""}
               </th>
             ))}
@@ -1221,12 +1359,14 @@ export default function OpenPurchaseList() {
                   p.status === "alert"
                     ? "bg-red-200"
                     : p.status === "pending"
-                      ? "bg-orange-200"
-                      : p.status === "received"
-                        ? "bg-green-200"
-                        : ""
+                    ? "bg-orange-200"
+                    : p.status === "received"
+                    ? "bg-green-200"
+                    : ""
                 }
               >
+                <td className="p-2 border">{p.completionState || ""}</td>
+
                 <td className="p-2 border">{fmtDate(p.jobSheetCreatedDate)}</td>
                 <td className="p-2 border">
                   <button

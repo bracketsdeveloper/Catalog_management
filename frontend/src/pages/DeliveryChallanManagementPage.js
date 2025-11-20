@@ -278,7 +278,6 @@ export default function DeliveryChallanManagementPage() {
     const qty = toNum(it.quantity);
     const rate = toNum(it.rate);
     const gst = toNum(it.productGST);
-    // Only autocalc if user hasn't directly typed amount/total in this change
     const amount = Math.round((rate * qty + Number.EPSILON) * 100) / 100;
     const total = Math.round((amount * (1 + gst / 100) + Number.EPSILON) * 100) / 100;
     return {
@@ -308,7 +307,6 @@ export default function DeliveryChallanManagementPage() {
         return { ...prev, materialTerms };
       }
       if (field === "fieldsToDisplay") {
-        // comma-separated -> array of trimmed strings
         const arr = raw
           .split(",")
           .map((s) => s.trim())
@@ -331,7 +329,6 @@ export default function DeliveryChallanManagementPage() {
       const items = [...prev.items];
       const draft = { ...items[idx], [key]: key === "slNo" ? Number(value) : value };
 
-      // If user changes qty/rate/GST -> recalc
       if (["quantity", "rate", "productGST"].includes(key)) {
         items[idx] = recalcItem({
           ...draft,
@@ -340,7 +337,6 @@ export default function DeliveryChallanManagementPage() {
           productGST: toNum(draft.productGST),
         });
       } else if (key === "amount" || key === "total" || key === "productprice") {
-        // allow manual override
         items[idx] = {
           ...draft,
           [key]: toNum(value),
@@ -391,7 +387,6 @@ export default function DeliveryChallanManagementPage() {
     setEditFormData((prev) => {
       const items = [...(prev.items || [])];
       items.splice(idx, 1);
-      // re-number slNo
       items.forEach((it, i) => (it.slNo = i + 1));
       return { ...prev, items };
     });
@@ -415,10 +410,8 @@ export default function DeliveryChallanManagementPage() {
     try {
       const token = localStorage.getItem("token");
 
-      // prepare payload, coerce numbers/dates
       const payload = {
         ...editFormData,
-        // normalize arrays/fields
         fieldsToDisplay: Array.isArray(editFormData.fieldsToDisplay)
           ? editFormData.fieldsToDisplay
           : [],
@@ -601,7 +594,9 @@ export default function DeliveryChallanManagementPage() {
 
             {/* Fields to display + price range */}
             <div className="col-span-2">
-              <label className="block text-sm font-medium">Fields To Display (comma-separated)</label>
+              <label className="block text-sm font-medium">
+                Fields To Display (comma-separated)
+              </label>
               <input
                 type="text"
                 value={(editFormData.fieldsToDisplay || []).join(", ")}
@@ -714,7 +709,6 @@ export default function DeliveryChallanManagementPage() {
                       onChange={(e) => handleEditInputChange(e, "terms", idx)}
                       className="w-full p-2 border rounded text-sm"
                     />
-                    
                   </div>
                 </div>
               ))}
@@ -744,7 +738,6 @@ export default function DeliveryChallanManagementPage() {
                       <th className="border p-2 text-left">GST %</th>
                       <th className="border p-2 text-left">Amount</th>
                       <th className="border p-2 text-left">Total</th>
-                      
                     </tr>
                   </thead>
                   <tbody>
@@ -818,7 +811,6 @@ export default function DeliveryChallanManagementPage() {
                             onChange={(e) => handleItemChange(idx, "total", e.target.value)}
                           />
                         </td>
-                        
                       </tr>
                     ))}
                     {!editFormData.items?.length && (
@@ -854,7 +846,8 @@ export default function DeliveryChallanManagementPage() {
     );
   };
 
-  if (loading || opportunitiesLoading) return <div className="p-6 text-gray-500">Loading...</div>;
+  if (loading || opportunitiesLoading)
+    return <div className="p-6 text-gray-500">Loading...</div>;
   if (error) return <div className="p-6 text-red-400">{error}</div>;
 
   return (
@@ -949,19 +942,27 @@ export default function DeliveryChallanManagementPage() {
                   }
                   if (!col.field && col.label === "Action") {
                     return (
-                      <td key="action" className="px-2 py-1 flex gap-2">
-                        <button
-                          onClick={() => openEditModalHandler(row)}
-                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => navigate(`/admin-dashboard/dc/${row._id}`)}
-                          className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                        >
-                          View
-                        </button>
+                      <td key="action" className="px-2 py-1">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEditModalHandler(row)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => navigate(`/admin-dashboard/dc/${row._id}`)}
+                            className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleDeleteChallan(row)}
+                            className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     );
                   }

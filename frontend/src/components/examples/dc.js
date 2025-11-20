@@ -21,19 +21,26 @@ const DeliveryChallan = () => {
     async function fetchChallan() {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${BACKEND_URL}/api/admin/delivery-challans/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.get(
+          `${BACKEND_URL}/api/admin/delivery-challans/${id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         setDeliveryChallan(res.data);
         setEditFormData({
           customerCompany: res.data.customerCompany || "",
           customerAddress: res.data.customerAddress || "",
           dcNumber: res.data.dcNumber || "",
-          dcDate: res.data.dcDate ? format(new Date(res.data.dcDate), "yyyy-MM-dd") : "",
+          dcDate: res.data.dcDate
+            ? format(new Date(res.data.dcDate), "yyyy-MM-dd")
+            : "",
           quotationNumber: res.data.quotationNumber || "",
           otherReferences: res.data.otherReferences || "",
           poNumber: res.data.poNumber || "",
-          poDate: res.data.poDate ? format(new Date(res.data.poDate), "yyyy-MM-dd") : "",
+          poDate: res.data.poDate
+            ? format(new Date(res.data.poDate), "yyyy-MM-dd")
+            : "",
           materialTerms: res.data.materialTerms || [],
         });
         setError(null);
@@ -74,10 +81,12 @@ const DeliveryChallan = () => {
       );
       alert("Delivery Challan updated successfully!");
       setOpenEditModal(false);
-      // Refresh data
-      const res = await axios.get(`${BACKEND_URL}/api/admin/delivery-challans/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(
+        `${BACKEND_URL}/api/admin/delivery-challans/${id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       setDeliveryChallan(res.data);
     } catch (error) {
       console.error("Error updating delivery challan:", error);
@@ -102,7 +111,9 @@ const DeliveryChallan = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">Quotation Number</label>
+              <label className="block text-sm font-medium">
+                Quotation Number
+              </label>
               <input
                 type="text"
                 value={editFormData.quotationNumber}
@@ -129,7 +140,9 @@ const DeliveryChallan = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">Other References</label>
+              <label className="block text-sm font-medium">
+                Other References
+              </label>
               <input
                 type="text"
                 value={editFormData.otherReferences}
@@ -147,7 +160,9 @@ const DeliveryChallan = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">Customer Company</label>
+              <label className="block text-sm font-medium">
+                Customer Company
+              </label>
               <input
                 type="text"
                 value={editFormData.customerCompany}
@@ -156,7 +171,9 @@ const DeliveryChallan = () => {
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium">Customer Address</label>
+              <label className="block text-sm font-medium">
+                Customer Address
+              </label>
               <textarea
                 value={editFormData.customerAddress}
                 onChange={(e) => handleEditInputChange(e, "customerAddress")}
@@ -170,7 +187,9 @@ const DeliveryChallan = () => {
                   <input
                     type="text"
                     value={term}
-                    onChange={(e) => handleEditInputChange(e, "materialTerms", index)}
+                    onChange={(e) =>
+                      handleEditInputChange(e, "materialTerms", index)
+                    }
                     className="w-full p-2 border rounded text-sm"
                   />
                 </div>
@@ -199,12 +218,16 @@ const DeliveryChallan = () => {
 
   const handlePrint = () => {
     const printContents = printRefs.current
-      .map((ref, index) => `
-        <div class="print-content" style="${index < 2 ? 'page-break-after: always;' : ''}">
+      .map(
+        (ref, index) => `
+        <div class="print-content" style="${
+          index < 2 ? "page-break-after: always;" : ""
+        }">
           ${ref.innerHTML}
         </div>
-      `)
-      .join('');
+      `
+      )
+      .join("");
 
     const originalContents = document.body.innerHTML;
 
@@ -212,7 +235,9 @@ const DeliveryChallan = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Delivery Challan - ${deliveryChallan?.dcNumber || id}</title>
+          <title>Delivery Challan - ${
+            deliveryChallan?.dcNumber || id
+          }</title>
           <style>
             @page {
               size: A4;
@@ -235,22 +260,16 @@ const DeliveryChallan = () => {
               padding: 15px;
               margin: 0;
               box-sizing: border-box;
+              position: relative;
             }
             table {
               border-collapse: collapse;
               width: 100%;
-              border: 1px solid black;
               line-height: 1.1;
             }
             th, td {
-              border-left: 1px solid black;
-              border-right: 1px solid black;
               padding: 0;
               text-align: left;
-              vertical-align: top;
-            }
-            thead tr {
-              border-bottom: 1px solid black;
             }
             .text-xs {
               font-size: 14px;
@@ -267,10 +286,7 @@ const DeliveryChallan = () => {
             .items-end {
               align-items: flex-end;
             }
-            .mt-16 {
-              margin-top: 64px;
-            }
-            .w-1\/2 {
+            .w-1\\/2 {
               width: 50%;
             }
             .w-full {
@@ -345,26 +361,26 @@ const DeliveryChallan = () => {
               font-weight: bold;
               text-align: center;
             }
-            .original-recipient {
-              font-size: 14px;
-              position: absolute;
-              right: 0;
-              top: 50%;
-              transform: translateY(-50%);
-            }
             .company-details {
               font-size: 15px;
-              line-height: 1.4;
             }
-            .two-column {
-              display: flex;
-              width: 100%;
+            .top-row {
+              min-height: 90px;
             }
-            .column-35 {
-              width: 35%;
+            .logo-top-right {
+              position: absolute;
+              top: 8px;
+              right: 16px;
+              height: 52px;
+              object-fit: contain;
             }
-            .column-65 {
-              width: 65%;
+            .footer-note {
+              position: absolute;
+              bottom: 4px;
+              left: 50%;
+              transform: translateX(-50%);
+              font-size: 10px;
+              text-align: center;
             }
           </style>
         </head>
@@ -401,9 +417,12 @@ const DeliveryChallan = () => {
     ],
   } = deliveryChallan || {};
 
+  const customerGSTIN =
+    deliveryChallan?.customerGSTIN || deliveryChallan?.customerGstin || "";
+
   const PageContent = ({ index, label }) => (
     <div
-      ref={el => (printRefs.current[index] = el)}
+      ref={(el) => (printRefs.current[index] = el)}
       className="bg-white font-sans flex flex-col"
       style={{
         width: "210mm",
@@ -412,114 +431,259 @@ const DeliveryChallan = () => {
         boxSizing: "border-box",
         border: "1px solid #000",
         fontFamily: "Calibri, sans-serif",
+        position: "relative",
       }}
     >
+      {/* Logo */}
+      <img
+        src="/logo.png"
+        alt="ACE PRINT PACK"
+        className="logo-top-right"
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 16,
+          height: "52px",
+          objectFit: "contain",
+        }}
+      />
+
       <div className="title-container">
         <h1 className="delivery-challan-title uppercase">DELIVERY CHALLAN</h1>
-        <p className="original-recipient italic">({label})</p>
       </div>
 
-      <div className="text-center border-header company-details">
+      {/* Company details with equal line spacing and label on right */}
+      <div
+        className="text-center company-details"
+        style={{
+          lineHeight: "1.3",
+          position: "relative",
+          marginBottom: "4px",
+        }}
+      >
         <h1 className="font-bold text-2xl">ACE PRINT PACK</h1>
         <p># 61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore 560018</p>
-        <p>  M: +91 9945261108 | accounts@aceprintpack.com</p>
-        <p> www.aceprintpack.com</p>
+        <p>M: +91 9945261108 | accounts@aceprintpack.com</p>
         <p>GSTIN: 29ABCFA9924A1ZL | UDYAM-KR-03-0063533</p>
+
+        {/* ORIGINAL / DUPLICATE / TRIPLICATE label */}
+        <span
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            fontStyle: "italic",
+            fontSize: "14px",
+          }}
+        >
+          ({label})
+        </span>
       </div>
 
-      <div className="flex justify-between mb-0 text-xs border-l border-t border-r border-black ">
-        <div className="w-1/2 border-r border-black">
+      {/* Top details row: To 50%, DC 25%, PO 25% */}
+      <div className="flex mb-0 text-xs border-l border-t border-r border-black top-row">
+        {/* To: 50% */}
+        <div
+          className="border-r border-black"
+          style={{ width: "50%", boxSizing: "border-box" }}
+        >
           <h3 className="font-bold ml-2 mt-2">To:</h3>
           <p className="font-bold ml-2">{customerCompany}</p>
           <p className="ml-2">{customerAddress}</p>
         </div>
-        <div className="w-1/2">
-          <div className="two-column">
-            <div className="column-35 text-left border-r border-black">
-              <div className="flex m-2">
-                <span className=" font-bold">DC No.:</span>
-                <span className="font-medium">{dcNumber}</span>
-              </div>
-              <div className="flex m-2">
-                <span className=" font-bold">Date:</span>
-                <span className="font-medium">{format(new Date(dcDate), "dd/MM/yyyy")}</span>
-              </div>
-              <div className="flex m-2">
-                <span className=" font-bold">Ref QN No:</span>
-                <span className="font-medium">{quotationNumber}</span>
-              </div>
-              <div className="flex m-2">
-                <span className=" font-bold">Ref No:</span>
-                <span className="font-medium">#00000</span>
-              </div>
+
+        {/* DC details: 25% */}
+        <div
+          className="border-r border-black"
+          style={{ width: "25%", boxSizing: "border-box" }}
+        >
+          <div className="m-2">
+            <div className="flex">
+              <span className="font-bold">DC No.:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                {dcNumber}
+              </span>
             </div>
-            <div className="column-65">
-              <div className="flex m-2">
-                <span className=" font-bold">PO Number:</span>
-                <span className="font-medium">{poNumber}</span>
-              </div>
-              <div className="flex m-2">
-                <span className=" font-bold">PO Date:</span>
-                <span className="font-medium">{poDate ? format(new Date(poDate), "dd/MM/yyyy") : "N/A"}</span>
-              </div>
-              <div className="flex m-2">
-                <span className=" font-bold">Other Reference:</span>
-                <span className="font-medium">{otherReferences}</span>
-              </div>
+            <div className="flex mt-1">
+              <span className="font-bold">Date:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                {format(new Date(dcDate), "dd/MM/yyyy")}
+              </span>
+            </div>
+            <div className="flex mt-1">
+              <span className="font-bold">Ref QN No:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                {quotationNumber}
+              </span>
+            </div>
+            <div className="flex mt-1">
+              <span className="font-bold">Ref No:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                #00000
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* PO details: 25% */}
+        <div style={{ width: "25%", boxSizing: "border-box" }}>
+          <div className="m-2">
+            <div className="flex">
+              <span className="font-bold">PO Number:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                {poNumber}
+              </span>
+            </div>
+            <div className="flex mt-1">
+              <span className="font-bold">PO Date:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                {poDate ? format(new Date(poDate), "dd/MM/yyyy") : "N/A"}
+              </span>
+            </div>
+            <div className="flex mt-1">
+              <span className="font-bold">Other Reference:</span>
+              <span className="font-medium" style={{ marginLeft: 4 }}>
+                {otherReferences}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 mb-2" style={{ minHeight: "350px" }}>
-        <table className="w-full border border-black text-xs h-full" style={{ lineHeight: '1.1' }}>
+      {/* PRODUCT TABLE – 600px box, no horizontal row borders, vertical lines across empty space */}
+      <div
+        className="mb-2"
+        style={{
+          height: "600px",
+          border: "1px solid #000",
+          position: "relative",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* Table itself (only header bottom border, no row horizontals) */}
+        <table
+          className="w-full text-xs"
+          style={{
+            lineHeight: "1.1",
+            borderCollapse: "collapse",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
           <thead>
-            <tr className="border-b border-black">
-              <th className="p-0 text-center" style={{ width: '5%', padding: '1px' }}>Sl No</th>
-              <th className="p-0 text-center" style={{ width: '65%', padding: '1px' }}>Particulars</th>
-              <th className="p-0 text-center" style={{ width: '15%', padding: '1px' }}>HSN/SAC</th>
-              <th className="p-0 text-center" style={{ width: '15%', padding: '1px' }}>Quantity</th>
+            <tr>
+              <th
+                className="p-0 text-center"
+                style={{
+                  width: "5%",
+                  padding: "1px",
+                  borderBottom: "1px solid #000",
+                }}
+              >
+                Sl No
+              </th>
+              <th
+                className="p-0 text-center"
+                style={{
+                  width: "65%",
+                  padding: "1px",
+                  borderBottom: "1px solid #000",
+                }}
+              >
+                Particulars
+              </th>
+              <th
+                className="p-0 text-center"
+                style={{
+                  width: "15%",
+                  padding: "1px",
+                  borderBottom: "1px solid #000",
+                }}
+              >
+                HSN/SAC
+              </th>
+              <th
+                className="p-0 text-center"
+                style={{
+                  width: "15%",
+                  padding: "1px",
+                  borderBottom: "1px solid #000",
+                }}
+              >
+                Quantity
+              </th>
             </tr>
           </thead>
           <tbody>
             {items.length > 0 ? (
-              <tr style={{ lineHeight: '2' }}>
-                <td className="p-0 text-center align-top" style={{ padding: '1px' }}>
-                  {items.map((_, index) => (
-                    <div key={index}>{index + 1}</div>
-                  ))}
-                </td>
-                <td className="p-0 align-top" style={{ padding: '1px' }}>
-                  {items.map((item, index) => (
-                    <div key={index}>{item.product || "N/A"}</div>
-                  ))}
-                </td>
-                <td className="p-0 text-center align-top" style={{ padding: '1px' }}>
-                  {items.map((item, index) => (
-                    <div key={index}>{item.hsnCode || "N/A"}</div>
-                  ))}
-                </td>
-                <td className="p-0 text-center align-top" style={{ padding: '1px' }}>
-                  {items.map((item, index) => (
-                    <div key={index}>{item.quantity ? `${item.quantity} No's` : "N/A"}</div>
-                  ))}
-                </td>
-              </tr>
+              items.map((item, index) => (
+                <tr key={index}>
+                  <td className="text-center p-1">
+                    {index + 1}
+                  </td>
+                  <td className="p-1">
+                    {item.product || "N/A"}
+                  </td>
+                  <td className="text-center p-1">
+                    {item.hsnCode || "N/A"}
+                  </td>
+                  <td className="text-center p-1">
+                    {item.quantity ? `${item.quantity} No's` : "N/A"}
+                  </td>
+                </tr>
+              ))
             ) : (
-              <tr style={{ lineHeight: '1.1' }}>
-                <td colSpan={4} className="p-0 text-center" style={{ padding: '1px' }}>
+              <tr>
+                <td colSpan={4} className="text-center p-1">
                   No items found
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {/* Column vertical lines spanning entire 600px, no double border on outer edges */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: "5%",
+            borderLeft: "1px solid #000",
+            zIndex: 0,
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: "70%",
+            borderLeft: "1px solid #000",
+            zIndex: 0,
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: "85%",
+            borderLeft: "1px solid #000",
+            zIndex: 0,
+            pointerEvents: "none",
+          }}
+        />
       </div>
 
       <div className="border border-black p-1 text-xs mb-3">
         <ol className="list-decimal list-inside pl-2">
           {materialTerms.map((term, index) => (
-            <li key={index} className="mb-0">{term}</li>
+            <li key={index} className="mb-0">
+              {term}
+            </li>
           ))}
         </ol>
       </div>
@@ -544,6 +708,10 @@ const DeliveryChallan = () => {
             <p>Authorised Signatory</p>
           </div>
         </div>
+      </div>
+
+      <div className="footer-note">
+        This is a computer generated document.
       </div>
     </div>
   );

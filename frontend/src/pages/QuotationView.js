@@ -29,6 +29,8 @@ export default function QuotationView() {
   const token = localStorage.getItem("token");
   // NEW: Operations Breakdown table state
   const [opRows, setOpRows] = useState([]);
+  // NEW: expand / minimize state for operations breakdown panel
+  const [isOpsExpanded, setIsOpsExpanded] = useState(false);
 
   const fieldNameMapping = {
     txn: "Transaction",
@@ -166,11 +168,11 @@ export default function QuotationView() {
     const j = num(row.deliveryCost);
     const k = num(row.markUpCost);
     const c = num(row.quantity);
-    const l = h + i + j + k;                // finalTotal
-    const d = l;                            // rate
-    const e = c * d;                        // amount
-    const fPct = parseGstPercent(row.gst);  // GST %
-    const g = e * (1 + fPct / 100);         // total including GST
+    const l = h + i + j + k; // finalTotal
+    const d = l; // rate
+    const e = c * d; // amount
+    const fPct = parseGstPercent(row.gst); // GST %
+    const g = e * (1 + fPct / 100); // total including GST
     return { ...row, finalTotal: l, rate: d, amount: e, total: g };
   };
   const addOpRow = () => {
@@ -240,65 +242,68 @@ export default function QuotationView() {
   }, [editableQuotation, opRows.length]); // only operations section behavior
 
   // NEW: Save ONLY operationsBreakdown to current quotation (no new quotation)
-async function handleSaveOperationsBreakdownOnly() {
-  try {
-    const payload = {
-      operationsBreakdown: opRows.map((r) => ({
-        slNo: r.slNo,
-        product: r.product,
-        quantity: num(r.quantity),
-        rate: num(r.rate),
-        amount: num(r.amount),
-        gst: r.gst,
-        total: num(r.total),
-        ourCost: num(r.ourCost),
-        brandingCost: num(r.brandingCost),
-        deliveryCost: num(r.deliveryCost),
-        markUpCost: num(r.markUpCost),
-        finalTotal: num(r.finalTotal),
-        vendor: r.vendor,
-      })),
-    };
+  async function handleSaveOperationsBreakdownOnly() {
+    try {
+      const payload = {
+        operationsBreakdown: opRows.map((r) => ({
+          slNo: r.slNo,
+          product: r.product,
+          quantity: num(r.quantity),
+          rate: num(r.rate),
+          amount: num(r.amount),
+          gst: r.gst,
+          total: num(r.total),
+          ourCost: num(r.ourCost),
+          brandingCost: num(r.brandingCost),
+          deliveryCost: num(r.deliveryCost),
+          markUpCost: num(r.markUpCost),
+          finalTotal: num(r.finalTotal),
+          vendor: r.vendor,
+        })),
+      };
 
-    const res = await axios.put(
-      `${BACKEND_URL}/api/admin/quotations/${id}/operations-breakdown`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+      const res = await axios.put(
+        `${BACKEND_URL}/api/admin/quotations/${id}/operations-breakdown`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    if (res?.data?.quotation) {
-      // refresh local state from server response
-      setEditableQuotation(res.data.quotation);
-      setQuotation(res.data.quotation);
+      if (res?.data?.quotation) {
+        // refresh local state from server response
+        setEditableQuotation(res.data.quotation);
+        setQuotation(res.data.quotation);
 
-      const fresh = (res.data.quotation.operationsBreakdown || []).map((r, idx) => ({
-        slNo: r.slNo || idx + 1,
-        product: r.product || "",
-        quantity: Number(r.quantity) || 0,
-        rate: Number(r.rate) || 0,
-        amount: Number(r.amount) || 0,
-        gst: r.gst || "",
-        total: Number(r.total) || 0,
-        ourCost: Number(r.ourCost) || 0,
-        brandingCost: Number(r.brandingCost) || 0,
-        deliveryCost: Number(r.deliveryCost) || 0,
-        markUpCost: Number(r.markUpCost) || 0,
-        finalTotal: Number(r.finalTotal) || 0,
-        vendor: r.vendor || "",
-      }));
-      setOpRows(fresh);
+        const fresh = (res.data.quotation.operationsBreakdown || []).map(
+          (r, idx) => ({
+            slNo: r.slNo || idx + 1,
+            product: r.product || "",
+            quantity: Number(r.quantity) || 0,
+            rate: Number(r.rate) || 0,
+            amount: Number(r.amount) || 0,
+            gst: r.gst || "",
+            total: Number(r.total) || 0,
+            ourCost: Number(r.ourCost) || 0,
+            brandingCost: Number(r.brandingCost) || 0,
+            deliveryCost: Number(r.deliveryCost) || 0,
+            markUpCost: Number(r.markUpCost) || 0,
+            finalTotal: Number(r.finalTotal) || 0,
+            vendor: r.vendor || "",
+          })
+        );
+        setOpRows(fresh);
+      }
+
+      alert(
+        "Operations breakdown saved to this quotation (no new quotation created)."
+      );
+    } catch (err) {
+      console.error("Save operations breakdown only error:", err);
+      alert(
+        "Failed to save operations breakdown on this quotation: " +
+          (err.response?.data?.message || err.message)
+      );
     }
-
-    alert("Operations breakdown saved to this quotation (no new quotation created).");
-  } catch (err) {
-    console.error("Save operations breakdown only error:", err);
-    alert(
-      "Failed to save operations breakdown on this quotation: " +
-        (err.response?.data?.message || err.message)
-    );
   }
-}
-
 
   async function handleAuthenticate() {
     try {
@@ -331,7 +336,7 @@ async function handleSaveOperationsBreakdownOnly() {
     } catch (err) {
       setErrorMessage(
         "Failed to fetch customer details: " +
-        (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message)
       );
     }
   }
@@ -376,7 +381,8 @@ async function handleSaveOperationsBreakdownOnly() {
       const parsedJson = JSON.parse(referenceJson);
       if (
         parsedJson.RefDtls?.InvRm &&
-        (parsedJson.RefDtls.InvRm.length < 3 || parsedJson.RefDtls.InvRm.length > 100)
+        (parsedJson.RefDtls.InvRm.length < 3 ||
+          parsedJson.RefDtls.InvRm.length > 100)
       ) {
         throw new Error("Invoice remarks must be 3–100 characters");
       }
@@ -390,7 +396,7 @@ async function handleSaveOperationsBreakdownOnly() {
     } catch (err) {
       setErrorMessage(
         "Failed to save reference JSON: " +
-        (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message)
       );
     }
   }
@@ -419,7 +425,9 @@ async function handleSaveOperationsBreakdownOnly() {
           Object.keys(parsedJson[key]).forEach((subKey) => {
             const fieldLabel =
               fieldNameMapping[`${key}.${subKey}`] ||
-              `${fieldNameMapping[key] || key}.${fieldNameMapping[subKey] || subKey}`;
+              `${fieldNameMapping[key] || key}.${
+                fieldNameMapping[subKey] || subKey
+              }`;
             fields.push(
               <div key={`${key}.${subKey}`} className="mb-4">
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -428,14 +436,17 @@ async function handleSaveOperationsBreakdownOnly() {
                 <input
                   type="text"
                   value={parsedJson[key][subKey] || ""}
-                  onChange={(e) => handleFormFieldChange(subKey, e.target.value, key)}
-                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${key === "RefDtls" &&
-                      subKey === "InvRm" &&
-                      (parsedJson[key][subKey]?.length < 3 ||
-                        parsedJson[key][subKey]?.length > 100)
+                  onChange={(e) =>
+                    handleFormFieldChange(subKey, e.target.value, key)
+                  }
+                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    key === "RefDtls" &&
+                    subKey === "InvRm" &&
+                    (parsedJson[key][subKey]?.length < 3 ||
+                      parsedJson[key][subKey]?.length > 100)
                       ? "border-red-500"
                       : "border-gray-300"
-                    }`}
+                  }`}
                 />
                 {key === "RefDtls" &&
                   subKey === "InvRm" &&
@@ -500,13 +511,15 @@ async function handleSaveOperationsBreakdownOnly() {
             {editableQuotation.items.map((item, index) => {
               const baseRate = parseFloat(item.rate) || 0;
               const effRate = baseRate * marginFactor;
-              const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(2);
+              const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(
+                2
+              );
               const gstRate =
                 item.productGST != null
                   ? parseFloat(item.productGST)
                   : editableQuotation.gst
-                    ? parseFloat(editableQuotation.gst)
-                    : 0;
+                  ? parseFloat(editableQuotation.gst)
+                  : 0;
               const total = (
                 parseFloat(amount) +
                 (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
@@ -574,7 +587,7 @@ async function handleSaveOperationsBreakdownOnly() {
         try {
           const list = JSON.parse(detail);
           detail = list.map((e) => e.ErrorMessage).join("\n");
-        } catch { }
+        } catch {}
       }
       setErrorMessage("Failed to generate IRN: " + detail);
     }
@@ -593,7 +606,7 @@ async function handleSaveOperationsBreakdownOnly() {
     } catch (err) {
       setErrorMessage(
         "Failed to cancel e-invoice: " +
-        (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message)
       );
     }
   }
@@ -631,8 +644,8 @@ async function handleSaveOperationsBreakdownOnly() {
           item.productGST != null
             ? parseFloat(item.productGST)
             : gst
-              ? parseFloat(gst)
-              : 0;
+            ? parseFloat(gst)
+            : 0;
         const gstAmount =
           gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
         const total = parseFloat((amount + gstAmount).toFixed(2));
@@ -667,6 +680,7 @@ async function handleSaveOperationsBreakdownOnly() {
         displayHSNCodes,
         operations,
         priceRange,
+        // IMPORTANT: operationsBreakdown is sent so new quotation gets these rows
         operationsBreakdown: opRows.map((r) => ({
           slNo: r.slNo,
           product: r.product,
@@ -728,7 +742,9 @@ async function handleSaveOperationsBreakdownOnly() {
         displayHSNCodes: newDisplayHSNCodes,
       }));
       alert(
-        `HSN Codes display ${newDisplayHSNCodes ? "enabled" : "disabled"} in database`
+        `HSN Codes display ${
+          newDisplayHSNCodes ? "enabled" : "disabled"
+        } in database`
       );
     } catch (error) {
       console.error("Error toggling HSN codes:", error);
@@ -744,17 +760,18 @@ async function handleSaveOperationsBreakdownOnly() {
         format ? { format } : {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      alert(`Invoice created: ${res.data.invoice.invoiceDetails.invoiceNumber}`);
-      // Navigate to your invoice page (adjust route as per your app)
+      alert(
+        `Invoice created: ${res.data.invoice.invoiceDetails.invoiceNumber}`
+      );
       navigate(`/admin-dashboard/invoices/${res.data.invoice._id}`);
     } catch (error) {
       console.error("Error creating invoice:", error);
       alert(
-        "Failed to create invoice: " + (error.response?.data?.message || error.message)
+        "Failed to create invoice: " +
+          (error.response?.data?.message || error.message)
       );
     }
   }
-
 
   function handleHeaderBlur(field, e) {
     setEditableQuotation((prev) => ({
@@ -833,13 +850,37 @@ async function handleSaveOperationsBreakdownOnly() {
     navigate(`/admin-dashboard/print-quotation/${id}`);
   };
 
-  // Add the missing handleViewOperation function
   const handleViewOperation = (operation) => {
     console.log("View/Edit operation:", operation);
     alert(`Operation details: ${JSON.stringify(operation, null, 2)}`);
   };
 
   const marginFactor = 1 + (parseFloat(editableQuotation?.margin) || 0) / 100;
+
+  // NEW: vertical totals for operations breakdown
+  const opTotals = opRows.reduce(
+    (acc, r) => {
+      acc.quantity += num(r.quantity);
+      acc.amount += num(r.amount);
+      acc.total += num(r.total);
+      acc.ourCost += num(r.ourCost);
+      acc.brandingCost += num(r.brandingCost);
+      acc.deliveryCost += num(r.deliveryCost);
+      acc.markUpCost += num(r.markUpCost);
+      acc.finalTotal += num(r.finalTotal);
+      return acc;
+    },
+    {
+      quantity: 0,
+      amount: 0,
+      total: 0,
+      ourCost: 0,
+      brandingCost: 0,
+      deliveryCost: 0,
+      markUpCost: 0,
+      finalTotal: 0,
+    }
+  );
 
   if (loading) return <div className="p-6 text-gray-400">Loading quotation...</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
@@ -864,33 +905,13 @@ async function handleSaveOperationsBreakdownOnly() {
                 `Enter invoice number format (tokens: {FY}, {SEQn}).\nExample: ${defFmt}`,
                 defFmt
               );
-              if (fmt === null) return; // user cancelled
+              if (fmt === null) return;
               handleCreateInvoice(fmt.trim());
             }}
             className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-xs"
           >
             Create Invoice
           </button>
-
-          {/* <button
-            onClick={async () => {
-              try {
-                const res = await axios.post(
-                  `${BACKEND_URL}/api/admin/dc/${id}`,
-                  {},
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
-                alert("Delivery Challan created successfully!");
-                navigate(`/admin-delivery-challan/${res.data.deliveryChallan._id}`);
-              } catch (error) {
-                console.error("Error generating delivery challan:", error);
-                alert("Failed to generate delivery challan.");
-              }
-            }}
-            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-xs"
-          >
-            Generate Delivery Challan
-          </button> */}
 
           <button
             onClick={handleSaveQuotation}
@@ -915,7 +936,9 @@ async function handleSaveOperationsBreakdownOnly() {
             onClick={handleToggleHSNCodes}
             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
           >
-            {editableQuotation.displayHSNCodes ? "Disable HSN Codes in DB" : "Enable HSN Codes in DB"}
+            {editableQuotation.displayHSNCodes
+              ? "Disable HSN Codes in DB"
+              : "Enable HSN Codes in DB"}
           </button>
 
           <button
@@ -930,25 +953,42 @@ async function handleSaveOperationsBreakdownOnly() {
         </div>
       </div>
 
-      {/* OPERATIONS COST: updated to avoid horizontal overflow, no scroll, and prefill if empty */}
+      {/* OPERATIONS COST: sticky, expand/minimize, internal scroll when minimized */}
       <div
         id="op-breakdown-panel"
         className="sticky top-16 z-30 bg-white border border-gray-300 shadow p-3 rounded mb-6"
       >
         <div className="flex items-center justify-between mb-2">
-          <div className="text-xs font-semibold">Operations Cost — Detailed Table</div>
+          <div className="text-xs font-semibold">
+            Operations Cost — Detailed Table
+          </div>
 
-          <button
-            onClick={handleSaveOperationsBreakdownOnly}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs"
-            title="Save operations breakdown to this quotation without creating a new one"
-          >
-            Save Operations Breakdown
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsOpsExpanded((prev) => !prev)}
+              className="bg-gray-700 hover:bg-gray-800 text-white px-3 py-1.5 rounded text-xs"
+            >
+              {isOpsExpanded ? "Minimize" : "Expand"}
+            </button>
+
+            <button
+              onClick={handleSaveOperationsBreakdownOnly}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs"
+              title="Save operations breakdown to this quotation without creating a new one"
+            >
+              Save Operations Breakdown
+            </button>
+          </div>
         </div>
 
-        {/* no horizontal scroll container */}
-        <div className="overflow-visible">
+        {/* when minimized: fixed height with scroll; when expanded: full height allowed to overlap */}
+        <div
+          className={
+            isOpsExpanded
+              ? "overflow-visible"
+              : "max-h-40 overflow-y-auto" // header + ~2 rows visible, rest scrollable
+          }
+        >
           <table className="table-auto w-full text-[11px] border-collapse">
             <thead>
               <tr className="bg-gray-100">
@@ -972,7 +1012,9 @@ async function handleSaveOperationsBreakdownOnly() {
             <tbody>
               {opRows.map((r, idx) => (
                 <tr key={idx} className="hover:bg-gray-50">
-                  <td className="border px-2 py-1 text-center whitespace-nowrap">{r.slNo}</td>
+                  <td className="border px-2 py-1 text-center whitespace-nowrap">
+                    {r.slNo}
+                  </td>
 
                   <td className="border px-2 py-1">
                     <input
@@ -1026,7 +1068,9 @@ async function handleSaveOperationsBreakdownOnly() {
                     <input
                       type="number"
                       value={r.brandingCost}
-                      onChange={(e) => updateOpRow(idx, "brandingCost", e.target.value)}
+                      onChange={(e) =>
+                        updateOpRow(idx, "brandingCost", e.target.value)
+                      }
                       className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
                     />
                   </td>
@@ -1035,7 +1079,9 @@ async function handleSaveOperationsBreakdownOnly() {
                     <input
                       type="number"
                       value={r.deliveryCost}
-                      onChange={(e) => updateOpRow(idx, "deliveryCost", e.target.value)}
+                      onChange={(e) =>
+                        updateOpRow(idx, "deliveryCost", e.target.value)
+                      }
                       className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
                     />
                   </td>
@@ -1044,7 +1090,9 @@ async function handleSaveOperationsBreakdownOnly() {
                     <input
                       type="number"
                       value={r.markUpCost}
-                      onChange={(e) => updateOpRow(idx, "markUpCost", e.target.value)}
+                      onChange={(e) =>
+                        updateOpRow(idx, "markUpCost", e.target.value)
+                      }
                       className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
                     />
                   </td>
@@ -1071,6 +1119,44 @@ async function handleSaveOperationsBreakdownOnly() {
                   </td>
                 </tr>
               ))}
+
+              {/* vertical totals row */}
+              {opRows.length > 0 && (
+                <tr className="bg-gray-50 font-semibold">
+                  <td className="border px-2 py-1 text-center">Σ</td>
+                  <td className="border px-2 py-1 text-right text-[10px]">
+                    Totals
+                  </td>
+                  <td className="border px-2 py-1 text-right whitespace-nowrap">
+                    {opTotals.quantity.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1 bg-gray-100" />
+                  <td className="border px-2 py-1 bg-gray-100 text-right whitespace-nowrap">
+                    {opTotals.amount.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1" />
+                  <td className="border px-2 py-1 bg-gray-100 text-right whitespace-nowrap">
+                    {opTotals.total.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1 text-right whitespace-nowrap">
+                    {opTotals.ourCost.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1 text-right whitespace-nowrap">
+                    {opTotals.brandingCost.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1 text-right whitespace-nowrap">
+                    {opTotals.deliveryCost.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1 text-right whitespace-nowrap">
+                    {opTotals.markUpCost.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1 bg-gray-100 text-right whitespace-nowrap">
+                    {opTotals.finalTotal.toFixed(2)}
+                  </td>
+                  <td className="border px-2 py-1" />
+                  <td className="border px-2 py-1" />
+                </tr>
+              )}
 
               <tr>
                 <td colSpan={14} className="border px-2 py-2 text-right">
@@ -1169,70 +1255,75 @@ async function handleSaveOperationsBreakdownOnly() {
       </div>
 
       {termModalOpen && (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center">
-    {/* Backdrop */}
-    <div className="absolute inset-0 bg-black/40" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/40" />
 
-    {/* Modal */}
-    <div className="relative z-[70] bg-white p-6 rounded w-full max-w-lg shadow-xl">
-      <h2 className="text-xl font-semibold mb-4">
-        {editingTermIdx !== null ? "Edit Term" : "Add Term"}
-      </h2>
+          {/* Modal */}
+          <div className="relative z-[70] bg-white p-6 rounded w-full max-w-lg shadow-xl">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingTermIdx !== null ? "Edit Term" : "Add Term"}
+            </h2>
 
-      <div className="mb-4">
-        <input
-          type="text"
-          value={newTerm.heading}
-          placeholder="Term Heading"
-          onChange={(e) =>
-            setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
-          }
-          className="border p-2 w-full text-xs"
-          readOnly={editingTermIdx !== null}
-        />
-      </div>
+            <div className="mb-4">
+              <input
+                type="text"
+                value={newTerm.heading}
+                placeholder="Term Heading"
+                onChange={(e) =>
+                  setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
+                }
+                className="border p-2 w-full text-xs"
+                readOnly={editingTermIdx !== null}
+              />
+            </div>
 
-      <div className="mb-4">
-        <textarea
-          value={newTerm.content}
-          placeholder="Term Content"
-          onChange={(e) =>
-            setNewTerm((prev) => ({ ...prev, content: e.target.value }))
-          }
-          className="border p-2 w-full text-xs"
-          rows={4}
-        />
-      </div>
+            <div className="mb-4">
+              <textarea
+                value={newTerm.content}
+                placeholder="Term Content"
+                onChange={(e) =>
+                  setNewTerm((prev) => ({ ...prev, content: e.target.value }))
+                }
+                className="border p-2 w-full text-xs"
+                rows={4}
+              />
+            </div>
 
-      <div className="flex justify-end gap-3">
-        <button
-          onClick={() => {
-            setTermModalOpen(false);
-            setNewTerm({ heading: "", content: "" });
-            setEditingTermIdx(null);
-          }}
-          className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
-        >
-          {editingTermIdx !== null ? "Update Term" : "Add Term"}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setTermModalOpen(false);
+                  setNewTerm({ heading: "", content: "" });
+                  setEditingTermIdx(null);
+                }}
+                className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={
+                  editingTermIdx !== null ? handleUpdateTerm : handleAddTerm
+                }
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+              >
+                {editingTermIdx !== null ? "Update Term" : "Add Term"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {eInvoiceModalOpen && (
         <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50 z-50">
           <div className="bg-white p-8 rounded-lg w-3/4 max_h-[80vh] overflow-y-auto shadow-xl">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800">Generate E-Invoice</h2>
+            <h2 className="text-2xl font-semibold mb-6 text-gray-800">
+              Generate E-Invoice
+            </h2>
             {errorMessage && (
-              <div className="text-red-500 mb-4 text-xs bg-red-100 p-2 rounded">{errorMessage}</div>
+              <div className="text-red-500 mb-4 text-xs bg-red-100 p-2 rounded">
+                {errorMessage}
+              </div>
             )}
 
             <div className="mb-6">
@@ -1246,7 +1337,10 @@ async function handleSaveOperationsBreakdownOnly() {
               {isAuthenticated && (
                 <div className="mt-2 text-xs text-gray-600">
                   <p>Auth Token: {eInvoiceData?.authToken}</p>
-                  <p>Token Expiry: {new Date(eInvoiceData?.tokenExpiry).toLocaleString()}</p>
+                  <p>
+                    Token Expiry:{" "}
+                    {new Date(eInvoiceData?.tokenExpiry).toLocaleString()}
+                  </p>
                 </div>
               )}
             </div>
@@ -1258,20 +1352,51 @@ async function handleSaveOperationsBreakdownOnly() {
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-xs"
                   disabled={customerDetails}
                 >
-                  {customerDetails ? "Customer Details Fetched" : "Get Customer Details"}
+                  {customerDetails
+                    ? "Customer Details Fetched"
+                    : "Get Customer Details"}
                 </button>
                 {customerDetails && (
                   <div className="mt-2 text-xs text-gray-600">
-                    <p><span className="font-semibold">GSTIN:</span> {customerDetails.gstin}</p>
-                    <p><span className="font-semibold">Legal Name:</span> {customerDetails.legalName}</p>
-                    <p><span className="font-semibold">Trade Name:</span> {customerDetails.tradeName}</p>
-                    <p><span className="font-semibold">Address:</span> {customerDetails.address1}
-                      {customerDetails.address2 ? `, ${customerDetails.address2}` : ""}</p>
-                    <p><span className="font-semibold">Location:</span> {customerDetails.location}</p>
-                    <p><span className="font-semibold">Pincode:</span> {customerDetails.pincode}</p>
-                    <p><span className="font-semibold">State Code:</span> {customerDetails.stateCode}</p>
-                    <p><span className="font-semibold">Phone:</span> {customerDetails.phone}</p>
-                    <p><span className="font-semibold">Email:</span> {customerDetails.email}</p>
+                    <p>
+                      <span className="font-semibold">GSTIN:</span>{" "}
+                      {customerDetails.gstin}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Legal Name:</span>{" "}
+                      {customerDetails.legalName}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Trade Name:</span>{" "}
+                      {customerDetails.tradeName}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Address:</span>{" "}
+                      {customerDetails.address1}
+                      {customerDetails.address2
+                        ? `, ${customerDetails.address2}`
+                        : ""}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Location:</span>{" "}
+                      {customerDetails.location}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Pincode:</span>{" "}
+                      {customerDetails.pincode}
+                    </p>
+                    <p>
+                      <span className="font-semibold">State Code:</span>{" "}
+                      {customerDetails.stateCode}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Phone:</span>{" "}
+                      {customerDetails.phone}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Email:</span>{" "}
+                      {customerDetails.email}
+                    </p>
                   </div>
                 )}
               </div>
@@ -1299,7 +1424,9 @@ async function handleSaveOperationsBreakdownOnly() {
                     </button>
                   )}
                   <button
-                    onClick={() => setJsonView(jsonView === "json" ? "form" : "json")}
+                    onClick={() =>
+                      setJsonView(jsonView === "json" ? "form" : "json")
+                    }
                     className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-xs"
                   >
                     {jsonView === "json" ? "Show Form View" : "Show JSON View"}
@@ -1312,19 +1439,21 @@ async function handleSaveOperationsBreakdownOnly() {
                         <textarea
                           value={referenceJson}
                           onChange={(e) => setReferenceJson(e.target.value)}
-                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${referenceJson &&
+                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            referenceJson &&
                             (() => {
                               try {
                                 const parsed = JSON.parse(referenceJson);
                                 return parsed.RefDtls?.InvRm &&
-                                  (parsed.RefDtls.InvRm.length < 3 || parsed.RefDtls.InvRm.length > 100)
+                                  (parsed.RefDtls.InvRm.length < 3 ||
+                                    parsed.RefDtls.InvRm.length > 100)
                                   ? "border-red-500"
                                   : "border-gray-300";
                               } catch {
                                 return "border-red-500";
                               }
                             })()
-                            }`}
+                          }`}
                         />
                         {referenceJson &&
                           (() => {
@@ -1332,7 +1461,8 @@ async function handleSaveOperationsBreakdownOnly() {
                               const parsed = JSON.parse(referenceJson);
                               if (
                                 parsed.RefDtls?.InvRm &&
-                                (parsed.RefDtls.InvRm.length < 3 || parsed.RefDtls.InvRm.length > 100)
+                                (parsed.RefDtls.InvRm.length < 3 ||
+                                  parsed.RefDtls.InvRm.length > 100)
                               ) {
                                 return (
                                   <p className="text-red-500 text-xs mt-1">
@@ -1341,7 +1471,11 @@ async function handleSaveOperationsBreakdownOnly() {
                                 );
                               }
                             } catch {
-                              return <p className="text-red-500 text-xs mt-1">Invalid JSON format</p>;
+                              return (
+                                <p className="text-red-500 text-xs mt-1">
+                                  Invalid JSON format
+                                </p>
+                              );
                             }
                             return null;
                           })()}
@@ -1367,20 +1501,49 @@ async function handleSaveOperationsBreakdownOnly() {
                   className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
                   disabled={eInvoiceData?.irn}
                 >
-                  {eInvoiceData?.irn ? "IRN Generated" : "Create E-Invoice (Generate IRN)"}
+                  {eInvoiceData?.irn
+                    ? "IRN Generated"
+                    : "Create E-Invoice (Generate IRN)"}
                 </button>
                 {eInvoiceData?.irn && (
                   <div className="mt-2 text-xs text-gray-600">
-                    <p><span className="font-semibold">IRN:</span> {eInvoiceData.irn}</p>
-                    <p><span className="font-semibold">Ack No:</span> {eInvoiceData.ackNo}</p>
-                    <p><span className="font-semibold">Ack Date:</span> {new Date(eInvoiceData.ackDt).toLocaleString()}</p>
-                    <p><span className="font-semibold">Status:</span> {eInvoiceData.status}</p>
-                    {eInvoiceData.ewbNo && <p><span className="font-semibold">EWB No:</span> {eInvoiceData.ewbNo}</p>}
+                    <p>
+                      <span className="font-semibold">IRN:</span>{" "}
+                      {eInvoiceData.irn}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Ack No:</span>{" "}
+                      {eInvoiceData.ackNo}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Ack Date:</span>{" "}
+                      {new Date(eInvoiceData.ackDt).toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Status:</span>{" "}
+                      {eInvoiceData.status}
+                    </p>
+                    {eInvoiceData.ewbNo && (
+                      <p>
+                        <span className="font-semibold">EWB No:</span>{" "}
+                        {eInvoiceData.ewbNo}
+                      </p>
+                    )}
                     {eInvoiceData.ewbDt && (
-                      <p><span className="font-semibold">EWB Date:</span> {new Date(eInvoiceData.ewbDt).toLocaleString()}</p>
+                      <p>
+                        <span className="font-semibold">EWB Date:</span>{" "}
+                        {new Date(eInvoiceData.ewbDt).toLocaleString()}
+                      </p>
                     )}
                     {eInvoiceData.ewbValidTill && (
-                      <p><span className="font-semibold">EWB Valid Till:</span> {new Date(eInvoiceData.ewbValidTill).toLocaleString()}</p>
+                      <p>
+                        <span className="font-semibold">
+                          EWB Valid Till:
+                        </span>{" "}
+                        {new Date(
+                          eInvoiceData.ewbValidTill
+                        ).toLocaleString()}
+                      </p>
                     )}
                   </div>
                 )}
@@ -1394,7 +1557,9 @@ async function handleSaveOperationsBreakdownOnly() {
                   className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-xs"
                   disabled={eInvoiceData?.cancelled}
                 >
-                  {eInvoiceData?.cancelled ? "E-Invoice Cancelled" : "Cancel E-Invoice"}
+                  {eInvoiceData?.cancelled
+                    ? "E-Invoice Cancelled"
+                    : "Cancel E-Invoice"}
                 </button>
               </div>
             )}
@@ -1477,13 +1642,15 @@ async function handleSaveOperationsBreakdownOnly() {
           {editableQuotation.items.map((item, index) => {
             const baseRate = parseFloat(item.rate) || 0;
             const effRate = baseRate * marginFactor;
-            const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(2);
+            const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(
+              2
+            );
             const gstRate =
               item.productGST != null
                 ? parseFloat(item.productGST)
                 : editableQuotation.gst
-                  ? parseFloat(editableQuotation.gst)
-                  : 0;
+                ? parseFloat(editableQuotation.gst)
+                : 0;
             const total = (
               parseFloat(amount) +
               (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
@@ -1507,7 +1674,9 @@ async function handleSaveOperationsBreakdownOnly() {
                   <input
                     type="text"
                     value={item.product}
-                    onChange={(e) => updateItemField(index, "product", e.target.value)}
+                    onChange={(e) =>
+                      updateItemField(index, "product", e.target.value)
+                    }
                     className="border p-1 w-full text-xs"
                   />
                 </td>
@@ -1515,7 +1684,9 @@ async function handleSaveOperationsBreakdownOnly() {
                   <input
                     type="text"
                     value={item.hsnCode || item.productId?.hsnCode || ""}
-                    onChange={(e) => updateItemField(index, "hsnCode", e.target.value)}
+                    onChange={(e) =>
+                      updateItemField(index, "hsnCode", e.target.value)
+                    }
                     className="border p-1 w-full text-xs"
                   />
                 </td>
@@ -1523,7 +1694,9 @@ async function handleSaveOperationsBreakdownOnly() {
                   <input
                     type="number"
                     value={item.quantity}
-                    onChange={(e) => updateItemField(index, "quantity", e.target.value)}
+                    onChange={(e) =>
+                      updateItemField(index, "quantity", e.target.value)
+                    }
                     className="border p-1 w-16 text-xs"
                     min="1"
                   />
@@ -1532,7 +1705,9 @@ async function handleSaveOperationsBreakdownOnly() {
                   <input
                     type="number"
                     value={item.rate}
-                    onChange={(e) => updateItemField(index, "rate", e.target.value)}
+                    onChange={(e) =>
+                      updateItemField(index, "rate", e.target.value)
+                    }
                     className="border p-1 w-20 text-xs"
                     min="0"
                     step="0.01"
@@ -1593,9 +1768,12 @@ async function handleSaveOperationsBreakdownOnly() {
                   item.productGST != null
                     ? parseFloat(item.productGST)
                     : editableQuotation.gst
-                      ? parseFloat(editableQuotation.gst)
-                      : 0;
-                return sum + (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0));
+                    ? parseFloat(editableQuotation.gst)
+                    : 0;
+                return (
+                  sum +
+                  (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0))
+                );
               }, 0)
               .toFixed(2)}
           </p>

@@ -41,19 +41,11 @@ function computeTotals(items) {
 /**
  * nextPO
  * Format: PO-APP-YYYY-SEQ
- * where YYYY is the "financial year start" number:
- * - From 1 Apr 2025 to 31 Mar 2026 => 2025
- * - From 1 Apr 2026 to 31 Mar 2027 => 2026
- * and so on.
  */
 async function nextPO(sequenceKey = "PO-APP") {
   const now = dayjs();
-  // dayjs().month() is 0-based (0 = Jan, 3 = Apr)
   const calendarYear = now.year();
   const monthIndex = now.month();
-
-  // If month >= April (3), use current calendar year as the FY label
-  // Else use previous year
   const fyYear = monthIndex >= 3 ? calendarYear : calendarYear - 1;
 
   const key = `${sequenceKey}:${fyYear}`;
@@ -63,7 +55,6 @@ async function nextPO(sequenceKey = "PO-APP") {
     { new: true, upsert: true }
   );
   const seqStr = String(doc.seq).padStart(3, "0");
-  // Final number: PO-APP-<FY_YEAR>-<SEQ>
   return `PO-APP-${fyYear}-${seqStr}`;
 }
 
@@ -110,8 +101,9 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           schedulePickUp: null,
           followUp: [],
           remarks: "",
-          invoiceRemarks: "", // NEW default for temp rows
+          invoiceRemarks: "",
           status: "",
+          completionState: "", // NEW default for temp rows
           jobSheetId: js._id,
           isTemporary: true,
         });
@@ -263,6 +255,15 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       data.invoiceRemarks = data.invoiceRemarks || "";
     }
 
+    // NEW: normalize completionState on create
+    if (data.completionState === undefined || data.completionState === null) {
+      data.completionState = "";
+    } else {
+      const v = String(data.completionState).trim();
+      data.completionState =
+        v === "Partially" || v === "Fully" ? v : "";
+    }
+
     if (data.jobSheetId) {
       const js = await JobSheet.findById(data.jobSheetId);
       if (!js) return res.status(404).json({ message: "JobSheet not found" });
@@ -305,7 +306,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               schedulePickUp: p.schedulePickUp,
               followUp: p.followUp,
               remarks: p.remarks,
-              invoiceRemarks: p.invoiceRemarks || "", // carry forward
+              invoiceRemarks: p.invoiceRemarks || "",
               status: p.status,
               jobSheetId: p.jobSheetId,
               createdAt: p.createdAt,
@@ -360,6 +361,13 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       // do nothing
     } else if (typeof updateData.invoiceRemarks !== "string") {
       updateData.invoiceRemarks = String(updateData.invoiceRemarks || "");
+    }
+
+    // NEW: normalize completionState on update
+    if (updateData.completionState !== undefined) {
+      const v = String(updateData.completionState || "").trim();
+      updateData.completionState =
+        v === "Partially" || v === "Fully" ? v : "";
     }
 
     if (updateData.jobSheetId) {
