@@ -151,10 +151,10 @@ const adminPages = [
       { name: "Employees", path: "/admin-dashboard/hrms/employees", permission: "hrms-employees" },
       { name: "Holidays", path: "/admin-dashboard/holidays", permission: "holidays" },
       { name: "Leave Tracker", path: "/admin-dashboard/leaves-super-admin", permission: "leaves" },
-      { name: "Attendance", path: "/admin-dashboard/hrms/attendance", permission: "hrms-attendance" },
-      { name: "Work From Home", path: "/admin-dashboard/hrms/wfh", permission: "hrms-wfh" },
+      // { name: "Attendance", path: "/admin-dashboard/hrms/attendance", permission: "hrms-attendance" },
+      // { name: "Work From Home", path: "/admin-dashboard/hrms/wfh", permission: "hrms-wfh" },
       { name: "Leaves", path: "/admin-dashboard/hrms/leaves", permission: "hrms-leaves" },
-      { name: "Salary", path: "/admin-dashboard/hrms/salary", permission: "hrms-salary" },
+      // { name: "Salary", path: "/admin-dashboard/hrms/salary", permission: "hrms-salary" },
     ],
   },
 ];
