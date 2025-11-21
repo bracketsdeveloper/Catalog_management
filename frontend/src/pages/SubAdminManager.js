@@ -35,6 +35,7 @@ const groupedPermissions = {
 
   /* ↓ Purchasing flow */
   Purchase: [
+    "manage-vendors",
     "open-purchase",
     "closed-purchases",
     "manage-purchaseinvoice",

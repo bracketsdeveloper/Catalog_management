@@ -17,7 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 /* ------------------------------------------------------------------ */
-/* TOP-LEVEL NAVIGATION CONFIG (≈50% larger than prior compact)       */
+/* TOP-LEVEL NAVIGATION CONFIG                                        */
 /* ------------------------------------------------------------------ */
 
 const adminPages = [
@@ -129,7 +129,9 @@ const adminPages = [
     name: "Expense Recording",
     defaultPath: "/admin-dashboard/manage-expenses",
     icon: <img src="/expenses.png" className="h-8 w-8 shrink-0" alt="Expenses" />,
-    subItems: [{ name: "Manage Expenses", path: "/admin-dashboard/manage-expenses", permission: "manage-expenses" }],
+    subItems: [
+      { name: "Manage Expenses", path: "/admin-dashboard/manage-expenses", permission: "manage-expenses" },
+    ],
   },
   {
     name: "FollowUp Tracker",
@@ -213,14 +215,23 @@ export default function AdminDashboard() {
       const fetchUserAndShowGreeting = async () => {
         try {
           const token = localStorage.getItem("token");
-          const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/admin/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const response = await axios.get(
+            `${process.env.REACT_APP_BACKEND_URL}/api/admin/me`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
           const username = response.data.name || "User";
-          toast.success(getTimeBasedGreeting(username), { position: "top-center", autoClose: 3000 });
+          toast.success(getTimeBasedGreeting(username), {
+            position: "top-center",
+            autoClose: 3000,
+          });
         } catch {
           const username = localStorage.getItem("name") || "User";
-          toast.success(getTimeBasedGreeting(username), { position: "top-center", autoClose: 3000 });
+          toast.success(getTimeBasedGreeting(username), {
+            position: "top-center",
+            autoClose: 3000,
+          });
         }
       };
       fetchUserAndShowGreeting();
@@ -232,19 +243,35 @@ export default function AdminDashboard() {
     navigate("/login");
   };
 
-  const accessiblePages = adminPages.filter((page) => {
-    if (page.name === "Calculations") {
-      const hasPermission = page.subItems.some((sub) => isSuperAdmin || permissions.includes(sub.permission));
-      return hasPermission;
-    }
-    if (page.subItems) {
-      const accessibleSub = page.subItems.filter((s) => isSuperAdmin || !s.permission || permissions.includes(s.permission));
-      return accessibleSub.length > 0;
-    }
-    return isSuperAdmin || (page.permission && permissions.includes(page.permission));
-  });
+  /* ---------------- FILTER PAGES + SUBITEMS BY PERMISSIONS ---------------- */
 
-  /* width unchanged (increase is vertical) */
+  const accessiblePages = adminPages
+    .map((page) => {
+      if (page.subItems && Array.isArray(page.subItems)) {
+        const filteredSubItems = page.subItems.filter((sub) => {
+          if (isSuperAdmin) return true;
+          if (!sub.permission) return true;
+          return permissions.includes(sub.permission);
+        });
+
+        return { ...page, subItems: filteredSubItems };
+      }
+
+      // pages without subItems would use direct permission (if any)
+      if (!page.permission) {
+        return isSuperAdmin ? page : null;
+      }
+      if (isSuperAdmin || permissions.includes(page.permission)) {
+        return page;
+      }
+      return null;
+    })
+    .filter((p) => {
+      if (!p) return false;
+      if (p.subItems && p.subItems.length === 0) return false;
+      return true;
+    });
+
   const baseSidebarWidth = sidebarOpen || sidebarHover ? 220 : 92;
   const megaOpen =
     crmHovered ||
@@ -267,12 +294,16 @@ export default function AdminDashboard() {
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-gray-800">
         <h1 className="text-3xl font-semibold mb-2">DEACTIVE</h1>
         <p className="text-gray-500 text-sm">You do not have admin privileges.</p>
-        <button onClick={handleSignOut} className="mt-5 px-3 py-1.5 bg-red-500 text-white rounded">
+        <button
+          onClick={handleSignOut}
+          className="mt-5 px-3 py-1.5 bg-red-500 text-white rounded"
+        >
           Sign Out
         </button>
       </div>
     );
   }
+
   if (role !== "ADMIN") {
     navigate("/unauthorized");
     return null;
@@ -290,7 +321,7 @@ export default function AdminDashboard() {
         <UserCircleIcon className="h-7 w-7 text-gray-700" />
       </Link>
 
-      {/* ============ LEFT SIDEBAR (50% larger than compact) ============ */}
+      {/* ============ LEFT SIDEBAR ============ */}
       <aside
         className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-[#Ff8045] text-white leading-tight"
         style={{ width: finalSidebarWidth }}
@@ -320,7 +351,10 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between px-3 py-3">
           <img src="/pacer-logo.jpeg" alt="Logo" className="h-9 w-24" />
           {sidebarOpen && (
-            <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded hover:bg-white/10">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-1.5 rounded hover:bg-white/10"
+            >
               <ArrowLeftOnRectangleIcon className="h-6 w-6" />
             </button>
           )}
@@ -529,14 +563,17 @@ export default function AdminDashboard() {
                 );
               }
 
+              // Fallback if any single-link pages exist later
               return (
                 <li key={page.name}>
                   <Link
-                    to={page.path}
-                    className="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 transition whitespace-nowrap text-sm"
+                    to={page.defaultPath}
+                    className="flex items-center gap-3 px-3 py-2 rounded hover:bg.white/10 transition whitespace-nowrap text-sm"
                   >
                     {page.icon}
-                    {(sidebarOpen || sidebarHover) && <span className="truncate">{page.name}</span>}
+                    {(sidebarOpen || sidebarHover) && (
+                      <span className="truncate">{page.name}</span>
+                    )}
                   </Link>
                 </li>
               );
@@ -560,7 +597,11 @@ export default function AdminDashboard() {
       <main className="flex-1 overflow-y-auto p-2">
         {isAdminDashboard ? (
           <div className="flex items-center justify-center h-full">
-            <img src="/pacer-loader.jpeg" alt="Admin Dashboard Background" className="w-full h-full" />
+            <img
+              src="/pacer-loader.jpeg"
+              alt="Admin Dashboard Background"
+              className="w-full h-full"
+            />
           </div>
         ) : (
           <Outlet key={location.pathname} />
@@ -571,9 +612,13 @@ export default function AdminDashboard() {
 }
 
 /* ****************************************************************** */
-/* MEGA-MENU (≈50% larger than prior compact)                         */
+/* MEGA-MENU                                                          */
 /* ****************************************************************** */
 function MegaMenu({ page, hovered, setHovered, sidebarOpen, sidebarHover }) {
+  if (!page.subItems || page.subItems.length === 0) {
+    return null;
+  }
+
   return (
     <li onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <Link
