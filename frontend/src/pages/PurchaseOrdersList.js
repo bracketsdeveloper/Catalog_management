@@ -947,7 +947,7 @@ export default function PurchaseOrdersList() {
         <h1>ACE PRINT PACK</h1>
         <div># 61, 1st Floor, 5th Main Road, Chamrajpet, Bangalore 560018</div>
         <div>Phone: +91 9945261108 | Email: accounts@aceprintpack.com</div>
-        <div>GSTIN: 29AACF4992A1ZL</div>
+        <div>GSTIN: 29ABCFA9924A1ZL</div>
       </div>
     </div>
   `;
