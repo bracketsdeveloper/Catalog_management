@@ -693,19 +693,31 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
 }
 
 /* ---------------- DEFAULT PO TERMS (prefill) ---------------- */
-const DEFAULT_PO_TERMS = `The Vendor warrants that all goods supplied shall strictly confirm to the specifications, samples (pre-approved or otherwise), drawings, and/or standards explicitly referenced in this Purchase Order.
-Quality Standards: All materials must be new, defect-free, and of first-class quality, suitable for the intended use as premium corporate gifts. This includes specific requirements on durability, colorfastness, finish, and safety standards (e.g., non-toxic, food-safe, etc.).
-Right to Inspect and Reject: We reserve the right to inspect all goods upon delivery. If, upon inspection, any item is found to be defective, non-conforming, or of unacceptable quality, we may reject the entire shipment or the non-conforming portion at the Vendor's risk and expense. The Vendor shall bear all costs of return and shall, either provide a full refund or replace the rejected goods within agreed days.
-Proofing: For custom or branded items, the Vendor must submit a pre-production sample/proof for written approval before mass production begins. Production without written approval is at the Vendor's sole risk.
-Firm Delivery Date: The Required Delivery Date specified in the Header Details is firm and of the essence. The Vendor must ensure delivery to the specified address on or before this date.
-Notification of Delay: The Vendor must immediately notify us in writing of any potential delay, providing the reasons and a revised expected delivery date.
-Late Delivery Penalty (Liquidated Damages): Should the Vendor fail to deliver the goods by the Required Delivery Date, we reserve the right to assess a penalty for Liquidated Damages.
-Cancellation Rights: If delivery is delayed by more than committed days beyond the Required Delivery Date, we may, without prejudice to any other rights or remedies, cancel the entire Purchase Order without penalty and secure the goods from an alternate source, holding the original Vendor responsible for any additional costs incurred.
-Payment Terms: Net 30 days from the later of (a) the invoice date or (b) the date of acceptance of the goods by Ace
-Shipping Terms: Specify the shipping responsibility
-The Vendor agrees not to disclose or use any specific branding, client details, or product designs related to this PO for any other purpose without the prior written consent of Ace Gifting Solutions
-The Vendor's acceptance of this Purchase Order is deemed to occur upon the earliest of (a) written acknowledgment, (b) shipment of the goods, or (c) commencement of work on the goods.
-PO is subject to Bangalore Jurisdiction`;
+const DEFAULT_PO_TERMS = `1. The Vendor warrants that all goods supplied shall strictly conform to the specifications, samples (pre-approved or otherwise), drawings, and/or standards explicitly referenced in this Purchase Order.
+
+2. Quality Standards: All materials must be new, defect-free, and of first-class quality, suitable for the intended use as premium corporate gifts. This includes specific requirements on durability, colorfastness, finish, and safety standards (e.g., non-toxic, food-safe, etc.).
+
+3. Right to Inspect and Reject: We reserve the right to inspect all goods upon delivery. If, upon inspection, any item is found to be defective, non-conforming, or of unacceptable quality, we may reject the entire shipment or the non-conforming portion at the Vendor's risk and expense. The Vendor shall bear all costs of return and shall, either provide a full refund or replace the rejected goods within agreed days.
+
+4. Proofing: For custom or branded items, the Vendor must submit a pre-production sample/proof for written approval before mass production begins. Production without written approval is at the Vendor's sole risk.
+
+5. Firm Delivery Date: The Required Delivery Date specified in the Header Details is firm and of the essence. The Vendor must ensure delivery to the specified address on or before this date.
+
+6. Notification of Delay: The Vendor must immediately notify us in writing of any potential delay, providing the reasons and a revised expected delivery date.
+
+7. Late Delivery Penalty (Liquidated Damages): Should the Vendor fail to deliver the goods by the Required Delivery Date, we reserve the right to assess a penalty for Liquidated Damages.
+
+8. Cancellation Rights: If delivery is delayed by more than committed days beyond the Required Delivery Date, we may, without prejudice to any other rights or remedies, cancel the entire Purchase Order without penalty and secure the goods from an alternate source, holding the original Vendor responsible for any additional costs incurred.
+
+9. Payment Terms: Net 30 days from the later of (a) the invoice date or (b) the date of acceptance of the goods by Ace.
+
+10. Shipping Terms: Specify the shipping responsibility.
+
+11. The Vendor agrees not to disclose or use any specific branding, client details, or product designs related to this PO for any other purpose without the prior written consent of Ace Gifting Solutions.
+
+12. The Vendor's acceptance of this Purchase Order is deemed to occur upon the earliest of (a) written acknowledgment, (b) shipment of the goods, or (c) commencement of work on the goods.
+
+13. PO is subject to Bangalore Jurisdiction.`;
 
 /* ---------------- Generate PO Modal ---------------- */
 function GeneratePOModal({ row, onClose, onCreated }) {
