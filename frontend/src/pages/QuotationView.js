@@ -992,20 +992,20 @@ export default function QuotationView() {
           <table className="table-auto w-full text-[11px] border-collapse">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border px-2 py-1 align-top">Sl</th>
-                <th className="border px-2 py-1 align-top">Product</th>
-                <th className="border px-2 py-1 align-top">Qty</th>
-                <th className="border px-2 py-1 align-top">Rate</th>
-                <th className="border px-2 py-1 align-top">Amount</th>
-                <th className="border px-2 py-1 align-top">GST</th>
-                <th className="border px-2 py-1 align-top">Total</th>
-                <th className="border px-2 py-1 align-top">Our Cost</th>
-                <th className="border px-2 py-1 align-top">Branding Cost</th>
-                <th className="border px-2 py-1 align-top">Delivery Cost</th>
-                <th className="border px-2 py-1 align-top">Markup</th>
-                <th className="border px-2 py-1 align-top">Final Total</th>
-                <th className="border px-2 py-1 align-top">Vendor</th>
-                <th className="border px-2 py-1 align-top">Action</th>
+                <th className="border px-2 py-1 align-top w-10">Sl</th>
+                <th className="border px-2 py-1 align-top w-64">Product</th>
+                <th className="border px-2 py-1 align-top w-14">Qty</th>
+                <th className="border px-2 py-1 align-top w-16">Rate</th>
+                <th className="border px-2 py-1 align-top w-16">Amount</th>
+                <th className="border px-2 py-1 align-top w-14">GST</th>
+                <th className="border px-2 py-1 align-top w-20">Total</th>
+                <th className="border px-2 py-1 align-top w-20">Our Cost</th>
+                <th className="border px-2 py-1 align-top w-16">Branding Cost</th>
+                <th className="border px-2 py-1 align-top w-20">Delivery Cost</th>
+                <th className="border px-2 py-1 align-top w-16">Markup</th>
+                <th className="border px-2 py-1 align-top w-24">Final Total</th>
+                <th className="border px-2 py-1 align-top w-32">Vendor</th>
+                <th className="border px-2 py-1 align-top w-16">Action</th>
               </tr>
             </thead>
 
@@ -1016,7 +1016,7 @@ export default function QuotationView() {
                     {r.slNo}
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-64">
                     <input
                       value={r.product}
                       onChange={(e) => updateOpRow(idx, "product", e.target.value)}
@@ -1024,7 +1024,7 @@ export default function QuotationView() {
                     />
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-14">
                     <input
                       type="number"
                       value={r.quantity}
@@ -1042,7 +1042,7 @@ export default function QuotationView() {
                     {r.amount.toFixed(2)}
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-14">
                     <input
                       value={r.gst}
                       onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
@@ -1055,7 +1055,7 @@ export default function QuotationView() {
                     {r.total.toFixed(2)}
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-20">
                     <input
                       type="number"
                       value={r.ourCost}
@@ -1064,7 +1064,7 @@ export default function QuotationView() {
                     />
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-16">
                     <input
                       type="number"
                       value={r.brandingCost}
@@ -1075,7 +1075,7 @@ export default function QuotationView() {
                     />
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-20">
                     <input
                       type="number"
                       value={r.deliveryCost}
@@ -1086,7 +1086,7 @@ export default function QuotationView() {
                     />
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-16">
                     <input
                       type="number"
                       value={r.markUpCost}
@@ -1101,7 +1101,7 @@ export default function QuotationView() {
                     {r.finalTotal.toFixed(2)}
                   </td>
 
-                  <td className="border px-2 py-1">
+                  <td className="border px-2 py-1 w-32">
                     <input
                       value={r.vendor}
                       onChange={(e) => updateOpRow(idx, "vendor", e.target.value)}
