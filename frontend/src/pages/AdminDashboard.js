@@ -28,6 +28,7 @@ const adminPages = [
     subItems: [
       { name: "Manage Tasks", path: "/admin-dashboard/manage-tasks", permission: "manage-task" },
       { name: "Manage Tickets", path: "/admin-dashboard/manage-tickets" },
+      { name:"Manuals",path:"/admin-dashboard/file-management"  }
     ],
   },
   {

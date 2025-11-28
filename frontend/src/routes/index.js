@@ -85,6 +85,7 @@ import PurchaseOrdersList from "../pages/PurchaseOrdersList";
 import HolidaysPage from "../pages/HolidaysPage";
 import MyProfile from "../pages/MyProfile";
 import LeavesSuperAdminPage from "../pages/LeavesSuperAdminPage";
+import FileManagement from "../pages/FileManagement";
 
 
 const router = createBrowserRouter([
@@ -439,6 +440,10 @@ const router = createBrowserRouter([
                     {
                         path: "leaves-super-admin",
                         element:<LeavesSuperAdminPage/>
+                    },
+                    {
+                        path: "file-management",
+                        element:<FileManagement/>
                     }
                 ]
             }

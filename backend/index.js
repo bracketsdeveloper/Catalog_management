@@ -149,6 +149,10 @@ app.use("/api/admin", require("./routes/adminInvoices"));
 // server/index.js (or registerRoutes)
 app.use("/api/admin", require("./routes/admin/holidays"));
 
+// Add this to your existing app.js
+const fileRoutes = require("./routes/files");
+app.use("/api/files", fileRoutes);
+
 
 // server.js or index.js
 const invoicesEinvoiceRoutes = require("./routes/invoices.einvoice");
