@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+import RichTextEditor from "../components/RichTextEditor";
 
 const ROLE_OPTIONS_ASC = [
   "ACCOUNTS", "ADMIN", "CRM", "DESIGN", "HR", "PROCESS", 
@@ -27,7 +28,6 @@ const PDFViewer = ({ fileUrl, fileName, onClose }) => {
             src={fileUrl}
             className="w-full h-full border-0"
             title={fileName}
-            // Prevent right-click and download
             onContextMenu={(e) => e.preventDefault()}
           />
         </div>
@@ -77,7 +77,6 @@ const ExcelCSVViewer = ({ fileData, fileName, fileType, onClose }) => {
     }
   }, [fileData, fileType]);
 
-  // Prevent right-click context menu
   useEffect(() => {
     const preventRightClick = (e) => {
       e.preventDefault();
@@ -167,7 +166,6 @@ const ExcelCSVViewer = ({ fileData, fileName, fileType, onClose }) => {
 
 // Image Viewer Component with download prevention
 const ImageViewer = ({ fileUrl, fileName, onClose }) => {
-  // Prevent right-click and drag
   const preventDefault = (e) => {
     e.preventDefault();
     return false;
@@ -194,7 +192,6 @@ const ImageViewer = ({ fileUrl, fileName, onClose }) => {
             src={fileUrl}
             alt={fileName}
             className="max-w-full max-h-[70vh] object-contain"
-            // Prevent image drag and right-click
             onContextMenu={preventDefault}
             onDragStart={preventDefault}
             draggable="false"
@@ -220,7 +217,6 @@ const TextViewer = ({ fileData, fileName, onClose }) => {
     reader.readAsText(fileData);
   }, [fileData]);
 
-  // Prevent text selection and right-click
   const preventDefault = (e) => {
     e.preventDefault();
     return false;
@@ -258,6 +254,34 @@ const TextViewer = ({ fileData, fileName, onClose }) => {
   );
 };
 
+// Document Viewer Component
+const DocumentViewer = ({ documentContent, fileName, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b">
+          <h3 className="text-lg font-semibold text-gray-900">{fileName}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          <div 
+            className="prose max-w-none"
+            dangerouslySetInnerHTML={{ __html: documentContent }}
+          />
+        </div>
+        <div className="p-3 bg-gray-100 text-center text-sm text-gray-600 border-t">
+          Document View - Download disabled
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Enhanced File Management Component
 export default function FileManagement() {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -266,6 +290,7 @@ export default function FileManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   
   // Upload form state
@@ -274,9 +299,17 @@ export default function FileManagement() {
   const [accessibleRoles, setAccessibleRoles] = useState([]);
   const [description, setDescription] = useState("");
   
+  // Document creation state
+  const [documentName, setDocumentName] = useState("");
+  const [documentDescription, setDocumentDescription] = useState("");
+  const [documentContent, setDocumentContent] = useState("");
+  const [documentRoles, setDocumentRoles] = useState([]);
+  const [creatingDocument, setCreatingDocument] = useState(false);
+  
   // Search and sort state
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "uploadedOn", direction: "desc" });
+  const [showDocumentsOnly, setShowDocumentsOnly] = useState(false);
 
   // File viewer state
   const [viewerState, setViewerState] = useState({
@@ -284,24 +317,26 @@ export default function FileManagement() {
     fileType: null,
     fileUrl: null,
     fileData: null,
-    fileName: null
+    fileName: null,
+    documentContent: null,
+    isDocument: false
   });
 
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
 
   useEffect(() => {
     fetchFiles();
-  }, []);
+  }, [showDocumentsOnly]);
 
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${BACKEND_URL}/api/files?sortBy=${sortConfig.key}&sortOrder=${sortConfig.direction}`,
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        }
-      );
+      const url = `${BACKEND_URL}/api/files?sortBy=${sortConfig.key}&sortOrder=${sortConfig.direction}${
+        showDocumentsOnly ? '&documentOnly=true' : ''
+      }`;
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
       setFiles(response.data);
       setError(null);
     } catch (err) {
@@ -365,6 +400,53 @@ export default function FileManagement() {
     }
   };
 
+  const handleCreateDocument = async (e) => {
+    e.preventDefault();
+    
+    if (!documentName.trim()) {
+      alert("Please enter a document name");
+      return;
+    }
+
+    if (documentRoles.length === 0) {
+      alert("Please select at least one role");
+      return;
+    }
+
+    if (!documentContent.trim()) {
+      alert("Please add some content to the document");
+      return;
+    }
+
+    try {
+      setCreatingDocument(true);
+      const response = await axios.post(
+        `${BACKEND_URL}/api/files/create-document`,
+        {
+          fileName: documentName.trim(),
+          accessibleRoles: documentRoles,
+          description: documentDescription,
+          documentContent: documentContent
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      setFiles(prev => [response.data.file, ...prev]);
+      setShowCreateDocumentModal(false);
+      resetDocumentForm();
+      alert("Document created successfully!");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to create document");
+    } finally {
+      setCreatingDocument(false);
+    }
+  };
+
   const resetUploadForm = () => {
     setSelectedFile(null);
     setFileName("");
@@ -372,10 +454,31 @@ export default function FileManagement() {
     setDescription("");
   };
 
-  const handleViewFile = async (fileId, fileType, fileName) => {
+  const resetDocumentForm = () => {
+    setDocumentName("");
+    setDocumentDescription("");
+    setDocumentContent("");
+    setDocumentRoles([]);
+  };
+
+  const handleViewFile = async (file) => {
+    // For documents, use the stored content directly
+    if (file.isDocument) {
+      setViewerState({
+        isOpen: true,
+        fileType: 'text/html',
+        fileUrl: null,
+        fileData: null,
+        fileName: file.fileName,
+        documentContent: file.documentContent,
+        isDocument: true
+      });
+      return;
+    }
+
     try {
       const response = await axios.get(
-        `${BACKEND_URL}/api/files/view/${fileId}`,
+        `${BACKEND_URL}/api/files/view/${file.id}`,
         {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -384,18 +487,17 @@ export default function FileManagement() {
         }
       );
 
-      // Create a blob without download capability
-      const fileBlob = new Blob([response.data], { type: fileType });
-      
-      // Create object URL but don't expose download
+      const fileBlob = new Blob([response.data], { type: file.fileType });
       const fileUrl = URL.createObjectURL(fileBlob);
 
       setViewerState({
         isOpen: true,
-        fileType,
+        fileType: file.fileType,
         fileUrl,
         fileData: fileBlob,
-        fileName
+        fileName: file.fileName,
+        documentContent: null,
+        isDocument: false
       });
 
     } catch (err) {
@@ -409,10 +511,11 @@ export default function FileManagement() {
       fileType: null,
       fileUrl: null,
       fileData: null,
-      fileName: null
+      fileName: null,
+      documentContent: null,
+      isDocument: false
     });
     
-    // Clean up URL object
     if (viewerState.fileUrl) {
       URL.revokeObjectURL(viewerState.fileUrl);
     }
@@ -442,8 +545,8 @@ export default function FileManagement() {
     }
   };
 
-  const toggleRole = (role) => {
-    setAccessibleRoles(prev =>
+  const toggleRole = (role, setRolesFunction) => {
+    setRolesFunction(prev =>
       prev.includes(role)
         ? prev.filter(r => r !== role)
         : [...prev, role]
@@ -496,7 +599,6 @@ export default function FileManagement() {
           : new Date(bValue) - new Date(aValue);
       }
       
-      // String comparison for other fields
       const compareResult = String(aValue).localeCompare(String(bValue));
       return sortConfig.direction === "asc" ? compareResult : -compareResult;
     });
@@ -520,7 +622,11 @@ export default function FileManagement() {
   const renderViewer = () => {
     if (!viewerState.isOpen) return null;
 
-    const { fileType, fileUrl, fileData, fileName } = viewerState;
+    const { fileType, fileUrl, fileData, fileName, documentContent, isDocument } = viewerState;
+
+    if (isDocument) {
+      return <DocumentViewer documentContent={documentContent} fileName={fileName} onClose={closeViewer} />;
+    }
 
     if (fileType === 'application/pdf') {
       return <PDFViewer fileUrl={fileUrl} fileName={fileName} onClose={closeViewer} />;
@@ -575,6 +681,31 @@ export default function FileManagement() {
             </div>
           </div>
 
+          {/* Documents Only Toggle */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="documentsOnly"
+              checked={showDocumentsOnly}
+              onChange={(e) => setShowDocumentsOnly(e.target.checked)}
+              className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500"
+            />
+            <label htmlFor="documentsOnly" className="text-sm font-medium">
+              Documents Only
+            </label>
+          </div>
+
+          {/* Create Document Button - Only show for Super Admin */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowCreateDocumentModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <span>📝</span>
+              Create Document
+            </button>
+          )}
+
           {/* Upload Button - Only show for Super Admin */}
           {isSuperAdmin && (
             <button
@@ -605,6 +736,7 @@ export default function FileManagement() {
               <SortableHeader columnKey="uploadedBy">Uploaded By</SortableHeader>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Uploaded For</th>
               <SortableHeader columnKey="uploadedOn">Uploaded On</SortableHeader>
+              <th className="px-6 py-3 text-left text-sm font-medium uppercase">Type</th>
               <th className="px-6 py-3 text-left text-sm font-medium uppercase">Actions</th>
             </tr>
           </thead>
@@ -614,7 +746,14 @@ export default function FileManagement() {
                 <td className="px-6 py-4 text-sm">{index + 1}</td>
                 <td className="px-6 py-4 text-sm">
                   <div>
-                    <div className="font-medium">{file.fileName}</div>
+                    <div className="font-medium flex items-center gap-2">
+                      {file.fileName}
+                      {file.isDocument && (
+                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                          Document
+                        </span>
+                      )}
+                    </div>
                     {file.description && (
                       <div className="text-xs text-gray-500 mt-1">{file.description}</div>
                     )}
@@ -636,9 +775,16 @@ export default function FileManagement() {
                 </td>
                 <td className="px-6 py-4 text-sm">{formatDate(file.uploadedOn)}</td>
                 <td className="px-6 py-4 text-sm">
+                  {file.isDocument ? (
+                    <span className="text-blue-600">📝 Document</span>
+                  ) : (
+                    <span className="text-gray-600">📎 File</span>
+                  )}
+                </td>
+                <td className="px-6 py-4 text-sm">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleViewFile(file.id, file.fileType, file.fileName)}
+                      onClick={() => handleViewFile(file)}
                       className="text-blue-600 hover:text-blue-800 text-sm"
                     >
                       👁️ View
@@ -660,13 +806,115 @@ export default function FileManagement() {
 
         {sortedFiles.length === 0 && (
           <div className="text-center py-8 text-gray-500">
-            No files found. {isSuperAdmin && "Upload your first file to get started!"}
+            No files found. {isSuperAdmin && "Upload your first file or create a document to get started!"}
           </div>
         )}
       </div>
 
       {/* File Viewer Modal */}
       {renderViewer()}
+
+      {/* Create Document Modal - Only for Super Admin */}
+      {showCreateDocumentModal && isSuperAdmin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl max-h-[95vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-blue-600">Create Document</h2>
+            
+            <form onSubmit={handleCreateDocument}>
+              {/* Document Name */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Document Name *
+                </label>
+                <input
+                  type="text"
+                  value={documentName}
+                  onChange={(e) => setDocumentName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  placeholder="Enter document name..."
+                  required
+                />
+              </div>
+
+              {/* Document Description */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Description (Optional)</label>
+                <textarea
+                  value={documentDescription}
+                  onChange={(e) => setDocumentDescription(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 h-20"
+                  placeholder="Enter document description..."
+                />
+              </div>
+
+              {/* Accessible Roles */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Accessible Roles *
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                  {ROLE_OPTIONS_ASC.map(role => (
+                    <label
+                      key={role}
+                      className={`flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer ${
+                        documentRoles.includes(role)
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-gray-50 border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={documentRoles.includes(role)}
+                        onChange={() => toggleRole(role, setDocumentRoles)}
+                        className="hidden"
+                      />
+                      {role}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select roles that should have access to this document
+                </p>
+              </div>
+
+              {/* Rich Text Editor */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">
+                  Document Content *
+                </label>
+                <RichTextEditor
+                  value={documentContent}
+                  onChange={setDocumentContent}
+                  placeholder="Start typing your document content here..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateDocumentModal(false);
+                    resetDocumentForm();
+                  }}
+                  className="bg-gray-300 text-gray-900 px-4 py-2 rounded-md hover:bg-gray-400"
+                  disabled={creatingDocument}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"
+                  disabled={creatingDocument}
+                >
+                  {creatingDocument ? "Creating..." : "Create Document"}
+                  {creatingDocument && "⏳"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal - Only for Super Admin */}
       {showUploadModal && isSuperAdmin && (
@@ -736,7 +984,7 @@ export default function FileManagement() {
                       <input
                         type="checkbox"
                         checked={accessibleRoles.includes(role)}
-                        onChange={() => toggleRole(role)}
+                        onChange={() => toggleRole(role, setAccessibleRoles)}
                         className="hidden"
                       />
                       {role}

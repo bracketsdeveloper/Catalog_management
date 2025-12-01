@@ -257,6 +257,7 @@ export default function ManageJobSheets() {
               "Order Date": orderDateFormatted,
               "Quotation Number": js.referenceQuotation || "",
               "Job Sheet Number": js.jobSheetNumber || "",
+              "Opportunity Number": js.opportunityNumber || "",
               "Opportunity Name": js.eventName || "",
               "Client Company Name": js.clientCompanyName || "",
               "Client Name": js.clientName || "",
@@ -280,6 +281,7 @@ export default function ManageJobSheets() {
             "Order Date": orderDateFormatted,
             "Quotation Number": js.referenceQuotation || "",
             "Job Sheet Number": js.jobSheetNumber || "",
+            "Opportunity Number": js.opportunityNumber || "",
             "Opportunity Name": js.eventName || "",
             "Client Company Name": js.clientCompanyName || "",
             "Client Name": js.clientName || "",
@@ -318,6 +320,7 @@ export default function ManageJobSheets() {
           <tr>
             {[
               "JobSheet No.",
+              "Opportunity Number",
               "Event Name",
               "Client Name",
               "Company",
@@ -335,7 +338,7 @@ export default function ManageJobSheets() {
         <tbody>
           {[...Array(5)].map((_, index) => (
             <tr key={index} className="border-b">
-              {[...Array(8)].map((_, cellIndex) => (
+              {[...Array(9)].map((_, cellIndex) => (
                 <td key={cellIndex} className="py-2 px-3">
                   <div className="animate-pulse bg-gray-200 h-4 w-full rounded"></div>
                 </td>
@@ -565,6 +568,7 @@ export default function ManageJobSheets() {
                   className="border p-2 rounded"
                 >
                   <option value="jobSheetNumber">JobSheet No.</option>
+                  <option value="opportunityNumber">Opportunity Number</option>
                   <option value="eventName">Event Name</option>
                   <option value="clientName">Client Name</option>
                   <option value="clientCompanyName">Company</option>
@@ -602,6 +606,7 @@ export default function ManageJobSheets() {
               <tr className="border-b">
                 {[
                   { label: "JobSheet No.", field: "jobSheetNumber", isDate: false },
+                  { label: "Opportunity Number", field: "opportunityNumber", isDate: false },
                   { label: "Event Name", field: "eventName", isDate: false },
                   { label: "Client Name", field: "clientName", isDate: false },
                   { label: "Company", field: "clientCompanyName", isDate: false },
@@ -639,6 +644,7 @@ export default function ManageJobSheets() {
                         {js.jobSheetNumber || "(No Number)"}
                       </button>
                     </td>
+                    <td className="p-2">{js.opportunityNumber || "N/A"}</td>
                     <td className="p-2">{js.eventName || "N/A"}</td>
                     <td className="p-2">{js.clientName || "N/A"}</td>
                     <td className="p-2">{js.clientCompanyName || "N/A"}</td>
@@ -737,6 +743,7 @@ export default function ManageJobSheets() {
               <thead>
                 <tr className="border-b">
                   <th className="p-2 text-left">Draft #</th>
+                  <th className="p-2 text-left">Opportunity Number</th>
                   <th className="p-2 text-left">Client Name</th>
                   <th className="p-2 text-left">Company</th>
                   <th className="p-2 text-left">Order Date</th>
@@ -748,6 +755,7 @@ export default function ManageJobSheets() {
                 {draftSheets.map((draft) => (
                   <tr key={draft._id} className="border-b">
                     <td className="p-2">{draft.jobSheetNumber || "(Draft)"}</td>
+                    <td className="p-2">{draft.opportunityNumber || "N/A"}</td>
                     <td className="p-2">{draft.clientName || "N/A"}</td>
                     <td className="p-2">{draft.clientCompanyName || "N/A"}</td>
                     <td className="p-2">

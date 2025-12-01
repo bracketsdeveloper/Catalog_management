@@ -994,7 +994,7 @@ export default function QuotationView() {
               <tr className="bg-gray-100">
                 <th className="border px-2 py-1 align-top w-10">Sl</th>
                 <th className="border px-2 py-1 align-top w-64">Product</th>
-                <th className="border px-2 py-1 align-top w-14">Qty</th>
+                <th className="border px-2 py-1 align-top w-20">Qty</th>
                 <th className="border px-2 py-1 align-top w-16">Rate</th>
                 <th className="border px-2 py-1 align-top w-16">Amount</th>
                 <th className="border px-2 py-1 align-top w-14">GST</th>
@@ -1024,7 +1024,7 @@ export default function QuotationView() {
                     />
                   </td>
 
-                  <td className="border px-2 py-1 w-14">
+                  <td className="border px-2 py-1 w-20">
                     <input
                       type="number"
                       value={r.quantity}
@@ -1197,7 +1197,7 @@ export default function QuotationView() {
             contentEditable
             suppressContentEditableWarning
             onBlur={(e) => handleHeaderBlur("customerCompany", e)}
-          >
+            >
             {editableQuotation.customerCompany}
           </span>
         </div>
@@ -1778,7 +1778,7 @@ export default function QuotationView() {
               .toFixed(2)}
           </p>
         </div>
-      )}
+      )}  
     </div>
   );
 }

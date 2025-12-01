@@ -199,36 +199,54 @@ export const ManageVendors = () => {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse border border-gray-200">
-          <thead>
+      {/* Table Container with Fixed Header */}
+      <div className="overflow-x-auto border border-gray-200 rounded-lg" style={{ maxHeight: "calc(100vh - 200px)" }}>
+        <table className="min-w-full border-collapse">
+          <thead className="sticky top-0 z-10">
             <tr className="bg-gray-50 text-left">
-              <th onClick={() => handleSort("reliability")} className="p-2 cursor-pointer border border-gray-200">
+              <th 
+                onClick={() => handleSort("reliability")} 
+                className="p-2 cursor-pointer border border-gray-200 sticky top-0 bg-gray-50 z-20"
+              >
                 Reliability <SortIndicator field="reliability" />
               </th>
-              <th onClick={() => handleSort("vendorName")} className="p-2 cursor-pointer border border-gray-200">
+              <th 
+                onClick={() => handleSort("vendorName")} 
+                className="p-2 cursor-pointer border border-gray-200 sticky top-0 bg-gray-50 z-20"
+              >
                 WhatsApp Group <SortIndicator field="vendorName" />
               </th>
-              <th onClick={() => handleSort("vendorCompany")} className="p-2 cursor-pointer border border-gray-200">
+              <th 
+                onClick={() => handleSort("vendorCompany")} 
+                className="p-2 cursor-pointer border border-gray-200 sticky top-0 bg-gray-50 z-20"
+              >
                 Company <SortIndicator field="vendorCompany" />
               </th>
-              <th onClick={() => handleSort("brandDealing")} className="p-2 cursor-pointer border border-gray-200">
+              <th 
+                onClick={() => handleSort("brandDealing")} 
+                className="p-2 cursor-pointer border border-gray-200 sticky top-0 bg-gray-50 z-20"
+              >
                 Specialises In <SortIndicator field="brandDealing" />
               </th>
-              <th onClick={() => handleSort("location")} className="p-2 cursor-pointer border border-gray-200">
+              <th 
+                onClick={() => handleSort("location")} 
+                className="p-2 cursor-pointer border border-gray-200 sticky top-0 bg-gray-50 z-20"
+              >
                 Location <SortIndicator field="location" />
               </th>
-              <th onClick={() => handleSort("postalCode")} className="p-2 cursor-pointer border border-gray-200">
+              <th 
+                onClick={() => handleSort("postalCode")} 
+                className="p-2 cursor-pointer border border-gray-200 sticky top-0 bg-gray-50 z-20"
+              >
                 Postal Code <SortIndicator field="postalCode" />
               </th>
-              <th className="p-2 border border-gray-200">Contact Person</th>
-              <th className="p-2 border border-gray-200">GSTs</th>
-              <th className="p-2 border border-gray-200">Bank Accounts</th>
-              <th className="p-2 border border-gray-200">Actions</th>
+              <th className="p-2 border border-gray-200 sticky top-0 bg-gray-50 z-20">Contact Person</th>
+              <th className="p-2 border border-gray-200 sticky top-0 bg-gray-50 z-20">GSTs</th>
+              <th className="p-2 border border-gray-200 sticky top-0 bg-gray-50 z-20">Bank Accounts</th>
+              <th className="p-2 border border-gray-200 sticky top-0 bg-gray-50 z-20">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="overflow-y-auto">
             {displayedVendors.map((v) => {
               const rel = String(v.reliability || "").toLowerCase();
               const isNonReliable = !rel || rel === "non-reliable";

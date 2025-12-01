@@ -33,6 +33,9 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
 
     // NEW: manual opportunity number
     opportunityNumber: "",
+
+    // NEW: reason field when not received back
+    notReceivedReason: "",
   });
 
   // suggestions & lists
@@ -74,8 +77,9 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         ? new Date(initialData.sampleBackDate)
         : null,
 
-      // NEW: prefill opp number
+      // NEW: prefill opp number and reason
       opportunityNumber: initialData.opportunityNumber || "",
+      notReceivedReason: initialData.notReceivedReason || "",
     }));
   }, [initialData]);
 
@@ -302,8 +306,9 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
           ? form.sampleBackDate.toISOString()
           : null,
 
-        // ensure trimmed string to API
+        // ensure trimmed strings to API
         opportunityNumber: (form.opportunityNumber || "").trim(),
+        notReceivedReason: (form.notReceivedReason || "").trim(),
       };
 
       if (isEdit) {
@@ -665,6 +670,20 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
                 onChange={(e) =>
                   handleChange("sampleBackDate", new Date(e.target.value))
                 }
+              />
+            </div>
+          )}
+
+          {/* Not Received Reason - Only show when Received Back is false */}
+          {!form.receivedBack && (
+            <div className="md:col-span-3">
+              <label className="block mb-1">Reason for Not Receiving Back</label>
+              <textarea
+                className="border rounded p-2 w-full"
+                rows="3"
+                value={form.notReceivedReason}
+                onChange={(e) => handleChange("notReceivedReason", e.target.value)}
+                placeholder="Enter reason why sample was not received back..."
               />
             </div>
           )}

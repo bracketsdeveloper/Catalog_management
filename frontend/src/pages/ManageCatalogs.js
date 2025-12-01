@@ -93,7 +93,8 @@ export default function CreateManualCatalog() {
 
   const [cartOpen, setCartOpen] = useState(false);
   const [quotationId, setQuotationId] = useState(null);
-  const [quotationNumber, setQuotationNumber] = useState(null); // New state for quotation number
+  const [quotationNumber, setQuotationNumber] = useState(null);
+  const [isDraftQuotation, setIsDraftQuotation] = useState(false); // NEW: Track if current quotation is draft
 
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
@@ -368,6 +369,7 @@ export default function CreateManualCatalog() {
         if (Array.isArray(quotationData) && quotationData.length > 0) {
           setQuotationId(quotationData[0]._id);
           setQuotationNumber(quotationData[0].quotationNumber || null);
+          setIsDraftQuotation(quotationData[0].isDraft || false); // NEW: Track draft status
         }
       } catch (err) {
         console.error("Error fetching catalog:", err);
@@ -381,6 +383,7 @@ export default function CreateManualCatalog() {
         });
         setQuotationId(data._id);
         setQuotationNumber(data.quotationNumber || null);
+        setIsDraftQuotation(data.isDraft || false); // NEW: Track draft status
         setOpportunityNumber(data.opportunityNumber || "");
         setCatalogName(data.catalogName || "");
         setCustomerName(data.customerName || "");
@@ -622,7 +625,7 @@ export default function CreateManualCatalog() {
   // ─── Build Quotation Payload ──────────────────────────────────────────────
   function buildQuotationPayload() {
     return {
-      _id: isQuotationEditMode ? undefined : quotationId, // Clear _id for new quotation
+      _id: isQuotationEditMode ? quotationId : undefined, // Include _id for updates
       opportunityNumber,
       catalogId: isCatalogEditMode ? id : undefined,
       catalogName,
@@ -686,6 +689,7 @@ export default function CreateManualCatalog() {
       });
       setQuotationId(response.data.quotation._id);
       setQuotationNumber(response.data.quotation.quotationNumber || null);
+      setIsDraftQuotation(false); // Regular quotations are not drafts
       alert("New quotation created!");
     } catch (error) {
       console.error("Error saving quotation:", error);
@@ -701,8 +705,7 @@ export default function CreateManualCatalog() {
 
     const payload = {
       ...buildQuotationPayload(),
-      // Mark as draft using remarks (no schema change needed)
-      remarks: [{ sender: "system", message: "__DRAFT__" }],
+      isDraft: true, // NEW: Use the proper isDraft field
     };
 
     try {
@@ -712,12 +715,59 @@ export default function CreateManualCatalog() {
       });
       setQuotationId(response.data.quotation._id);
       setQuotationNumber(response.data.quotation.quotationNumber || null);
+      setIsDraftQuotation(true); // NEW: Track draft status
       alert(`Draft quotation created! #${response.data.quotation.quotationNumber}`);
-      // Optional: take them to management to see the draft section
-      // navigate("/admin-dashboard/manage-quotations");
     } catch (error) {
       console.error("Error creating draft quotation:", error);
       alert("Error creating draft quotation");
+    }
+  };
+
+  // ─── NEW: Update Draft Quotation ──────────────────────────────────────────
+  const handleUpdateDraftQuotation = async () => {
+    if (!quotationId || !isDraftQuotation) {
+      alert("No draft quotation found to update");
+      return;
+    }
+
+    if (!catalogName || !selectedProducts.length) {
+      return alert("Enter Catalog Name & add ≥1 product");
+    }
+
+    const payload = {
+      ...buildQuotationPayload(),
+      isDraft: true, // Keep it as draft
+    };
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.put(`${BACKEND_URL}/api/admin/quotations/${quotationId}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      alert("Draft quotation updated successfully!");
+    } catch (error) {
+      console.error("Error updating draft quotation:", error);
+      alert("Error updating draft quotation");
+    }
+  };
+
+  // ─── NEW: Publish Draft Quotation ─────────────────────────────────────────
+  const handlePublishDraftQuotation = async () => {
+    if (!quotationId || !isDraftQuotation) {
+      alert("No draft quotation found to publish");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.put(`${BACKEND_URL}/api/admin/quotations/${quotationId}/publish`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setIsDraftQuotation(false);
+      alert("Draft quotation published successfully!");
+    } catch (error) {
+      console.error("Error publishing draft quotation:", error);
+      alert("Error publishing draft quotation");
     }
   };
 
@@ -919,14 +969,33 @@ export default function CreateManualCatalog() {
             {isCatalogEditMode && id ? "Update Catalog" : "Create Catalog"}
           </button>
 
-          {/* NEW: Create Draft Quotation */}
-          <button
-            onClick={handleCreateDraftQuotation}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
-            title="Creates a quotation marked as draft"
-          >
-            Create Draft Quotation
-          </button>
+          {/* NEW: Draft Quotation Buttons */}
+          {isDraftQuotation ? (
+            <>
+              <button
+                onClick={handleUpdateDraftQuotation}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+                title="Update existing draft quotation"
+              >
+                Update Draft Quotation
+              </button>
+              <button
+                onClick={handlePublishDraftQuotation}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+                title="Publish draft to live quotation"
+              >
+                Publish Draft
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleCreateDraftQuotation}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+              title="Creates a quotation marked as draft"
+            >
+              Create Draft Quotation
+            </button>
+          )}
 
           <button
             onClick={handleSaveQuotation}
@@ -934,9 +1003,17 @@ export default function CreateManualCatalog() {
           >
             {isQuotationEditMode && quotationId ? "Create New Quotation" : "Create Quotation"}
           </button>
+
+          {/* Draft Status Indicator */}
+          {isDraftQuotation && (
+            <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
+              Draft Mode
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Rest of your JSX remains the same... */}
       {/* Form Fields */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {/* Opportunity Number */}
@@ -1329,7 +1406,7 @@ export default function CreateManualCatalog() {
               <Droppable droppableId="cartItems">
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps}>
-                                        {selectedProducts.map((row, idx) => (
+                    {selectedProducts.map((row, idx) => (
                       <Draggable
                         key={row._id || `${row.productId}-${idx}`}
                         draggableId={String(row._id || `${row.productId}-${idx}`)}

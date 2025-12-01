@@ -111,13 +111,14 @@ export default function SamplesOut() {
       Client: r.clientName,
       "Sent By": r.sentByName,
       "Sample Ref": r.sampleReferenceCode,
-      "Opportunity #": r.opportunityNumber || "", // NEW in export
+      "Opportunity #": r.opportunityNumber || "",
       Product: r.productName,
       Brand: r.brand,
       Qty: r.qty,
       Color: r.color,
       Status: r.sampleOutStatus || "",
       "Received Back": r.receivedBack ? "Yes" : "No",
+      "Not Received Reason": r.notReceivedReason || "", // NEW
       Returned: r.returned ? "Yes" : "No",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);

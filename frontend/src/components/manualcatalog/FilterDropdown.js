@@ -51,9 +51,22 @@ export default function FilterDropdown({
         respectsDependencies = dependsOn[label].every((parentFilter) => {
           const parentOptions = allSelections[parentFilter] || [];
           if (parentOptions.length === 0) return true;
-          return parentOptions.some((parent) =>
-            (parentChildMap[parentFilter]?.[norm(opt)] || []).includes(norm(parent))
-          );
+          
+          // For subCategories, check if any selected category has this subCategory
+          if (label === 'subCategories' && parentFilter === 'categories') {
+            return parentOptions.some((parent) =>
+              (parentChildMap.categories?.[norm(parent)] || []).includes(norm(opt))
+            );
+          }
+          
+          // For variationHinges, check if any selected category/subCategory has this hinge
+          if (label === 'variationHinges' && (parentFilter === 'categories' || parentFilter === 'subCategories')) {
+            return parentOptions.some((parent) =>
+              (parentChildMap[parentFilter]?.[norm(parent)] || []).includes(norm(opt))
+            );
+          }
+          
+          return true;
         });
       }
 
