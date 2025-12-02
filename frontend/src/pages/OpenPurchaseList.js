@@ -17,30 +17,29 @@ const toISODate = (d) => {
 
 function HeaderFilters({ headerFilters, onFilterChange }) {
   const cols = [
-    "jobSheetCreatedDate",
-    "jobSheetNumber",
-    "clientCompanyName",
-    "eventName",
-    "product",
-    "productPrice",
-    "size",
-    "qtyRequired",
-    "qtyOrdered",
-    "sourcedBy",
-    "sourcingFrom",
-    "deliveryDateTime",
-    "vendorContactNumber",
-    "orderConfirmedDate",
-    "expectedReceiveDate",
-    "schedulePickUp",
-    "invoiceRemarks",
-    "remarks",
+    { key: "jobSheetCreatedDate", label: "Job Sheet Date" },
+    { key: "jobSheetNumber", label: "Job Sheet #" },
+    { key: "clientCompanyName", label: "Client" },
+    { key: "eventName", label: "Event" },
+    { key: "product", label: "Product" },
+    { key: "productPrice", label: "Cost" },
+    { key: "size", label: "Size" },
+    { key: "qtyRequired", label: "Qty Req" },
+    { key: "qtyOrdered", label: "Qty Ordered" },
+    { key: "sourcedBy", label: "Sourced By" },
+    { key: "sourcingFrom", label: "Sourced From" },
+    { key: "deliveryDateTime", label: "Delivery Date" },
+    { key: "vendorContactNumber", label: "Vendor Contact" },
+    { key: "orderConfirmedDate", label: "Order Conf Date." },
+    { key: "expectedReceiveDate", label: "Expected Recv Date." },
+    { key: "schedulePickUp", label: "Pick-Up Date" },
+    { key: "invoiceRemarks", label: "Invoice Remarks" },
+    { key: "remarks", label: "Order Remarks" },
   ];
 
   return (
     <tr className="bg-gray-100">
-      {/* Completion filter */}
-      <th className="p-1 border">
+      <th className="p-1 border" style={{ width: "120px" }}>
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.completionState || ""}
@@ -53,17 +52,17 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
       </th>
 
       {cols.map((c) => (
-        <th key={c} className="p-1 border">
+        <th key={c.key} className="p-1 border">
           <input
             type="text"
             className="w-full p-1 text-xs border rounded"
-            placeholder={`Filter ${c}`}
-            value={headerFilters[c] || ""}
-            onChange={(e) => onFilterChange(c, e.target.value)}
+            placeholder={`Filter ${c.label}`}
+            value={headerFilters[c.key] || ""}
+            onChange={(e) => onFilterChange(c.key, e.target.value)}
           />
         </th>
       ))}
-      <th className="p-1 border">
+      <th className="p-1 border" style={{ width: "120px" }}>
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.status || ""}
@@ -76,8 +75,8 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="__empty__">No Status</option>
         </select>
       </th>
-      <th className="p-1 border" />
-      <th className="p-1 border">
+      <th className="p-1 border" style={{ width: "180px" }} />
+      <th className="p-1 border" style={{ width: "120px" }}>
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.__poStatus || ""}
@@ -88,7 +87,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="not">Not generated</option>
         </select>
       </th>
-      <th className="p-1 border" />
+      <th className="p-1 border" style={{ width: "80px" }} />
     </tr>
   );
 }
@@ -1197,10 +1196,12 @@ export default function OpenPurchaseList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="border p-2 rounded flex-grow text-xs"
+          style={{ minWidth: "300px" }}
         />
         <button
           onClick={() => setShowFilters((f) => !f)}
           className="bg-[#Ff8045] text-white px-4 py-2 rounded text-xs"
+          style={{ minWidth: "100px" }}
         >
           Filters
         </button>
@@ -1208,6 +1209,7 @@ export default function OpenPurchaseList() {
           <button
             onClick={exportToExcel}
             className="bg-green-600 text-white px-4 py-2 rounded text-xs"
+            style={{ minWidth: "140px" }}
           >
             Export to Excel
           </button>
@@ -1304,223 +1306,226 @@ export default function OpenPurchaseList() {
         </div>
       )}
 
-      <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
-        <thead className="bg-gray-50">
-          <tr>
-            {[
-              { key: "completionState", label: "Completion" }, // first column
-              { key: "jobSheetCreatedDate", label: "Job Sheet Date" },
-              { key: "jobSheetNumber", label: "Job Sheet #" },
-              { key: "clientCompanyName", label: "Client" },
-              { key: "eventName", label: "Event" },
-              { key: "product", label: "Product" },
-              { key: "productPrice", label: "Cost" },
-              { key: "size", label: "Size" },
-              { key: "qtyRequired", label: "Qty Req" },
-              { key: "qtyOrdered", label: "Qty Ordered" },
-              { key: "sourcedBy", label: "Sourced By" },
-              { key: "sourcingFrom", label: "Sourced From" },
-              { key: "deliveryDateTime", label: "Delivery Date" },
-              { key: "vendorContactNumber", label: "Vendor Contact" },
-              { key: "orderConfirmedDate", label: "Order Conf Date." },
-              { key: "expectedReceiveDate", label: "Expected Recv Date." },
-              { key: "schedulePickUp", label: "Pick-Up Date" },
-              { key: "invoiceRemarks", label: "Invoice Remarks" },
-              { key: "remarks", label: "Order Remarks" },
-              { key: "status", label: "Status" },
-            ].map(({ key, label }) => (
-              <th
-                key={key}
-                onClick={() => sortBy(key)}
-                className="p-2 border cursor-pointer"
-              >
-                {label}
-                {sortConfig.key === key
-                  ? sortConfig.direction === "asc"
-                    ? " ▲"
-                    : " ▼"
-                  : ""}
-              </th>
-            ))}
-            <th className="p-2 border">Follow-Up</th>
-            <th className="p-2 border">PO Status</th>
-            <th className="p-2 border">Actions</th>
-          </tr>
-          <HeaderFilters
-            headerFilters={headerFilters}
-            onFilterChange={(k, v) =>
-              setHeaderFilters((p) => ({ ...p, [k]: v }))
-            }
-          />
-        </thead>
-        <tbody>
-          {rows.map((p) => {
-            const latest = p.followUp?.length
-              ? p.followUp.reduce((l, fu) =>
-                  new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
-                )
-              : null;
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              {[
+                { key: "completionState", label: "Completion", width: "120px" },
+                { key: "jobSheetCreatedDate", label: "Job Sheet Date", width: "150px" },
+                { key: "jobSheetNumber", label: "Job Sheet #", width: "120px" },
+                { key: "clientCompanyName", label: "Client", width: "200px" },
+                { key: "eventName", label: "Event", width: "180px" },
+                { key: "product", label: "Product", width: "250px" },
+                { key: "productPrice", label: "Cost", width: "100px" },
+                { key: "size", label: "Size", width: "100px" },
+                { key: "qtyRequired", label: "Qty Req", width: "80px" },
+                { key: "qtyOrdered", label: "Qty Ordered", width: "100px" },
+                { key: "sourcedBy", label: "Sourced By", width: "150px" },
+                { key: "sourcingFrom", label: "Sourced From", width: "200px" },
+                { key: "deliveryDateTime", label: "Delivery Date", width: "150px" },
+                { key: "vendorContactNumber", label: "Vendor Contact", width: "180px" },
+                { key: "orderConfirmedDate", label: "Order Conf Date.", width: "150px" },
+                { key: "expectedReceiveDate", label: "Expected Recv Date.", width: "150px" },
+                { key: "schedulePickUp", label: "Pick-Up Date", width: "150px" },
+                { key: "invoiceRemarks", label: "Invoice Remarks", width: "200px" },
+                { key: "remarks", label: "Order Remarks", width: "250px" },
+                { key: "status", label: "Status", width: "120px" },
+              ].map(({ key, label, width }) => (
+                <th
+                  key={key}
+                  onClick={() => sortBy(key)}
+                  className="p-2 border cursor-pointer"
+                  style={{ width }}
+                >
+                  {label}
+                  {sortConfig.key === key
+                    ? sortConfig.direction === "asc"
+                      ? " ▲"
+                      : " ▼"
+                    : ""}
+                </th>
+              ))}
+              <th className="p-2 border" style={{ width: "180px" }}>Follow-Up</th>
+              <th className="p-2 border" style={{ width: "120px" }}>PO Status</th>
+              <th className="p-2 border" style={{ width: "80px" }}>Actions</th>
+            </tr>
+            <HeaderFilters
+              headerFilters={headerFilters}
+              onFilterChange={(k, v) =>
+                setHeaderFilters((p) => ({ ...p, [k]: v }))
+              }
+            />
+          </thead>
+          <tbody>
+            {rows.map((p) => {
+              const latest = p.followUp?.length
+                ? p.followUp.reduce((l, fu) =>
+                    new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
+                  )
+                : null;
 
-            const menuOpen = menuOpenFor === p._id;
-            const poGenerated = !!(p.poId || p.poNumber);
+              const menuOpen = menuOpenFor === p._id;
+              const poGenerated = !!(p.poId || p.poNumber);
 
-            return (
-              <tr
-                key={`${p._id}_${p.product}_${p.size || ""}`}
-                className={
-                  p.status === "alert"
-                    ? "bg-red-200"
-                    : p.status === "pending"
-                    ? "bg-orange-200"
-                    : p.status === "received"
-                    ? "bg-green-200"
-                    : ""
-                }
-              >
-                <td className="p-2 border">{p.completionState || ""}</td>
+              return (
+                <tr
+                  key={`${p._id}_${p.product}_${p.size || ""}`}
+                  className={
+                    p.status === "alert"
+                      ? "bg-red-200"
+                      : p.status === "pending"
+                      ? "bg-orange-200"
+                      : p.status === "received"
+                      ? "bg-green-200"
+                      : ""
+                  }
+                >
+                  <td className="p-2 border break-words" style={{ width: "120px" }}>{p.completionState || ""}</td>
 
-                <td className="p-2 border">{fmtDate(p.jobSheetCreatedDate)}</td>
-                <td className="p-2 border">
-                  <button
-                    className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(p.jobSheetNumber);
-                    }}
-                  >
-                    {p.jobSheetNumber || "(No Number)"}
-                  </button>
-                </td>
-                <td className="p-2 border">{p.clientCompanyName}</td>
-                <td className="p-2 border">{p.eventName}</td>
-                <td className="p-2 border">{p.product}</td>
-                <td className="p-2 border">
-                  {typeof p.productPrice === "number"
-                    ? p.productPrice.toFixed(2)
-                    : "—"}
-                </td>
-                <td className="p-2 border">{p.size || "N/A"}</td>
-                <td className="p-2 border">{p.qtyRequired}</td>
-                <td className="p-2 border">{p.qtyOrdered}</td>
-                <td className="p-2 border">{p.sourcedBy || ""}</td>
-                <td className="p-2 border">{p.sourcingFrom}</td>
-                <td className="p-2 border">{fmtDate(p.deliveryDateTime)}</td>
-                <td className="p-2 border">{p.vendorContactNumber}</td>
-                <td className="p-2 border">{fmtDate(p.orderConfirmedDate)}</td>
-                <td className="p-2 border">
-                  {fmtDate(p.expectedReceiveDate)}
-                </td>
-                <td className="p-2 border">{fmtDate(p.schedulePickUp)}</td>
-                <td className="p-2 border">{p.invoiceRemarks || ""}</td>
-                <td className="p-2 border">{p.remarks}</td>
-                <td className="p-2 border">{p.status || "N/A"}</td>
-
-                <td className="p-2 border">
-                  {latest
-                    ? latest.remarks && latest.remarks.trim()
-                      ? latest.remarks
-                      : latest.note || "—"
-                    : "—"}
-                </td>
-
-                <td className="p-2 border">
-                  {poGenerated ? (
-                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
-                      Generated
-                    </span>
-                  ) : (
-                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-gray-400 text-white">
-                      Not generated
-                    </span>
-                  )}
-                </td>
-
-                <td className="p-2 border space-y-1 relative">
-                  <div className="mt-1">
+                  <td className="p-2 border break-words" style={{ width: "150px" }}>{fmtDate(p.jobSheetCreatedDate)}</td>
+                  <td className="p-2 border break-words" style={{ width: "120px" }}>
                     <button
-                      className="w-full border rounded py-0.5 text-[10px]"
-                      onClick={() =>
-                        setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
-                      }
+                      className="border-b text-blue-500 hover:text-blue-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenModal(p.jobSheetNumber);
+                      }}
                     >
-                      ⋮
+                      {p.jobSheetNumber || "(No Number)"}
                     </button>
-                    {menuOpen && (
-                      <div className="absolute right-0 z-[120] mt-1 w-44 bg-white border rounded shadow">
-                        <button
-                          className={
-                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                            (!perms.includes("write-purchase") ||
-                            p.status === "received"
-                              ? "opacity-50 cursor-not-allowed"
-                              : "")
-                          }
-                          onClick={() => {
-                            if (
-                              !perms.includes("write-purchase") ||
-                              p.status === "received"
-                            )
-                              return;
-                            setMenuOpenFor(null);
-                            setCurrentEdit(p);
-                            setEditModal(true);
-                          }}
-                        >
-                          Edit
-                        </button>
+                  </td>
+                  <td className="p-2 border break-words" style={{ width: "200px" }}>{p.clientCompanyName}</td>
+                  <td className="p-2 border break-words" style={{ width: "180px" }}>{p.eventName}</td>
+                  <td className="p-2 border break-words" style={{ width: "250px" }}>{p.product}</td>
+                  <td className="p-2 border break-words text-right" style={{ width: "100px" }}>
+                    {typeof p.productPrice === "number"
+                      ? p.productPrice.toFixed(2)
+                      : "—"}
+                  </td>
+                  <td className="p-2 border break-words" style={{ width: "100px" }}>{p.size || "N/A"}</td>
+                  <td className="p-2 border break-words" style={{ width: "80px" }}>{p.qtyRequired}</td>
+                  <td className="p-2 border break-words" style={{ width: "100px" }}>{p.qtyOrdered}</td>
+                  <td className="p-2 border break-words" style={{ width: "150px" }}>{p.sourcedBy || ""}</td>
+                  <td className="p-2 border break-words" style={{ width: "200px" }}>{p.sourcingFrom}</td>
+                  <td className="p-2 border break-words" style={{ width: "150px" }}>{fmtDate(p.deliveryDateTime)}</td>
+                  <td className="p-2 border break-words" style={{ width: "180px" }}>{p.vendorContactNumber}</td>
+                  <td className="p-2 border break-words" style={{ width: "150px" }}>{fmtDate(p.orderConfirmedDate)}</td>
+                  <td className="p-2 border break-words" style={{ width: "150px" }}>
+                    {fmtDate(p.expectedReceiveDate)}
+                  </td>
+                  <td className="p-2 border break-words" style={{ width: "150px" }}>{fmtDate(p.schedulePickUp)}</td>
+                  <td className="p-2 border break-words" style={{ width: "200px" }}>{p.invoiceRemarks || ""}</td>
+                  <td className="p-2 border break-words" style={{ width: "250px" }}>{p.remarks}</td>
+                  <td className="p-2 border break-words" style={{ width: "120px" }}>{p.status || "N/A"}</td>
 
-                        <button
-                          className={
-                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
-                            (!perms.includes("write-purchase")
-                              ? "opacity-50 cursor-not-allowed"
-                              : "")
-                          }
-                          onClick={async () => {
-                            if (!perms.includes("write-purchase")) return;
-                            setMenuOpenFor(null);
-                            if (!window.confirm("Delete this purchase?")) return;
-                            try {
-                              const token = localStorage.getItem("token");
-                              await axios.delete(
-                                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
-                                { headers: { Authorization: `Bearer ${token}` } }
-                              );
-                              await loadPurchases();
-                            } catch {
-                              alert("Error deleting.");
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
+                  <td className="p-2 border break-words" style={{ width: "180px" }}>
+                    {latest
+                      ? latest.remarks && latest.remarks.trim()
+                        ? latest.remarks
+                        : latest.note || "—"
+                      : "—"}
+                  </td>
 
-                        {!poGenerated && (
+                  <td className="p-2 border break-words text-center" style={{ width: "120px" }}>
+                    {poGenerated ? (
+                      <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
+                        Generated
+                      </span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-gray-400 text-white">
+                        Not generated
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="p-2 border space-y-1 relative" style={{ width: "80px" }}>
+                    <div className="mt-1">
+                      <button
+                        className="w-full border rounded py-0.5 text-[10px]"
+                        onClick={() =>
+                          setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
+                        }
+                      >
+                        ⋮
+                      </button>
+                      {menuOpen && (
+                        <div className="absolute right-0 z-[120] mt-1 w-44 bg-white border rounded shadow">
                           <button
                             className={
                               "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                              (!perms.includes("write-purchase")
+                              (!perms.includes("write-purchase") ||
+                              p.status === "received"
                                 ? "opacity-50 cursor-not-allowed"
                                 : "")
                             }
                             onClick={() => {
-                              if (!perms.includes("write-purchase")) return;
+                              if (
+                                !perms.includes("write-purchase") ||
+                                p.status === "received"
+                              )
+                                return;
                               setMenuOpenFor(null);
-                              setPoModalRow(p);
+                              setCurrentEdit(p);
+                              setEditModal(true);
                             }}
                           >
-                            Generate PO
+                            Edit
                           </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+
+                          <button
+                            className={
+                              "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
+                              (!perms.includes("write-purchase")
+                                ? "opacity-50 cursor-not-allowed"
+                                : "")
+                            }
+                            onClick={async () => {
+                              if (!perms.includes("write-purchase")) return;
+                              setMenuOpenFor(null);
+                              if (!window.confirm("Delete this purchase?")) return;
+                              try {
+                                const token = localStorage.getItem("token");
+                                await axios.delete(
+                                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
+                                  { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                                await loadPurchases();
+                              } catch {
+                                alert("Error deleting.");
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+
+                          {!poGenerated && (
+                            <button
+                              className={
+                                "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
+                                (!perms.includes("write-purchase")
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "")
+                              }
+                              onClick={() => {
+                                if (!perms.includes("write-purchase")) return;
+                                setMenuOpenFor(null);
+                                setPoModalRow(p);
+                              }}
+                            >
+                              Generate PO
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <JobSheetGlobal
         jobSheetNumber={selectedJobSheetNumber}
