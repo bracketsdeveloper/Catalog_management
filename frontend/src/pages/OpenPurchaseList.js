@@ -17,53 +17,52 @@ const toISODate = (d) => {
 
 function HeaderFilters({ headerFilters, onFilterChange }) {
   const cols = [
-    "jobSheetCreatedDate",
-    "jobSheetNumber",
-    "clientCompanyName",
-    "eventName",
-    "product",
-    "productPrice",
-    "size",
-    "qtyRequired",
-    "qtyOrdered",
-    "sourcedBy",
-    "sourcingFrom",
-    "deliveryDateTime",
-    "vendorContactNumber",
-    "orderConfirmedDate",
-    "expectedReceiveDate",
-    "schedulePickUp",
-    "invoiceRemarks",
-    "remarks",
+    { key: "jobSheetCreatedDate", label: "JS Date" },
+    { key: "jobSheetNumber", label: "JS #" },
+    { key: "clientCompanyName", label: "Client" },
+    { key: "eventName", label: "Event" },
+    { key: "product", label: "Product" },
+    { key: "productPrice", label: "Cost" },
+    { key: "size", label: "Size" },
+    { key: "qtyRequired", label: "Qty Req" },
+    { key: "qtyOrdered", label: "Qty Ord" },
+    { key: "sourcedBy", label: "By" },
+    { key: "sourcingFrom", label: "Source" },
+    { key: "deliveryDateTime", label: "Deliv Date" },
+    { key: "vendorContactNumber", label: "Vendor #" },
+    { key: "orderConfirmedDate", label: "Order Conf" },
+    { key: "expectedReceiveDate", label: "Exp Recv" },
+    { key: "schedulePickUp", label: "Pick-Up" },
+    { key: "invoiceRemarks", label: "Inv Rmk" },
+    { key: "remarks", label: "Remarks" },
   ];
 
   return (
     <tr className="bg-gray-100">
-      {/* Completion filter */}
-      <th className="p-1 border">
+      <th className="p-1 border w-24">
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.completionState || ""}
           onChange={(e) => onFilterChange("completionState", e.target.value)}
         >
           <option value="">All</option>
-          <option value="Partially">Partially</option>
-          <option value="Fully">Fully</option>
+          <option value="Partially">Partial</option>
+          <option value="Fully">Full</option>
         </select>
       </th>
 
       {cols.map((c) => (
-        <th key={c} className="p-1 border">
+        <th key={c.key} className="p-1 border">
           <input
             type="text"
             className="w-full p-1 text-xs border rounded"
-            placeholder={`Filter ${c}`}
-            value={headerFilters[c] || ""}
-            onChange={(e) => onFilterChange(c, e.target.value)}
+            placeholder={c.label}
+            value={headerFilters[c.key] || ""}
+            onChange={(e) => onFilterChange(c.key, e.target.value)}
           />
         </th>
       ))}
-      <th className="p-1 border">
+      <th className="p-1 border w-24">
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.status || ""}
@@ -73,22 +72,22 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="pending">pending</option>
           <option value="received">received</option>
           <option value="alert">alert</option>
-          <option value="__empty__">No Status</option>
+          <option value="__empty__">Empty</option>
         </select>
       </th>
-      <th className="p-1 border" />
-      <th className="p-1 border">
+      <th className="p-1 border w-24" />
+      <th className="p-1 border w-24">
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.__poStatus || ""}
           onChange={(e) => onFilterChange("__poStatus", e.target.value)}
         >
           <option value="">All</option>
-          <option value="generated">Generated</option>
-          <option value="not">Not generated</option>
+          <option value="generated">Yes</option>
+          <option value="not">No</option>
         </select>
       </th>
-      <th className="p-1 border" />
+      <th className="p-1 border w-16" />
     </tr>
   );
 }
@@ -149,98 +148,95 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-      <div className="bg-white p-6 rounded w-full max-w-xl text-xs">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
-          <button onClick={close} className="text-2xl">
-            ×
-          </button>
+      <div className="bg-white p-4 rounded w-full max-w-xl text-xs">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-bold text-purple-700">Manage Follow-Ups</h3>
+          <button onClick={close} className="text-xl">×</button>
         </div>
 
-        <div className="mb-4 space-y-2">
-          <label className="font-bold">Add New Follow-Up</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="mb-3 space-y-2">
+          <label className="font-bold text-xs">Add New Follow-Up</label>
+          <div className="grid grid-cols-3 gap-1">
             <input
               type="date"
-              className="p-1 border rounded"
+              className="p-1 border rounded text-xs"
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
             <input
               type="text"
-              className="p-1 border rounded"
-              placeholder="Note (optional)"
+              className="p-1 border rounded text-xs"
+              placeholder="Note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
             <input
               type="text"
-              className="p-1 border rounded"
+              className="p-1 border rounded text-xs"
               placeholder="Remarks"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
             />
           </div>
           <div className="flex justify-end">
-            <button onClick={add} className="bg-blue-600 text-white px-3 py-1 rounded">
+            <button onClick={add} className="bg-blue-600 text-white px-2 py-1 rounded text-xs">
               Add
             </button>
           </div>
         </div>
 
-        <div className="max-h-64 overflow-y-auto border p-2 mb-4">
-          {local.length === 0 && <p className="text-gray-600">No follow-ups.</p>}
+        <div className="max-h-48 overflow-y-auto border p-2 mb-3">
+          {local.length === 0 && <p className="text-gray-600 text-xs">No follow-ups.</p>}
           {local.map((fu, i) => {
             const overdue = !fu.done && fu.followUpDate && fu.followUpDate < today;
             return (
               <div
                 key={i}
-                className={`border rounded p-2 mb-2 ${
-                  overdue ? "bg-red-200" : "bg-gray-50"
+                className={`border rounded p-1 mb-1 text-xs ${
+                  overdue ? "bg-red-100" : "bg-gray-50"
                 }`}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-1">
                   <input
                     type="date"
-                    className="p-1 border rounded"
+                    className="p-1 border rounded text-xs"
                     value={fu.followUpDate || ""}
                     onChange={(e) => editField(i, "followUpDate", e.target.value)}
                   />
                   <input
                     type="text"
-                    className="p-1 border rounded"
+                    className="p-1 border rounded text-xs"
                     placeholder="Note"
                     value={fu.note || ""}
                     onChange={(e) => editField(i, "note", e.target.value)}
                   />
                   <input
                     type="text"
-                    className="p-1 border rounded"
+                    className="p-1 border rounded text-xs"
                     placeholder="Remarks"
                     value={fu.remarks || ""}
                     onChange={(e) => editField(i, "remarks", e.target.value)}
                   />
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     {!fu.done && (
                       <button
                         onClick={() => markDone(i)}
-                        className="bg-green-600 text-white px-2 py-1 rounded"
+                        className="bg-green-600 text-white px-1 py-0.5 rounded text-xs"
                       >
                         Done
                       </button>
                     )}
                     <button
                       onClick={() => remove(i)}
-                      className="text-red-600 px-2 py-1"
+                      className="text-red-600 px-1 py-0.5 text-xs"
                     >
                       Remove
                     </button>
                   </div>
                 </div>
-                <div className="mt-1 text-[10px] text-gray-600">
-                  Updated {new Date(fu.updatedAt).toLocaleString()} by{" "}
-                  {fu.updatedBy || "admin"}
-                  {fu.done ? " • (Done)" : ""}
+                <div className="mt-1 text-[9px] text-gray-600">
+                  {new Date(fu.updatedAt).toLocaleDateString()} by {fu.updatedBy || "admin"}
+                  {fu.done ? " • Done" : ""}
                 </div>
               </div>
             );
@@ -250,7 +246,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
         <div className="flex justify-end">
           <button
             onClick={close}
-            className="bg-green-700 text-white px-4 py-1 rounded"
+            className="bg-green-700 text-white px-3 py-1 rounded text-xs"
           >
             Close
           </button>
@@ -267,7 +263,7 @@ function VendorTypeahead({
   value,
   onChange,
   disableNonReliable = false,
-  placeholder = "Search vendor by company/name/location…",
+  placeholder = "Search vendor...",
 }) {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -362,7 +358,7 @@ function VendorTypeahead({
     return (
       <span
         className={
-          "text-[10px] px-1 py-[1px] rounded " +
+          "text-[8px] px-1 py-0 rounded " +
           (isBad ? "bg-red-600 text-white" : "bg-green-600 text-white")
         }
       >
@@ -376,8 +372,8 @@ function VendorTypeahead({
       <input
         ref={inputRef}
         type="text"
-        className="w-full border p-2 rounded"
-        placeholder={loading ? "Loading vendors…" : placeholder}
+        className="w-full border p-1 rounded text-xs"
+        placeholder={loading ? "Loading..." : placeholder}
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -390,9 +386,9 @@ function VendorTypeahead({
         disabled={loading}
       />
       {open && (
-        <div className="absolute z-[120] mt-1 w-full max-h-60 overflow-auto bg-white border rounded shadow">
+        <div className="absolute z-[120] mt-1 w-full max-h-48 overflow-auto bg-white border rounded shadow text-xs">
           {filtered.length === 0 && (
-            <div className="px-3 py-2 text-xs text-gray-500">No matches</div>
+            <div className="px-2 py-1 text-gray-500">No matches</div>
           )}
           {filtered.map((v, idx) => {
             const isHi = idx === highlight;
@@ -404,7 +400,7 @@ function VendorTypeahead({
                 onMouseLeave={() => setHighlight(-1)}
                 onClick={() => selectVendor(v)}
                 className={
-                  "px-3 py-2 text-xs cursor-pointer " +
+                  "px-2 py-1 cursor-pointer " +
                   (isHi ? "bg-gray-100" : "") +
                   (disableNonReliable && nonRel ? " opacity-60" : "")
                 }
@@ -414,20 +410,15 @@ function VendorTypeahead({
                     : ""
                 }
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium">
-                    {v.vendorCompany || v.vendorName || "(Unnamed Vendor)"}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="font-medium truncate">
+                    {v.vendorCompany || v.vendorName || "(Unnamed)"}
                   </div>
                   {badge(v.reliability)}
                 </div>
-                <div className="text-[11px] text-gray-600">
+                <div className="text-[10px] text-gray-600 truncate">
                   {v.vendorName ? `${v.vendorName} • ` : ""}
                   {v.location || "-"}
-                  {v.brandDealing ? ` • ${v.brandDealing}` : ""}
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  {v.gst ? `GST: ${v.gst}` : ""}{" "}
-                  {v.postalCode ? ` • ${v.postalCode}` : ""}
                 </div>
               </div>
             );
@@ -436,14 +427,9 @@ function VendorTypeahead({
       )}
       {selected && (
         <div className="mt-1 text-xs text-gray-600">
-          <div>
+          <div className="truncate">
             <span className="font-medium">Selected:</span>{" "}
-            {selected.vendorCompany || selected.vendorName || "-"}{" "}
-            {badge(selected.reliability)}
-          </div>
-          <div>
-            <span className="font-medium">Location:</span>{" "}
-            {selected.location || "-"}
+            {selected.vendorCompany || selected.vendorName || "-"}
           </div>
         </div>
       )}
@@ -491,48 +477,34 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   return (
     <>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-        <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-2xl">
-              ×
-            </button>
+        <div className="bg-white p-4 rounded w-full max-w-2xl text-xs max-h-[90vh] overflow-auto">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-sm font-bold text-purple-700">Edit Open Purchase</h2>
+            <button onClick={onClose} className="text-xl">×</button>
           </div>
-          <form className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+          <form className="space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
-                <label className="font-bold">Job Sheet #:</label>{" "}
-                {data.jobSheetNumber}
+                <label className="font-bold">JS #:</label> {data.jobSheetNumber}
               </div>
               <div>
-                <label className="font-bold">Job Sheet Date:</label>{" "}
+                <label className="font-bold">JS Date:</label>{" "}
                 {data.jobSheetCreatedDate
                   ? new Date(data.jobSheetCreatedDate).toLocaleDateString()
                   : "N/A"}
               </div>
-              <div>
-                <label className="font-bold">Client:</label>{" "}
-                {data.clientCompanyName}
+              <div className="truncate">
+                <label className="font-bold">Client:</label> {data.clientCompanyName}
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold">Event:</label> {data.eventName}
-              </div>
-              <div>
-                <label className="font-bold">Product:</label> {data.product}
-              </div>
-              <div>
-                <label className="font-bold">Size:</label> {data.size || "N/A"}
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Product Price:</label>
+                <label className="font-bold text-xs">Product Price:</label>
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.productPrice ?? ""}
                   onChange={(e) =>
                     change(
@@ -543,45 +515,32 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
               <div>
-                <label className="font-bold">Sourced From:</label>{" "}
-                {data.sourcingFrom}
-              </div>
-              <div>
-                <label className="font-bold">Delivery Date:</label>{" "}
-                {data.deliveryDateTime
-                  ? new Date(data.deliveryDateTime).toLocaleDateString()
-                  : "N/A"}
-              </div>
-              <div>
-                <label className="font-bold">Qty Req'd:</label> {data.qtyRequired}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Qty Ordered:</label>
+                <label className="font-bold text-xs">Qty Ordered:</label>
                 <input
                   type="number"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.qtyOrdered || ""}
                   onChange={(e) =>
                     change("qtyOrdered", parseInt(e.target.value, 10) || 0)
                   }
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold">Vendor #:</label>
+                <label className="font-bold text-xs">Vendor #:</label>
                 <input
                   type="text"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.vendorContactNumber || ""}
                   onChange={(e) => change("vendorContactNumber", e.target.value)}
                 />
               </div>
               <div>
-                <label className="font-bold">Completion:</label>
+                <label className="font-bold text-xs">Completion:</label>
                 <select
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.completionState || ""}
                   onChange={(e) => change("completionState", e.target.value)}
                 >
@@ -592,60 +551,63 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold">General Remarks:</label>
+                <label className="font-bold text-xs">Remarks:</label>
                 <input
                   type="text"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.remarks || ""}
                   onChange={(e) => change("remarks", e.target.value)}
                 />
               </div>
               <div>
-                <label className="font-bold">Invoice Remarks:</label>
+                <label className="font-bold text-xs">Inv Remarks:</label>
                 <input
                   type="text"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.invoiceRemarks || ""}
                   onChange={(e) => change("invoiceRemarks", e.target.value)}
-                  placeholder="Shown on PO / flows to Closed"
+                  placeholder="PO / flows to Closed"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="font-bold">Order Confirmed:</label>
+                <label className="font-bold text-xs">Order Confirmed:</label>
                 <input
                   type="date"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.orderConfirmedDate?.substring(0, 10) || ""}
                   onChange={(e) => change("orderConfirmedDate", e.target.value)}
                 />
               </div>
               <div>
-                <label className="font-bold">Expected Recv':</label>
+                <label className="font-bold text-xs">Exp Receive:</label>
                 <input
                   type="date"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.expectedReceiveDate?.substring(0, 10) || ""}
                   onChange={(e) => change("expectedReceiveDate", e.target.value)}
                 />
               </div>
               <div>
-                <label className="font-bold">Pick-Up Dt/Tm:</label>
+                <label className="font-bold text-xs">Pick-Up:</label>
                 <input
                   type="datetime-local"
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.schedulePickUp?.substring(0, 16) || ""}
                   onChange={(e) => change("schedulePickUp", e.target.value)}
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold">Status:</label>
+                <label className="font-bold text-xs">Status:</label>
                 <select
-                  className="w-full border p-1"
+                  className="w-full border p-1 text-xs"
                   value={data.status || ""}
                   onChange={(e) => change("status", e.target.value)}
                 >
@@ -656,25 +618,24 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setFuModal(true)}
-                className="bg-blue-600 text-white px-2 py-1 rounded"
-              >
-                View Follow-Ups
-              </button>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => setFuModal(true)}
+                  className="bg-blue-600 text-white px-2 py-1 rounded text-xs w-full"
+                >
+                  View Follow-Ups
+                </button>
+              </div>
             </div>
           </form>
-          <div className="flex justify-end gap-4 mt-6">
-            <button onClick={onClose} className="px-4 py-2 border rounded">
+          <div className="flex justify-end gap-2 mt-4">
+            <button onClick={onClose} className="px-3 py-1 border rounded text-xs">
               Cancel
             </button>
             <button
               onClick={save}
-              className="px-4 py-2 bg-green-700 text-white rounded"
+              className="px-3 py-1 bg-green-700 text-white rounded text-xs"
             >
               Save
             </button>
@@ -692,32 +653,32 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   );
 }
 
-/* ---------------- DEFAULT PO TERMS (prefill) ---------------- */
+/* ---------------- DEFAULT PO TERMS ---------------- */
 const DEFAULT_PO_TERMS = `1. The Vendor warrants that all goods supplied shall strictly conform to the specifications, samples (pre-approved or otherwise), drawings, and/or standards explicitly referenced in this Purchase Order.
 
-2. Quality Standards: All materials must be new, defect-free, and of first-class quality, suitable for the intended use as premium corporate gifts. This includes specific requirements on durability, colorfastness, finish, and safety standards (e.g., non-toxic, food-safe, etc.).
+2. Quality Standards: All materials must be new, defect-free, and of first-class quality.
 
-3. Right to Inspect and Reject: We reserve the right to inspect all goods upon delivery. If, upon inspection, any item is found to be defective, non-conforming, or of unacceptable quality, we may reject the entire shipment or the non-conforming portion at the Vendor's risk and expense. The Vendor shall bear all costs of return and shall, either provide a full refund or replace the rejected goods within agreed days.
+3. Right to Inspect and Reject: We reserve the right to inspect all goods upon delivery.
 
-4. Proofing: For custom or branded items, the Vendor must submit a pre-production sample/proof for written approval before mass production begins. Production without written approval is at the Vendor's sole risk.
+4. Proofing: For custom or branded items, submit pre-production sample for approval.
 
-5. Firm Delivery Date: The Required Delivery Date specified in the Header Details is firm and of the essence. The Vendor must ensure delivery to the specified address on or before this date.
+5. Firm Delivery Date: Required Delivery Date is firm and of the essence.
 
-6. Notification of Delay: The Vendor must immediately notify us in writing of any potential delay, providing the reasons and a revised expected delivery date.
+6. Notification of Delay: Vendor must immediately notify us of any potential delay.
 
-7. Late Delivery Penalty (Liquidated Damages): Should the Vendor fail to deliver the goods by the Required Delivery Date, we reserve the right to assess a penalty for Liquidated Damages.
+7. Late Delivery Penalty: Right to assess penalty for Liquidated Damages.
 
-8. Cancellation Rights: If delivery is delayed by more than committed days beyond the Required Delivery Date, we may, without prejudice to any other rights or remedies, cancel the entire Purchase Order without penalty and secure the goods from an alternate source, holding the original Vendor responsible for any additional costs incurred.
+8. Cancellation Rights: May cancel PO without penalty if delayed.
 
-9. Payment Terms: Net 30 days from the later of (a) the invoice date or (b) the date of acceptance of the goods by Ace.
+9. Payment Terms: Net 30 days.
 
-10. Shipping Terms: Specify the shipping responsibility.
+10. Shipping Terms: Specify responsibility.
 
-11. The Vendor agrees not to disclose or use any specific branding, client details, or product designs related to this PO for any other purpose without the prior written consent of Ace Gifting Solutions.
+11. Confidentiality: Do not disclose client details without consent.
 
-12. The Vendor's acceptance of this Purchase Order is deemed to occur upon the earliest of (a) written acknowledgment, (b) shipment of the goods, or (c) commencement of work on the goods.
+12. Acceptance: Vendor acceptance occurs upon earliest of acknowledgment, shipment, or commencement.
 
-13. PO is subject to Bangalore Jurisdiction.`;
+13. Jurisdiction: Bangalore.`;
 
 /* ---------------- Generate PO Modal ---------------- */
 function GeneratePOModal({ row, onClose, onCreated }) {
@@ -742,7 +703,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
       return;
     }
     if (!row || !row._id || String(row._id).startsWith("temp_")) {
-      alert("This row hasn't been saved yet. Save it first, then generate a PO.");
+      alert("Save first, then generate PO.");
       return;
     }
 
@@ -788,31 +749,29 @@ function GeneratePOModal({ row, onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-      <div className="bg-white p-6 rounded w-full max-w-2xl text-xs">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-purple-700">
-            Generate Purchase Order
-          </h3>
-          <button onClick={onClose} className="text-2xl">
-            ×
-          </button>
+      <div className="bg-white p-4 rounded w-full max-w-md text-xs">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-sm font-bold text-purple-700">Generate PO</h3>
+          <button onClick={onClose} className="text-xl">×</button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="font-bold">Job Sheet #</label>
-            <div className="border rounded p-2">{row.jobSheetNumber}</div>
-          </div>
-          <div>
-            <label className="font-bold">Product</label>
-            <div className="border rounded p-2">
-              {row.product}
-              {row.size ? ` — ${row.size}` : ""}
+        <div className="space-y-2 mb-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="font-bold text-xs">Job Sheet #</label>
+              <div className="border rounded p-1 text-xs">{row.jobSheetNumber}</div>
+            </div>
+            <div>
+              <label className="font-bold text-xs">Product</label>
+              <div className="border rounded p-1 text-xs truncate">
+                {row.product}
+                {row.size ? ` — ${row.size}` : ""}
+              </div>
             </div>
           </div>
 
-          <div className="col-span-2">
-            <label className="font-bold">Vendor</label>
+          <div>
+            <label className="font-bold text-xs">Vendor</label>
             <VendorTypeahead
               value={vendorId}
               onChange={(id, v) => {
@@ -825,114 +784,73 @@ function GeneratePOModal({ row, onClose, onCreated }) {
                   setVendorAddress("");
                 }
               }}
+              placeholder="Search vendor..."
             />
           </div>
 
-          <div>
-            <label className="font-bold">Vendor GSTIN</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={vendorGst}
-              onChange={(e) => setVendorGst(e.target.value)}
-              placeholder="Override / confirm vendor GSTIN"
-            />
-          </div>
-          <div>
-            <label className="font-bold">Vendor Address</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={vendorAddress}
-              onChange={(e) => setVendorAddress(e.target.value)}
-              placeholder="Override / confirm vendor address"
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="font-bold text-xs">Vendor GST</label>
+              <input
+                type="text"
+                className="w-full border p-1 rounded text-xs"
+                value={vendorGst}
+                onChange={(e) => setVendorGst(e.target.value)}
+                placeholder="GSTIN"
+              />
+            </div>
+            <div>
+              <label className="font-bold text-xs">Issue Date</label>
+              <input
+                type="date"
+                className="w-full border p-1 rounded text-xs"
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>
-            <label className="font-bold">Product Code (optional)</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={productCode}
-              onChange={(e) => setProductCode(e.target.value)}
-              placeholder="Matches Product.productId"
-            />
-          </div>
-          <div>
-            <label className="font-bold">Issue Date</label>
+            <label className="font-bold text-xs">Delivery Date</label>
             <input
               type="date"
-              className="w-full border p-2 rounded"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="font-bold">Required Delivery Date</label>
-            <input
-              type="date"
-              className="w-full border p-2 rounded"
+              className="w-full border p-1 rounded text-xs"
               value={requiredDeliveryDate}
               onChange={(e) => setRequiredDeliveryDate(e.target.value)}
             />
           </div>
+
           <div>
-            <label className="font-bold">Delivery Address</label>
+            <label className="font-bold text-xs">Delivery Address</label>
             <input
               type="text"
-              className="w-full border p-2 rounded"
+              className="w-full border p-1 rounded text-xs"
               value={deliveryAddress}
               onChange={(e) => setDeliveryAddress(e.target.value)}
-              placeholder="Ace Gifting Solutions"
+              placeholder="Address"
             />
-          </div>
-          <div className="col-span-2">
-            <label className="font-bold">PO Remarks</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Header-level PO remarks (optional)"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="font-bold">Terms</label>
-            <textarea
-              className="w-full border p-2 rounded min-h-[120px]"
-              value={terms}
-              onChange={(e) => setTerms(e.target.value)}
-            />
-            <div className="mt-1">
-              <button
-                type="button"
-                className="text-[11px] underline"
-                onClick={() => setTerms(DEFAULT_PO_TERMS)}
-              >
-                Reset to default terms
-              </button>
-            </div>
           </div>
 
-          <div className="col-span-2">
-            <div className="text-[11px] text-gray-600">
-              <b>Line Item Invoice Remarks:</b>{" "}
-              {row.invoiceRemarks || "(none)"}
-              <br />
-              This will be added to the PO item automatically.
-            </div>
+          <div>
+            <label className="font-bold text-xs">PO Remarks</label>
+            <input
+              type="text"
+              className="w-full border p-1 rounded text-xs"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="Optional"
+            />
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-2 border rounded">
+        <div className="flex justify-end gap-1">
+          <button onClick={onClose} className="px-2 py-1 border rounded text-xs">
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="px-3 py-2 bg-[#Ff8045] text-white rounded disabled:opacity-60"
+            className="px-2 py-1 bg-[#Ff8045] text-white rounded text-xs disabled:opacity-60"
           >
             {loading ? "Creating…" : "Create PO"}
           </button>
@@ -1171,59 +1089,57 @@ export default function OpenPurchaseList() {
 
   if (loading)
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">
-          Open Purchases
-        </h1>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-300 rounded"></div>
-          <div className="h-64 bg-gray-300 rounded"></div>
+      <div className="p-4">
+        <h1 className="text-lg font-bold text-purple-700 mb-3">Open Purchases</h1>
+        <div className="animate-pulse space-y-3">
+          <div className="h-6 bg-gray-300 rounded"></div>
+          <div className="h-48 bg-gray-300 rounded"></div>
         </div>
       </div>
     );
 
   return (
-    <div className="p-6">
+    <div className="p-4">
       {!perms.includes("write-purchase") && (
-        <div className="mb-4 p-2 bg-red-200 text-red-800 rounded">
-          You don't have permission to edit purchase records.
+        <div className="mb-3 p-1 bg-red-100 text-red-800 rounded text-xs">
+          No edit permission for purchase records.
         </div>
       )}
-      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Open Purchases</h1>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <h1 className="text-lg font-bold text-[#Ff8045] mb-3">Open Purchases</h1>
+      <div className="flex flex-wrap gap-1 mb-3">
         <input
           type="text"
-          placeholder="Global search…"
+          placeholder="Search…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded flex-grow text-xs"
+          className="border p-1 rounded text-xs flex-grow"
         />
         <button
           onClick={() => setShowFilters((f) => !f)}
-          className="bg-[#Ff8045] text-white px-4 py-2 rounded text-xs"
+          className="bg-[#Ff8045] text-white px-3 py-1 rounded text-xs"
         >
           Filters
         </button>
         {(isSuperAdmin || canExport) && (
           <button
             onClick={exportToExcel}
-            className="bg-green-600 text-white px-4 py-2 rounded text-xs"
+            className="bg-green-600 text-white px-3 py-1 rounded text-xs"
           >
-            Export to Excel
+            Export
           </button>
         )}
       </div>
 
       {/* Advanced filters toggle content */}
       {showFilters && (
-        <div className="mb-4 border rounded p-3 text-xs bg-gray-50 space-y-2">
+        <div className="mb-3 border rounded p-2 text-xs bg-gray-50 space-y-1">
           <div className="font-bold mb-1">Advanced Filters</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
             <div>
-              <label className="block">Job Sheet # From</label>
+              <label className="block text-xs">JS # From</label>
               <input
                 type="text"
-                className="border p-1 rounded w-full"
+                className="border p-1 rounded w-full text-xs"
                 value={advFilters.jobSheetNumber.from}
                 onChange={(e) =>
                   setAdvFilters((p) => ({
@@ -1237,10 +1153,10 @@ export default function OpenPurchaseList() {
               />
             </div>
             <div>
-              <label className="block">Job Sheet # To</label>
+              <label className="block text-xs">JS # To</label>
               <input
                 type="text"
-                className="border p-1 rounded w-full"
+                className="border p-1 rounded w-full text-xs"
                 value={advFilters.jobSheetNumber.to}
                 onChange={(e) =>
                   setAdvFilters((p) => ({
@@ -1255,18 +1171,18 @@ export default function OpenPurchaseList() {
             </div>
 
             {[
-              ["jobSheetCreatedDate", "Job Sheet Date"],
-              ["deliveryDateTime", "Delivery Date"],
-              ["orderConfirmedDate", "Order Confirmed"],
-              ["expectedReceiveDate", "Expected Receive"],
+              ["jobSheetCreatedDate", "JS Date"],
+              ["deliveryDateTime", "Delivery"],
+              ["orderConfirmedDate", "Order Conf"],
+              ["expectedReceiveDate", "Exp Recv"],
               ["schedulePickUp", "Pick-Up"],
             ].map(([key, label]) => (
               <React.Fragment key={key}>
                 <div>
-                  <label className="block">{label} From</label>
+                  <label className="block text-xs">{label} From</label>
                   <input
                     type="date"
-                    className="border p-1 rounded w-full"
+                    className="border p-1 rounded w-full text-xs"
                     value={advFilters[key].from}
                     onChange={(e) =>
                       setAdvFilters((p) => ({
@@ -1277,10 +1193,10 @@ export default function OpenPurchaseList() {
                   />
                 </div>
                 <div>
-                  <label className="block">{label} To</label>
+                  <label className="block text-xs">{label} To</label>
                   <input
                     type="date"
-                    className="border p-1 rounded w-full"
+                    className="border p-1 rounded w-full text-xs"
                     value={advFilters[key].to}
                     onChange={(e) =>
                       setAdvFilters((p) => ({
@@ -1293,9 +1209,9 @@ export default function OpenPurchaseList() {
               </React.Fragment>
             ))}
           </div>
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="flex justify-end gap-1 mt-1">
             <button
-              className="px-3 py-1 border rounded"
+              className="px-2 py-0.5 border rounded text-xs"
               onClick={() => setAdvFilters(initAdv)}
             >
               Clear
@@ -1304,229 +1220,268 @@ export default function OpenPurchaseList() {
         </div>
       )}
 
-      <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
-        <thead className="bg-gray-50">
-          <tr>
-            {[
-              { key: "completionState", label: "Completion" }, // first column
-              { key: "jobSheetCreatedDate", label: "Job Sheet Date" },
-              { key: "jobSheetNumber", label: "Job Sheet #" },
-              { key: "clientCompanyName", label: "Client" },
-              { key: "eventName", label: "Event" },
-              { key: "product", label: "Product" },
-              { key: "productPrice", label: "Cost" },
-              { key: "size", label: "Size" },
-              { key: "qtyRequired", label: "Qty Req" },
-              { key: "qtyOrdered", label: "Qty Ordered" },
-              { key: "sourcedBy", label: "Sourced By" },
-              { key: "sourcingFrom", label: "Sourced From" },
-              { key: "deliveryDateTime", label: "Delivery Date" },
-              { key: "vendorContactNumber", label: "Vendor Contact" },
-              { key: "orderConfirmedDate", label: "Order Conf Date." },
-              { key: "expectedReceiveDate", label: "Expected Recv Date." },
-              { key: "schedulePickUp", label: "Pick-Up Date" },
-              { key: "invoiceRemarks", label: "Invoice Remarks" },
-              { key: "remarks", label: "Order Remarks" },
-              { key: "status", label: "Status" },
-            ].map(({ key, label }) => (
-              <th
-                key={key}
-                onClick={() => sortBy(key)}
-                className="p-2 border cursor-pointer"
-              >
-                {label}
-                {sortConfig.key === key
-                  ? sortConfig.direction === "asc"
-                    ? " ▲"
-                    : " ▼"
-                  : ""}
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="p-1 border w-24 cursor-pointer" onClick={() => sortBy("completionState")}>
+                Completion{sortConfig.key === "completionState" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
               </th>
-            ))}
-            <th className="p-2 border">Follow-Up</th>
-            <th className="p-2 border">PO Status</th>
-            <th className="p-2 border">Actions</th>
-          </tr>
-          <HeaderFilters
-            headerFilters={headerFilters}
-            onFilterChange={(k, v) =>
-              setHeaderFilters((p) => ({ ...p, [k]: v }))
-            }
-          />
-        </thead>
-        <tbody>
-          {rows.map((p) => {
-            const latest = p.followUp?.length
-              ? p.followUp.reduce((l, fu) =>
-                  new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
-                )
-              : null;
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("jobSheetCreatedDate")}>
+                JS Date{sortConfig.key === "jobSheetCreatedDate" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("jobSheetNumber")}>
+                JS #{sortConfig.key === "jobSheetNumber" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-32 cursor-pointer" onClick={() => sortBy("clientCompanyName")}>
+                Client{sortConfig.key === "clientCompanyName" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-24 cursor-pointer" onClick={() => sortBy("eventName")}>
+                Event{sortConfig.key === "eventName" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-32 cursor-pointer" onClick={() => sortBy("product")}>
+                Product{sortConfig.key === "product" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-16 cursor-pointer" onClick={() => sortBy("productPrice")}>
+                Cost{sortConfig.key === "productPrice" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-16 cursor-pointer" onClick={() => sortBy("size")}>
+                Size{sortConfig.key === "size" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-12 cursor-pointer" onClick={() => sortBy("qtyRequired")}>
+                Qty Req{sortConfig.key === "qtyRequired" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-12 cursor-pointer" onClick={() => sortBy("qtyOrdered")}>
+                Qty Ord{sortConfig.key === "qtyOrdered" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("sourcedBy")}>
+                By{sortConfig.key === "sourcedBy" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-32 cursor-pointer" onClick={() => sortBy("sourcingFrom")}>
+                Source{sortConfig.key === "sourcingFrom" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("deliveryDateTime")}>
+                Deliv Date{sortConfig.key === "deliveryDateTime" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-24 cursor-pointer" onClick={() => sortBy("vendorContactNumber")}>
+                Vendor #{sortConfig.key === "vendorContactNumber" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("orderConfirmedDate")}>
+                Order Conf{sortConfig.key === "orderConfirmedDate" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("expectedReceiveDate")}>
+                Exp Recv{sortConfig.key === "expectedReceiveDate" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-20 cursor-pointer" onClick={() => sortBy("schedulePickUp")}>
+                Pick-Up{sortConfig.key === "schedulePickUp" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-32 cursor-pointer" onClick={() => sortBy("invoiceRemarks")}>
+                Inv Rmk{sortConfig.key === "invoiceRemarks" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-40 cursor-pointer" onClick={() => sortBy("remarks")}>
+                Remarks{sortConfig.key === "remarks" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-24 cursor-pointer" onClick={() => sortBy("status")}>
+                Status{sortConfig.key === "status" ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+              <th className="p-1 border w-24">Follow-Up</th>
+              <th className="p-1 border w-24">PO Status</th>
+              <th className="p-1 border w-16">Actions</th>
+            </tr>
+            <HeaderFilters
+              headerFilters={headerFilters}
+              onFilterChange={(k, v) =>
+                setHeaderFilters((p) => ({ ...p, [k]: v }))
+              }
+            />
+          </thead>
+          <tbody>
+            {rows.map((p) => {
+              const latest = p.followUp?.length
+                ? p.followUp.reduce((l, fu) =>
+                    new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
+                  )
+                : null;
 
-            const menuOpen = menuOpenFor === p._id;
-            const poGenerated = !!(p.poId || p.poNumber);
+              const menuOpen = menuOpenFor === p._id;
+              const poGenerated = !!(p.poId || p.poNumber);
 
-            return (
-              <tr
-                key={`${p._id}_${p.product}_${p.size || ""}`}
-                className={
-                  p.status === "alert"
-                    ? "bg-red-200"
-                    : p.status === "pending"
-                    ? "bg-orange-200"
-                    : p.status === "received"
-                    ? "bg-green-200"
-                    : ""
-                }
-              >
-                <td className="p-2 border">{p.completionState || ""}</td>
-
-                <td className="p-2 border">{fmtDate(p.jobSheetCreatedDate)}</td>
-                <td className="p-2 border">
-                  <button
-                    className="border-b text-blue-500 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleOpenModal(p.jobSheetNumber);
-                    }}
-                  >
-                    {p.jobSheetNumber || "(No Number)"}
-                  </button>
-                </td>
-                <td className="p-2 border">{p.clientCompanyName}</td>
-                <td className="p-2 border">{p.eventName}</td>
-                <td className="p-2 border">{p.product}</td>
-                <td className="p-2 border">
-                  {typeof p.productPrice === "number"
-                    ? p.productPrice.toFixed(2)
-                    : "—"}
-                </td>
-                <td className="p-2 border">{p.size || "N/A"}</td>
-                <td className="p-2 border">{p.qtyRequired}</td>
-                <td className="p-2 border">{p.qtyOrdered}</td>
-                <td className="p-2 border">{p.sourcedBy || ""}</td>
-                <td className="p-2 border">{p.sourcingFrom}</td>
-                <td className="p-2 border">{fmtDate(p.deliveryDateTime)}</td>
-                <td className="p-2 border">{p.vendorContactNumber}</td>
-                <td className="p-2 border">{fmtDate(p.orderConfirmedDate)}</td>
-                <td className="p-2 border">
-                  {fmtDate(p.expectedReceiveDate)}
-                </td>
-                <td className="p-2 border">{fmtDate(p.schedulePickUp)}</td>
-                <td className="p-2 border">{p.invoiceRemarks || ""}</td>
-                <td className="p-2 border">{p.remarks}</td>
-                <td className="p-2 border">{p.status || "N/A"}</td>
-
-                <td className="p-2 border">
-                  {latest
-                    ? latest.remarks && latest.remarks.trim()
-                      ? latest.remarks
-                      : latest.note || "—"
-                    : "—"}
-                </td>
-
-                <td className="p-2 border">
-                  {poGenerated ? (
-                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
-                      Generated
-                    </span>
-                  ) : (
-                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-gray-400 text-white">
-                      Not generated
-                    </span>
-                  )}
-                </td>
-
-                <td className="p-2 border space-y-1 relative">
-                  <div className="mt-1">
+              return (
+                <tr
+                  key={`${p._id}_${p.product}_${p.size || ""}`}
+                  className={
+                    p.status === "alert"
+                      ? "bg-red-100"
+                      : p.status === "pending"
+                      ? "bg-orange-100"
+                      : p.status === "received"
+                      ? "bg-green-100"
+                      : ""
+                  }
+                >
+                  <td className="p-1 border text-center">{p.completionState || ""}</td>
+                  <td className="p-1 border">{fmtDate(p.jobSheetCreatedDate)}</td>
+                  <td className="p-1 border">
                     <button
-                      className="w-full border rounded py-0.5 text-[10px]"
-                      onClick={() =>
-                        setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
-                      }
+                      className="text-blue-500 hover:text-blue-700 text-xs underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenModal(p.jobSheetNumber);
+                      }}
                     >
-                      ⋮
+                      {p.jobSheetNumber || "(No #)"}
                     </button>
-                    {menuOpen && (
-                      <div className="absolute right-0 z-[120] mt-1 w-44 bg-white border rounded shadow">
-                        <button
-                          className={
-                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                            (!perms.includes("write-purchase") ||
-                            p.status === "received"
-                              ? "opacity-50 cursor-not-allowed"
-                              : "")
-                          }
-                          onClick={() => {
-                            if (
-                              !perms.includes("write-purchase") ||
-                              p.status === "received"
-                            )
-                              return;
-                            setMenuOpenFor(null);
-                            setCurrentEdit(p);
-                            setEditModal(true);
-                          }}
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          className={
-                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
-                            (!perms.includes("write-purchase")
-                              ? "opacity-50 cursor-not-allowed"
-                              : "")
-                          }
-                          onClick={async () => {
-                            if (!perms.includes("write-purchase")) return;
-                            setMenuOpenFor(null);
-                            if (!window.confirm("Delete this purchase?")) return;
-                            try {
-                              const token = localStorage.getItem("token");
-                              await axios.delete(
-                                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
-                                { headers: { Authorization: `Bearer ${token}` } }
-                              );
-                              await loadPurchases();
-                            } catch {
-                              alert("Error deleting.");
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
-
-                        {!poGenerated && (
+                  </td>
+                  <td className="p-1 border truncate max-w-[8rem]" title={p.clientCompanyName}>
+                    {p.clientCompanyName}
+                  </td>
+                  <td className="p-1 border truncate max-w-[6rem]" title={p.eventName}>
+                    {p.eventName}
+                  </td>
+                  <td className="p-1 border truncate max-w-[8rem]" title={p.product}>
+                    {p.product}
+                  </td>
+                  <td className="p-1 border text-right">
+                    {typeof p.productPrice === "number"
+                      ? p.productPrice.toFixed(2)
+                      : "—"}
+                  </td>
+                  <td className="p-1 border">{p.size || "—"}</td>
+                  <td className="p-1 border text-center">{p.qtyRequired}</td>
+                  <td className="p-1 border text-center">{p.qtyOrdered}</td>
+                  <td className="p-1 border truncate max-w-[5rem]" title={p.sourcedBy}>
+                    {p.sourcedBy || ""}
+                  </td>
+                  <td className="p-1 border truncate max-w-[8rem]" title={p.sourcingFrom}>
+                    {p.sourcingFrom}
+                  </td>
+                  <td className="p-1 border">{fmtDate(p.deliveryDateTime)}</td>
+                  <td className="p-1 border truncate max-w-[6rem]" title={p.vendorContactNumber}>
+                    {p.vendorContactNumber}
+                  </td>
+                  <td className="p-1 border">{fmtDate(p.orderConfirmedDate)}</td>
+                  <td className="p-1 border">{fmtDate(p.expectedReceiveDate)}</td>
+                  <td className="p-1 border">{fmtDate(p.schedulePickUp)}</td>
+                  <td className="p-1 border truncate max-w-[8rem]" title={p.invoiceRemarks}>
+                    {p.invoiceRemarks || ""}
+                  </td>
+                  <td className="p-1 border truncate max-w-[10rem]" title={p.remarks}>
+                    {p.remarks}
+                  </td>
+                  <td className="p-1 border text-center">{p.status || "—"}</td>
+                  <td className="p-1 border truncate max-w-[6rem]" title={latest ? (latest.remarks || latest.note) : ""}>
+                    {latest
+                      ? latest.remarks && latest.remarks.trim()
+                        ? latest.remarks
+                        : latest.note || "—"
+                      : "—"}
+                  </td>
+                  <td className="p-1 border text-center">
+                    {poGenerated ? (
+                      <span className="inline-block px-1 py-0 text-[9px] rounded bg-green-600 text-white">
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="inline-block px-1 py-0 text-[9px] rounded bg-gray-400 text-white">
+                        No
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-1 border relative">
+                    <div className="mt-0">
+                      <button
+                        className="w-full border rounded py-0 text-[10px]"
+                        onClick={() =>
+                          setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
+                        }
+                      >
+                        ⋮
+                      </button>
+                      {menuOpen && (
+                        <div className="absolute right-0 z-[120] mt-1 w-32 bg-white border rounded shadow text-xs">
                           <button
                             className={
-                              "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                              (!perms.includes("write-purchase")
+                              "block w-full text-left px-2 py-1 hover:bg-gray-100 " +
+                              (!perms.includes("write-purchase") ||
+                              p.status === "received"
                                 ? "opacity-50 cursor-not-allowed"
                                 : "")
                             }
                             onClick={() => {
-                              if (!perms.includes("write-purchase")) return;
+                              if (
+                                !perms.includes("write-purchase") ||
+                                p.status === "received"
+                              )
+                                return;
                               setMenuOpenFor(null);
-                              setPoModalRow(p);
+                              setCurrentEdit(p);
+                              setEditModal(true);
                             }}
                           >
-                            Generate PO
+                            Edit
                           </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
 
-      <JobSheetGlobal
-        jobSheetNumber={selectedJobSheetNumber}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-      />
+                          <button
+                            className={
+                              "block w-full text-left px-2 py-1 hover:bg-gray-100 text-red-600 " +
+                              (!perms.includes("write-purchase")
+                                ? "opacity-50 cursor-not-allowed"
+                                : "")
+                            }
+                            onClick={async () => {
+                              if (!perms.includes("write-purchase")) return;
+                              setMenuOpenFor(null);
+                              if (!window.confirm("Delete this purchase?")) return;
+                              try {
+                                const token = localStorage.getItem("token");
+                                await axios.delete(
+                                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
+                                  { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                                await loadPurchases();
+                              } catch {
+                                alert("Error deleting.");
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+
+                          {!poGenerated && (
+                            <button
+                              className={
+                                "block w-full text-left px-2 py-1 hover:bg-gray-100 " +
+                                (!perms.includes("write-purchase")
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "")
+                              }
+                              onClick={() => {
+                                if (!perms.includes("write-purchase")) return;
+                                setMenuOpenFor(null);
+                                setPoModalRow(p);
+                              }}
+                            >
+                              Generate PO
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {isModalOpen && (
+        <JobSheetGlobal
+          jobSheetNumber={selectedJobSheetNumber}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+        />
+      )}
 
       {editModal && currentEdit && (
         <EditPurchaseModal
