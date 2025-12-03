@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { HRMS, dateUtils } from '../api/hrmsClient';
 import EmployeeCalendarModal from '../components/attendance/EmployeeCalendarModal';
+import AttendanceUploadModal from '../components/attendance/AttendanceUploadModal';
 
 const PageHeader = ({ title, subtitle, actions }) => (
   <div className="mb-6">
@@ -36,6 +37,7 @@ const AttendanceSummaryPage = () => {
   const [roles, setRoles] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -141,6 +143,12 @@ const AttendanceSummaryPage = () => {
     return date.toLocaleDateString('en-IN');
   };
 
+  const handleUploadSuccess = () => {
+    setUploadModalOpen(false);
+    toast.success('Attendance uploaded successfully');
+    fetchSummary(); // Refresh the summary data
+  };
+
   const sortedData = getSortedData();
 
   const monthNames = [
@@ -156,15 +164,18 @@ const AttendanceSummaryPage = () => {
         actions={
           <div className="flex gap-2">
             <button
-              onClick={() => navigate('/attendance/individual')}
+              onClick={() => navigate('/admin-dashboard/hrms/attendance')}
               className="px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
             >
               Individual View
             </button>
             <button
-              onClick={() => navigate('/attendance/upload')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              onClick={() => setUploadModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
             >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+              </svg>
               Upload Attendance
             </button>
           </div>
@@ -392,6 +403,7 @@ const AttendanceSummaryPage = () => {
         </div>
       )}
 
+      {/* Employee Calendar Modal */}
       {calendarModalOpen && selectedEmployee && (
         <EmployeeCalendarModal
           employee={selectedEmployee}
@@ -408,6 +420,14 @@ const AttendanceSummaryPage = () => {
           onDataUpdate={() => {
             fetchSummary();
           }}
+        />
+      )}
+
+      {/* Attendance Upload Modal */}
+      {uploadModalOpen && (
+        <AttendanceUploadModal
+          onClose={() => setUploadModalOpen(false)}
+          onSuccess={handleUploadSuccess}
         />
       )}
     </div>

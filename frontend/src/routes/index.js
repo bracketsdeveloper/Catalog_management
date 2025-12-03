@@ -87,6 +87,7 @@ import MyProfile from "../pages/MyProfile";
 import LeavesSuperAdminPage from "../pages/LeavesSuperAdminPage";
 import FileManagement from "../pages/FileManagement";
 import AttendanceSummaryPage from "../pages/AttendanceSummaryPage";
+import AttendanceUploadModal from "../components/attendance/AttendanceUploadModal";
 
 
 const router = createBrowserRouter([
@@ -449,6 +450,10 @@ const router = createBrowserRouter([
                     {
                         path: "attendance-summary",
                         element:<AttendanceSummaryPage/>
+                    },
+                    {
+                        path:"attendance/upload",
+                        element:<AttendanceUploadModal/>
                     }
                 ]
             }
