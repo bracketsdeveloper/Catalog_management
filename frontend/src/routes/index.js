@@ -86,6 +86,7 @@ import HolidaysPage from "../pages/HolidaysPage";
 import MyProfile from "../pages/MyProfile";
 import LeavesSuperAdminPage from "../pages/LeavesSuperAdminPage";
 import FileManagement from "../pages/FileManagement";
+import AttendanceSummaryPage from "../pages/AttendanceSummaryPage";
 
 
 const router = createBrowserRouter([
@@ -444,6 +445,10 @@ const router = createBrowserRouter([
                     {
                         path: "file-management",
                         element:<FileManagement/>
+                    },
+                    {
+                        path: "attendance-summary",
+                        element:<AttendanceSummaryPage/>
                     }
                 ]
             }

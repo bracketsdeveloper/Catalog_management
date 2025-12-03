@@ -168,6 +168,11 @@ app.use('/api', require('./routes/hrms'));
 // server/index.js (or routes/index.js)
 app.use("/api/admin/purchase-orders", require("./routes/purchaseOrders.js"));
 
+const attendanceRoutes = require('./routes/attendance');
+
+// Use the routes
+app.use('/api/attendance', attendanceRoutes);
+
 
 
 

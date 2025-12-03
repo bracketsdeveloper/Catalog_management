@@ -1,510 +1,367 @@
-// src/pages/hrms/AttendancePage.jsx
-import { useEffect, useState, useMemo, useRef } from "react";
-import PageHeader from "../components/common/PageHeader";
-import FiltersBar from "../components/common/FiltersBar";
-import RangePicker from "../components/common/RangePicker";
-import ExportButton from "../components/common/ExportButton";
-import EmployeeSelect from "../components/hrms/EmployeeSelect";
-import { StatCard } from "../components/common/StatCard";
-import { HRMS } from "../api/hrmsClient";
-import { toast } from "react-toastify";
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+import AttendanceUploadModal from '../components/attendance/AttendanceUploadModal';
+import { HRMS, dateUtils } from '../api/hrmsClient';
 
-/* ========================= Upload Attendance Modal ========================= */
-function UploadAttendanceModal({ onClose, onImported }) {
-  const dialogRef = useRef(null);
-  const [file, setFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null); // {imported, skipped, errors[]}
-
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose?.();
-    window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const ae = document.activeElement;
-    if (!ae || ae === document.body) dialogRef.current?.focus({ preventScroll: true });
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
-  const onBackdrop = (e) => {
-    if (e.target === e.currentTarget) onClose?.();
-  };
-
-  const upload = async () => {
-    if (!file) {
-      toast.error("Pick a .xls, .xlsx or .csv file.");
-      return;
-    }
-    const api = process.env.REACT_APP_BACKEND_URL;
-    const token = localStorage.getItem("token");
-    const form = new FormData();
-    form.append("file", file);
-
-    setSubmitting(true);
-    try {
-      const res = await fetch(`${api}/api/hrms/attendance/import-file`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || "Upload failed");
-      setResult(data);
-      toast.success(`Imported: ${data.imported}, Skipped: ${data.skipped}`);
-      onImported && onImported();
-    } catch (e) {
-      toast.error(e.message || "Upload failed");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-2 sm:p-4"
-      onClick={onBackdrop}
-      aria-modal="true"
-      role="dialog"
-      aria-labelledby="upload-attendance-title"
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="bg-white rounded-lg w-full max-w-lg outline-none shadow-lg
-                   max-h-[92vh] sm:max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h2 id="upload-attendance-title" className="text-base sm:text-lg font-semibold">
-            Upload daily attendance
-          </h2>
-          <button className="text-sm text-gray-600 hover:underline" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-4 sm:px-5 py-4 space-y-4 overflow-y-auto">
-          <div className="text-xs text-gray-600">
-            Accepted formats: .xls, .xlsx, .csv. The column “E Code” will be used as Employee ID. 
-            Include columns for Date, In Time, Out Time, and (optionally) Hours.
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-700 mb-1">Select file</label>
-            <input
-              type="file"
-              accept=".xls,.xlsx,.csv"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="block w-full text-sm border rounded px-2 py-1"
-            />
-          </div>
-
-          {result && (
-            <div className="border rounded p-3 bg-gray-50 text-xs">
-              <div className="font-semibold mb-2">Import summary</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>Imported: <b>{result.imported}</b></div>
-                <div>Skipped: <b>{result.skipped}</b></div>
-              </div>
-              {result.errors && result.errors.length > 0 && (
-                <div className="mt-2">
-                  <div className="font-semibold">Errors</div>
-                  <ul className="list-disc list-inside">
-                    {result.errors.map((e, i) => (
-                      <li key={i}>{e}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 sm:px-5 py-3 border-t">
-          <div className="flex justify-end gap-2">
-            <button className="px-3 py-1 text-xs rounded border" onClick={onClose} disabled={submitting}>
-              Close
-            </button>
-            <button
-              className="px-3 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-60"
-              onClick={upload}
-              disabled={submitting || !file}
-            >
-              {submitting ? "Uploading…" : "Upload & Import"}
-            </button>
-          </div>
-        </div>
+const PageHeader = ({ title, subtitle, actions }) => (
+  <div className="mb-6">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex-1 mb-4 sm:mb-0">
+        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-gray-600">{subtitle}</p>}
       </div>
+      {actions && <div className="flex gap-2">{actions}</div>}
     </div>
-  );
-}
+  </div>
+);
 
-/* ========================= Mark Attendance Modal (manual) ========================= */
-function MarkAttendanceModal({ onClose, onSaved }) {
-  const dialogRef = useRef(null);
-  const today = new Date().toISOString().slice(0, 10);
+const FiltersBar = ({ children }) => (
+  <div className="mb-6 bg-gray-50 p-4 rounded-lg border">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {children}
+    </div>
+  </div>
+);
 
-  const [date, setDate] = useState(today);
-  const [rows, setRows] = useState([]); // [{employeeId, name, dept, status}]
-  const [filterQ, setFilterQ] = useState("");
-  const [saving, setSaving] = useState(false);
+const AttendancePage = () => {
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [employeeId, setEmployeeId] = useState('');
+  const [employees, setEmployees] = useState([]);
+  const [startDate, setStartDate] = useState(dateUtils.formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
+  const [endDate, setEndDate] = useState(dateUtils.formatDate(new Date()));
+  const [loading, setLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [employeeDetails, setEmployeeDetails] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    pages: 1
+  });
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await HRMS.listEmployees({ active: "true", limit: 1000 });
-        const list = (r.data.rows || []).map((e) => ({
-          employeeId: e?.personal?.employeeId || "",
-          name: e?.personal?.name || "",
-          dept: e?.org?.department || "",
-          status: "Present",
-        }));
-        setRows(list);
-      } catch {
-        setRows([]);
-      }
-    };
-    load();
+    fetchEmployees();
   }, []);
 
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose?.();
-    window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const ae = document.activeElement;
-    if (!ae || ae === document.body) dialogRef.current?.focus({ preventScroll: true });
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
-  const onBackdrop = (e) => {
-    if (e.target === e.currentTarget) onClose?.();
+  const fetchEmployees = async () => {
+    try {
+      const response = await HRMS.listEmployees({ limit: 1000 });
+      setEmployees(response.data.rows || []);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('Failed to load employees');
+    }
   };
 
-  const setAll = (val) => {
-    setRows((prev) => prev.map((r) => ({ ...r, status: val })));
+  const fetchAttendance = async (page = 1) => {
+    if (!employeeId) {
+      toast.warn('Please select an employee');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        limit: pagination.limit,
+        startDate,
+        endDate
+      };
+
+      const response = await HRMS.getEmployeeAttendance(employeeId, params);
+      
+      setAttendanceData(response.data.attendance || []);
+      setSummary(response.data.summary || null);
+      setEmployeeDetails(response.data.employee || null);
+      setPagination(response.data.pagination || pagination);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+      toast.error(error.response?.data?.message || 'Failed to fetch attendance');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateRow = (idx, status) => {
-    setRows((prev) => {
-      const copy = [...prev];
-      copy[idx] = { ...copy[idx], status };
-      return copy;
+  const handleSearch = () => {
+    fetchAttendance(1);
+  };
+
+  const handleExport = async () => {
+    if (!startDate || !endDate) {
+      toast.warn('Please select start and end dates');
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const params = { startDate, endDate };
+      if (employeeId) params.employeeId = employeeId;
+
+      const response = await HRMS.exportAttendance(params);
+      
+      const filename = `Attendance_${startDate}_to_${endDate}${employeeId ? `_${employeeId}` : ''}.xlsx`;
+      HRMS.downloadFile(response.data, filename);
+      
+      toast.success('Export completed');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.pages) {
+      fetchAttendance(newPage);
+    }
+  };
+
+  const handleUploadSuccess = () => {
+    setUploadModalOpen(false);
+    toast.success('Attendance uploaded successfully');
+    if (employeeId) {
+      fetchAttendance();
+    }
+  };
+
+  const getStatusColor = (status) => {
+    if (!status) return 'bg-gray-100';
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('present')) return 'bg-green-100 text-green-800';
+    if (statusLower.includes('absent')) return 'bg-red-100 text-red-800';
+    if (statusLower.includes('leave')) return 'bg-blue-100 text-blue-800';
+    if (statusLower.includes('wfh')) return 'bg-purple-100 text-purple-800';
+    if (statusLower.includes('weeklyoff')) return 'bg-yellow-100 text-yellow-800';
+    if (statusLower.includes('holiday')) return 'bg-indigo-100 text-indigo-800';
+    return 'bg-gray-100 text-gray-800';
+  };
+
+  const formatDisplayDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
     });
   };
 
-  const filtered = useMemo(() => {
-    const q = filterQ.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.employeeId.toLowerCase().includes(q) ||
-        r.name.toLowerCase().includes(q) ||
-        r.dept.toLowerCase().includes(q)
-    );
-  }, [rows, filterQ]);
-
-  const save = async () => {
-    const records = rows
-      .filter((r) => r.employeeId)
-      .map((r) => ({ employeeId: r.employeeId, status: r.status }));
-
-    if (!date) {
-      toast.error("Please pick a date.");
-      return;
-    }
-    if (!records.length) {
-      toast.error("No employees to save.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await HRMS.markAttendanceBulk({ date, records });
-      toast.success("Attendance saved.");
-      onSaved && onSaved(date);
-    } catch (e) {
-      toast.error(e.response?.data?.message || e.message || "Failed to save attendance.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-2 sm:p-4"
-      onClick={onBackdrop}
-      aria-modal="true"
-      role="dialog"
-      aria-labelledby="mark-attendance-title"
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="bg-white rounded-lg w-full max-w-5xl outline-none shadow-lg
-                   max-h-[92vh] sm:max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b sticky top-0 bg-white z-10">
-          <h2 id="mark-attendance-title" className="text-base sm:text-lg font-semibold">
-            Mark Attendance
-          </h2>
-          <button className="text-sm text-gray-600 hover:underline" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        {/* Controls */}
-        <div className="px-4 sm:px-5 py-3 border-b sticky top-[48px] sm:top-[52px] bg-white z-10">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-            <div className="flex flex-col">
-              <label className="text-xs text-gray-600 mb-1">Date</label>
-              <input
-                type="date"
-                className="border rounded px-2 py-1 text-sm"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs text-gray-600 mb-1">Search</label>
-              <input
-                className="border rounded px-2 py-1 text-sm"
-                placeholder="Name / ID / Dept"
-                value={filterQ}
-                onChange={(e) => setFilterQ(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs text-gray-600 mb-1">Set all to</label>
-              <select
-                className="border rounded px-2 py-1 text-sm"
-                onChange={(e) => setAll(e.target.value)}
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Choose…
-                </option>
-                <option value="Present">Present</option>
-                <option value="Leave">Leave</option>
-                <option value="WFH">WFH</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="px-4 sm:px-5 py-3 overflow-y-auto">
-          <div className="overflow-x-auto border rounded">
-            <table className="table-auto w-full text-xs">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="border px-2 py-1 text-left">Employee ID</th>
-                  <th className="border px-2 py-1 text-left">Name</th>
-                  <th className="border px-2 py-1 text-left">Department</th>
-                  <th className="border px-2 py-1 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r, idx) => (
-                  <tr key={r.employeeId || idx} className="hover:bg-gray-50">
-                    <td className="border px-2 py-1">{r.employeeId}</td>
-                    <td className="border px-2 py-1">{r.name}</td>
-                    <td className="border px-2 py-1">{r.dept || "-"}</td>
-                    <td className="border px-2 py-1">
-                      <select
-                        className="border rounded px-2 py-1 text-xs"
-                        value={r.status}
-                        onChange={(e) => updateRow(idx, e.target.value)}
-                      >
-                        <option value="Present">Present</option>
-                        <option value="Leave">Leave</option>
-                        <option value="WFH">WFH</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-                {!filtered.length && (
-                  <tr>
-                    <td className="border px-2 py-4 text-center text-gray-500" colSpan={4}>
-                      No employees
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 sm:px-5 py-3 border-t sticky bottom-0 bg-white z-10">
-          <div className="flex justify-end gap-2">
-            <button className="px-3 py-1 text-xs rounded border" onClick={onClose} disabled={saving}>
-              Cancel
+    <div className="p-4 md:p-6">
+      <PageHeader
+        title="Attendance Management"
+        subtitle="Track and manage employee attendance"
+        actions={
+          <div className="flex gap-2">
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Upload Attendance
             </button>
             <button
-              className="px-3 py-1 text-xs rounded bg-emerald-600 text-white"
-              onClick={save}
-              disabled={saving}
+              onClick={handleExport}
+              disabled={exportLoading}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400"
             >
-              {saving ? "Saving…" : "Save Attendance"}
+              {exportLoading ? 'Exporting...' : 'Export to Excel'}
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =============================== Page =============================== */
-export default function AttendancePage() {
-  const [employeeId, setEmployeeId] = useState("");
-  const [range, setRange] = useState("last-1m");
-  const [custom, setCustom] = useState({ from: "", to: "" });
-  const [data, setData] = useState(null);
-  const [markOpen, setMarkOpen] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
-
-  const fetchData = () => {
-    if (!employeeId) return;
-    const params = range === "custom" ? { range, from: custom.from, to: custom.to } : { range };
-    HRMS.getAttendance(employeeId, params)
-      .then((r) => setData(r.data))
-      .catch(() => setData(null));
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [employeeId, range, custom.from, custom.to]);
-
-  const rows = data?.rows || [];
-  const redRow = (r) => !r.isHoliday && !r.isWeekend && (!r.hours || r.hours === 0);
-  const yellowRow = (r) => r.isHoliday || r.isWeekend;
-
-  return (
-    <div className="p-6">
-      <PageHeader
-        title="Attendance"
-        actions={[
-          <button
-            key="upload"
-            className="px-3 py-1 text-xs rounded border"
-            onClick={() => setUploadOpen(true)}
-          >
-            Upload attendance
-          </button>,
-          <button
-            key="mark"
-            className="px-3 py-1 text-xs rounded bg-emerald-600 text-white"
-            onClick={() => setMarkOpen(true)}
-          >
-            Mark Attendance
-          </button>,
-          <ExportButton
-            key="exp"
-            onClick={() => employeeId && HRMS.exportAttendance(employeeId).then(dlBlob)}
-          />
-        ]}
+        }
       />
 
       <FiltersBar>
         <div>
-          <div className="text-xs">Employee</div>
-          <EmployeeSelect value={employeeId} onChange={setEmployeeId} />
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Employee
+          </label>
+          <select
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+            className="w-full border rounded-md px-3 py-2"
+          >
+            <option value="">Select Employee</option>
+            {employees.map((emp) => (
+              <option key={emp._id} value={emp.personal.employeeId}>
+                {emp.personal.employeeId} - {emp.personal.name}
+              </option>
+            ))}
+          </select>
         </div>
+
         <div>
-          <div className="text-xs">Range</div>
-          <RangePicker value={range} onChange={setRange} custom={custom} setCustom={setCustom} />
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Start Date
+          </label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full border rounded-md px-3 py-2"
+          />
         </div>
-        <button className="px-3 py-1 text-xs rounded border" onClick={fetchData}>
-          Refresh
-        </button>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            End Date
+          </label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full border rounded-md px-3 py-2"
+          />
+        </div>
+
+        <div className="flex items-end">
+          <button
+            onClick={handleSearch}
+            disabled={loading || !employeeId}
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            {loading ? 'Loading...' : 'Search'}
+          </button>
+        </div>
       </FiltersBar>
 
-      <div className="grid md:grid-cols-3 gap-3 mb-4">
-        <StatCard
-          label="Days Worked / Total"
-          value={`${data?.summary?.daysWorked || 0} / ${data?.summary?.totalDays || 0}`}
-        />
-        <StatCard label="Hours Worked (sum)" value={data?.summary?.totalHours || 0} />
-        <StatCard
-          label="Sundays & Holidays"
-          value={(data?.summary?.holidays || 0) + (data?.summary?.weekends || 0)}
-        />
-      </div>
-
-      <div className="overflow-x-auto border rounded">
-        <table className="table-auto w-full text-xs">
-          <thead className="bg-gray-50">
-            <tr>
-              {["Date", "Day", "Login", "Logout", "# of hours"].map((h) => (
-                <th key={h} className="border px-2 py-1 text-left">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr
-                key={`${r.employeeId}-${r.date}`}
-                className={`${redRow(r) ? "bg-red-100" : yellowRow(r) ? "bg-yellow-100" : ""} hover:bg-gray-50`}
-              >
-                <td className="border px-2 py-1">{String(r.date).slice(0, 10)}</td>
-                <td className="border px-2 py-1">{r.dayName || ""}</td>
-                <td className="border px-2 py-1">{r.login || "-"}</td>
-                <td className="border px-2 py-1">{r.logout || "-"}</td>
-                <td className="border px-2 py-1">{r.hours || 0}</td>
-              </tr>
-            ))}
-            {!rows.length && (
-              <tr>
-                <td className="border px-2 py-4 text-center text-gray-500" colSpan={5}>
-                  No data
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {uploadOpen && (
-        <UploadAttendanceModal
-          onClose={() => setUploadOpen(false)}
-          onImported={() => {
-            if (employeeId) fetchData();
-          }}
-        />
+      {summary && employeeDetails && (
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="text-sm font-medium text-gray-500">Employee</h3>
+            <p className="text-xl font-semibold">{employeeDetails.name}</p>
+            <p className="text-sm text-gray-600">{employeeDetails.role} • {employeeDetails.department}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="text-sm font-medium text-gray-500">Attendance Rate</h3>
+            <p className="text-xl font-semibold">{summary.attendanceRate}%</p>
+            <p className="text-sm text-gray-600">
+              {summary.presentDays} present / {summary.totalDays} days
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="text-sm font-medium text-gray-500">Total Hours</h3>
+            <p className="text-xl font-semibold">{summary.totalHours}h</p>
+            <p className="text-sm text-gray-600">{summary.totalOT}h overtime</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <h3 className="text-sm font-medium text-gray-500">Absence</h3>
+            <p className="text-xl font-semibold">{summary.absentDays} days</p>
+            <p className="text-sm text-gray-600">
+              {summary.absentDays > 0 ? `${((summary.absentDays / summary.totalDays) * 100).toFixed(1)}% absence` : 'Perfect'}
+            </p>
+          </div>
+        </div>
       )}
 
-      {markOpen && (
-        <MarkAttendanceModal
-          onClose={() => setMarkOpen(false)}
-          onSaved={() => {
-            setMarkOpen(false);
-            fetchData();
-          }}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Attendance Records {employeeDetails && `for ${employeeDetails.name}`}
+          </h2>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="mt-2 text-gray-600">Loading...</p>
+          </div>
+        ) : attendanceData.length === 0 ? (
+          <div className="p-8 text-center">
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No attendance records</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {employeeId ? 'Select dates and search' : 'Select an employee'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Day</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">In Time</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Out Time</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Hours</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">OT Hours</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {attendanceData.map((record) => (
+                    <tr key={record._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDisplayDate(record.date)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.dayName}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.inTime || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.outTime || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.hoursWorked ? `${record.hoursWorked.toFixed(2)}h` : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.hoursOT ? `${record.hoursOT.toFixed(2)}h` : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(record.status)}`}>
+                          {record.status || 'Not Marked'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.remarks || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {pagination.pages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Page {pagination.page} of {pagination.pages}
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handlePageChange(pagination.page - 1)}
+                      disabled={pagination.page === 1}
+                      className="px-3 py-1 border rounded-md text-sm disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(pagination.page + 1)}
+                      disabled={pagination.page === pagination.pages}
+                      className="px-3 py-1 border rounded-md text-sm disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {uploadModalOpen && (
+        <AttendanceUploadModal
+          onClose={() => setUploadModalOpen(false)}
+          onSuccess={handleUploadSuccess}
         />
       )}
     </div>
   );
-}
+};
 
-function dlBlob(res) {
-  const url = window.URL.createObjectURL(new Blob([res.data]));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "attendance.xlsx";
-  a.click();
-  window.URL.revokeObjectURL(url);
-}
+export default AttendancePage;
