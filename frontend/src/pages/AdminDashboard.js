@@ -153,7 +153,7 @@ const adminPages = [
       { name: "Holidays", path: "/admin-dashboard/holidays", permission: "holidays" },
       { name: "Leave Tracker", path: "/admin-dashboard/leaves-super-admin", permission: "leaves" },
       { name: "Upload Attendance", path: "/admin-dashboard/hrms/attendance", permission: "hrms-attendance" },
-      { name: "Attendance Summary", path: "/admin-dashboard/attendance", permission: "hrms-attendance-summary" },
+      { name: "Attendance Summary", path: "/admin-dashboard/attendance-summary", permission: "hrms-attendance-summary" },
       // { name: "Work From Home", path: "/admin-dashboard/hrms/wfh", permission: "hrms-wfh" },
       { name: "Leaves", path: "/admin-dashboard/hrms/leaves", permission: "hrms-leaves" },
       // { name: "Salary", path: "/admin-dashboard/hrms/salary", permission: "hrms-salary" },
