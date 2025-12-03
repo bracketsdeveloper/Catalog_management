@@ -243,119 +243,175 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-router.get(
-  "/products/filters",
-  authenticate,
-  authorizeAdmin,
-  async (req, res) => {
-    try {
-      const {
-        categories,
-        subCategories,
-        brands,
-        priceRanges,
-        variationHinges,
-      } = req.query;
+// In your backend route /api/admin/products/filters
+router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const {
+      categories,
+      subCategories,
+      brands,
+      priceRanges,
+      variationHinges,
+    } = req.query;
 
-      const match = {};
-      if (categories) {
-        match.category = {
-          $in: categories.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
-        };
-      }
-      if (subCategories) {
-        match.subCategory = {
-          $in: subCategories.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
-        };
-      }
-      if (brands) {
-        match.brandName = {
-          $in: brands.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
-        };
-      }
-      if (priceRanges) {
-        match.priceRange = {
-          $in: priceRanges.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
-        };
-      }
-      if (variationHinges) {
-        match.variationHinge = {
-          $in: variationHinges.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
-        };
-      }
-
-      const buildAggregation = (field, excludeField) => {
-        const filteredMatch = { ...match };
-        if (excludeField) {
-          delete filteredMatch[excludeField];
-        }
-        return [
-          ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
-          { $match: { [field]: { $nin: [null, ""] } } },
-          { $project: { name: { $toLower: { $trim: { input: `$${field}` } } } } },
-          { $group: { _id: "$name", count: { $sum: 1 } } },
-          { $project: { name: "$_id", count: 1, _id: 0 } },
-          { $sort: { name: 1 } },
-        ];
+    const match = {};
+    if (categories) {
+      match.category = {
+        $in: categories.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
       };
+    }
+    if (subCategories) {
+      match.subCategory = {
+        $in: subCategories.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
+      };
+    }
+    if (brands) {
+      match.brandName = {
+        $in: brands.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
+      };
+    }
+    if (priceRanges) {
+      match.priceRange = {
+        $in: priceRanges.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
+      };
+    }
+    if (variationHinges) {
+      match.variationHinge = {
+        $in: variationHinges.split(",").map((v) => new RegExp(`^${v.trim()}$`, "i")),
+      };
+    }
 
-      const buildPriceRangeAggregation = () => {
-        const filteredMatch = { ...match };
-        delete filteredMatch.priceRange;
-        return [
-          ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
-          { $match: { priceRange: { $nin: [null, ""] } } },
-          {
-            $project: {
-              name: { $trim: { input: "$priceRange" } },
-              start: {
-                $convert: {
-                  input: {
-                    $arrayElemAt: [
-                      { $split: [{ $trim: { input: "$priceRange" } }, "-"] },
-                      0,
-                    ],
-                  },
-                  to: "int",
-                  onError: Number.MAX_SAFE_INTEGER,
-                  onNull: Number.MAX_SAFE_INTEGER,
+    const buildAggregation = (field, excludeField) => {
+      const filteredMatch = { ...match };
+      if (excludeField) {
+        delete filteredMatch[excludeField];
+      }
+      return [
+        ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
+        { $match: { [field]: { $nin: [null, ""] } } },
+        { $project: { name: { $toLower: { $trim: { input: `$${field}` } } } } },
+        { $group: { _id: "$name", count: { $sum: 1 } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $sort: { name: 1 } },
+      ];
+    };
+
+    const buildPriceRangeAggregation = () => {
+      const filteredMatch = { ...match };
+      delete filteredMatch.priceRange;
+      return [
+        ...(Object.keys(filteredMatch).length ? [{ $match: filteredMatch }] : []),
+        { $match: { priceRange: { $nin: [null, ""] } } },
+        {
+          $project: {
+            name: { $trim: { input: "$priceRange" } },
+            start: {
+              $convert: {
+                input: {
+                  $arrayElemAt: [
+                    { $split: [{ $trim: { input: "$priceRange" } }, "-"] },
+                    0,
+                  ],
                 },
+                to: "int",
+                onError: Number.MAX_SAFE_INTEGER,
+                onNull: Number.MAX_SAFE_INTEGER,
               },
             },
           },
-          { $group: { _id: "$name", count: { $sum: 1 }, start: { $first: "$start" } } },
-          { $project: { name: "$_id", count: 1, _id: 0 } },
-          { $sort: { start: 1 } },
-        ];
+        },
+        { $group: { _id: "$name", count: { $sum: 1 }, start: { $first: "$start" } } },
+        { $project: { name: "$_id", count: 1, _id: 0 } },
+        { $sort: { start: 1 } },
+      ];
+    };
+
+    // Build parent-child relationships
+    const buildRelationships = async () => {
+      const relationships = {
+        categories: {},
+        subCategories: {},
+        brands: {},
+        priceRanges: {},
+        variationHinges: {}
       };
 
-      const [
-        categoriesAgg,
-        subCategoriesAgg,
-        brandsAgg,
-        priceRangesAgg,
-        variationHingesAgg,
-      ] = await Promise.all([
-        Product.aggregate(buildAggregation("category", "category")),
-        Product.aggregate(buildAggregation("subCategory", "subCategory")),
-        Product.aggregate(buildAggregation("brandName", "brandName")),
-        Product.aggregate(buildPriceRangeAggregation()),
-        Product.aggregate(buildAggregation("variationHinge", "variationHinge")),
+      // Get category to subCategory mapping
+      const categorySubCategoryMap = await Product.aggregate([
+        { $match: { category: { $nin: [null, ""] }, subCategory: { $nin: [null, ""] } } },
+        { $group: { 
+          _id: { $toLower: { $trim: { input: "$category" } } }, 
+          subCategories: { $addToSet: { $toLower: { $trim: { input: "$subCategory" } } } }
+        }},
+        { $project: { category: "$_id", subCategories: 1, _id: 0 } }
       ]);
 
-      res.status(200).json({
-        categories: categoriesAgg,
-        subCategories: subCategoriesAgg,
-        brands: brandsAgg,
-        priceRanges: priceRangesAgg,
-        variationHinges: variationHingesAgg,
+      categorySubCategoryMap.forEach(item => {
+        relationships.categories[item.category] = item.subCategories;
       });
-    } catch (err) {
-      console.error("Error fetching filter options:", err);
-      res.status(500).json({ message: "Server error fetching filter options" });
-    }
+
+      // Get category/subCategory to variationHinge mapping
+      const categoryHingeMap = await Product.aggregate([
+        { $match: { category: { $nin: [null, ""] }, variationHinge: { $nin: [null, ""] } } },
+        { $group: { 
+          _id: { $toLower: { $trim: { input: "$category" } } }, 
+          hinges: { $addToSet: { $toLower: { $trim: { input: "$variationHinge" } } } }
+        }},
+        { $project: { category: "$_id", hinges: 1, _id: 0 } }
+      ]);
+
+      categoryHingeMap.forEach(item => {
+        relationships.categories[item.category] = [
+          ...(relationships.categories[item.category] || []),
+          ...item.hinges
+        ];
+      });
+
+      const subCategoryHingeMap = await Product.aggregate([
+        { $match: { subCategory: { $nin: [null, ""] }, variationHinge: { $nin: [null, ""] } } },
+        { $group: { 
+          _id: { $toLower: { $trim: { input: "$subCategory" } } }, 
+          hinges: { $addToSet: { $toLower: { $trim: { input: "$variationHinge" } } } }
+        }},
+        { $project: { subCategory: "$_id", hinges: 1, _id: 0 } }
+      ]);
+
+      subCategoryHingeMap.forEach(item => {
+        relationships.subCategories[item.subCategory] = item.hinges;
+      });
+
+      return relationships;
+    };
+
+    const [
+      categoriesAgg,
+      subCategoriesAgg,
+      brandsAgg,
+      priceRangesAgg,
+      variationHingesAgg,
+      relationships
+    ] = await Promise.all([
+      Product.aggregate(buildAggregation("category", "category")),
+      Product.aggregate(buildAggregation("subCategory", "subCategory")),
+      Product.aggregate(buildAggregation("brandName", "brandName")),
+      Product.aggregate(buildPriceRangeAggregation()),
+      Product.aggregate(buildAggregation("variationHinge", "variationHinge")),
+      buildRelationships()
+    ]);
+
+    res.status(200).json({
+      categories: categoriesAgg,
+      subCategories: subCategoriesAgg,
+      brands: brandsAgg,
+      priceRanges: priceRangesAgg,
+      variationHinges: variationHingesAgg,
+      relationships,
+    });
+  } catch (err) {
+    console.error("Error fetching filter options:", err);
+    res.status(500).json({ message: "Server error fetching filter options" });
   }
-);
+});
 
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {

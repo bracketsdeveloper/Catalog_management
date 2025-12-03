@@ -32,6 +32,9 @@ const sampleOutSchema = new mongoose.Schema({
   // NEW: manual input
   opportunityNumber:  { type: String, default: "" },
 
+  // NEW: reason field when not received back
+  notReceivedReason:  { type: String, default: "" },
+
   createdAt:          { type: Date, default: Date.now },
   updatedAt:          { type: Date, default: Date.now },
 });

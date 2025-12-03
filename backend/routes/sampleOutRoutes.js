@@ -63,6 +63,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 
       // NEW
       opportunityNumber:   (b.opportunityNumber || "").trim(),
+      notReceivedReason:   (b.notReceivedReason || "").trim(),
     });
 
     await so.save();
@@ -81,7 +82,8 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
       ? {
           $or: [
             { sampleReferenceCode: { $regex: search, $options: "i" } },
-            { opportunityNumber:   { $regex: search, $options: "i" } }, // allow searching this too
+            { opportunityNumber:   { $regex: search, $options: "i" } },
+            { notReceivedReason:   { $regex: search, $options: "i" } }, // NEW: allow searching reason too
           ],
         }
       : {};
@@ -155,6 +157,11 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     // NEW: opportunityNumber
     if (typeof b.opportunityNumber !== "undefined") {
       so.opportunityNumber = (b.opportunityNumber || "").trim();
+    }
+
+    // NEW: notReceivedReason
+    if (typeof b.notReceivedReason !== "undefined") {
+      so.notReceivedReason = (b.notReceivedReason || "").trim();
     }
 
     await so.save();

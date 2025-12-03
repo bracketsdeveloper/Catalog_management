@@ -60,7 +60,7 @@ router.post("/upload", authenticate, upload.single("file"), async (req, res) => 
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    let { accessibleRoles, description, fileName } = req.body;
+    let { accessibleRoles, description, fileName, documentContent, isDocument } = req.body;
     
     // Parse accessibleRoles if it's a string (from form data)
     if (typeof accessibleRoles === 'string') {
@@ -98,7 +98,7 @@ router.post("/upload", authenticate, upload.single("file"), async (req, res) => 
     }
 
     const newFile = new File({
-      fileName: fileName || req.file.originalname, // Use custom fileName if provided
+      fileName: fileName || req.file.originalname,
       originalName: req.file.originalname,
       filePath: req.file.path,
       fileSize: req.file.size,
@@ -106,7 +106,10 @@ router.post("/upload", authenticate, upload.single("file"), async (req, res) => 
       uploadedBy: req.user.id,
       uploadedByName: user.name,
       accessibleRoles: accessibleRoles,
-      description: description || ""
+      description: description || "",
+      // NEW: Document fields
+      documentContent: documentContent || "",
+      isDocument: isDocument === "true" || isDocument === true
     });
 
     await newFile.save();
@@ -118,12 +121,15 @@ router.post("/upload", authenticate, upload.single("file"), async (req, res) => 
         fileName: newFile.fileName,
         originalName: newFile.originalName,
         fileSize: newFile.fileSize,
-        uploadedBy: newFile.uploadedByName, // Send the name directly
+        uploadedBy: newFile.uploadedByName,
         uploadedById: newFile.uploadedBy,
         accessibleRoles: newFile.accessibleRoles,
         uploadedOn: newFile.createdAt,
         description: newFile.description,
-        fileType: newFile.fileType
+        fileType: newFile.fileType,
+        // NEW: Include document fields in response
+        documentContent: newFile.documentContent,
+        isDocument: newFile.isDocument
       }
     });
 
@@ -136,10 +142,76 @@ router.post("/upload", authenticate, upload.single("file"), async (req, res) => 
   }
 });
 
+/* ---------- Create Document (without file upload) ---------- */
+router.post("/create-document", authenticate, async (req, res) => {
+  try {
+    const { fileName, accessibleRoles, description, documentContent } = req.body;
+
+    if (!fileName || !fileName.trim()) {
+      return res.status(400).json({ message: "File name is required" });
+    }
+
+    if (!accessibleRoles || !Array.isArray(accessibleRoles) || accessibleRoles.length === 0) {
+      return res.status(400).json({ message: "At least one accessible role is required" });
+    }
+
+    // Validate roles
+    const validRoles = accessibleRoles.every(role => ROLE_ENUM.includes(role));
+    if (!validRoles) {
+      return res.status(400).json({ message: "Invalid roles specified" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Create a virtual file path for documents
+    const documentPath = path.join(uploadDir, `document-${Date.now()}.html`);
+
+    const newDocument = new File({
+      fileName: fileName.trim(),
+      originalName: `${fileName.trim()}.html`,
+      filePath: documentPath,
+      fileSize: Buffer.byteLength(documentContent || '', 'utf8'),
+      fileType: 'text/html',
+      uploadedBy: req.user.id,
+      uploadedByName: user.name,
+      accessibleRoles: accessibleRoles,
+      description: description || "",
+      documentContent: documentContent || "",
+      isDocument: true
+    });
+
+    await newDocument.save();
+
+    res.status(201).json({
+      message: "Document created successfully",
+      file: {
+        id: newDocument._id,
+        fileName: newDocument.fileName,
+        originalName: newDocument.originalName,
+        fileSize: newDocument.fileSize,
+        uploadedBy: newDocument.uploadedByName,
+        uploadedById: newDocument.uploadedBy,
+        accessibleRoles: newDocument.accessibleRoles,
+        uploadedOn: newDocument.createdAt,
+        description: newDocument.description,
+        fileType: newDocument.fileType,
+        documentContent: newDocument.documentContent,
+        isDocument: newDocument.isDocument
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: "Server error while creating document", error: error.message });
+  }
+});
+
 /* ---------- Get Files (with role-based access) ---------- */
 router.get("/", authenticate, async (req, res) => {
   try {
-    const { search, sortBy = "uploadedOn", sortOrder = "desc" } = req.query;
+    const { search, sortBy = "uploadedOn", sortOrder = "desc", documentOnly } = req.query;
     
     let query = {};
     
@@ -162,6 +234,11 @@ router.get("/", authenticate, async (req, res) => {
       query.accessibleRoles = { $in: userRoles };
     }
 
+    // Filter for documents only if requested
+    if (documentOnly === "true") {
+      query.isDocument = true;
+    }
+
     // Search functionality
     if (search) {
       query.$or = [
@@ -177,7 +254,7 @@ router.get("/", authenticate, async (req, res) => {
     sortConfig[sortBy] = sortOrder === "asc" ? 1 : -1;
 
     const files = await File.find(query)
-      .select("fileName originalName fileSize uploadedByName uploadedBy accessibleRoles createdAt description fileType")
+      .select("fileName originalName fileSize uploadedByName uploadedBy accessibleRoles createdAt description fileType documentContent isDocument")
       .sort(sortConfig)
       .lean();
 
@@ -185,12 +262,15 @@ router.get("/", authenticate, async (req, res) => {
       id: file._id,
       fileName: file.fileName,
       fileSize: file.fileSize,
-      uploadedBy: file.uploadedByName, // Use the stored name
+      uploadedBy: file.uploadedByName,
       uploadedById: file.uploadedBy,
       accessibleRoles: file.accessibleRoles,
       uploadedOn: file.createdAt,
       description: file.description,
-      fileType: file.fileType
+      fileType: file.fileType,
+      // NEW: Include document fields
+      documentContent: file.documentContent,
+      isDocument: file.isDocument || false
     }));
 
     res.status(200).json(formattedFiles);
@@ -221,6 +301,61 @@ router.get("/view/:fileId", authenticate, async (req, res) => {
         }
       }
   
+      // For documents, return the HTML content directly
+      if (file.isDocument) {
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${file.fileName}</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 40px; 
+                line-height: 1.6;
+                color: #333;
+              }
+              .document-content {
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 20px 0;
+              }
+              table, th, td {
+                border: 1px solid #ddd;
+              }
+              th, td {
+                padding: 12px;
+                text-align: left;
+              }
+              th {
+                background-color: #f5f5f5;
+              }
+              img {
+                max-width: 100%;
+                height: auto;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="document-content">
+              ${file.documentContent || '<p>No content available</p>'}
+            </div>
+          </body>
+          </html>
+        `;
+        
+        res.setHeader("Content-Type", "text/html");
+        res.setHeader("Content-Disposition", "inline");
+        res.send(htmlContent);
+        return;
+      }
+  
       if (!fs.existsSync(file.filePath)) {
         return res.status(404).json({ message: "File not found on server" });
       }
@@ -243,7 +378,6 @@ router.get("/view/:fileId", authenticate, async (req, res) => {
       res.status(500).json({ message: "Server error while viewing file", error: error.message });
     }
   });
-  
 
 /* ---------- Delete File (Super Admin only) ---------- */
 router.delete("/:fileId", authenticate, async (req, res) => {
@@ -259,8 +393,8 @@ router.delete("/:fileId", authenticate, async (req, res) => {
       return res.status(404).json({ message: "File not found" });
     }
 
-    // Delete physical file
-    if (fs.existsSync(file.filePath)) {
+    // Delete physical file if it exists and is not a document
+    if (!file.isDocument && fs.existsSync(file.filePath)) {
       fs.unlinkSync(file.filePath);
     }
 
@@ -299,6 +433,7 @@ router.get("/url/:fileId", authenticate, async (req, res) => {
         id: file._id,
         fileName: file.fileName,
         fileType: file.fileType,
+        isDocument: file.isDocument || false,
         viewUrl: `/api/files/view/${file._id}`
       });
   
@@ -315,12 +450,15 @@ router.get("/stats", authenticate, async (req, res) => {
         $group: {
           _id: null,
           totalFiles: { $sum: 1 },
-          totalSize: { $sum: "$fileSize" }
+          totalSize: { $sum: "$fileSize" },
+          totalDocuments: {
+            $sum: { $cond: [{ $eq: ["$isDocument", true] }, 1, 0] }
+          }
         }
       }
     ]);
 
-    res.status(200).json(stats[0] || { totalFiles: 0, totalSize: 0 });
+    res.status(200).json(stats[0] || { totalFiles: 0, totalSize: 0, totalDocuments: 0 });
   } catch (error) {
     res.status(500).json({ message: "Server error while fetching stats", error: error.message });
   }

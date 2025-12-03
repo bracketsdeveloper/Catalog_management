@@ -15,345 +15,6 @@ const toISODate = (d) => {
   return `${y}-${m}-${dd}`;
 };
 
-/* ---------------- Pagination Component ---------------- */
-function Pagination({ currentPage, totalPages, onPageChange }) {
-  const pages = [];
-  const maxVisiblePages = 5;
-  
-  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-  
-  if (endPage - startPage + 1 < maxVisiblePages) {
-    startPage = Math.max(1, endPage - maxVisiblePages + 1);
-  }
-
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(
-      <button
-        key={i}
-        onClick={() => onPageChange(i)}
-        className={`px-3 py-1 mx-1 border rounded text-xs ${
-          currentPage === i
-            ? "bg-[#Ff8045] text-white border-[#Ff8045]"
-            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-        }`}
-      >
-        {i}
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-center space-x-2 mt-4">
-      <button
-        onClick={() => onPageChange(1)}
-        disabled={currentPage === 1}
-        className="px-3 py-1 border rounded text-xs bg-white text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-      >
-        First
-      </button>
-      
-      <button
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="px-3 py-1 border rounded text-xs bg-white text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-      >
-        Previous
-      </button>
-
-      {startPage > 1 && (
-        <span className="px-2 text-gray-500 text-xs">...</span>
-      )}
-      
-      {pages}
-      
-      {endPage < totalPages && (
-        <span className="px-2 text-gray-500 text-xs">...</span>
-      )}
-
-      <button
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="px-3 py-1 border rounded text-xs bg-white text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-      >
-        Next
-      </button>
-      
-      <button
-        onClick={() => onPageChange(totalPages)}
-        disabled={currentPage === totalPages}
-        className="px-3 py-1 border rounded text-xs bg-white text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-      >
-        Last
-      </button>
-
-      <span className="ml-4 text-xs text-gray-600">
-        Page {currentPage} of {totalPages}
-      </span>
-    </div>
-  );
-}
-
-/* ---------------- FollowUpView Component ---------------- */
-function FollowUpView({ purchases, onClose }) {
-  const [sortConfig, setSortConfig] = useState({ key: "followUpDate", direction: "desc" });
-  const [searchTerm, setSearchTerm] = useState("");
-
-  // Flatten all follow-ups with their parent purchase info
-  const allFollowUps = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const followUps = [];
-    
-    purchases.forEach(purchase => {
-      if (purchase.followUp && Array.isArray(purchase.followUp)) {
-        purchase.followUp.forEach(fu => {
-          if (fu.followUpDate) {
-            const followUpDate = new Date(fu.followUpDate);
-            followUpDate.setHours(0, 0, 0, 0);
-            
-            let status = "future";
-            const diffTime = followUpDate - today;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays < 0) status = "past";
-            else if (diffDays === 0) status = "today";
-            else if (diffDays === 1) status = "tomorrow";
-            else status = "future";
-            
-            followUps.push({
-              ...fu,
-              status,
-              diffDays,
-              parentPurchase: purchase,
-              followUpDate: fu.followUpDate,
-              createdBy: fu.updatedBy || "Unknown User" // Include createdBy field
-            });
-          }
-        });
-      }
-    });
-    
-    return followUps;
-  }, [purchases]);
-
-  // Filter follow-ups based on search
-  const filteredFollowUps = useMemo(() => {
-    if (!searchTerm) return allFollowUps;
-    
-    const term = searchTerm.toLowerCase();
-    return allFollowUps.filter(fu => 
-      fu.parentPurchase.jobSheetNumber?.toLowerCase().includes(term) ||
-      fu.parentPurchase.clientCompanyName?.toLowerCase().includes(term) ||
-      fu.parentPurchase.product?.toLowerCase().includes(term) ||
-      fu.note?.toLowerCase().includes(term) ||
-      fu.remarks?.toLowerCase().includes(term) ||
-      fu.createdBy?.toLowerCase().includes(term) // Search by createdBy as well
-    );
-  }, [allFollowUps, searchTerm]);
-
-  // Sort follow-ups
-  const sortedFollowUps = useMemo(() => {
-    const sorted = [...filteredFollowUps];
-    
-    sorted.sort((a, b) => {
-      // First sort by status priority: today -> tomorrow -> future -> past
-      const statusOrder = { today: 0, tomorrow: 1, future: 2, past: 3 };
-      const statusCompare = statusOrder[a.status] - statusOrder[b.status];
-      if (statusCompare !== 0) return statusCompare;
-      
-      // Then sort by follow-up date
-      const dateA = new Date(a.followUpDate);
-      const dateB = new Date(b.followUpDate);
-      
-      if (sortConfig.key === "followUpDate") {
-        return sortConfig.direction === "asc" ? dateA - dateB : dateB - dateA;
-      }
-      
-      // Then sort by job sheet number
-      if (sortConfig.key === "jobSheetNumber") {
-        const valA = a.parentPurchase.jobSheetNumber || "";
-        const valB = b.parentPurchase.jobSheetNumber || "";
-        return sortConfig.direction === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-
-      // Sort by createdBy
-      if (sortConfig.key === "createdBy") {
-        const valA = a.createdBy || "";
-        const valB = b.createdBy || "";
-        return sortConfig.direction === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-      
-      return 0;
-    });
-    
-    return sorted;
-  }, [filteredFollowUps, sortConfig]);
-
-  const sortBy = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === "desc" ? "asc" : "desc"
-    }));
-  };
-
-  const getStatusBadge = (status) => {
-    const styles = {
-      today: "bg-red-500 text-white",
-      tomorrow: "bg-orange-500 text-white", 
-      future: "bg-blue-500 text-white",
-      past: "bg-gray-500 text-white"
-    };
-    
-    const labels = {
-      today: "TODAY",
-      tomorrow: "TOMORROW",
-      future: "UPCOMING", 
-      past: "PAST"
-    };
-    
-    return (
-      <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${styles[status]}`}>
-        {labels[status]}
-      </span>
-    );
-  };
-
-  const exportToExcel = () => {
-    const data = sortedFollowUps.map(fu => ({
-      "Status": fu.status.toUpperCase(),
-      "Follow-up Date": fmtDate(fu.followUpDate),
-      "Job Sheet #": fu.parentPurchase.jobSheetNumber,
-      "Client": fu.parentPurchase.clientCompanyName,
-      "Product": fu.parentPurchase.product,
-      "Note": fu.note || "",
-      "Remarks": fu.remarks || "",
-      "Created By": fu.createdBy || "Unknown User", // Include Created By in export
-      "Done": fu.done ? "Yes" : "No",
-      "Last Updated": fmtDate(fu.updatedAt)
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, "Follow-ups");
-    XLSX.writeFile(wb, "purchase_followups.xlsx");
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-      <div className="bg-white p-6 rounded w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-purple-700">Follow-ups View</h2>
-          <button onClick={onClose} className="text-2xl">
-            ×
-          </button>
-        </div>
-
-        {/* Search and Controls */}
-        <div className="flex gap-4 mb-4">
-          <input
-            type="text"
-            placeholder="Search follow-ups..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="border p-2 rounded text-xs w-64"
-          />
-          <button
-            onClick={exportToExcel}
-            className="bg-green-600 text-white px-4 py-2 rounded text-xs"
-          >
-            Export to Excel
-          </button>
-        </div>
-
-        {/* Follow-ups Table */}
-        <div className="overflow-auto flex-1">
-          <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
-            <thead className="bg-gray-50 sticky top-0">
-              <tr>
-                <th 
-                  className="p-2 border cursor-pointer"
-                  onClick={() => sortBy("status")}
-                >
-                  Status {sortConfig.key === "status" && (sortConfig.direction === "asc" ? "▲" : "▼")}
-                </th>
-                <th 
-                  className="p-2 border cursor-pointer"
-                  onClick={() => sortBy("followUpDate")}
-                >
-                  Follow-up Date {sortConfig.key === "followUpDate" && (sortConfig.direction === "asc" ? "▲" : "▼")}
-                </th>
-                <th 
-                  className="p-2 border cursor-pointer"
-                  onClick={() => sortBy("jobSheetNumber")}
-                >
-                  Job Sheet # {sortConfig.key === "jobSheetNumber" && (sortConfig.direction === "asc" ? "▲" : "▼")}
-                </th>
-                <th className="p-2 border">Client</th>
-                <th className="p-2 border">Product</th>
-                <th className="p-2 border">Note</th>
-                <th className="p-2 border">Remarks</th>
-                <th 
-                  className="p-2 border cursor-pointer"
-                  onClick={() => sortBy("createdBy")}
-                >
-                  Created By {sortConfig.key === "createdBy" && (sortConfig.direction === "asc" ? "▲" : "▼")}
-                </th>
-                <th className="p-2 border">Done</th>
-                <th className="p-2 border">Last Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedFollowUps.length === 0 ? (
-                <tr>
-                  <td colSpan="10" className="p-4 text-center text-gray-500">
-                    No follow-ups found
-                  </td>
-                </tr>
-              ) : (
-                sortedFollowUps.map((fu, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="p-2 border">{getStatusBadge(fu.status)}</td>
-                    <td className="p-2 border">{fmtDate(fu.followUpDate)}</td>
-                    <td className="p-2 border font-medium">
-                      {fu.parentPurchase.jobSheetNumber}
-                    </td>
-                    <td className="p-2 border">{fu.parentPurchase.clientCompanyName}</td>
-                    <td className="p-2 border">{fu.parentPurchase.product}</td>
-                    <td className="p-2 border">{fu.note || "-"}</td>
-                    <td className="p-2 border">{fu.remarks || "-"}</td>
-                    <td className="p-2 border font-medium text-blue-600">
-                      {fu.createdBy || "Unknown User"}
-                    </td>
-                    <td className="p-2 border">
-                      {fu.done ? (
-                        <span className="text-green-600 font-bold">✓</span>
-                      ) : (
-                        <span className="text-red-600">✗</span>
-                      )}
-                    </td>
-                    <td className="p-2 border">{fmtDate(fu.updatedAt)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function HeaderFilters({ headerFilters, onFilterChange }) {
   const cols = [
     "jobSheetCreatedDate",
@@ -378,8 +39,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
 
   return (
     <tr className="bg-gray-100">
-      {/* Completion filter */}
-      <th className="p-1 border">
+      <th className="p-1 border" style={{ width: "120px" }}>
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.completionState || ""}
@@ -402,7 +62,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           />
         </th>
       ))}
-      <th className="p-1 border">
+      <th className="p-1 border" style={{ width: "120px" }}>
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.status || ""}
@@ -415,8 +75,8 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="__empty__">No Status</option>
         </select>
       </th>
-      <th className="p-1 border" />
-      <th className="p-1 border">
+      <th className="p-1 border" style={{ width: "180px" }} />
+      <th className="p-1 border" style={{ width: "120px" }}>
         <select
           className="w-full p-1 text-xs border rounded"
           value={headerFilters.__poStatus || ""}
@@ -427,7 +87,7 @@ function HeaderFilters({ headerFilters, onFilterChange }) {
           <option value="not">Not generated</option>
         </select>
       </th>
-      <th className="p-1 border" />
+      <th className="p-1 border" style={{ width: "80px" }} />
     </tr>
   );
 }
@@ -521,9 +181,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
       <div className="bg-white p-6 rounded w-full max-w-xl text-xs">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-purple-700">Manage Follow-Ups</h3>
-          <button onClick={close} className="text-2xl">
-            ×
-          </button>
+          <button onClick={close} className="text-2xl">×</button>
         </div>
 
         <div className="mb-4 space-y-2">
@@ -551,9 +209,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
             />
           </div>
           <div className="flex justify-end">
-            <button onClick={add} className="bg-blue-600 text-white px-3 py-1 rounded">
-              Add
-            </button>
+            <button onClick={add} className="bg-blue-600 text-white px-3 py-1 rounded">Add</button>
           </div>
         </div>
 
@@ -562,12 +218,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
           {local.map((fu, i) => {
             const overdue = !fu.done && fu.followUpDate && fu.followUpDate < today;
             return (
-              <div
-                key={i}
-                className={`border rounded p-2 mb-2 ${
-                  overdue ? "bg-red-200" : "bg-gray-50"
-                }`}
-              >
+              <div key={i} className={`border rounded p-2 mb-2 ${overdue ? "bg-red-200" : "bg-gray-50"}`}>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <input
                     type="date"
@@ -591,24 +242,14 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
                   />
                   <div className="flex items-center gap-2">
                     {!fu.done && (
-                      <button
-                        onClick={() => markDone(i)}
-                        className="bg-green-600 text-white px-2 py-1 rounded"
-                      >
-                        Done
-                      </button>
+                      <button onClick={() => markDone(i)} className="bg-green-600 text-white px-2 py-1 rounded">Done</button>
                     )}
-                    <button
-                      onClick={() => remove(i)}
-                      className="text-red-600 px-2 py-1"
-                    >
-                      Remove
-                    </button>
+                    <button onClick={() => remove(i)} className="text-red-600 px-2 py-1">Remove</button>
                   </div>
                 </div>
                 <div className="mt-1 text-[10px] text-gray-600">
                   Updated {new Date(fu.updatedAt).toLocaleString()} by{" "}
-                  <span className="font-semibold">{fu.updatedBy || "Unknown User"}</span>
+                  {fu.updatedBy || "admin"}
                   {fu.done ? " • (Done)" : ""}
                 </div>
               </div>
@@ -617,12 +258,7 @@ function FollowUpModal({ followUps, onUpdate, onClose }) {
         </div>
 
         <div className="flex justify-end">
-          <button
-            onClick={close}
-            className="bg-green-700 text-white px-4 py-1 rounded"
-          >
-            Close
-          </button>
+          <button onClick={close} className="bg-green-700 text-white px-4 py-1 rounded">Close</button>
         </div>
       </div>
     </div>
@@ -710,12 +346,7 @@ function VendorTypeahead({
   const badge = (rel) => {
     const isBad = (rel || "reliable") === "non-reliable";
     return (
-      <span
-        className={
-          "text-[10px] px-1 py-[1px] rounded " +
-          (isBad ? "bg-red-600 text-white" : "bg-green-600 text-white")
-        }
-      >
+      <span className={`text-[10px] px-1 py-[1px] rounded ${isBad ? "bg-red-600 text-white" : "bg-green-600 text-white"}`}>
         {isBad ? "NON-RELIABLE" : "RELIABLE"}
       </span>
     );
@@ -749,9 +380,7 @@ function VendorTypeahead({
       />
       {open && (
         <div className="absolute z-[120] mt-1 w-full max-h-60 overflow-auto bg-white border rounded shadow">
-          {filtered.length === 0 && (
-            <div className="px-3 py-2 text-xs text-gray-500">No matches</div>
-          )}
+          {filtered.length === 0 && <div className="px-3 py-2 text-xs text-gray-500">No matches</div>}
           {filtered.map((v, idx) => {
             const isHi = idx === highlight;
             const nonRel = (v.reliability || "reliable") === "non-reliable";
@@ -763,31 +392,20 @@ function VendorTypeahead({
                 onMouseEnter={() => setHighlight(idx)}
                 onMouseLeave={() => setHighlight(-1)}
                 onClick={() => selectVendor(v)}
-                className={
-                  "px-3 py-2 text-xs cursor-pointer " +
-                  (isHi ? "bg-gray-100" : "") +
-                  (disableNonReliable && nonRel ? " opacity-60" : "")
-                }
-                title={
-                  disableNonReliable && nonRel
-                    ? "Selection disabled for non-reliable vendors"
-                    : ""
-                }
+                className={`px-3 py-2 text-xs cursor-pointer ${isHi ? "bg-gray-100" : ""} ${disableNonReliable && nonRel ? " opacity-60" : ""}`}
+                title={disableNonReliable && nonRel ? "Selection disabled for non-reliable vendors" : ""}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium">
-                    {v.vendorCompany || v.vendorName || "(Unnamed Vendor)"}
-                  </div>
+                  <div className="font-medium">{v.vendorCompany || v.vendorName || "(Unnamed Vendor)"}</div>
                   {badge(v.reliability)}
                 </div>
                 <div className="text-[11px] text-gray-600">
-                  {v.vendorName ? `${v.vendorName} • ` : ""}
-                  {v.location || "-"}
+                  {v.vendorName ? `${v.vendorName} • ` : ""}{v.location || "-"}
                   {v.brandDealing ? ` • ${v.brandDealing}` : ""}
                 </div>
                 <div className="text-[10px] text-gray-500">
-                  {primaryContact ? `Contact: ${primaryContact}` : "No contact"}
-                  {v.gst ? ` • GST: ${v.gst}` : ""}
+                  {v.gst ? `GST: ${v.gst}` : ""}{" "}
+                  {v.postalCode ? ` • ${v.postalCode}` : ""}
                 </div>
               </div>
             );
@@ -800,10 +418,6 @@ function VendorTypeahead({
             <span className="font-medium">Selected:</span>{" "}
             {selected.vendorCompany || selected.vendorName || "-"}{" "}
             {badge(selected.reliability)}
-          </div>
-          <div>
-            <span className="font-medium">Contact:</span>{" "}
-            {getPrimaryContact(selected) || "-"}
           </div>
           <div>
             <span className="font-medium">Location:</span>{" "}
@@ -886,17 +500,12 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
   };
 
   const save = () => {
-    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?"))
-      return;
+    if (data.status === "received" && !window.confirm("Marked RECEIVED. Save changes?")) return;
 
     const payload = { ...data };
     if (payload.status === "") delete payload.status;
 
-    if (
-      payload.productPrice !== undefined &&
-      payload.productPrice !== null &&
-      payload.productPrice !== ""
-    ) {
+    if (payload.productPrice !== undefined && payload.productPrice !== null && payload.productPrice !== "") {
       payload.productPrice = Number(payload.productPrice) || 0;
     }
 
@@ -922,96 +531,50 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
         <div className="bg-white p-6 rounded w-full max-w-3xl text-xs">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-purple-700">Edit Open Purchase</h2>
-            <button onClick={onClose} className="text-2xl">
-              ×
-            </button>
+            <button onClick={onClose} className="text-2xl">×</button>
           </div>
           <form className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Job Sheet #:</label>{" "}
-                {data.jobSheetNumber}
-              </div>
-              <div>
-                <label className="font-bold">Job Sheet Date:</label>{" "}
-                {data.jobSheetCreatedDate
-                  ? new Date(data.jobSheetCreatedDate).toLocaleDateString()
-                  : "N/A"}
-              </div>
-              <div>
-                <label className="font-bold">Client:</label>{" "}
-                {data.clientCompanyName}
-              </div>
+              <div><label className="font-bold">Job Sheet #:</label> {data.jobSheetNumber}</div>
+              <div><label className="font-bold">Job Sheet Date:</label> {data.jobSheetCreatedDate ? new Date(data.jobSheetCreatedDate).toLocaleDateString() : "N/A"}</div>
+              <div><label className="font-bold">Client:</label> {data.clientCompanyName}</div>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold">Event:</label> {data.eventName}
-              </div>
-              <div>
-                <label className="font-bold">Product:</label> {data.product}
-              </div>
-              <div>
-                <label className="font-bold">Size:</label> {data.size || "N/A"}
-              </div>
+              <div><label className="font-bold">Event:</label> {data.eventName}</div>
+              <div><label className="font-bold">Product:</label> {data.product}</div>
+              <div><label className="font-bold">Size:</label> {data.size || "N/A"}</div>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="font-bold">Product Price:</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="w-full border p-1"
-                  value={data.productPrice ?? ""}
-                  onChange={(e) =>
-                    change(
-                      "productPrice",
-                      e.target.value === "" ? "" : parseFloat(e.target.value)
-                    )
-                  }
+                <input type="number" step="0.01" className="w-full border p-1" value={data.productPrice ?? ""}
+                  onChange={(e) => change("productPrice", e.target.value === "" ? "" : parseFloat(e.target.value))}
                 />
               </div>
-              
-              {/* Sourced From - Auto-populates vendor details */}
               <div>
-                <label className="font-bold">Sourced From:</label>
-                <input
-                  type="text"
-                  className="w-full border p-1"
-                  value={data.sourcingFrom || ""}
-                  onChange={(e) => change("sourcingFrom", e.target.value)}
-                  placeholder="Vendor name - auto-fills contact"
-                />
-                <div className="text-[10px] text-gray-500 mt-1">
-                  Start typing vendor name to auto-fill contact details
-                </div>
+                <label className="font-bold">Sourced From:</label>{" "}
+                {data.sourcingFrom}
               </div>
-
-              {/* Vendor Selection */}
               <div>
-                <label className="font-bold">Select Vendor:</label>
-                <VendorTypeahead
-                  value={data.vendorId || ""}
-                  onChange={handleVendorSelect}
-                  placeholder="Search vendor..."
-                  vendors={vendors}
-                />
+                <label className="font-bold">Delivery Date:</label>{" "}
+                {data.deliveryDateTime
+                  ? new Date(data.deliveryDateTime).toLocaleDateString()
+                  : "N/A"}
+              </div>
+              <div>
+                <label className="font-bold">Qty Req'd:</label> {data.qtyRequired}
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="font-bold">Qty Ordered:</label>
-                <input
-                  type="number"
-                  className="w-full border p-1"
-                  value={data.qtyOrdered || ""}
-                  onChange={(e) =>
-                    change("qtyOrdered", parseInt(e.target.value, 10) || 0)
-                  }
+                <input type="number" className="w-full border p-1" value={data.qtyOrdered || ""}
+                  onChange={(e) => change("qtyOrdered", parseInt(e.target.value, 10) || 0)}
                 />
               </div>
               <div>
-                <label className="font-bold">Vendor Contact #:</label>
+                <label className="font-bold">Vendor #:</label>
                 <input
                   type="text"
                   className="w-full border p-1"
@@ -1021,7 +584,7 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
                 />
               </div>
               <div>
-                <label className="font-bold">Full/Partial:</label>
+                <label className="font-bold">Completion:</label>
                 <select
                   className="w-full border p-1"
                   value={data.completionState || ""}
@@ -1037,21 +600,14 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="font-bold">General Remarks:</label>
-                <input
-                  type="text"
-                  className="w-full border p-1"
-                  value={data.remarks || ""}
+                <input type="text" className="w-full border p-1" value={data.remarks || ""}
                   onChange={(e) => change("remarks", e.target.value)}
                 />
               </div>
               <div>
                 <label className="font-bold">Invoice Remarks:</label>
-                <input
-                  type="text"
-                  className="w-full border p-1"
-                  value={data.invoiceRemarks || ""}
-                  onChange={(e) => change("invoiceRemarks", e.target.value)}
-                  placeholder="Shown on PO / flows to Closed"
+                <input type="text" className="w-full border p-1" value={data.invoiceRemarks || ""}
+                  onChange={(e) => change("invoiceRemarks", e.target.value)} placeholder="Shown on PO / flows to Closed"
                 />
               </div>
             </div>
@@ -1059,77 +615,41 @@ function EditPurchaseModal({ purchase, onClose, onSave }) {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="font-bold">Order Confirmed:</label>
-                <input
-                  type="date"
-                  className="w-full border p-1"
-                  value={data.orderConfirmedDate?.substring(0, 10) || ""}
+                <input type="date" className="w-full border p-1" value={data.orderConfirmedDate?.substring(0, 10) || ""}
                   onChange={(e) => change("orderConfirmedDate", e.target.value)}
                 />
               </div>
               <div>
                 <label className="font-bold">Expected Recv':</label>
-                <input
-                  type="date"
-                  className="w-full border p-1"
-                  value={data.expectedReceiveDate?.substring(0, 10) || ""}
+                <input type="date" className="w-full border p-1" value={data.expectedReceiveDate?.substring(0, 10) || ""}
                   onChange={(e) => change("expectedReceiveDate", e.target.value)}
                 />
               </div>
               <div>
                 <label className="font-bold">Pick-Up Dt/Tm:</label>
-                <input
-                  type="datetime-local"
-                  className="w-full border p-1"
-                  value={data.schedulePickUp?.substring(0, 16) || ""}
+                <input type="datetime-local" className="w-full border p-1" value={data.schedulePickUp?.substring(0, 16) || ""}
                   onChange={(e) => change("schedulePickUp", e.target.value)}
                 />
               </div>
               <div>
                 <label className="font-bold">Status:</label>
-                <select
-                  className="w-full border p-1"
-                  value={data.status || ""}
-                  onChange={(e) => change("status", e.target.value)}
-                >
-                  {statusOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {s === "" ? "Empty" : s}
-                    </option>
-                  ))}
+                <select className="w-full border p-1" value={data.status || ""} onChange={(e) => change("status", e.target.value)}>
+                  {statusOptions.map((s) => (<option key={s} value={s}>{s === "" ? "Empty" : s}</option>))}
                 </select>
               </div>
             </div>
 
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setFuModal(true)}
-                className="bg-blue-600 text-white px-2 py-1 rounded"
-              >
-                View Follow-Ups
-              </button>
+              <button type="button" onClick={() => setFuModal(true)} className="bg-blue-600 text-white px-2 py-1 rounded">View Follow-Ups</button>
             </div>
           </form>
           <div className="flex justify-end gap-4 mt-6">
-            <button onClick={onClose} className="px-4 py-2 border rounded">
-              Cancel
-            </button>
-            <button
-              onClick={save}
-              className="px-4 py-2 bg-green-700 text-white rounded"
-            >
-              Save
-            </button>
+            <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+            <button onClick={save} className="px-4 py-2 bg-green-700 text-white rounded">Save</button>
           </div>
         </div>
       </div>
-      {fuModal && (
-        <FollowUpModal
-          followUps={data.followUp}
-          onUpdate={(f) => change("followUp", f)}
-          onClose={() => setFuModal(false)}
-        />
-      )}
+      {fuModal && (<FollowUpModal followUps={data.followUp} onUpdate={(f) => change("followUp", f)} onClose={() => setFuModal(false)} />)}
     </>
   );
 }
@@ -1166,9 +686,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   const [vendorId, setVendorId] = useState("");
   const [productCode, setProductCode] = useState("");
   const [issueDate, setIssueDate] = useState(toISODate(new Date()));
-  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState(
-    toISODate(row?.deliveryDateTime)
-  );
+  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState(toISODate(row?.deliveryDateTime));
   const [deliveryAddress, setDeliveryAddress] = useState("Ace Gifting Solutions");
   const [vendors, setVendors] = useState([]);
 
@@ -1232,13 +750,9 @@ function GeneratePOModal({ row, onClose, onCreated }) {
   };
 
   const handleSubmit = async () => {
-    if (!vendorId) {
-      alert("Please select a vendor.");
-      return;
-    }
+    if (!vendorId) { alert("Please select a vendor."); return; }
     if (!row || !row._id || String(row._id).startsWith("temp_")) {
-      alert("This row hasn't been saved yet. Save it first, then generate a PO.");
-      return;
+      alert("This row hasn't been saved yet. Save it first, then generate a PO."); return;
     }
 
     setLoading(true);
@@ -1252,16 +766,11 @@ function GeneratePOModal({ row, onClose, onCreated }) {
         deliveryAddress: deliveryAddress || undefined,
         remarks,
         terms: terms || undefined,
-        vendor: {
-          gstNumber: vendorGst || undefined,
-          address: vendorAddress || undefined,
-        },
+        vendor: { gstNumber: vendorGst || undefined, address: vendorAddress || undefined },
       };
 
       const url = `${process.env.REACT_APP_BACKEND_URL}/api/admin/purchase-orders/from-open/${row._id}`;
-      const res = await axios.post(url, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.post(url, payload, { headers: { Authorization: `Bearer ${token}` } });
 
       const po = res.data && res.data.po;
       alert(`PO created: ${po && po.poNumber ? po.poNumber : "(no number)"}`);
@@ -1269,55 +778,37 @@ function GeneratePOModal({ row, onClose, onCreated }) {
       onClose();
     } catch (e) {
       console.error(e);
-      alert(
-        (e &&
-          e.response &&
-          e.response.data &&
-          e.response.data.message) ||
-          "Failed to generate PO"
-      );
-    } finally {
-      setLoading(false);
-    }
+      alert((e && e.response && e.response.data && e.response.data.message) || "Failed to generate PO");
+    } finally { setLoading(false); }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       <div className="bg-white p-6 rounded w-full max-w-2xl text-xs">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-purple-700">
-            Generate Purchase Order
-          </h3>
-          <button onClick={onClose} className="text-2xl">
-            ×
-          </button>
+          <h3 className="text-lg font-bold text-purple-700">Generate Purchase Order</h3>
+          <button onClick={onClose} className="text-2xl">×</button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="font-bold">Job Sheet #</label>
-            <div className="border rounded p-2">{row.jobSheetNumber}</div>
-          </div>
-          <div>
-            <label className="font-bold">Product</label>
-            <div className="border rounded p-2">
-              {row.product}
-              {row.size ? ` — ${row.size}` : ""}
-            </div>
-          </div>
+          <div><label className="font-bold">Job Sheet #</label><div className="border rounded p-2">{row.jobSheetNumber}</div></div>
+          <div><label className="font-bold">Product</label><div className="border rounded p-2">{row.product}{row.size ? ` — ${row.size}` : ""}</div></div>
 
           <div className="col-span-2">
             <label className="font-bold">Vendor</label>
             <VendorTypeahead
               value={vendorId}
-              onChange={handleVendorSelect}
-              vendors={vendors}
+              onChange={(id, v) => {
+                setVendorId(id || "");
+                if (v) {
+                  setVendorGst(v.gst || "");
+                  setVendorAddress(v.address || v.location || "");
+                } else {
+                  setVendorGst("");
+                  setVendorAddress("");
+                }
+              }}
             />
-            {row.sourcingFrom && (
-              <div className="text-[10px] text-gray-500 mt-1">
-                Auto-detected from: "{row.sourcingFrom}"
-              </div>
-            )}
           </div>
 
           <div>
@@ -1327,7 +818,7 @@ function GeneratePOModal({ row, onClose, onCreated }) {
               className="w-full border p-2 rounded"
               value={vendorGst}
               onChange={(e) => setVendorGst(e.target.value)}
-              placeholder="Auto-filled from vendor"
+              placeholder="Override / confirm vendor GSTIN"
             />
           </div>
           <div>
@@ -1337,95 +828,35 @@ function GeneratePOModal({ row, onClose, onCreated }) {
               className="w-full border p-2 rounded"
               value={vendorAddress}
               onChange={(e) => setVendorAddress(e.target.value)}
-              placeholder="Auto-filled from vendor"
+              placeholder="Override / confirm vendor address"
             />
           </div>
 
-          <div>
-            <label className="font-bold">Product Code (optional)</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={productCode}
-              onChange={(e) => setProductCode(e.target.value)}
-              placeholder="Matches Product.productId"
-            />
-          </div>
-          <div>
-            <label className="font-bold">Issue Date</label>
-            <input
-              type="date"
-              className="w-full border p-2 rounded"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="font-bold">Required Delivery Date</label>
-            <input
-              type="date"
-              className="w-full border p-2 rounded"
-              value={requiredDeliveryDate}
-              onChange={(e) => setRequiredDeliveryDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="font-bold">Delivery Address</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
-              placeholder="Ace Gifting Solutions"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="font-bold">PO Remarks</label>
-            <input
-              type="text"
-              className="w-full border p-2 rounded"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Header-level PO remarks (optional)"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="font-bold">Terms</label>
-            <textarea
-              className="w-full border p-2 rounded min-h-[120px]"
-              value={terms}
-              onChange={(e) => setTerms(e.target.value)}
-            />
-            <div className="mt-1">
-              <button
-                type="button"
-                className="text-[11px] underline"
-                onClick={() => setTerms(DEFAULT_PO_TERMS)}
-              >
-                Reset to default terms
-              </button>
-            </div>
-          </div>
+          <div><label className="font-bold">Product Code (optional)</label><input type="text" className="w-full border p-2 rounded" value={productCode}
+            onChange={(e) => setProductCode(e.target.value)} placeholder="Matches Product.productId"
+          /></div>
+          <div><label className="font-bold">Issue Date</label><input type="date" className="w-full border p-2 rounded" value={issueDate}
+            onChange={(e) => setIssueDate(e.target.value)}
+          /></div>
+          <div><label className="font-bold">Required Delivery Date</label><input type="date" className="w-full border p-2 rounded" value={requiredDeliveryDate}
+            onChange={(e) => setRequiredDeliveryDate(e.target.value)}
+          /></div>
+          <div><label className="font-bold">Delivery Address</label><input type="text" className="w-full border p-2 rounded" value={deliveryAddress}
+            onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Ace Gifting Solutions"
+          /></div>
+          <div className="col-span-2"><label className="font-bold">PO Remarks</label><input type="text" className="w-full border p-2 rounded" value={remarks}
+            onChange={(e) => setRemarks(e.target.value)} placeholder="Header-level PO remarks (optional)"
+          /></div>
+          <div className="col-span-2"><label className="font-bold">Terms</label><textarea className="w-full border p-2 rounded min-h-[120px]" value={terms}
+            onChange={(e) => setTerms(e.target.value)}
+          /><div className="mt-1"><button type="button" className="text-[11px] underline" onClick={() => setTerms(DEFAULT_PO_TERMS)}>Reset to default terms</button></div></div>
 
-          <div className="col-span-2">
-            <div className="text-[11px] text-gray-600">
-              <b>Line Item Invoice Remarks:</b>{" "}
-              {row.invoiceRemarks || "(none)"}
-              <br />
-              This will be added to the PO item automatically.
-            </div>
-          </div>
+          <div className="col-span-2"><div className="text-[11px] text-gray-600"><b>Line Item Invoice Remarks:</b> {row.invoiceRemarks || "(none)"}<br />This will be added to the PO item automatically.</div></div>
         </div>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-2 border rounded">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-3 py-2 bg-[#Ff8045] text-white rounded disabled:opacity-60"
-          >
+          <button onClick={onClose} className="px-3 py-2 border rounded">Cancel</button>
+          <button onClick={handleSubmit} disabled={loading} className="px-3 py-2 bg-[#Ff8045] text-white rounded disabled:opacity-60">
             {loading ? "Creating…" : "Create PO"}
           </button>
         </div>
@@ -1456,10 +887,6 @@ export default function OpenPurchaseList() {
     direction: "asc",
   });
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage] = useState(100);
-
   const [perms, setPerms] = useState([]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const canExport = isSuperAdmin || perms.includes("export-purchase");
@@ -1473,25 +900,12 @@ export default function OpenPurchaseList() {
   const [poModalRow, setPoModalRow] = useState(null);
   const [showFollowUpView, setShowFollowUpView] = useState(false);
 
-  const handleOpenModal = (jobSheetNumber) => {
-    setSelectedJobSheetNumber(jobSheetNumber);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedJobSheetNumber(null);
-  };
+  const handleOpenModal = (jobSheetNumber) => { setSelectedJobSheetNumber(jobSheetNumber); setIsModalOpen(true); };
+  const handleCloseModal = () => { setIsModalOpen(false); setSelectedJobSheetNumber(null); };
 
   useEffect(() => {
     const str = localStorage.getItem("permissions");
-    if (str) {
-      try {
-        setPerms(JSON.parse(str));
-      } catch {
-        /* ignore */
-      }
-    }
+    if (str) { try { setPerms(JSON.parse(str)); } catch { /* ignore */ } }
   }, []);
 
   const loadPurchases = async (cfg = sortConfig) => {
@@ -1500,13 +914,9 @@ export default function OpenPurchaseList() {
       const token = localStorage.getItem("token");
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { sortKey: cfg.key, sortDirection: cfg.direction },
-        }
+        { headers: { Authorization: `Bearer ${token}` }, params: { sortKey: cfg.key, sortDirection: cfg.direction } }
       );
       setPurchases(res.data);
-      setCurrentPage(1); // Reset to first page when data loads
     } catch (err) {
       console.error(err);
     } finally {
@@ -1514,40 +924,23 @@ export default function OpenPurchaseList() {
     }
   };
 
-  useEffect(() => {
-    loadPurchases();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortConfig]);
+  useEffect(() => { loadPurchases(); }, [sortConfig]);
 
   const filteredPurchases = useMemo(() => {
     const jobSheetStatus = {};
     purchases.forEach((rec) => {
-      if (!jobSheetStatus[rec.jobSheetNumber]) {
-        jobSheetStatus[rec.jobSheetNumber] = { allReceived: true, items: 0 };
-      }
+      if (!jobSheetStatus[rec.jobSheetNumber]) { jobSheetStatus[rec.jobSheetNumber] = { allReceived: true, items: 0 }; }
       jobSheetStatus[rec.jobSheetNumber].items += 1;
-      if (rec.status !== "received") {
-        jobSheetStatus[rec.jobSheetNumber].allReceived = false;
-      }
+      if (rec.status !== "received") { jobSheetStatus[rec.jobSheetNumber].allReceived = false; }
     });
-
     return purchases.filter((rec) => !jobSheetStatus[rec.jobSheetNumber]?.allReceived);
   }, [purchases]);
 
   const globalFiltered = useMemo(() => {
     const s = search.toLowerCase();
     return filteredPurchases.filter((p) =>
-      [
-        "jobSheetNumber",
-        "clientCompanyName",
-        "eventName",
-        "product",
-        "size",
-        "sourcingFrom",
-        "vendorContactNumber",
-        "remarks",
-        "invoiceRemarks",
-      ].some((f) => (p[f] || "").toLowerCase().includes(s))
+      ["jobSheetNumber", "clientCompanyName", "eventName", "product", "size", "sourcingFrom", "vendorContactNumber", "remarks", "invoiceRemarks"]
+        .some((f) => (p[f] || "").toLowerCase().includes(s))
     );
   }, [filteredPurchases, search]);
 
@@ -1555,28 +948,10 @@ export default function OpenPurchaseList() {
     return globalFiltered.filter((r) =>
       Object.entries(headerFilters).every(([k, v]) => {
         if (!v) return true;
-
-        if (k === "status") {
-          if (v === "__empty__") return !r.status;
-          return (r.status || "").toLowerCase() === v.toLowerCase();
-        }
-
-        if (k === "completionState") {
-          return (r.completionState || "") === v;
-        }
-
-        if (k === "__poStatus") {
-          const generated = !!(r.poId || r.poNumber);
-          return v === "generated" ? generated : v === "not" ? !generated : true;
-        }
-
-        const raw = r[k];
-        const cell = raw
-          ? k.includes("Date")
-            ? new Date(raw).toLocaleDateString()
-            : String(raw)
-          : "";
-
+        if (k === "status") { if (v === "__empty__") return !r.status; return (r.status || "").toLowerCase() === v.toLowerCase(); }
+        if (k === "completionState") { return (r.completionState || "") === v; }
+        if (k === "__poStatus") { const generated = !!(r.poId || r.poNumber); return v === "generated" ? generated : v === "not" ? !generated : true; }
+        const raw = r[k]; const cell = raw ? k.includes("Date") ? new Date(raw).toLocaleDateString() : String(raw) : "";
         return cell.toLowerCase().includes(v.toLowerCase());
       })
     );
@@ -1584,38 +959,27 @@ export default function OpenPurchaseList() {
 
   const advFiltered = useMemo(() => {
     const inRange = (d, range) => {
-      const from = range.from;
-      const to = range.to;
-      if (!from && !to) return true;
-      if (!d) return false;
+      const from = range.from; const to = range.to;
+      if (!from && !to) return true; if (!d) return false;
       const dt = new Date(d);
       if (from && dt < new Date(from)) return false;
       if (to && dt > new Date(to)) return false;
       return true;
     };
     return headerFiltered.filter((r) => {
-      const numOK =
-        (!advFilters.jobSheetNumber.from ||
-          r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
-        (!advFilters.jobSheetNumber.to ||
-          r.jobSheetNumber <= advFilters.jobSheetNumber.to);
-      return (
-        numOK &&
-        inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
-        inRange(r.deliveryDateTime, advFilters.deliveryDateTime) &&
-        inRange(r.orderConfirmedDate, advFilters.orderConfirmedDate) &&
-        inRange(r.expectedReceiveDate, advFilters.expectedReceiveDate) &&
-        inRange(r.schedulePickUp, advFilters.schedulePickUp)
-      );
+      const numOK = (!advFilters.jobSheetNumber.from || r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
+                    (!advFilters.jobSheetNumber.to || r.jobSheetNumber <= advFilters.jobSheetNumber.to);
+      return numOK && inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
+                     inRange(r.deliveryDateTime, advFilters.deliveryDateTime) &&
+                     inRange(r.orderConfirmedDate, advFilters.orderConfirmedDate) &&
+                     inRange(r.expectedReceiveDate, advFilters.expectedReceiveDate) &&
+                     inRange(r.schedulePickUp, advFilters.schedulePickUp);
     });
   }, [headerFiltered, advFilters]);
 
   const rows = useMemo(() => {
     const byKey = {};
-    advFiltered.forEach((r) => {
-      const key = `${r.jobSheetNumber}_${r.product}_${r.size || ""}`;
-      byKey[key] = r;
-    });
+    advFiltered.forEach((r) => { const key = `${r.jobSheetNumber}_${r.product}_${r.size || ""}`; byKey[key] = r; });
     return Object.values(byKey);
   }, [advFiltered]);
 
@@ -1628,21 +992,13 @@ export default function OpenPurchaseList() {
 
   const sortBy = (key) => {
     setSortConfig((prev) => {
-      if (prev.key === key) {
-        return {
-          key,
-          direction: prev.direction === "asc" ? "desc" : "asc",
-        };
-      }
+      if (prev.key === key) { return { key, direction: prev.direction === "asc" ? "desc" : "asc" }; }
       return { key, direction: "asc" };
     });
   };
 
   const exportToExcel = () => {
-    if (!canExport) {
-      alert("You don't have permission to export purchase records.");
-      return;
-    }
+    if (!canExport) { alert("You don't have permission to export purchase records."); return; }
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(
       rows.map((r) => ({
@@ -1652,8 +1008,7 @@ export default function OpenPurchaseList() {
         Client: r.clientCompanyName,
         Event: r.eventName,
         Product: r.product,
-        "Product Price":
-          typeof r.productPrice === "number" ? r.productPrice : "",
+        "Product Price": typeof r.productPrice === "number" ? r.productPrice : "",
         Size: r.size || "N/A",
         "Qty Required": r.qtyRequired,
         "Qty Ordered": r.qtyOrdered,
@@ -1674,48 +1029,32 @@ export default function OpenPurchaseList() {
     XLSX.writeFile(wb, "open_purchases.xlsx");
   };
 
-  if (loading)
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-purple-700 mb-4">
-          Open Purchases
-        </h1>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-300 rounded"></div>
-          <div className="h-64 bg-gray-300 rounded"></div>
-        </div>
-      </div>
-    );
+  if (loading) return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-purple-700 mb-4">Open Purchases</h1>
+      <div className="animate-pulse space-y-4"><div className="h-8 bg-gray-300 rounded"></div><div className="h-64 bg-gray-300 rounded"></div></div>
+    </div>
+  );
 
   return (
     <div className="p-6">
       {!perms.includes("write-purchase") && (
-        <div className="mb-4 p-2 bg-red-200 text-red-800 rounded">
-          You don't have permission to edit purchase records.
-        </div>
+        <div className="mb-4 p-2 bg-red-200 text-red-800 rounded">You don't have permission to edit purchase records.</div>
       )}
       <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Open Purchases</h1>
-      
-      {/* Updated Header with reduced search bar and new button */}
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
+      <div className="flex flex-wrap gap-2 mb-4">
         <input
           type="text"
           placeholder="Global search…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded text-xs w-64" 
+          className="border p-2 rounded flex-grow text-xs"
         />
         <button
           onClick={() => setShowFilters((f) => !f)}
           className="bg-[#Ff8045] text-white px-4 py-2 rounded text-xs"
         >
           Filters
-        </button>
-        <button
-          onClick={() => setShowFollowUpView(true)}
-          className="bg-purple-600 text-white px-4 py-2 rounded text-xs"
-        >
-          View Follow-ups
         </button>
         {(isSuperAdmin || canExport) && (
           <button
@@ -1727,399 +1066,297 @@ export default function OpenPurchaseList() {
         )}
       </div>
 
-      {/* Advanced filters toggle content */}
       {showFilters && (
         <div className="mb-4 border rounded p-3 text-xs bg-gray-50 space-y-2">
           <div className="font-bold mb-1">Advanced Filters</div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            <div>
-              <label className="block">Job Sheet # From</label>
-              <input
-                type="text"
-                className="border p-1 rounded w-full"
-                value={advFilters.jobSheetNumber.from}
-                onChange={(e) =>
-                  setAdvFilters((p) => ({
-                    ...p,
-                    jobSheetNumber: {
-                      ...p.jobSheetNumber,
-                      from: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <label className="block">Job Sheet # To</label>
-              <input
-                type="text"
-                className="border p-1 rounded w-full"
-                value={advFilters.jobSheetNumber.to}
-                onChange={(e) =>
-                  setAdvFilters((p) => ({
-                    ...p,
-                    jobSheetNumber: {
-                      ...p.jobSheetNumber,
-                      to: e.target.value,
-                    },
-                  }))
-                }
-              />
-            </div>
-
-            {[
-              ["jobSheetCreatedDate", "Job Sheet Date"],
-              ["deliveryDateTime", "Delivery Date"],
-              ["orderConfirmedDate", "Order Confirmed"],
-              ["expectedReceiveDate", "Expected Receive"],
-              ["schedulePickUp", "Pick-Up"],
-            ].map(([key, label]) => (
-              <React.Fragment key={key}>
-                <div>
-                  <label className="block">{label} From</label>
-                  <input
-                    type="date"
-                    className="border p-1 rounded w-full"
-                    value={advFilters[key].from}
-                    onChange={(e) =>
-                      setAdvFilters((p) => ({
-                        ...p,
-                        [key]: { ...p[key], from: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block">{label} To</label>
-                  <input
-                    type="date"
-                    className="border p-1 rounded w-full"
-                    value={advFilters[key].to}
-                    onChange={(e) =>
-                      setAdvFilters((p) => ({
-                        ...p,
-                        [key]: { ...p[key], to: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-              </React.Fragment>
-            ))}
+            <div><label className="block">Job Sheet # From</label><input type="text" className="border p-1 rounded w-full"
+              value={advFilters.jobSheetNumber.from} onChange={(e) => setAdvFilters((p) => ({ ...p, jobSheetNumber: { ...p.jobSheetNumber, from: e.target.value } }))}
+            /></div>
+            <div><label className="block">Job Sheet # To</label><input type="text" className="border p-1 rounded w-full"
+              value={advFilters.jobSheetNumber.to} onChange={(e) => setAdvFilters((p) => ({ ...p, jobSheetNumber: { ...p.jobSheetNumber, to: e.target.value } }))}
+            /></div>
+            {[["jobSheetCreatedDate", "Job Sheet Date"], ["deliveryDateTime", "Delivery Date"], ["orderConfirmedDate", "Order Confirmed"],
+              ["expectedReceiveDate", "Expected Receive"], ["schedulePickUp", "Pick-Up"]].map(([key, label]) => (<React.Fragment key={key}>
+                <div><label className="block">{label} From</label><input type="date" className="border p-1 rounded w-full"
+                  value={advFilters[key].from} onChange={(e) => setAdvFilters((p) => ({ ...p, [key]: { ...p[key], from: e.target.value } }))}
+                /></div>
+                <div><label className="block">{label} To</label><input type="date" className="border p-1 rounded w-full"
+                  value={advFilters[key].to} onChange={(e) => setAdvFilters((p) => ({ ...p, [key]: { ...p[key], to: e.target.value } }))}
+                /></div>
+              </React.Fragment>))}
           </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <button
-              className="px-3 py-1 border rounded"
-              onClick={() => setAdvFilters(initAdv)}
-            >
-              Clear
-            </button>
-          </div>
+          <div className="flex justify-end gap-2 mt-2"><button className="px-3 py-1 border rounded" onClick={() => setAdvFilters(initAdv)}>Clear</button></div>
         </div>
       )}
 
-            {/* Table Container with Fixed Header */}
-            <div 
-        className="border border-gray-200 rounded-lg overflow-auto" 
-        style={{ 
-          maxHeight: "calc(100vh - 200px)",
-          position: "relative"
-        }}
-      >
-        <table className="min-w-full border-collapse text-xs">
-          <thead className="bg-gray-50 sticky top-0 z-10">
-            <tr>
-              {[
-                { key: "completionState", label: "Full/Partial" },
-                { key: "jobSheetCreatedDate", label: "Job Sheet Date" },
-                { key: "jobSheetNumber", label: "Job Sheet #" },
-                { key: "clientCompanyName", label: "Client" },
-                { key: "eventName", label: "Event" },
-                { key: "product", label: "Product" },
-                { key: "productPrice", label: "Cost" },
-                { key: "size", label: "Size" },
-                { key: "qtyRequired", label: "Qty Req" },
-                { key: "qtyOrdered", label: "Qty Ordered" },
-                { key: "sourcedBy", label: "Sourced By" },
-                { key: "sourcingFrom", label: "Sourced From" },
-                { key: "deliveryDateTime", label: "Delivery Date" },
-                { key: "vendorContactNumber", label: "Vendor Contact" },
-                { key: "orderConfirmedDate", label: "Order Conf Date." },
-                { key: "expectedReceiveDate", label: "Expected Recv Date." },
-                { key: "schedulePickUp", label: "Pick-Up Date" },
-                { key: "invoiceRemarks", label: "Invoice Remarks" },
-                { key: "remarks", label: "Order Remarks" },
-                { key: "status", label: "Status" },
-              ].map(({ key, label }) => (
-                <th
-                  key={key}
-                  onClick={() => sortBy(key)}
-                  className="p-2 border cursor-pointer sticky top-0 bg-gray-50 z-20 whitespace-nowrap"
-                >
-                  {label}
-                  {sortConfig.key === key
-                    ? sortConfig.direction === "asc"
-                      ? " ▲"
-                      : " ▼"
-                    : ""}
-                </th>
-              ))}
-              <th className="p-2 border sticky top-0 bg-gray-50 z-20 whitespace-nowrap">Follow-Up</th>
-              <th className="p-2 border sticky top-0 bg-gray-50 z-20 whitespace-nowrap">PO Status</th>
-              <th className="p-2 border sticky top-0 bg-gray-50 z-20 whitespace-nowrap">Actions</th>
-            </tr>
-            <HeaderFilters
-              headerFilters={headerFilters}
-              onFilterChange={(k, v) =>
-                setHeaderFilters((p) => ({ ...p, [k]: v }))
-              }
-            />
-          </thead>
-          <tbody>
-            {currentRows.map((p) => {
-              const latest = p.followUp?.length
-                ? p.followUp.reduce((l, fu) =>
-                    new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
-                  )
-                : null;
+      <table className="min-w-full border-collapse border-b border-gray-300 text-xs">
+        <thead className="bg-gray-50">
+          <tr>
+            {[
+              { key: "completionState", label: "Completion" }, // first column
+              { key: "jobSheetCreatedDate", label: "Job Sheet Date" },
+              { key: "jobSheetNumber", label: "Job Sheet #" },
+              { key: "clientCompanyName", label: "Client" },
+              { key: "eventName", label: "Event" },
+              { key: "product", label: "Product" },
+              { key: "productPrice", label: "Cost" },
+              { key: "size", label: "Size" },
+              { key: "qtyRequired", label: "Qty Req" },
+              { key: "qtyOrdered", label: "Qty Ordered" },
+              { key: "sourcedBy", label: "Sourced By" },
+              { key: "sourcingFrom", label: "Sourced From" },
+              { key: "deliveryDateTime", label: "Delivery Date" },
+              { key: "vendorContactNumber", label: "Vendor Contact" },
+              { key: "orderConfirmedDate", label: "Order Conf Date." },
+              { key: "expectedReceiveDate", label: "Expected Recv Date." },
+              { key: "schedulePickUp", label: "Pick-Up Date" },
+              { key: "invoiceRemarks", label: "Invoice Remarks" },
+              { key: "remarks", label: "Order Remarks" },
+              { key: "status", label: "Status" },
+            ].map(({ key, label }) => (
+              <th
+                key={key}
+                onClick={() => sortBy(key)}
+                className="p-2 border cursor-pointer"
+              >
+                {label}
+                {sortConfig.key === key
+                  ? sortConfig.direction === "asc"
+                    ? " ▲"
+                    : " ▼"
+                  : ""}
+              </th>
+            ))}
+            <th className="p-2 border">Follow-Up</th>
+            <th className="p-2 border">PO Status</th>
+            <th className="p-2 border">Actions</th>
+          </tr>
+          <HeaderFilters
+            headerFilters={headerFilters}
+            onFilterChange={(k, v) =>
+              setHeaderFilters((p) => ({ ...p, [k]: v }))
+            }
+          />
+        </thead>
+        <tbody>
+          {rows.map((p) => {
+            const latest = p.followUp?.length
+              ? p.followUp.reduce((l, fu) =>
+                  new Date(fu.updatedAt) > new Date(l.updatedAt) ? fu : l
+                )
+              : null;
 
-              const menuOpen = menuOpenFor === p._id;
-              const poGenerated = !!(p.poId || p.poNumber);
+            const menuOpen = menuOpenFor === p._id;
+            const poGenerated = !!(p.poId || p.poNumber);
 
-              return (
-                <tr
-                  key={`${p._id}_${p.product}_${p.size || ""}`}
-                  className={
-                    p.status === "alert"
-                      ? "bg-red-200"
-                      : p.status === "pending"
-                      ? "bg-orange-200"
-                      : p.status === "received"
-                      ? "bg-green-200"
-                      : ""
-                  }
-                >
-                  <td className="p-2 border whitespace-nowrap">{p.completionState || ""}</td>
-                  <td className="p-2 border whitespace-nowrap">{fmtDate(p.jobSheetCreatedDate)}</td>
-                  <td className="p-2 border whitespace-nowrap">
+            return (
+              <tr
+                key={`${p._id}_${p.product}_${p.size || ""}`}
+                className={
+                  p.status === "alert"
+                    ? "bg-red-200"
+                    : p.status === "pending"
+                    ? "bg-orange-200"
+                    : p.status === "received"
+                    ? "bg-green-200"
+                    : ""
+                }
+              >
+                <td className="p-2 border">{p.completionState || ""}</td>
+
+                <td className="p-2 border">{fmtDate(p.jobSheetCreatedDate)}</td>
+                <td className="p-2 border">
+                  <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleOpenModal(p.jobSheetNumber);
+                    }}
+                  >
+                    {p.jobSheetNumber || "(No Number)"}
+                  </button>
+                </td>
+                <td className="p-2 border">{p.clientCompanyName}</td>
+                <td className="p-2 border">{p.eventName}</td>
+                <td className="p-2 border">{p.product}</td>
+                <td className="p-2 border">
+                  {typeof p.productPrice === "number"
+                    ? p.productPrice.toFixed(2)
+                    : "—"}
+                </td>
+                <td className="p-2 border">{p.size || "N/A"}</td>
+                <td className="p-2 border">{p.qtyRequired}</td>
+                <td className="p-2 border">{p.qtyOrdered}</td>
+                <td className="p-2 border">{p.sourcedBy || ""}</td>
+                <td className="p-2 border">{p.sourcingFrom}</td>
+                <td className="p-2 border">{fmtDate(p.deliveryDateTime)}</td>
+                <td className="p-2 border">{p.vendorContactNumber}</td>
+                <td className="p-2 border">{fmtDate(p.orderConfirmedDate)}</td>
+                <td className="p-2 border">
+                  {fmtDate(p.expectedReceiveDate)}
+                </td>
+                <td className="p-2 border">{fmtDate(p.schedulePickUp)}</td>
+                <td className="p-2 border">{p.invoiceRemarks || ""}</td>
+                <td className="p-2 border">{p.remarks}</td>
+                <td className="p-2 border">{p.status || "N/A"}</td>
+
+                <td className="p-2 border">
+                  {latest
+                    ? latest.remarks && latest.remarks.trim()
+                      ? latest.remarks
+                      : latest.note || "—"
+                    : "—"}
+                </td>
+
+                <td className="p-2 border">
+                  {poGenerated ? (
+                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
+                      Generated
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-gray-400 text-white">
+                      Not generated
+                    </span>
+                  )}
+                </td>
+
+                <td className="p-2 border space-y-1 relative">
+                  <div className="mt-1">
                     <button
-                      className="border-b text-blue-500 hover:text-blue-700 whitespace-nowrap"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleOpenModal(p.jobSheetNumber);
-                      }}
+                      className="w-full border rounded py-0.5 text-[10px]"
+                      onClick={() =>
+                        setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
+                      }
                     >
-                      {p.jobSheetNumber || "(No Number)"}
+                      ⋮
                     </button>
-                  </td>
-                  <td className="p-2 border whitespace-nowrap">{p.clientCompanyName}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.eventName}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.product}</td>
-                  <td className="p-2 border whitespace-nowrap">
-                    {typeof p.productPrice === "number"
-                      ? p.productPrice.toFixed(2)
-                      : "—"}
-                  </td>
-                  <td className="p-2 border whitespace-nowrap">{p.size || "N/A"}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.qtyRequired}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.qtyOrdered}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.sourcedBy || ""}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.sourcingFrom}</td>
-                  <td className="p-2 border whitespace-nowrap">{fmtDate(p.deliveryDateTime)}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.vendorContactNumber}</td>
-                  <td className="p-2 border whitespace-nowrap">{fmtDate(p.orderConfirmedDate)}</td>
-                  <td className="p-2 border whitespace-nowrap">
-                    {fmtDate(p.expectedReceiveDate)}
-                  </td>
-                  <td className="p-2 border whitespace-nowrap">{fmtDate(p.schedulePickUp)}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.invoiceRemarks || ""}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.remarks}</td>
-                  <td className="p-2 border whitespace-nowrap">{p.status || "N/A"}</td>
+                    {menuOpen && (
+                      <div className="absolute right-0 z-[120] mt-1 w-44 bg-white border rounded shadow">
+                        <button
+                          className={
+                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
+                            (!perms.includes("write-purchase") ||
+                            p.status === "received"
+                              ? "opacity-50 cursor-not-allowed"
+                              : "")
+                          }
+                          onClick={() => {
+                            if (
+                              !perms.includes("write-purchase") ||
+                              p.status === "received"
+                            )
+                              return;
+                            setMenuOpenFor(null);
+                            setCurrentEdit(p);
+                            setEditModal(true);
+                          }}
+                        >
+                          Edit
+                        </button>
 
-                  <td className="p-2 border whitespace-nowrap">
-                    {latest
-                      ? latest.remarks && latest.remarks.trim()
-                        ? latest.remarks
-                        : latest.note || "—"
-                      : "—"}
-                  </td>
+                        <button
+                          className={
+                            "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
+                            (!perms.includes("write-purchase")
+                              ? "opacity-50 cursor-not-allowed"
+                              : "")
+                          }
+                          onClick={async () => {
+                            if (!perms.includes("write-purchase")) return;
+                            setMenuOpenFor(null);
+                            if (!window.confirm("Delete this purchase?")) return;
+                            try {
+                              const token = localStorage.getItem("token");
+                              await axios.delete(
+                                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
+                                { headers: { Authorization: `Bearer ${token}` } }
+                              );
+                              await loadPurchases();
+                            } catch {
+                              alert("Error deleting.");
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
 
-                  <td className="p-2 border whitespace-nowrap">
-                    {poGenerated ? (
-                      <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-green-600 text-white">
-                        Generated
-                      </span>
-                    ) : (
-                      <span className="inline-block px-2 py-0.5 text-[10px] rounded bg-gray-400 text-white">
-                        Not generated
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="p-2 border space-y-1 relative whitespace-nowrap">
-                    <div className="mt-1">
-                      <button
-                        className="w-full border rounded py-0.5 text-[10px]"
-                        onClick={() =>
-                          setMenuOpenFor((cur) => (cur === p._id ? null : p._id))
-                        }
-                      >
-                        ⋮
-                      </button>
-                      {menuOpen && (
-                        <div className="absolute right-0 z-[120] mt-1 w-44 bg-white border rounded shadow">
+                        {!poGenerated && (
                           <button
                             className={
                               "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                              (!perms.includes("write-purchase") ||
-                              p.status === "received"
-                                ? "opacity-50 cursor-not-allowed"
-                                : "")
-                            }
-                            onClick={() => {
-                              if (
-                                !perms.includes("write-purchase") ||
-                                p.status === "received"
-                              )
-                                return;
-                              setMenuOpenFor(null);
-                              setCurrentEdit(p);
-                              setEditModal(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            className={
-                              "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-red-600 " +
                               (!perms.includes("write-purchase")
                                 ? "opacity-50 cursor-not-allowed"
                                 : "")
                             }
-                            onClick={async () => {
+                            onClick={() => {
                               if (!perms.includes("write-purchase")) return;
                               setMenuOpenFor(null);
-                              if (!window.confirm("Delete this purchase?")) return;
-                              try {
-                                const token = localStorage.getItem("token");
-                                await axios.delete(
-                                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${p._id}`,
-                                  { headers: { Authorization: `Bearer ${token}` } }
-                                );
-                                await loadPurchases();
-                              } catch {
-                                alert("Error deleting.");
-                              }
+                              setPoModalRow(p);
                             }}
                           >
-                            Delete
+                            Generate PO
                           </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
 
-                          {!poGenerated && (
-                            <button
-                              className={
-                                "block w-full text-left px-3 py-2 text-xs hover:bg-gray-100 " +
-                                (!perms.includes("write-purchase")
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : "")
-                              }
-                              onClick={() => {
-                                if (!perms.includes("write-purchase")) return;
-                                setMenuOpenFor(null);
-                                setPoModalRow(p);
-                              }}
-                            >
-                              Generate PO
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <JobSheetGlobal
+        jobSheetNumber={selectedJobSheetNumber}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
 
-    {/* Pagination Component */}
-    {totalRows > 0 && (
-      <div className="mt-4">
-        <div className="text-xs text-gray-600 mb-2">
-          Showing {startIndex + 1} to {Math.min(endIndex, totalRows)} of {totalRows} entries
-        </div>
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
-      </div>
-    )}
+      {editModal && currentEdit && (
+        <EditPurchaseModal
+          purchase={currentEdit}
+          onClose={() => setEditModal(false)}
+          onSave={async (u) => {
+            try {
+              const token = localStorage.getItem("token");
+              const headers = { Authorization: `Bearer ${token}` };
 
-    {totalRows === 0 && !loading && (
-      <div className="text-center py-8 text-gray-500">
-        No open purchase records found matching your filters.
-      </div>
-    )}
+              if (u._id && String(u._id).startsWith("temp_")) {
+                const { _id, isTemporary, ...data } = u;
+                await axios.post(
+                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
+                  data,
+                  { headers }
+                );
+              } else {
+                await axios.put(
+                  `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
+                  u,
+                  { headers }
+                );
+              }
 
-    <JobSheetGlobal
-      jobSheetNumber={selectedJobSheetNumber}
-      isOpen={isModalOpen}
-      onClose={handleCloseModal}
-    />
-
-    {editModal && currentEdit && (
-      <EditPurchaseModal
-        purchase={currentEdit}
-        onClose={() => setEditModal(false)}
-        onSave={async (u) => {
-          try {
-            const token = localStorage.getItem("token");
-            const headers = { Authorization: `Bearer ${token}` };
-
-            if (u._id && String(u._id).startsWith("temp_")) {
-              const { _id, isTemporary, ...data } = u;
-              await axios.post(
-                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases`,
-                data,
-                { headers }
-              );
-            } else {
-              await axios.put(
-                `${process.env.REACT_APP_BACKEND_URL}/api/admin/openPurchases/${u._id}`,
-                u,
-                { headers }
-              );
+              await loadPurchases();
+            } catch (error) {
+              console.error("Error saving purchase:", error);
+            } finally {
+              setEditModal(false);
             }
+          }}
+        />
+      )}
 
+      {poModalRow && (
+        <GeneratePOModal
+          row={poModalRow}
+          onClose={() => setPoModalRow(null)}
+          onCreated={async () => {
             await loadPurchases();
-          } catch (error) {
-            console.error("Error saving purchase:", error);
-          } finally {
-            setEditModal(false);
-          }
-        }}
-      />
-    )}
-
-    {poModalRow && (
-      <GeneratePOModal
-        row={poModalRow}
-        onClose={() => setPoModalRow(null)}
-        onCreated={async () => {
-          await loadPurchases();
-        }}
-      />
-    )}
-
-    {/* Follow-up View Modal */}
-    {showFollowUpView && (
-      <FollowUpView
-        purchases={rows}
-        onClose={() => setShowFollowUpView(false)}
-      />
-    )}
-  </div>
-);
+          }}
+        />
+      )}
+    </div>
+  );
 }
