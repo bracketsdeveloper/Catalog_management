@@ -14,6 +14,11 @@ const Vendor = require("../models/Vendor");
 // UTILITY FUNCTIONS
 // ------------------------------
 
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(id) && 
+         (new mongoose.Types.ObjectId(id)).toString() === id;
+}
+
 async function createLog(action, field, oldValue, newValue, performedBy, ip) {
   try {
     await Log.create({
@@ -243,7 +248,6 @@ router.get("/products", authenticate, authorizeAdmin, async (req, res) => {
   }
 });
 
-// In your backend route /api/admin/products/filters
 router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const {
@@ -326,7 +330,6 @@ router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) =
       ];
     };
 
-    // Build parent-child relationships
     const buildRelationships = async () => {
       const relationships = {
         categories: {},
@@ -336,7 +339,6 @@ router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) =
         variationHinges: {}
       };
 
-      // Get category to subCategory mapping
       const categorySubCategoryMap = await Product.aggregate([
         { $match: { category: { $nin: [null, ""] }, subCategory: { $nin: [null, ""] } } },
         { $group: { 
@@ -350,7 +352,6 @@ router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) =
         relationships.categories[item.category] = item.subCategories;
       });
 
-      // Get category/subCategory to variationHinge mapping
       const categoryHingeMap = await Product.aggregate([
         { $match: { category: { $nin: [null, ""] }, variationHinge: { $nin: [null, ""] } } },
         { $group: { 
@@ -415,19 +416,36 @@ router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) =
 
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { images = [], preferredVendors = [] } = req.body;
+    const { images = [], preferredVendors = [], productId } = req.body;
 
-    if (!req.body.productTag || !req.body.productId || !req.body.category || !req.body.name) {
+    if (!req.body.productTag || !productId || !req.body.category || !req.body.name) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields",
       });
     }
 
+    // Check for duplicate productId before creation
+    const existingProduct = await Product.findOne({ productId: productId });
+    if (existingProduct) {
+      return res.status(400).json({
+        success: false,
+        message: `Product with ID "${productId}" already exists`,
+      });
+    }
+
     // Validate vendor IDs
     if (preferredVendors.length > 0) {
-      const validVendors = await Vendor.find({ _id: { $in: preferredVendors }, deleted: false });
-      if (validVendors.length !== preferredVendors.length) {
+      const validVendorIds = preferredVendors.filter(id => isValidObjectId(id));
+      if (validVendorIds.length !== preferredVendors.length) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid vendor ID format detected",
+        });
+      }
+      
+      const validVendors = await Vendor.find({ _id: { $in: validVendorIds }, deleted: false });
+      if (validVendors.length !== validVendorIds.length) {
         return res.status(400).json({
           success: false,
           message: "One or more vendor IDs are invalid or deleted",
@@ -439,7 +457,7 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
 
     const newProduct = new Product({
       productTag: req.body.productTag,
-      productId: req.body.productId,
+      productId: productId,
       variantId: req.body.variantId || "",
       category: req.body.category,
       subCategory: req.body.subCategory || "",
@@ -515,8 +533,16 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // Validate vendor IDs
     if (preferredVendors.length > 0) {
-      const validVendors = await Vendor.find({ _id: { $in: preferredVendors }, deleted: false });
-      if (validVendors.length !== preferredVendors.length) {
+      const validVendorIds = preferredVendors.filter(id => isValidObjectId(id));
+      if (validVendorIds.length !== preferredVendors.length) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid vendor ID format detected",
+        });
+      }
+      
+      const validVendors = await Vendor.find({ _id: { $in: validVendorIds }, deleted: false });
+      if (validVendors.length !== validVendorIds.length) {
         return res.status(400).json({
           success: false,
           message: "One or more vendor IDs are invalid or deleted",
@@ -655,11 +681,32 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       preferredVendors: p.preferredVendors || [],
     }));
 
-    // Validate vendor IDs
+    // Check for duplicates in bulk upload
+    const productIds = productsData.map(p => p.productId);
+    const existingProducts = await Product.find({ productId: { $in: productIds } });
+    
+    if (existingProducts.length > 0) {
+      const existingIds = existingProducts.map(p => p.productId);
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate product IDs found: ${existingIds.join(', ')}`,
+        duplicates: existingIds
+      });
+    }
+
+    // Validate vendor IDs for all products
     for (const prodData of productsData) {
       if (prodData.preferredVendors.length > 0) {
-        const validVendors = await Vendor.find({ _id: { $in: prodData.preferredVendors }, deleted: false });
-        if (validVendors.length !== prodData.preferredVendors.length) {
+        const validVendorIds = prodData.preferredVendors.filter(id => isValidObjectId(id));
+        if (validVendorIds.length !== prodData.preferredVendors.length) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid vendor ID format detected in bulk upload",
+          });
+        }
+        
+        const validVendors = await Vendor.find({ _id: { $in: validVendorIds }, deleted: false });
+        if (validVendors.length !== validVendorIds.length) {
           return res.status(400).json({
             success: false,
             message: "One or more vendor IDs are invalid or deleted in bulk upload",
@@ -682,16 +729,24 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       );
     }
 
-    res.status(201).json({ message: "Products created successfully" });
+    res.status(201).json({ 
+      success: true,
+      message: "Products created successfully",
+      count: insertedProducts.length 
+    });
   } catch (error) {
     console.error("Error bulk uploading products:", error);
     if (error.code === 11000) {
       res.status(400).json({
         success: false,
-        message: "Duplicate product ID detected",
+        message: "Duplicate product ID detected in bulk upload",
       });
     } else {
-      res.status(500).json({ message: "Server error during bulk upload" });
+      res.status(500).json({ 
+        success: false,
+        message: "Server error during bulk upload",
+        error: error.message 
+      });
     }
   }
 });

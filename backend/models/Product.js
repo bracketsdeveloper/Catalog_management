@@ -28,7 +28,7 @@ const productSchema = new mongoose.Schema(
     productCost: { type: Number, default: 0 },
     productCost_Unit: { type: String, default: "" },
     productGST: { type: Number, default: 0 },
-    preferredVendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "Vendor" }], // New field
+    preferredVendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "Vendor" }],
     createdAt: { type: Date, default: Date.now }
   },
   { timestamps: true }
