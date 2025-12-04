@@ -96,6 +96,58 @@ async function isHoliday(date) {
   return !!holiday;
 }
 
+// Helper function to find employee with flexible ID matching
+async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
+  if (!employeeIdFromExcel) return null;
+  
+  const id = String(employeeIdFromExcel).trim();
+  
+  // Try exact match first
+  let employee = await Employee.findOne({ 
+    "personal.employeeId": id 
+  }, { "personal.name": 1 });
+  
+  if (employee) {
+    return { employee, matchedId: id };
+  }
+  
+  // Try cleaning leading zeros
+  const cleanId = id.replace(/^0+/, '');
+  if (cleanId !== id) {
+    employee = await Employee.findOne({ 
+      "personal.employeeId": cleanId 
+    }, { "personal.name": 1 });
+    
+    if (employee) {
+      return { employee, matchedId: cleanId };
+    }
+  }
+  
+  // Try adding leading zeros (common patterns)
+  const numericId = parseInt(id, 10);
+  if (!isNaN(numericId)) {
+    // Try common zero-padded formats
+    const paddedIds = [
+      numericId.toString().padStart(3, '0'),  // "005"
+      numericId.toString().padStart(4, '0'),  // "0005"
+      numericId.toString().padStart(5, '0'),  // "00005"
+      numericId.toString().padStart(6, '0')   // "000005"
+    ];
+    
+    for (const paddedId of paddedIds) {
+      employee = await Employee.findOne({ 
+        "personal.employeeId": paddedId 
+      }, { "personal.name": 1 });
+      
+      if (employee) {
+        return { employee, matchedId: paddedId };
+      }
+    }
+  }
+  
+  return null;
+}
+
 router.post("/upload", authenticate, requireAdmin, upload.single("file"), async (req, res) => {
   try {
     const { date = new Date().toISOString().split('T')[0] } = req.body;
@@ -137,14 +189,14 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
       return acc;
     }, {});
     
-    const requiredColumns = ['ecode', 'e code', 'employee code', 'emp code'];
+    const requiredColumns = ['ecode', 'e code', 'employee code', 'emp code', 'employee id', 'emp id'];
     const employeeIdHeader = requiredColumns.find(col => normalizedHeaders[col]);
     
     if (!employeeIdHeader) {
       fs.unlinkSync(filePath);
       return res.status(400).json({ 
         success: false, 
-        message: "Employee ID column not found" 
+        message: "Employee ID column not found. Looking for columns like: ecode, e code, employee code, emp code" 
       });
     }
     
@@ -159,6 +211,7 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
     
     const bulkOps = [];
     const holidayCheck = await isHoliday(attendanceDate);
+    const employeeIdMap = {}; // Cache for found employees
     
     for (let i = 0; i < rows.length; i++) {
       results.total++;
@@ -172,18 +225,28 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
           continue;
         }
         
-        const employeeId = String(employeeIdRaw).trim();
-        const employee = await Employee.findOne({ 
-          "personal.employeeId": employeeId 
-        }, { "personal.name": 1 });
+        const employeeIdFromExcel = String(employeeIdRaw).trim();
         
-        if (!employee) {
-          results.warnings.push(`Row ${originalRowNum}: Employee not found`);
-          continue;
+        // Check cache first
+        let employeeData = employeeIdMap[employeeIdFromExcel];
+        
+        // If not in cache, find employee
+        if (!employeeData) {
+          employeeData = await findEmployeeWithFlexibleId(employeeIdFromExcel);
+          
+          if (employeeData) {
+            // Cache the result
+            employeeIdMap[employeeIdFromExcel] = employeeData;
+          } else {
+            results.warnings.push(`Row ${originalRowNum}: Employee not found for ID "${employeeIdFromExcel}"`);
+            continue;
+          }
         }
         
+        const { employee, matchedId } = employeeData;
+        
         const attendanceData = {
-          employeeId,
+          employeeId: matchedId, // Use the matched ID from database
           date: attendanceDate,
           name: employee.personal.name,
           importedAt: new Date(),
@@ -192,13 +255,13 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
         
         const columnMappings = {
           'shift': ['shift'],
-          'intime': ['intime', 'in time', 'in', 'intime(00:00)'],
-          'outtime': ['outtime', 'out time', 'out', 'outtime(00:00)'],
-          'workdur': ['work dur', 'workdur', 'work dur.(00:00)'],
-          'ot': ['ot', 'overtime', 'ot(00:00)'],
-          'totdur': ['tot dur', 'total dur', 'tot. dur.(8:42)'],
-          'status': ['status'],
-          'remarks': ['remarks']
+          'intime': ['intime', 'in time', 'in', 'intime(00:00)', 'punchin', 'punch in'],
+          'outtime': ['outtime', 'out time', 'out', 'outtime(00:00)', 'punchout', 'punch out'],
+          'workdur': ['work dur', 'workdur', 'work dur.(00:00)', 'working hours', 'wh'],
+          'ot': ['ot', 'overtime', 'ot(00:00)', 'overtime hours'],
+          'totdur': ['tot dur', 'total dur', 'tot. dur.(8:42)', 'total hours', 'th'],
+          'status': ['status', 'attendance status', 'attstatus'],
+          'remarks': ['remarks', 'note', 'comments']
         };
         
         for (const [field, aliases] of Object.entries(columnMappings)) {
@@ -239,6 +302,17 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
           }
         }
         
+        // If no status found, calculate it
+        if (!attendanceData.status) {
+          if (attendanceData.inTime && attendanceData.outTime) {
+            attendanceData.status = 'Present';
+          } else if (attendanceData.inTime && !attendanceData.outTime) {
+            attendanceData.status = 'Absent (No OutPunch)';
+          } else {
+            attendanceData.status = 'Absent';
+          }
+        }
+        
         attendanceData.isHoliday = holidayCheck;
         if (attendanceData.status && attendanceData.status.toLowerCase().includes('holiday')) {
           attendanceData.isHoliday = true;
@@ -247,6 +321,19 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
         const dayOfWeek = attendanceDate.getUTCDay();
         attendanceData.isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         attendanceData.dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+        
+        // If hours worked not calculated from durations, calculate from in/out times
+        if (!attendanceData.hoursWorked && attendanceData.inTime && attendanceData.outTime) {
+          const inMinutes = Attendance.timeToMinutes(attendanceData.inTime);
+          const outMinutes = Attendance.timeToMinutes(attendanceData.outTime);
+          if (inMinutes !== null && outMinutes !== null) {
+            const workMinutes = outMinutes - inMinutes;
+            if (workMinutes > 0) {
+              attendanceData.hoursWorked = workMinutes / 60;
+              attendanceData.workDuration = Attendance.minutesToTime(workMinutes);
+            }
+          }
+        }
         
         bulkOps.push({
           updateOne: {
@@ -273,6 +360,15 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
     
     fs.unlinkSync(filePath);
     
+    // Log ID mapping issues if any
+    const idMappingWarnings = Object.entries(employeeIdMap)
+      .filter(([excelId, data]) => excelId !== data.matchedId)
+      .map(([excelId, data]) => `Excel ID "${excelId}" mapped to DB ID "${data.matchedId}"`);
+    
+    if (idMappingWarnings.length > 0) {
+      results.warnings.push(...idMappingWarnings);
+    }
+    
     res.json({
       success: true,
       message: `Attendance imported for ${date}`,
@@ -283,6 +379,7 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
         totalRecords: results.total,
         imported: results.success,
         failed: results.failed,
+        idMappings: idMappingWarnings.length,
         importBatchId
       }
     });
@@ -532,7 +629,6 @@ router.get("/summary", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// Add this route to /routes/attendance.js
 router.get("/summary/all", authenticate, requireAdmin, async (req, res) => {
     try {
       const { month, year, department, role } = req.query;
@@ -872,19 +968,20 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
     }
     
     const attendanceDate = parseDateString(date);
-    const employee = await Employee.findOne({ 
-      "personal.employeeId": employeeId 
-    }, { "personal.name": 1 });
     
-    if (!employee) {
+    // Use the flexible employee finder
+    const employeeData = await findEmployeeWithFlexibleId(employeeId);
+    if (!employeeData) {
       return res.status(404).json({ 
         success: false, 
-        message: "Employee not found" 
+        message: `Employee not found for ID ${employeeId}` 
       });
     }
     
+    const { employee, matchedId } = employeeData;
+    
     const attendanceData = {
-      employeeId,
+      employeeId: matchedId,
       date: attendanceDate,
       name: employee.personal.name,
       inTime: inTime || "",
@@ -909,7 +1006,7 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
     }
     
     const attendance = await Attendance.findOneAndUpdate(
-      { employeeId, date: attendanceDate },
+      { employeeId: matchedId, date: attendanceDate },
       { $set: attendanceData },
       { new: true, upsert: true }
     );
@@ -917,7 +1014,8 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
     res.json({
       success: true,
       message: "Attendance saved",
-      attendance
+      attendance,
+      note: matchedId !== employeeId ? `Employee ID mapped from "${employeeId}" to "${matchedId}"` : null
     });
     
   } catch (error) {
