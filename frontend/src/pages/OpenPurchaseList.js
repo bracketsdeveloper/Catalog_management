@@ -950,7 +950,9 @@ export default function OpenPurchaseList() {
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
-  const [showFollowUpView, setShowFollowUpView] = useState(false); // ADDED STATE FOR FOLLOW-UP VIEW
+  const [showFollowUpView, setShowFollowUpView] = useState(false);
+  const [vendors, setVendors] = useState([]);
+  const [createdByUsers, setCreatedByUsers] = useState({});
 
   const [perms, setPerms] = useState([]);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
@@ -971,6 +973,52 @@ export default function OpenPurchaseList() {
     const str = localStorage.getItem("permissions");
     if (str) { try { setPerms(JSON.parse(str)); } catch { /* ignore */ } }
   }, []);
+
+  useEffect(() => {
+    const loadVendors = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `${process.env.REACT_APP_BACKEND_URL}/api/admin/vendors/vendors`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setVendors(res.data || []);
+      } catch (err) {
+        console.error("Error loading vendors:", err);
+      }
+    };
+    loadVendors();
+  }, []);
+
+  useEffect(() => {
+    const loadCreatedByUsers = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const userIds = [...new Set(purchases.map(p => p.createdBy).filter(Boolean))];
+        if (userIds.length > 0) {
+          const usersMap = {};
+          for (const userId of userIds) {
+            try {
+              const res = await axios.get(
+                `${process.env.REACT_APP_BACKEND_URL}/api/admin/users/${userId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              if (res.data && res.data.user) {
+                usersMap[userId] = res.data.user.name || res.data.user.email || userId;
+              }
+            } catch (err) {
+              console.error(`Error loading user ${userId}:`, err);
+              usersMap[userId] = userId;
+            }
+          }
+          setCreatedByUsers(usersMap);
+        }
+      } catch (err) {
+        console.error("Error loading users:", err);
+      }
+    };
+    loadCreatedByUsers();
+  }, [purchases]);
 
   const loadPurchases = async (cfg = sortConfig) => {
     setLoading(true);
@@ -1037,11 +1085,32 @@ export default function OpenPurchaseList() {
     });
   }, [headerFiltered, advFilters]);
 
+  const getVendorContactNumber = (sourcingFrom) => {
+    if (!sourcingFrom || sourcingFrom.trim() === "") return "";
+    const vendor = vendors.find(v => 
+      v.vendorName?.toLowerCase() === sourcingFrom.toLowerCase() || 
+      v.vendorCompany?.toLowerCase() === sourcingFrom.toLowerCase()
+    );
+    return vendor?.phone || vendor?.contactNumber || "";
+  };
+
+  const getCreatedByName = (createdById) => {
+    if (!createdById) return "";
+    return createdByUsers[createdById] || createdById;
+  };
+
   const rows = useMemo(() => {
     const byKey = {};
-    advFiltered.forEach((r) => { const key = `${r.jobSheetNumber}_${r.product}_${r.size || ""}`; byKey[key] = r; });
+    advFiltered.forEach((r) => { 
+      const key = `${r.jobSheetNumber}_${r.product}_${r.size || ""}`;
+      byKey[key] = {
+        ...r,
+        vendorContactNumber: getVendorContactNumber(r.sourcingFrom),
+        createdByName: getCreatedByName(r.createdBy)
+      };
+    });
     return Object.values(byKey);
-  }, [advFiltered]);
+  }, [advFiltered, vendors, createdByUsers]);
 
   const sortBy = (key) => {
     setSortConfig((prev) => {
@@ -1065,10 +1134,10 @@ export default function OpenPurchaseList() {
         Size: r.size || "N/A",
         "Qty Required": r.qtyRequired,
         "Qty Ordered": r.qtyOrdered,
-        "Sourced By": r.sourcedBy || "",
+        "Sourced By": r.createdByName || r.sourcedBy || "",
         "Sourced From": r.sourcingFrom,
+        "Vendor Contact": r.vendorContactNumber || "",
         "Delivery Date": fmtDate(r.deliveryDateTime),
-        "Vendor Contact": r.vendorContactNumber,
         "Order Confirmed": fmtDate(r.orderConfirmedDate),
         "Expected Receive": fmtDate(r.expectedReceiveDate),
         "Schedule PickUp": fmtDate(r.schedulePickUp),
@@ -1096,7 +1165,6 @@ export default function OpenPurchaseList() {
       )}
       <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">Open Purchases</h1>
       
-      {/* Updated Header with reduced search bar and NEW "View Follow-ups" button */}
       <div className="flex flex-wrap gap-2 mb-4 items-center">
         <input
           type="text"
@@ -1111,7 +1179,6 @@ export default function OpenPurchaseList() {
         >
           Filters
         </button>
-        {/* ADDED "View Follow-ups" BUTTON HERE */}
         <button
           onClick={() => setShowFollowUpView(true)}
           className="bg-purple-600 text-white px-4 py-2 rounded text-xs"
@@ -1145,7 +1212,7 @@ export default function OpenPurchaseList() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" style={{ maxHeight: "calc(110vh - 250px)" }}>
         <table className="min-w-full border-collapse border-b border-gray-300 text-xs table-fixed">
           <colgroup>
             <col className="w-24" /> {/* Completion */}
@@ -1160,8 +1227,8 @@ export default function OpenPurchaseList() {
             <col className="w-20" /> {/* Qty Ordered */}
             <col className="w-28" /> {/* Sourced By */}
             <col className="w-32" /> {/* Sourced From */}
-            <col className="w-24" /> {/* Delivery Date */}
             <col className="w-32" /> {/* Vendor Contact */}
+            <col className="w-24" /> {/* Delivery Date */}
             <col className="w-24" /> {/* Order Conf Date */}
             <col className="w-24" /> {/* Expected Recv Date */}
             <col className="w-24" /> {/* Pick-Up Date */}
@@ -1172,7 +1239,7 @@ export default function OpenPurchaseList() {
             <col className="w-24" /> {/* PO Status */}
             <col className="w-20" /> {/* Actions */}
           </colgroup>
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               {[
                 { key: "completionState", label: "Completion" },
@@ -1185,10 +1252,10 @@ export default function OpenPurchaseList() {
                 { key: "size", label: "Size" },
                 { key: "qtyRequired", label: "Qty Req" },
                 { key: "qtyOrdered", label: "Qty Ordered" },
-                { key: "sourcedBy", label: "Sourced By" },
+                { key: "createdByName", label: "Sourced By" },
                 { key: "sourcingFrom", label: "Sourced From" },
-                { key: "deliveryDateTime", label: "Delivery Date" },
                 { key: "vendorContactNumber", label: "Vendor Contact" },
+                { key: "deliveryDateTime", label: "Delivery Date" },
                 { key: "orderConfirmedDate", label: "Order Conf Date." },
                 { key: "expectedReceiveDate", label: "Expected Recv Date." },
                 { key: "schedulePickUp", label: "Pick-Up Date" },
@@ -1229,10 +1296,10 @@ export default function OpenPurchaseList() {
                   <td className="p-2 border break-words">{p.size || "N/A"}</td>
                   <td className="p-2 border break-words text-center">{p.qtyRequired}</td>
                   <td className="p-2 border break-words text-center">{p.qtyOrdered}</td>
-                  <td className="p-2 border break-words">{p.sourcedBy || ""}</td>
+                  <td className="p-2 border break-words">{p.createdByName || ""}</td>
                   <td className="p-2 border break-words">{p.sourcingFrom}</td>
+                  <td className="p-2 border break-words">{p.vendorContactNumber || ""}</td>
                   <td className="p-2 border break-words">{fmtDate(p.deliveryDateTime)}</td>
-                  <td className="p-2 border break-words">{p.vendorContactNumber}</td>
                   <td className="p-2 border break-words">{fmtDate(p.orderConfirmedDate)}</td>
                   <td className="p-2 border break-words">{fmtDate(p.expectedReceiveDate)}</td>
                   <td className="p-2 border break-words">{fmtDate(p.schedulePickUp)}</td>
@@ -1282,7 +1349,6 @@ export default function OpenPurchaseList() {
       }} />)}
       {poModalRow && (<GeneratePOModal row={poModalRow} onClose={() => setPoModalRow(null)} onCreated={async () => { await loadPurchases(); }} />)}
       
-      {/* ADDED: Follow-up View Modal */}
       {showFollowUpView && (
         <FollowUpView
           purchases={rows}
