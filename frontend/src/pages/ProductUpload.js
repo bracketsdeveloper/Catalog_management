@@ -80,7 +80,6 @@ export default function ProductManagementPage() {
   const [editProductId, setEditProductId] = useState(null);
   const [newProductData, setNewProductData] = useState({
     productTag: "",
-    productId: "",
     variantId: "",
     category: "",
     subCategory: "",
@@ -126,6 +125,9 @@ export default function ProductManagementPage() {
   const [productDetailsOpen, setProductDetailsOpen] = useState(false);
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // ADD THIS: Refresh trigger to force re-fetch
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const limit = 100;
 
@@ -181,6 +183,7 @@ export default function ProductManagementPage() {
     })();
   }, [BACKEND_URL]);
 
+  // UPDATED useEffect: Added refreshTrigger to dependency array
   useEffect(() => {
     const cancelSrc = axios.CancelToken.source();
     (async () => {
@@ -241,6 +244,7 @@ export default function ProductManagementPage() {
     selectedPriceRanges,
     selectedVariationHinges,
     initialLoad,
+    refreshTrigger, // ADDED: This will trigger re-fetch when changed
   ]);
 
   const { getRootProps: advRoot, getInputProps: advInput } = useDropzone({
@@ -252,7 +256,6 @@ export default function ProductManagementPage() {
         const token = localStorage.getItem("token");
         const fd = new FormData();
         fd.append("image", file);
-        // FIX: matches backend route (no /admin)
         const res = await axios.post(`${BACKEND_URL}/api/products/advanced-search`, fd, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -392,7 +395,6 @@ export default function ProductManagementPage() {
                 setEditProductId(null);
                 setNewProductData({
                   productTag: "",
-                  productId: "",
                   variantId: "",
                   category: "",
                   subCategory: "",
@@ -563,7 +565,7 @@ export default function ProductManagementPage() {
 
         {!initialLoad && !isFetching && displayList.length === 0 && (
           <div className="py-8 text-center text-gray-500">
-            No products found{hasSearch ? ` for “${debouncedSearch}”` : ""}.
+            No products found{hasSearch ? ` for "${debouncedSearch}"` : ""}.
           </div>
         )}
 
@@ -588,6 +590,8 @@ export default function ProductManagementPage() {
                       await axios.delete(`${BACKEND_URL}/api/admin/products/${id}`, {
                         headers: { Authorization: `Bearer ${token}` },
                       });
+                      // ADD THIS: Trigger refresh after deletion
+                      setRefreshTrigger(prev => prev + 1);
                       setCurrentPage(1);
                     } catch (err) {
                       console.error(err);
@@ -622,42 +626,41 @@ export default function ProductManagementPage() {
         )}
 
         {/* Pagination with manual input */}
-<div className="flex justify-center items-center mt-6 space-x-4">
-  <button
-    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-    disabled={currentPage <= 1 || isFetching}
-    className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
-  >
-    Previous
-  </button>
+        <div className="flex justify-center items-center mt-6 space-x-4">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            disabled={currentPage <= 1 || isFetching}
+            className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
+          >
+            Previous
+          </button>
 
-  <div className="flex items-center gap-2">
-    <span>Page</span>
-    <input
-      type="number"
-      min={1}
-      max={totalPages}
-      value={currentPage}
-      onChange={(e) => {
-        const val = parseInt(e.target.value);
-        if (!isNaN(val) && val >= 1 && val <= totalPages) {
-          setCurrentPage(val);
-        }
-      }}
-      className="w-16 text-center border rounded py-1"
-    />
-    <span>of {totalPages}</span>
-  </div>
+          <div className="flex items-center gap-2">
+            <span>Page</span>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={currentPage}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                  setCurrentPage(val);
+                }
+              }}
+              className="w-16 text-center border rounded py-1"
+            />
+            <span>of {totalPages}</span>
+          </div>
 
-  <button
-    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-    disabled={currentPage >= totalPages || isFetching}
-    className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
-  >
-    Next
-  </button>
-</div>
-
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            disabled={currentPage >= totalPages || isFetching}
+            className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
 
       {singleModalOpen && (
@@ -681,6 +684,8 @@ export default function ProductManagementPage() {
                 });
               }
               setSingleModalOpen(false);
+              // ADD THIS: Trigger refresh after successful save
+              setRefreshTrigger(prev => prev + 1);
               setCurrentPage(1);
             } catch (err) {
               console.error(err);
@@ -714,7 +719,6 @@ export default function ProductManagementPage() {
           categories={filterOptions.categories}
           subCategories={filterOptions.subCategories}
           brands={filterOptions.brands}
-          // NEW: give the modal the populated vendors for label rendering
           initialSelectedVendors={initialSelectedVendors}
         />
       )}
@@ -727,7 +731,7 @@ export default function ProductManagementPage() {
           handleDownloadTemplate={() => {
             const wb = XLSX.utils.book_new();
             const headerRow = [
-              "Product Tag","Product ID","Variant ID","Category","Sub Category","Variation_hinge",
+              "Product Tag","Variant ID","Category","Sub Category","Variation_hinge",
               "Name","Brand Name","Qty","MRP_Currency","MRP","MRP_Unit","Delivery Time","Size","Color",
               "Material","Price Range","Weight","HSN Code","Product Cost_Currency","Product Cost",
               "Product Cost_Unit","Product_Details","Main_Image_URL","Second_Image_URL","Third_Image_URL",
@@ -753,7 +757,6 @@ export default function ProductManagementPage() {
               const token = localStorage.getItem("token");
               const toUpload = csvData.map((r) => ({
                 productTag: r["Product Tag"] || "",
-                productId: r["Product ID"] || "",
                 variantId: r["Variant ID"] || "",
                 category: r["Category"] || "",
                 subCategory: r["Sub Category"] || "",
@@ -790,6 +793,8 @@ export default function ProductManagementPage() {
               });
               alert("Bulk upload successful!");
               setBulkOpen(false);
+              // ADD THIS: Trigger refresh after bulk upload
+              setRefreshTrigger(prev => prev + 1);
               setCurrentPage(1);
             } catch (err) {
               console.error(err);
@@ -828,7 +833,6 @@ export default function ProductManagementPage() {
                   setEditProductId(sel._id);
                   setNewProductData({
                     ...sel,
-                    // Defensive mapping here as well
                     preferredVendors: Array.isArray(sel?.preferredVendors)
                       ? sel.preferredVendors
                           .map((v) => (typeof v === "string" ? v : v?._id))

@@ -12,8 +12,6 @@ export default function SingleProductModal({
   categories,
   subCategories,
   brands,
-
-  // NEW: pass populated vendors (objects with _id, vendorCompany/vendorName)
   initialSelectedVendors = [],
 }) {
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -22,8 +20,6 @@ export default function SingleProductModal({
   const [brandSuggestions, setBrandSuggestions] = useState([]);
   const [vendorSuggestions, setVendorSuggestions] = useState([]);
   const [vendorSearch, setVendorSearch] = useState("");
-
-  // Map of vendorId -> { _id, vendorCompany?, vendorName? }
   const [selectedVendorsMap, setSelectedVendorsMap] = useState({});
 
   // Hydrate map from initialSelectedVendors (edit mode or prefilled product)
@@ -169,22 +165,7 @@ export default function SingleProductModal({
                   required
                 />
               </div>
-              {/* Product ID */}
-              <div>
-                <label className="block font-medium mb-1">Product ID</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.productId}
-                  onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      productId: e.target.value,
-                    }))
-                  }
-                  required
-                />
-              </div>
+              
               {/* Variant ID */}
               <div>
                 <label className="block font-medium mb-1">Variant ID</label>
@@ -200,6 +181,7 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
               {/* Category */}
               <div>
                 <label className="block font-medium mb-1">Category</label>
@@ -240,6 +222,7 @@ export default function SingleProductModal({
                   </div>
                 )}
               </div>
+              
               {/* SubCategory */}
               <div>
                 <label className="block font-medium mb-1">Sub Category</label>
@@ -279,6 +262,7 @@ export default function SingleProductModal({
                   </div>
                 )}
               </div>
+              
               {/* Variation Hinge */}
               <div>
                 <label className="block font-medium mb-1">Variation Hinge</label>
@@ -294,6 +278,7 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
               {/* Name */}
               <div>
                 <label className="block font-medium mb-1">Name</label>
@@ -310,6 +295,7 @@ export default function SingleProductModal({
                   required
                 />
               </div>
+              
               {/* Brand Name */}
               <div>
                 <label className="block font-medium mb-1">Brand Name</label>
@@ -362,7 +348,7 @@ export default function SingleProductModal({
                 />
               </div>
 
-              {/* Qty / prices */}
+              {/* Qty */}
               <div>
                 <label className="block font-medium mb-1">Qty</label>
                 <input
@@ -377,6 +363,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* MRP Currency */}
               <div>
                 <label className="block font-medium mb-1">MRP Currency</label>
                 <input
@@ -391,6 +379,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* MRP */}
               <div>
                 <label className="block font-medium mb-1">MRP</label>
                 <input
@@ -405,6 +395,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* MRP Unit */}
               <div>
                 <label className="block font-medium mb-1">MRP Unit</label>
                 <input
@@ -419,6 +411,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Delivery Time */}
               <div>
                 <label className="block font-medium mb-1">Delivery Time</label>
                 <input
@@ -433,6 +427,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Size */}
               <div>
                 <label className="block font-medium mb-1">Size</label>
                 <input
@@ -447,6 +443,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Color */}
               <div>
                 <label className="block font-medium mb-1">Color</label>
                 <input
@@ -461,6 +459,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Material */}
               <div>
                 <label className="block font-medium mb-1">Material</label>
                 <input
@@ -475,6 +475,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Price Range */}
               <div>
                 <label className="block font-medium mb-1">Price Range</label>
                 <input
@@ -489,6 +491,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Weight */}
               <div>
                 <label className="block font-medium mb-1">Weight</label>
                 <input
@@ -503,6 +507,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* HSN Code */}
               <div>
                 <label className="block font-medium mb-1">HSN Code</label>
                 <input
@@ -517,6 +523,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Product Cost Currency */}
               <div>
                 <label className="block font-medium mb-1">Product Cost Currency</label>
                 <input
@@ -531,6 +539,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Product Cost */}
               <div>
                 <label className="block font-medium mb-1">Product Cost</label>
                 <input
@@ -545,6 +555,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Product Cost Unit */}
               <div>
                 <label className="block font-medium mb-1">Product Cost Unit</label>
                 <input
@@ -559,6 +571,8 @@ export default function SingleProductModal({
                   }
                 />
               </div>
+              
+              {/* Product GST (%) */}
               <div>
                 <label className="block font-medium mb-1">Product GST (%)</label>
                 <input

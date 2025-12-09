@@ -12,6 +12,7 @@ export default function ManageExpenses() {
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [expenses, setExpenses] = useState([]);
+  const [openPurchases, setOpenPurchases] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
@@ -30,17 +31,67 @@ export default function ManageExpenses() {
     orderConfirmed: ""
   });
 
-  // Fetch all expenses
+  // Fetch all expenses and open purchases
   useEffect(() => {
-    axios
-      .get(`${BACKEND_URL}/api/admin/expenses`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-      })
-      .then(r => setExpenses(r.data))
-      .catch(console.error);
+    const fetchData = async () => {
+      try {
+        const [expensesRes, openPurchasesRes] = await Promise.all([
+          axios.get(`${BACKEND_URL}/api/admin/expenses`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+          }),
+          axios.get(`${BACKEND_URL}/api/admin/openpurchases`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+          })
+        ]);
+        
+        setExpenses(expensesRes.data);
+        setOpenPurchases(openPurchasesRes.data);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+    
+    fetchData();
   }, []);
 
-  // Apply search + filters
+  // Helper function to calculate totals from OpenPurchase for a specific jobSheetNumber
+  const calculateOpenPurchaseTotals = (jobSheetNumber) => {
+    if (!jobSheetNumber || !openPurchases.length) return { productCost: 0, brandingCost: 0 };
+    
+    const relevantPurchases = openPurchases.filter(
+      purchase => purchase.jobSheetNumber === jobSheetNumber && 
+      purchase.status && 
+      ["received", "closed", "ordered", "in-progress"].includes(purchase.status)
+    );
+    
+    let productCost = 0;
+    let brandingCost = 0;
+    
+    relevantPurchases.forEach(purchase => {
+      const quantity = Number(purchase.qtyRequired) || 0;
+      const price = Number(purchase.productPrice) || 0;
+      const totalCost = quantity * price;
+      
+      // Check for branding keywords in product name
+      const productName = (purchase.product || "").toLowerCase();
+      const brandingKeywords = [
+        "branding", "printing", "print", "logo", "label", "sticker", 
+        "tag", "packaging", "wrap", "vinyl", "banner", "flex", "hoarding"
+      ];
+      
+      const isBranding = brandingKeywords.some(keyword => productName.includes(keyword));
+      
+      if (isBranding) {
+        brandingCost += totalCost;
+      } else {
+        productCost += totalCost;
+      }
+    });
+    
+    return { productCost, brandingCost };
+  };
+
+  // Apply search + filters and enhance with OpenPurchase data
   const displayed = useMemo(() => {
     return expenses.flatMap(exp => {
       if (searchTerm) {
@@ -72,18 +123,69 @@ export default function ManageExpenses() {
         return [{
           ...exp,
           jobSheetNumber: "",
-          orderExpenses: []
+          orderExpenses: [],
+          calculatedProductCost: 0,
+          calculatedBrandingCost: 0
         }];
       }
-      return jobSheets.map(jobSheet => ({
-        ...exp,
-        jobSheetNumber: jobSheet.jobSheetNumber || "",
-        orderExpenses: jobSheet.orderExpenses || []
-      }));
+      
+      return jobSheets.map(jobSheet => {
+        const totals = calculateOpenPurchaseTotals(jobSheet.jobSheetNumber);
+        
+        // Enhance orderExpenses with calculated values
+        let enhancedOrderExpenses = [...(jobSheet.orderExpenses || [])];
+        
+        // Update or add Product Cost
+        const productCostIndex = enhancedOrderExpenses.findIndex(item => item.section === "Product Cost");
+        if (productCostIndex >= 0) {
+          enhancedOrderExpenses[productCostIndex] = {
+            ...enhancedOrderExpenses[productCostIndex],
+            amount: totals.productCost,
+            isAutoCalculated: true
+          };
+        } else if (totals.productCost > 0) {
+          enhancedOrderExpenses.push({
+            section: "Product Cost",
+            amount: totals.productCost,
+            expenseDate: new Date().toISOString().split('T')[0],
+            remarks: "Auto-calculated from OpenPurchase",
+            damagedBy: "",
+            isAutoCalculated: true
+          });
+        }
+        
+        // Update or add Branding Cost
+        const brandingCostIndex = enhancedOrderExpenses.findIndex(item => item.section === "Branding Cost");
+        if (brandingCostIndex >= 0) {
+          enhancedOrderExpenses[brandingCostIndex] = {
+            ...enhancedOrderExpenses[brandingCostIndex],
+            amount: totals.brandingCost,
+            isAutoCalculated: true
+          };
+        } else if (totals.brandingCost > 0) {
+          enhancedOrderExpenses.push({
+            section: "Branding Cost",
+            amount: totals.brandingCost,
+            expenseDate: new Date().toISOString().split('T')[0],
+            remarks: "Auto-calculated from OpenPurchase",
+            damagedBy: "",
+            isAutoCalculated: true
+          });
+        }
+        
+        return {
+          ...exp,
+          jobSheetNumber: jobSheet.jobSheetNumber || "",
+          orderExpenses: enhancedOrderExpenses,
+          calculatedProductCost: totals.productCost,
+          calculatedBrandingCost: totals.brandingCost,
+          hasAutoCalculated: totals.productCost > 0 || totals.brandingCost > 0
+        };
+      });
     });
-  }, [expenses, searchTerm, filters]);
+  }, [expenses, openPurchases, searchTerm, filters]);
 
-  // Export to Excel (unchanged; does not include damagedBy unless you want it)
+  // Export to Excel - updated to include auto-calculated values
   const exportToExcel = () => {
     const SAMPLE_SECTIONS = [
       "Sample Product Cost",
@@ -141,15 +243,24 @@ export default function ManageExpenses() {
           exp.eventName,
           exp.crmName
         ];
+        
+        // Sample costs
         SAMPLE_SECTIONS.forEach(s => {
           row.push(sumBy(exp.expenses, s), dateBy(exp.expenses, s));
         });
+        
         const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
         row.push(sampleTotal);
         row.push(exp.orderConfirmed ? "Yes" : "No", exp.jobSheetNumber || "");
+        
+        // Order costs - use enhanced orderExpenses which includes auto-calculated values
         ORDER_SECTIONS.forEach(s => {
-          row.push(exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : "", exp.orderConfirmed ? dateBy(exp.orderExpenses, s) : "");
+          const value = exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0;
+          const item = (exp.orderExpenses || []).find(i => i.section === s);
+          const date = item && item.expenseDate ? item.expenseDate : "";
+          row.push(exp.orderConfirmed ? value : "", exp.orderConfirmed ? date : "");
         });
+        
         const orderTotal = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
         row.push(exp.orderConfirmed ? orderTotal : "");
         row.push(sampleTotal + (exp.orderConfirmed ? orderTotal : 0));
@@ -157,10 +268,15 @@ export default function ManageExpenses() {
       })
     );
 
+    // Add note about auto-calculated values
+    aoa.push([]);
+    aoa.push(["Note: Product Cost and Branding Cost are auto-calculated from OpenPurchase records"]);
+
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws["!merges"] = [
       { s: { r: 0, c: 5 }, e: { r: 0, c: 5 + sampleCols - 1 } },
-      { s: { r: 0, c: 5 + sampleCols }, e: { r: 0, c: 5 + sampleCols + productCols - 1 } }
+      { s: { r: 0, c: 5 + sampleCols }, e: { r: 0, c: 5 + sampleCols + productCols - 1 } },
+      { s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: header2.length - 1 } }
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Expenses");
@@ -207,6 +323,7 @@ export default function ManageExpenses() {
           onClose={() => {
             setNewModalOpen(false);
             setEditingExpense(null);
+            // Refresh data
             axios
               .get(`${BACKEND_URL}/api/admin/expenses`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }

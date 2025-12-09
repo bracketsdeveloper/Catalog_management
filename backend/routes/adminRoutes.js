@@ -4,6 +4,7 @@ const multer = require("multer");
 const fs = require("fs-extra");
 const axios = require("axios");
 const imghash = require("imghash");
+const mongoose = require("mongoose"); // ADDED THIS LINE
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 const Product = require("../models/Product");
 const User = require("../models/User");
@@ -85,6 +86,103 @@ async function computeAllHashes(imageUrls) {
     if (hash) hashes.push(hash);
   }
   return hashes;
+}
+
+/**
+ * Generate product ID based on category, subCategory, brandName, and product name
+ * Format: [CAT(2-3)][SUBCAT(2-3)][BRAND(2-3)][NAME(2-3)][111+]
+ */
+async function generateProductId(category, subCategory, brandName, productName) {
+  try {
+    // Helper to get 2-3 character code
+    function getCode(str, existingCodes = []) {
+      if (!str) return '';
+      
+      const words = str.toString().trim().split(/\s+/);
+      let code = '';
+      
+      if (words.length === 1) {
+        // Single word: use first 2-3 letters
+        code = words[0].substring(0, 2).toUpperCase();
+        
+        // Check if 2-letter code already exists in the list
+        if (existingCodes.includes(code)) {
+          // Try 3 letters
+          code = words[0].substring(0, 3).toUpperCase();
+          if (existingCodes.includes(code)) {
+            // Use 2 letters with a number
+            code = words[0].substring(0, 2).toUpperCase() + '1';
+          }
+        }
+      } else {
+        // Multiple words: use first letter of first 2-3 words
+        code = words.slice(0, Math.min(3, words.length))
+          .map(w => w.charAt(0).toUpperCase())
+          .join('');
+        
+        // Ensure 2-3 characters
+        code = code.substring(0, Math.min(3, code.length));
+        
+        // Handle duplicates
+        if (existingCodes.includes(code)) {
+          // Add number
+          for (let i = 2; i <= 9; i++) {
+            const newCode = code.substring(0, 2) + i;
+            if (!existingCodes.includes(newCode)) {
+              code = newCode;
+              break;
+            }
+          }
+        }
+      }
+      
+      return code;
+    }
+    
+    // Get all existing product IDs to check for duplicates
+    const existingProducts = await Product.find({}, 'productId');
+    const existingIds = existingProducts.map(p => p.productId);
+    
+    // Collect existing codes for each part to avoid duplication
+    const catCodes = existingIds.map(id => id.substring(0, 2));
+    const subCatCodes = existingIds.map(id => id.substring(2, 4));
+    const brandCodes = existingIds.map(id => id.substring(4, 6));
+    const nameCodes = existingIds.map(id => id.substring(6, 8));
+    
+    // Generate codes
+    const catCode = getCode(category, catCodes);
+    const subCatCode = getCode(subCategory, subCatCodes) || 'XX';
+    const brandCode = getCode(brandName, brandCodes) || 'XX';
+    const nameCode = getCode(productName, nameCodes) || 'XX';
+    
+    // Find the next number in sequence
+    let nextNumber = 111;
+    const existingNumbers = existingIds
+      .filter(id => id.startsWith(catCode + subCatCode + brandCode + nameCode))
+      .map(id => parseInt(id.substring(8)) || 0);
+    
+    if (existingNumbers.length > 0) {
+      nextNumber = Math.max(...existingNumbers) + 1;
+    }
+    
+    // Ensure number is at least 111
+    nextNumber = Math.max(nextNumber, 111);
+    
+    const productId = `${catCode}${subCatCode}${brandCode}${nameCode}${nextNumber}`;
+    
+    // Final check for uniqueness
+    const exists = await Product.findOne({ productId });
+    if (exists) {
+      // If by chance duplicate exists, increment number
+      return `${catCode}${subCatCode}${brandCode}${nameCode}${nextNumber + 1}`;
+    }
+    
+    return productId;
+  } catch (error) {
+    console.error("Error generating product ID:", error);
+    // Fallback: timestamp-based ID
+    return `PID${Date.now()}`;
+  }
 }
 
 // ------------------------------
@@ -416,21 +514,29 @@ router.get("/products/filters", authenticate, authorizeAdmin, async (req, res) =
 
 router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const { images = [], preferredVendors = [], productId } = req.body;
+    const { images = [], preferredVendors = [], ...restBody } = req.body;
 
-    if (!req.body.productTag || !productId || !req.body.category || !req.body.name) {
+    if (!restBody.productTag || !restBody.category || !restBody.name) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields",
+        message: "Missing required fields (productTag, category, name)",
       });
     }
 
-    // Check for duplicate productId before creation
+    // Generate product ID automatically
+    const productId = await generateProductId(
+      restBody.category,
+      restBody.subCategory || "",
+      restBody.brandName || "",
+      restBody.name
+    );
+
+    // Check for duplicate productId before creation (just in case)
     const existingProduct = await Product.findOne({ productId: productId });
     if (existingProduct) {
       return res.status(400).json({
         success: false,
-        message: `Product with ID "${productId}" already exists`,
+        message: `Generated product ID "${productId}" already exists`,
       });
     }
 
@@ -456,32 +562,32 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
     const imageHashes = images.length > 0 ? await computeAllHashes(images) : [];
 
     const newProduct = new Product({
-      productTag: req.body.productTag,
-      productId: productId,
-      variantId: req.body.variantId || "",
-      category: req.body.category,
-      subCategory: req.body.subCategory || "",
-      variationHinge: req.body.variationHinge || "",
-      name: req.body.name,
-      brandName: req.body.brandName || "",
+      productId, // Use auto-generated ID
+      productTag: restBody.productTag,
+      variantId: restBody.variantId || "",
+      category: restBody.category,
+      subCategory: restBody.subCategory || "",
+      variationHinge: restBody.variationHinge || "",
+      name: restBody.name,
+      brandName: restBody.brandName || "",
       images: images.filter((img) => typeof img === "string" && img.trim() !== ""),
       imageHashes,
-      productDetails: req.body.productDetails || "",
-      qty: Number(req.body.qty) || 0,
-      MRP_Currency: req.body.MRP_Currency || "",
-      MRP: Number(req.body.MRP) || 0,
-      MRP_Unit: req.body.MRP_Unit || "",
-      deliveryTime: req.body.deliveryTime || "",
-      size: req.body.size || "",
-      color: req.body.color || "",
-      material: req.body.material || "",
-      priceRange: req.body.priceRange || "",
-      weight: req.body.weight || "",
-      hsnCode: req.body.hsnCode || "",
-      productCost_Currency: req.body.productCost_Currency || "",
-      productCost: Number(req.body.productCost) || 0,
-      productCost_Unit: req.body.productCost_Unit || "",
-      productGST: Number(req.body.productGST) || 0,
+      productDetails: restBody.productDetails || "",
+      qty: Number(restBody.qty) || 0,
+      MRP_Currency: restBody.MRP_Currency || "",
+      MRP: Number(restBody.MRP) || 0,
+      MRP_Unit: restBody.MRP_Unit || "",
+      deliveryTime: restBody.deliveryTime || "",
+      size: restBody.size || "",
+      color: restBody.color || "",
+      material: restBody.material || "",
+      priceRange: restBody.priceRange || "",
+      weight: restBody.weight || "",
+      hsnCode: restBody.hsnCode || "",
+      productCost_Currency: restBody.productCost_Currency || "",
+      productCost: Number(restBody.productCost) || 0,
+      productCost_Unit: restBody.productCost_Unit || "",
+      productGST: Number(restBody.productGST) || 0,
       preferredVendors,
     });
 
@@ -557,7 +663,7 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     const updatedData = {
       productTag: req.body.productTag || existingProduct.productTag,
-      productId: req.body.productId || existingProduct.productId,
+      productId: existingProduct.productId, // Keep existing product ID during update
       variantId: req.body.variantId || existingProduct.variantId,
       category: req.body.category || existingProduct.category,
       subCategory: req.body.subCategory || existingProduct.subCategory,
@@ -653,13 +759,12 @@ router.delete("/products/:id", authenticate, authorizeAdmin, async (req, res) =>
 router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const productsData = req.body.map((p) => ({
-      productTag: p.productTag,
-      productId: p.productId,
+      productTag: p.productTag || "",
       variantId: p.variantId || "",
-      category: p.category,
+      category: p.category || "",
       subCategory: p.subCategory || "",
       variationHinge: p.variationHinge || "",
-      name: p.name,
+      name: p.name || "",
       brandName: p.brandName || "",
       images: p.images || [],
       productDetails: p.productDetails || "",
@@ -681,8 +786,25 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
       preferredVendors: p.preferredVendors || [],
     }));
 
-    // Check for duplicates in bulk upload
-    const productIds = productsData.map(p => p.productId);
+    // Generate unique product IDs for each item
+    const productsWithIds = [];
+    for (const prodData of productsData) {
+      const productId = await generateProductId(
+        prodData.category,
+        prodData.subCategory || "",
+        prodData.brandName || "",
+        prodData.name
+      );
+      
+      productsWithIds.push({
+        ...prodData,
+        productId,
+        imageHashes: await computeAllHashes(prodData.images),
+      });
+    }
+
+    // Check for duplicates (shouldn't happen with generated IDs, but just in case)
+    const productIds = productsWithIds.map(p => p.productId);
     const existingProducts = await Product.find({ productId: { $in: productIds } });
     
     if (existingProducts.length > 0) {
@@ -695,7 +817,7 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
     }
 
     // Validate vendor IDs for all products
-    for (const prodData of productsData) {
+    for (const prodData of productsWithIds) {
       if (prodData.preferredVendors.length > 0) {
         const validVendorIds = prodData.preferredVendors.filter(id => isValidObjectId(id));
         if (validVendorIds.length !== prodData.preferredVendors.length) {
@@ -713,10 +835,9 @@ router.post("/products/bulk", authenticate, authorizeAdmin, async (req, res) => 
           });
         }
       }
-      prodData.imageHashes = await computeAllHashes(prodData.images);
     }
 
-    const insertedProducts = await Product.insertMany(productsData);
+    const insertedProducts = await Product.insertMany(productsWithIds);
 
     for (const prod of insertedProducts) {
       await createLog(

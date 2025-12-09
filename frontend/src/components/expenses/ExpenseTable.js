@@ -34,8 +34,29 @@ export default function ExpenseTable({ data, onEdit }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [filters, setFilters] = useState({});
 
-  const sumBy = (list, section) =>
-    (list || []).filter(i => i?.section === section).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  // Enhanced sumBy function that checks for auto-calculated values
+  const sumBy = (list, section) => {
+    if (!list || !Array.isArray(list)) return 0;
+    
+    const item = list.find(i => i?.section === section);
+    if (item) {
+      const amount = Number(item.amount) || 0;
+      const isAutoCalculated = item.isAutoCalculated || 
+                               (section === "Product Cost" || section === "Branding Cost");
+      
+      return {
+        amount,
+        isAutoCalculated,
+        hasData: true
+      };
+    }
+    
+    return {
+      amount: 0,
+      isAutoCalculated: false,
+      hasData: false
+    };
+  };
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
@@ -57,23 +78,37 @@ export default function ExpenseTable({ data, onEdit }) {
         const searchLower = filters[key].toLowerCase();
         result = result.filter((exp) => {
           if (key === "sampleTotal") {
-            const total = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
+            const total = SAMPLE_SECTIONS.reduce((t, s) => {
+              const item = sumBy(exp.expenses, s);
+              return t + item.amount;
+            }, 0);
             return total.toString().includes(searchLower);
           }
           if (key === "orderTotal") {
-            const total = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
+            const total = ORDER_SECTIONS.reduce((t, s) => {
+              const item = sumBy(exp.orderExpenses, s);
+              return t + (exp.orderConfirmed ? item.amount : 0);
+            }, 0);
             return total.toString().includes(searchLower);
           }
           if (key === "grandTotal") {
-            const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
-            const orderTotal = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
+            const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => {
+              const item = sumBy(exp.expenses, s);
+              return t + item.amount;
+            }, 0);
+            const orderTotal = ORDER_SECTIONS.reduce((t, s) => {
+              const item = sumBy(exp.orderExpenses, s);
+              return t + (exp.orderConfirmed ? item.amount : 0);
+            }, 0);
             return (sampleTotal + orderTotal).toString().includes(searchLower);
           }
           if (SAMPLE_SECTIONS.includes(key)) {
-            return sumBy(exp.expenses, key).toString().includes(searchLower);
+            const item = sumBy(exp.expenses, key);
+            return item.amount.toString().includes(searchLower);
           }
           if (ORDER_SECTIONS.includes(key)) {
-            return exp.orderConfirmed ? sumBy(exp.orderExpenses, key).toString().includes(searchLower) : false;
+            const item = sumBy(exp.orderExpenses, key);
+            return exp.orderConfirmed ? item.amount.toString().includes(searchLower) : false;
           }
           const value = (exp[key] || "").toString();
           return value.toLowerCase().includes(searchLower);
@@ -86,24 +121,52 @@ export default function ExpenseTable({ data, onEdit }) {
       result.sort((a, b) => {
         let aValue, bValue;
         if (sortConfig.key === "sampleTotal") {
-          aValue = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(a.expenses, s), 0);
-          bValue = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(b.expenses, s), 0);
+          aValue = SAMPLE_SECTIONS.reduce((t, s) => {
+            const item = sumBy(a.expenses, s);
+            return t + item.amount;
+          }, 0);
+          bValue = SAMPLE_SECTIONS.reduce((t, s) => {
+            const item = sumBy(b.expenses, s);
+            return t + item.amount;
+          }, 0);
         } else if (sortConfig.key === "orderTotal") {
-          aValue = ORDER_SECTIONS.reduce((t, s) => t + (a.orderConfirmed ? sumBy(a.orderExpenses, s) : 0), 0);
-          bValue = ORDER_SECTIONS.reduce((t, s) => t + (b.orderConfirmed ? sumBy(b.orderExpenses, s) : 0), 0);
+          aValue = ORDER_SECTIONS.reduce((t, s) => {
+            const item = sumBy(a.orderExpenses, s);
+            return t + (a.orderConfirmed ? item.amount : 0);
+          }, 0);
+          bValue = ORDER_SECTIONS.reduce((t, s) => {
+            const item = sumBy(b.orderExpenses, s);
+            return t + (b.orderConfirmed ? item.amount : 0);
+          }, 0);
         } else if (sortConfig.key === "grandTotal") {
-          const aSample = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(a.expenses, s), 0);
-          const bSample = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(b.expenses, s), 0);
-          const aOrder = ORDER_SECTIONS.reduce((t, s) => t + (a.orderConfirmed ? sumBy(a.orderExpenses, s) : 0), 0);
-          const bOrder = ORDER_SECTIONS.reduce((t, s) => t + (b.orderConfirmed ? sumBy(b.orderExpenses, s) : 0), 0);
+          const aSample = SAMPLE_SECTIONS.reduce((t, s) => {
+            const item = sumBy(a.expenses, s);
+            return t + item.amount;
+          }, 0);
+          const bSample = SAMPLE_SECTIONS.reduce((t, s) => {
+            const item = sumBy(b.expenses, s);
+            return t + item.amount;
+          }, 0);
+          const aOrder = ORDER_SECTIONS.reduce((t, s) => {
+            const item = sumBy(a.orderExpenses, s);
+            return t + (a.orderConfirmed ? item.amount : 0);
+          }, 0);
+          const bOrder = ORDER_SECTIONS.reduce((t, s) => {
+            const item = sumBy(b.orderExpenses, s);
+            return t + (b.orderConfirmed ? item.amount : 0);
+          }, 0);
           aValue = aSample + aOrder;
           bValue = bSample + bOrder;
         } else if (SAMPLE_SECTIONS.includes(sortConfig.key)) {
-          aValue = sumBy(a.expenses, sortConfig.key);
-          bValue = sumBy(b.expenses, sortConfig.key);
+          const itemA = sumBy(a.expenses, sortConfig.key);
+          const itemB = sumBy(b.expenses, sortConfig.key);
+          aValue = itemA.amount;
+          bValue = itemB.amount;
         } else if (ORDER_SECTIONS.includes(sortConfig.key)) {
-          aValue = a.orderConfirmed ? sumBy(a.orderExpenses, sortConfig.key) : 0;
-          bValue = b.orderConfirmed ? sumBy(b.orderExpenses, sortConfig.key) : 0;
+          const itemA = sumBy(a.orderExpenses, sortConfig.key);
+          const itemB = sumBy(b.orderExpenses, sortConfig.key);
+          aValue = a.orderConfirmed ? itemA.amount : 0;
+          bValue = b.orderConfirmed ? itemB.amount : 0;
         } else {
           aValue = a[sortConfig.key] || "";
           bValue = b[sortConfig.key] || "";
@@ -119,6 +182,12 @@ export default function ExpenseTable({ data, onEdit }) {
 
     return result;
   };
+
+  // Check if any expense has auto-calculated values
+  const hasAutoCalculatedValues = data.some(exp => 
+    exp.orderExpenses?.some(item => item.isAutoCalculated) || 
+    exp.hasAutoCalculated
+  );
 
   return (
     <div className="overflow-x-auto border border-gray-300">
@@ -194,10 +263,27 @@ export default function ExpenseTable({ data, onEdit }) {
         </thead>
         <tbody>
           {sortedAndFilteredData().map((exp, idx) => {
-            const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => t + sumBy(exp.expenses, s), 0);
-            const orderTotal = ORDER_SECTIONS.reduce((t, s) => t + (exp.orderConfirmed ? sumBy(exp.orderExpenses, s) : 0), 0);
-            const allSampleFilled = SAMPLE_SECTIONS.every(s => sumBy(exp.expenses, s) > 0);
-            const allOrderFilled = exp.orderConfirmed && ORDER_SECTIONS.every(s => sumBy(exp.orderExpenses, s) > 0);
+            // Calculate totals
+            const sampleTotal = SAMPLE_SECTIONS.reduce((t, s) => {
+              const item = sumBy(exp.expenses, s);
+              return t + item.amount;
+            }, 0);
+            
+            const orderTotal = ORDER_SECTIONS.reduce((t, s) => {
+              const item = sumBy(exp.orderExpenses, s);
+              return t + (exp.orderConfirmed ? item.amount : 0);
+            }, 0);
+            
+            const allSampleFilled = SAMPLE_SECTIONS.every(s => {
+              const item = sumBy(exp.expenses, s);
+              return item.amount > 0;
+            });
+            
+            const allOrderFilled = exp.orderConfirmed && ORDER_SECTIONS.every(s => {
+              const item = sumBy(exp.orderExpenses, s);
+              return item.amount > 0;
+            });
+            
             const rowClass = allSampleFilled && allOrderFilled ? "bg-green-100" : "";
 
             return (
@@ -207,19 +293,53 @@ export default function ExpenseTable({ data, onEdit }) {
                 <td className="px-2 py-1 border">{exp.clientName}</td>
                 <td className="px-2 py-1 border">{exp.eventName}</td>
                 <td className="px-2 py-1 border">{exp.crmName}</td>
-                {SAMPLE_SECTIONS.map(s => (
-                  <td key={s} className="px-2 py-1 border">
-                    {sumBy(exp.expenses, s) || "-"}
-                  </td>
-                ))}
+                
+                {/* Sample Costs */}
+                {SAMPLE_SECTIONS.map(s => {
+                  const item = sumBy(exp.expenses, s);
+                  return (
+                    <td key={s} className="px-2 py-1 border">
+                      {item.amount || "-"}
+                    </td>
+                  );
+                })}
+                
                 <td className="px-2 py-1 border">{sampleTotal}</td>
                 <td className="px-2 py-1 border">{exp.orderConfirmed ? "Yes" : "No"}</td>
                 <td className="px-2 py-1 border">{exp.jobSheetNumber || "-"}</td>
-                {ORDER_SECTIONS.map(s => (
-                  <td key={s} className="px-2 py-1 border">
-                    {exp.orderConfirmed ? sumBy(exp.orderExpenses, s) || "-" : ""}
-                  </td>
-                ))}
+                
+                {/* Order Costs - Special handling for Product Cost and Branding Cost */}
+                {ORDER_SECTIONS.map(s => {
+                  const item = sumBy(exp.orderExpenses, s);
+                  const isAutoCalculated = item.isAutoCalculated || 
+                                          (s === "Product Cost" && exp.calculatedProductCost > 0) ||
+                                          (s === "Branding Cost" && exp.calculatedBrandingCost > 0);
+                  
+                  let displayValue = "-";
+                  if (exp.orderConfirmed) {
+                    displayValue = item.amount > 0 ? item.amount : (item.amount === 0 ? "0" : "-");
+                  }
+                  
+                  return (
+                    <td 
+                      key={s} 
+                      className={`px-2 py-1 border ${isAutoCalculated ? 'bg-blue-50' : ''}`}
+                      title={isAutoCalculated ? "Auto-calculated from OpenPurchase" : ""}
+                    >
+                      {exp.orderConfirmed ? (
+                        <>
+                          {displayValue}
+                          {isAutoCalculated && item.amount > 0 && (
+                            <span className="text-blue-500 text-xs ml-1" title="Auto-calculated">*</span>
+                          )}
+                        </>
+                      ) : (
+                        ""
+                      )}
+                    </td>
+                  );
+                })}
+                
                 {showTotals && (
                   <>
                     <td className="px-2 py-1 border">{exp.orderConfirmed ? orderTotal : ""}</td>
@@ -239,6 +359,14 @@ export default function ExpenseTable({ data, onEdit }) {
           })}
         </tbody>
       </table>
+      
+      {/* Legend for auto-calculated values */}
+      {hasAutoCalculatedValues && (
+        <div className="p-2 text-xs text-blue-600 bg-blue-50 border-t flex items-center">
+          <span className="text-blue-500 mr-1">*</span>
+          <span>Product Cost and Branding Cost values with asterisk (*) are auto-calculated from OpenPurchase records</span>
+        </div>
+      )}
     </div>
   );
 }
