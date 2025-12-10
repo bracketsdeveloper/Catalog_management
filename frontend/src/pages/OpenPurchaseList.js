@@ -34,23 +34,25 @@ function FollowUpView({ purchases, onClose }) {
             const followUpDate = new Date(fu.followUpDate);
             followUpDate.setHours(0, 0, 0, 0);
             
-            let status = "future";
+            // Only show future follow-ups (today and future)
             const diffTime = followUpDate - today;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
-            if (diffDays < 0) status = "past";
-            else if (diffDays === 0) status = "today";
-            else if (diffDays === 1) status = "tomorrow";
-            else status = "future";
-            
-            followUps.push({
-              ...fu,
-              status,
-              diffDays,
-              parentPurchase: purchase,
-              followUpDate: fu.followUpDate,
-              createdBy: fu.updatedBy || "Unknown User"
-            });
+            if (diffDays >= 0) { // Only include today and future follow-ups
+              let status = "future";
+              if (diffDays === 0) status = "today";
+              else if (diffDays === 1) status = "tomorrow";
+              else status = "future";
+              
+              followUps.push({
+                ...fu,
+                status,
+                diffDays,
+                parentPurchase: purchase,
+                followUpDate: fu.followUpDate,
+                createdBy: fu.updatedBy || "Unknown User"
+              });
+            }
           }
         });
       }
@@ -68,6 +70,7 @@ function FollowUpView({ purchases, onClose }) {
       fu.parentPurchase.jobSheetNumber?.toLowerCase().includes(term) ||
       fu.parentPurchase.clientCompanyName?.toLowerCase().includes(term) ||
       fu.parentPurchase.product?.toLowerCase().includes(term) ||
+      fu.parentPurchase.sourcingFrom?.toLowerCase().includes(term) || // Added vendor name search
       fu.note?.toLowerCase().includes(term) ||
       fu.remarks?.toLowerCase().includes(term) ||
       fu.createdBy?.toLowerCase().includes(term)
@@ -79,8 +82,8 @@ function FollowUpView({ purchases, onClose }) {
     const sorted = [...filteredFollowUps];
     
     sorted.sort((a, b) => {
-      // First sort by status priority: today -> tomorrow -> future -> past
-      const statusOrder = { today: 0, tomorrow: 1, future: 2, past: 3 };
+      // First sort by status priority: today -> tomorrow -> future
+      const statusOrder = { today: 0, tomorrow: 1, future: 2 };
       const statusCompare = statusOrder[a.status] - statusOrder[b.status];
       if (statusCompare !== 0) return statusCompare;
       
@@ -123,15 +126,13 @@ function FollowUpView({ purchases, onClose }) {
     const styles = {
       today: "bg-red-500 text-white",
       tomorrow: "bg-orange-500 text-white", 
-      future: "bg-blue-500 text-white",
-      past: "bg-gray-500 text-white"
+      future: "bg-blue-500 text-white"
     };
     
     const labels = {
       today: "TODAY",
       tomorrow: "TOMORROW",
-      future: "UPCOMING", 
-      past: "PAST"
+      future: "UPCOMING"
     };
     
     return (
@@ -148,6 +149,7 @@ function FollowUpView({ purchases, onClose }) {
       "Job Sheet #": fu.parentPurchase.jobSheetNumber,
       "Client": fu.parentPurchase.clientCompanyName,
       "Product": fu.parentPurchase.product,
+      "Vendor": fu.parentPurchase.sourcingFrom || "", // Added vendor name
       "Note": fu.note || "",
       "Remarks": fu.remarks || "",
       "Created By": fu.createdBy || "Unknown User",
@@ -213,6 +215,7 @@ function FollowUpView({ purchases, onClose }) {
                 </th>
                 <th className="p-2 border">Client</th>
                 <th className="p-2 border">Product</th>
+                <th className="p-2 border">Vendor</th> {/* Added Vendor column */}
                 <th className="p-2 border">Note</th>
                 <th className="p-2 border">Remarks</th>
                 <th 
@@ -228,8 +231,8 @@ function FollowUpView({ purchases, onClose }) {
             <tbody>
               {sortedFollowUps.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="p-4 text-center text-gray-500">
-                    No follow-ups found
+                  <td colSpan="11" className="p-4 text-center text-gray-500">
+                    No upcoming follow-ups found
                   </td>
                 </tr>
               ) : (
@@ -242,6 +245,7 @@ function FollowUpView({ purchases, onClose }) {
                     </td>
                     <td className="p-2 border">{fu.parentPurchase.clientCompanyName}</td>
                     <td className="p-2 border">{fu.parentPurchase.product}</td>
+                    <td className="p-2 border">{fu.parentPurchase.sourcingFrom || "-"}</td> {/* Display vendor name */}
                     <td className="p-2 border">{fu.note || "-"}</td>
                     <td className="p-2 border">{fu.remarks || "-"}</td>
                     <td className="p-2 border font-medium text-blue-600">
@@ -979,7 +983,7 @@ export default function OpenPurchaseList() {
       try {
         const token = localStorage.getItem("token");
         const res = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}/api/admin/vendors/vendors`,
+          `${process.env.REACT_APP_BACKEND_URL}/api/admin/vendors`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setVendors(res.data || []);
@@ -1034,6 +1038,29 @@ export default function OpenPurchaseList() {
 
   useEffect(() => { loadPurchases(); }, [sortConfig]);
 
+  // Get vendor contact number from vendor collection
+  const getVendorContactNumber = useMemo(() => {
+    return (sourcingFrom) => {
+      if (!sourcingFrom || sourcingFrom.trim() === "") return "";
+      
+      // Find vendor by vendorCompany or vendorName
+      const vendor = vendors.find(v => 
+        v.vendorCompany?.toLowerCase() === sourcingFrom.toLowerCase() || 
+        v.vendorName?.toLowerCase() === sourcingFrom.toLowerCase()
+      );
+      
+      if (vendor) {
+        // Get first contact number from clients array
+        if (vendor.clients && vendor.clients.length > 0 && vendor.clients[0].contactNumber) {
+          return vendor.clients[0].contactNumber;
+        }
+        // Fallback to phone field
+        return vendor.phone || "";
+      }
+      return "";
+    };
+  }, [vendors]);
+
   const filteredPurchases = useMemo(() => {
     const jobSheetStatus = {};
     purchases.forEach((rec) => {
@@ -1085,15 +1112,6 @@ export default function OpenPurchaseList() {
     });
   }, [headerFiltered, advFilters]);
 
-  const getVendorContactNumber = (sourcingFrom) => {
-    if (!sourcingFrom || sourcingFrom.trim() === "") return "";
-    const vendor = vendors.find(v => 
-      v.vendorName?.toLowerCase() === sourcingFrom.toLowerCase() || 
-      v.vendorCompany?.toLowerCase() === sourcingFrom.toLowerCase()
-    );
-    return vendor?.phone || vendor?.contactNumber || "";
-  };
-
   const getCreatedByName = (createdById) => {
     if (!createdById) return "";
     return createdByUsers[createdById] || createdById;
@@ -1110,7 +1128,7 @@ export default function OpenPurchaseList() {
       };
     });
     return Object.values(byKey);
-  }, [advFiltered, vendors, createdByUsers]);
+  }, [advFiltered, getVendorContactNumber, createdByUsers]);
 
   const sortBy = (key) => {
     setSortConfig((prev) => {

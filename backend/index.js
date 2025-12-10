@@ -154,6 +154,9 @@ const fileRoutes = require("./routes/files");
 app.use("/api/files", fileRoutes);
 
 
+const bankStatementRoutes = require("./routes/bankStatements");
+app.use("/api/bank-statements", bankStatementRoutes);
+
 // server.js or index.js
 const invoicesEinvoiceRoutes = require("./routes/invoices.einvoice");
 app.use("/api/admin", invoicesEinvoiceRoutes);

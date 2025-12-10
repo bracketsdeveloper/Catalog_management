@@ -14,6 +14,7 @@ import {
   ReceiptPercentIcon,
   UserCircleIcon,
   PencilIcon,
+  BanknotesIcon,
 } from "@heroicons/react/24/outline";
 
 /* ------------------------------------------------------------------ */
@@ -39,6 +40,14 @@ const adminPages = [
       { name: "Manage Invoices", path: "/admin-dashboard/manage-invoices", permission: "manage-einvoice" },
       { name: "Manage DC", path: "/admin-dashboard/manage-dc", permission: "manage-dc" },
       { name: "Manage E-Invoice", path: "/admin-dashboard/e-invoice", permission: "manage-einvoice" },
+    ],
+  },
+  {
+    name: "Accounts",
+    defaultPath: "/admin-dashboard/bank-statement",
+    icon: <BanknotesIcon className="w-8 h-8 shrink-0" />,
+    subItems: [
+      { name: "Bank Statements", path: "/admin-dashboard/bank-statement", permission: "bank-statements" },
     ],
   },
   {
@@ -154,9 +163,7 @@ const adminPages = [
       { name: "Leave Tracker", path: "/admin-dashboard/leaves-super-admin", permission: "leaves" },
       { name: "Upload Attendance", path: "/admin-dashboard/hrms/attendance", permission: "hrms-attendance" },
       { name: "Attendance Summary", path: "/admin-dashboard/attendance-summary", permission: "hrms-attendance-summary" },
-      // { name: "Work From Home", path: "/admin-dashboard/hrms/wfh", permission: "hrms-wfh" },
       { name: "Leaves", path: "/admin-dashboard/hrms/leaves", permission: "hrms-leaves" },
-      // { name: "Salary", path: "/admin-dashboard/hrms/salary", permission: "hrms-salary" },
     ],
   },
 ];
@@ -181,6 +188,7 @@ export default function AdminDashboard() {
   const [taskManagerHovered, setTaskManagerHovered] = useState(false);
   const [SalesManagerHovered, setSalesManagerHovered] = useState(false);
   const [userManagementHovered, setUserManagementHovered] = useState(false);
+  const [accountsHovered, setAccountsHovered] = useState(false);
   const [hrmsHovered, setHrmsHovered] = useState(false);
 
   const [permissions, setPermissions] = useState([]);
@@ -259,7 +267,6 @@ export default function AdminDashboard() {
         return { ...page, subItems: filteredSubItems };
       }
 
-      // pages without subItems would use direct permission (if any)
       if (!page.permission) {
         return isSuperAdmin ? page : null;
       }
@@ -288,6 +295,7 @@ export default function AdminDashboard() {
     taskManagerHovered ||
     SalesManagerHovered ||
     userManagementHovered ||
+    accountsHovered ||
     hrmsHovered;
   const finalSidebarWidth = megaOpen ? baseSidebarWidth + 180 : baseSidebarWidth;
 
@@ -313,7 +321,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
-      {/* Top-right profile */}
       <Link
         to="/admin-dashboard/my-profile"
         aria-label="My Profile"
@@ -323,7 +330,6 @@ export default function AdminDashboard() {
         <UserCircleIcon className="h-7 w-7 text-gray-700" />
       </Link>
 
-      {/* ============ LEFT SIDEBAR ============ */}
       <aside
         className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-[#Ff8045] text-white leading-tight"
         style={{ width: finalSidebarWidth }}
@@ -343,13 +349,13 @@ export default function AdminDashboard() {
             setSamplesHovered(false);
             setFollowUpTrackerHovered(false);
             setUserManagementHovered(false);
+            setAccountsHovered(false);
             setSalesManagerHovered(false);
             setTaskManagerHovered(false);
             setHrmsHovered(false);
           }
         }}
       >
-        {/* Brand / collapse */}
         <div className="flex items-center justify-between px-3 py-3">
           <img src="/pacer-logo.jpeg" alt="Logo" className="h-9 w-24" />
           {sidebarOpen && (
@@ -362,7 +368,6 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* Nav */}
         <nav className="px-2">
           <ul className="space-y-2">
             {accessiblePages.map((page) => {
@@ -373,6 +378,18 @@ export default function AdminDashboard() {
                     page={page}
                     hovered={userManagementHovered}
                     setHovered={setUserManagementHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
+              if (page.name === "Accounts") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={accountsHovered}
+                    setHovered={setAccountsHovered}
                     sidebarOpen={sidebarOpen}
                     sidebarHover={sidebarHover}
                   />
@@ -498,6 +515,18 @@ export default function AdminDashboard() {
                   />
                 );
               }
+              if (page.name === "HRMS") {
+                return (
+                  <MegaMenu
+                    key={page.name}
+                    page={page}
+                    hovered={hrmsHovered}
+                    setHovered={setHrmsHovered}
+                    sidebarOpen={sidebarOpen}
+                    sidebarHover={sidebarHover}
+                  />
+                );
+              }
 
               if (page.name === "Packing / Delivery") {
                 const grouped = page.subItems.reduce((acc, item) => {
@@ -552,20 +581,6 @@ export default function AdminDashboard() {
                 );
               }
 
-              if (page.name === "HRMS") {
-                return (
-                  <MegaMenu
-                    key={page.name}
-                    page={page}
-                    hovered={hrmsHovered}
-                    setHovered={setHrmsHovered}
-                    sidebarOpen={sidebarOpen}
-                    sidebarHover={sidebarHover}
-                  />
-                );
-              }
-
-              // Fallback if any single-link pages exist later
               return (
                 <li key={page.name}>
                   <Link
@@ -583,7 +598,6 @@ export default function AdminDashboard() {
           </ul>
         </nav>
 
-        {/* Footer: Logout */}
         <div className="mt-2 p-2">
           <button
             onClick={handleSignOut}
@@ -595,7 +609,6 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 overflow-y-auto p-2">
         {isAdminDashboard ? (
           <div className="flex items-center justify-center h-full">
@@ -613,9 +626,6 @@ export default function AdminDashboard() {
   );
 }
 
-/* ****************************************************************** */
-/* MEGA-MENU                                                          */
-/* ****************************************************************** */
 function MegaMenu({ page, hovered, setHovered, sidebarOpen, sidebarHover }) {
   if (!page.subItems || page.subItems.length === 0) {
     return null;
