@@ -118,8 +118,10 @@ export default function SamplesOut() {
       Color: r.color,
       Status: r.sampleOutStatus || "",
       "Received Back": r.receivedBack ? "Yes" : "No",
-      "Not Received Reason": r.notReceivedReason || "", // NEW
+      "Not Received Reason": r.notReceivedReason || "",
+      "Received Back Status": r.receivedBackStatus || "", // NEW
       Returned: r.returned ? "Yes" : "No",
+      Remarks: r.remarks || "", // NEW
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();

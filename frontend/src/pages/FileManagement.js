@@ -291,6 +291,7 @@ export default function FileManagement() {
   const [error, setError] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
+  const [showEditDocumentModal, setShowEditDocumentModal] = useState(false); // NEW
   const [uploading, setUploading] = useState(false);
   
   // Upload form state
@@ -305,6 +306,14 @@ export default function FileManagement() {
   const [documentContent, setDocumentContent] = useState("");
   const [documentRoles, setDocumentRoles] = useState([]);
   const [creatingDocument, setCreatingDocument] = useState(false);
+  
+  // NEW: Document editing state
+  const [editingDocument, setEditingDocument] = useState(null);
+  const [editDocumentName, setEditDocumentName] = useState("");
+  const [editDocumentDescription, setEditDocumentDescription] = useState("");
+  const [editDocumentContent, setEditDocumentContent] = useState("");
+  const [editDocumentRoles, setEditDocumentRoles] = useState([]);
+  const [updatingDocument, setUpdatingDocument] = useState(false);
   
   // Search and sort state
   const [searchTerm, setSearchTerm] = useState("");
@@ -326,6 +335,7 @@ export default function FileManagement() {
 
   useEffect(() => {
     fetchFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDocumentsOnly]);
 
   const fetchFiles = async () => {
@@ -447,6 +457,73 @@ export default function FileManagement() {
     }
   };
 
+  // NEW: Handle opening edit modal
+  const handleEditDocument = (file) => {
+    if (!file.isDocument) {
+      alert("Only documents can be edited");
+      return;
+    }
+
+    setEditingDocument(file);
+    setEditDocumentName(file.fileName || "");
+    setEditDocumentDescription(file.description || "");
+    setEditDocumentContent(file.documentContent || "");
+    setEditDocumentRoles(file.accessibleRoles || []);
+    setShowEditDocumentModal(true);
+  };
+
+  // NEW: Handle updating document
+  const handleUpdateDocument = async (e) => {
+    e.preventDefault();
+    
+    if (!editDocumentName.trim()) {
+      alert("Please enter a document name");
+      return;
+    }
+
+    if (editDocumentRoles.length === 0) {
+      alert("Please select at least one role");
+      return;
+    }
+
+    if (!editDocumentContent.trim()) {
+      alert("Please add some content to the document");
+      return;
+    }
+
+    try {
+      setUpdatingDocument(true);
+      const response = await axios.put(
+        `${BACKEND_URL}/api/files/update-document/${editingDocument.id}`,
+        {
+          fileName: editDocumentName.trim(),
+          accessibleRoles: editDocumentRoles,
+          description: editDocumentDescription,
+          documentContent: editDocumentContent
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Update the file in the list
+      setFiles(prev => prev.map(file => 
+        file.id === editingDocument.id ? response.data.file : file
+      ));
+      
+      setShowEditDocumentModal(false);
+      resetEditForm();
+      alert("Document updated successfully!");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update document");
+    } finally {
+      setUpdatingDocument(false);
+    }
+  };
+
   const resetUploadForm = () => {
     setSelectedFile(null);
     setFileName("");
@@ -459,6 +536,15 @@ export default function FileManagement() {
     setDocumentDescription("");
     setDocumentContent("");
     setDocumentRoles([]);
+  };
+
+  // NEW: Reset edit form
+  const resetEditForm = () => {
+    setEditingDocument(null);
+    setEditDocumentName("");
+    setEditDocumentDescription("");
+    setEditDocumentContent("");
+    setEditDocumentRoles([]);
   };
 
   const handleViewFile = async (file) => {
@@ -782,17 +868,26 @@ export default function FileManagement() {
                   )}
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => handleViewFile(file)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
+                      className="text-blue-600 hover:text-blue-800 text-sm whitespace-nowrap"
                     >
                       👁️ View
                     </button>
+                    {/* NEW: Edit button for documents */}
+                    {isSuperAdmin && file.isDocument && (
+                      <button
+                        onClick={() => handleEditDocument(file)}
+                        className="text-green-600 hover:text-green-800 text-sm whitespace-nowrap"
+                      >
+                        ✏️ Edit
+                      </button>
+                    )}
                     {isSuperAdmin && (
                       <button
                         onClick={() => handleDeleteFile(file.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
+                        className="text-red-600 hover:text-red-800 text-sm whitespace-nowrap"
                       >
                         🗑️ Delete
                       </button>
@@ -814,10 +909,112 @@ export default function FileManagement() {
       {/* File Viewer Modal */}
       {renderViewer()}
 
+      {/* NEW: Edit Document Modal */}
+      {showEditDocumentModal && isSuperAdmin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl max-h-[95vh] overflow-y-auto my-4">
+            <h2 className="text-xl font-bold mb-4 text-green-600">✏️ Edit Document</h2>
+            
+            <form onSubmit={handleUpdateDocument}>
+              {/* Document Name */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Document Name *
+                </label>
+                <input
+                  type="text"
+                  value={editDocumentName}
+                  onChange={(e) => setEditDocumentName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  placeholder="Enter document name..."
+                  required
+                />
+              </div>
+
+              {/* Document Description */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Description (Optional)</label>
+                <textarea
+                  value={editDocumentDescription}
+                  onChange={(e) => setEditDocumentDescription(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 h-20"
+                  placeholder="Enter document description..."
+                />
+              </div>
+
+              {/* Accessible Roles */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Accessible Roles *
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
+                  {ROLE_OPTIONS_ASC.map(role => (
+                    <label
+                      key={role}
+                      className={`flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer transition-colors ${
+                        editDocumentRoles.includes(role)
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-gray-50 border-gray-300 hover:bg-gray-100"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editDocumentRoles.includes(role)}
+                        onChange={() => toggleRole(role, setEditDocumentRoles)}
+                        className="hidden"
+                      />
+                      {role}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select roles that should have access to this document
+                </p>
+              </div>
+
+              {/* Rich Text Editor */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">
+                  Document Content *
+                </label>
+                <RichTextEditor
+                  value={editDocumentContent}
+                  onChange={setEditDocumentContent}
+                  placeholder="Edit your document content here..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditDocumentModal(false);
+                    resetEditForm();
+                  }}
+                  className="bg-gray-300 text-gray-900 px-4 py-2 rounded-md hover:bg-gray-400"
+                  disabled={updatingDocument}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"
+                  disabled={updatingDocument}
+                >
+                  {updatingDocument ? "Updating..." : "Update Document"}
+                  {updatingDocument && "⏳"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Create Document Modal - Only for Super Admin */}
       {showCreateDocumentModal && isSuperAdmin && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl max-h-[95vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl max-h-[95vh] overflow-y-auto my-4">
             <h2 className="text-xl font-bold mb-4 text-blue-600">Create Document</h2>
             
             <form onSubmit={handleCreateDocument}>
@@ -852,14 +1049,14 @@ export default function FileManagement() {
                 <label className="block text-sm font-medium mb-2">
                   Accessible Roles *
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
                   {ROLE_OPTIONS_ASC.map(role => (
                     <label
                       key={role}
-                      className={`flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer ${
+                      className={`flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer transition-colors ${
                         documentRoles.includes(role)
                           ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-gray-50 border-gray-300"
+                          : "bg-gray-50 border-gray-300 hover:bg-gray-100"
                       }`}
                     >
                       <input
@@ -918,8 +1115,8 @@ export default function FileManagement() {
 
       {/* Upload Modal - Only for Super Admin */}
       {showUploadModal && isSuperAdmin && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4">
             <h2 className="text-xl font-bold mb-4 text-[#Ff8045]">Upload File</h2>
             
             <form onSubmit={handleUpload}>
@@ -971,14 +1168,14 @@ export default function FileManagement() {
                 <label className="block text-sm font-medium mb-2">
                   Accessible Roles *
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
                   {ROLE_OPTIONS_ASC.map(role => (
                     <label
                       key={role}
-                      className={`flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer ${
+                      className={`flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer transition-colors ${
                         accessibleRoles.includes(role)
                           ? "bg-pink-600 text-white border-pink-600"
-                          : "bg-gray-50 border-gray-300"
+                          : "bg-gray-50 border-gray-300 hover:bg-gray-100"
                       }`}
                     >
                       <input

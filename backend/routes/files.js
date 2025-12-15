@@ -280,6 +280,73 @@ router.get("/", authenticate, async (req, res) => {
   }
 });
 
+router.put("/update-document/:fileId", authenticate, async (req, res) => {
+  try {
+    const { fileName, accessibleRoles, description, documentContent } = req.body;
+
+    // Check if user is Super Admin
+    const user = await User.findById(req.user.id);
+    if (!user || !user.isSuperAdmin) {
+      return res.status(403).json({ message: "Only Super Admin can edit documents" });
+    }
+
+    const file = await File.findById(req.params.fileId);
+    if (!file) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    if (!file.isDocument) {
+      return res.status(400).json({ message: "This is not a document" });
+    }
+
+    if (fileName && fileName.trim()) {
+      file.fileName = fileName.trim();
+      file.originalName = `${fileName.trim()}.html`;
+    }
+
+    if (accessibleRoles && Array.isArray(accessibleRoles) && accessibleRoles.length > 0) {
+      // Validate roles
+      const validRoles = accessibleRoles.every(role => ROLE_ENUM.includes(role));
+      if (!validRoles) {
+        return res.status(400).json({ message: "Invalid roles specified" });
+      }
+      file.accessibleRoles = accessibleRoles;
+    }
+
+    if (description !== undefined) {
+      file.description = description;
+    }
+
+    if (documentContent !== undefined) {
+      file.documentContent = documentContent;
+      file.fileSize = Buffer.byteLength(documentContent, 'utf8');
+    }
+
+    await file.save();
+
+    res.status(200).json({
+      message: "Document updated successfully",
+      file: {
+        id: file._id,
+        fileName: file.fileName,
+        originalName: file.originalName,
+        fileSize: file.fileSize,
+        uploadedBy: file.uploadedByName,
+        uploadedById: file.uploadedBy,
+        accessibleRoles: file.accessibleRoles,
+        uploadedOn: file.createdAt,
+        description: file.description,
+        fileType: file.fileType,
+        documentContent: file.documentContent,
+        isDocument: file.isDocument
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: "Server error while updating document", error: error.message });
+  }
+});
+
 /* ---------- View File ---------- */
 router.get("/view/:fileId", authenticate, async (req, res) => {
     try {

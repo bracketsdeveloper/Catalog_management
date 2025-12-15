@@ -6,12 +6,12 @@ const request = require("sync-request");
 const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 const ImageModule = require("docxtemplater-image-module-free");
-const mongoose = require("mongoose"); // NEW
+const mongoose = require("mongoose");
 const Quotation = require("../models/Quotation");
 const Log = require("../models/Log");
 const EInvoice = require("../models/EInvoice");
 const Company = require("../models/Company");
-const Opportunity = require("../models/Opportunity"); // NEW
+const Opportunity = require("../models/Opportunity");
 const axios = require("axios");
 const { authenticate, authorizeAdmin } = require("../middleware/authenticate");
 
@@ -59,6 +59,46 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Helper to build operationsBreakdown from quotation items' suggestedBreakdown
+function buildOperationsBreakdownFromItems(items) {
+  return items.map((item, idx) => {
+    const sb = item.suggestedBreakdown || {};
+    const quantity = Number(item.quantity) || 0;
+    
+    // Map from suggestedBreakdown fields
+    const ourCost = Number(sb.baseCost) || 0;          // Base Cost
+    const brandingCost = Number(sb.brandingCost) || 0; // Branding Cost
+    const deliveryCost = Number(sb.logisticsCost) || 0; // Logistics Cost
+    const markUpCost = Number(sb.marginAmount) || 0;   // Margin Amount
+    
+    // Calculate derived fields
+    const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+    const rate = finalTotal;
+    const amount = quantity * rate;
+    
+    // Get GST from item
+    const gstStr = item.productGST != null ? String(item.productGST) : "";
+    const gstPct = parseGstPercent(gstStr);
+    const total = amount * (1 + gstPct / 100);
+
+    return {
+      slNo: idx + 1,
+      product: item.productName || item.product || "",
+      quantity,
+      rate,
+      amount,
+      gst: gstStr,
+      total,
+      ourCost,        // from baseCost
+      brandingCost,   // from brandingCost
+      deliveryCost,   // from logisticsCost
+      markUpCost,     // from marginAmount
+      finalTotal,
+      vendor: "",
+    };
+  });
+}
+
 // Load environment variables
 const WHITEBOOKS_API_URL = process.env.WHITEBOOKS_API_URL;
 const WHITEBOOKS_CREDENTIALS = {
@@ -72,7 +112,7 @@ const WHITEBOOKS_CREDENTIALS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Create Quotation (supports isDraft + operationsBreakdown)
+// Create Quotation (supports isDraft + operationsBreakdown auto-population)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -94,9 +134,9 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       displayHSNCodes,
       operations,
       operationsBreakdown,
-      isDraft,           // NEW
-      sourceQuotationId, // optional (front-end may set on manual duplication)
-      remarks,           // could include "__DRAFT__"
+      isDraft,
+      sourceQuotationId,
+      remarks,
     } = req.body;
 
     if (!items || items.length === 0) {
@@ -171,45 +211,49 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
         })
       : [];
 
-    // Normalize operationsBreakdown rows and compute derived fields
-    const builtOperationsBreakdown = Array.isArray(operationsBreakdown)
-      ? operationsBreakdown.map((row, idx) => {
-          const slNo = row.slNo || idx + 1;
-          const product = row.product || "";
-          const quantity = toNum(row.quantity);
-          const ourCost = toNum(row.ourCost);
-          const brandingCost = toNum(row.brandingCost);
-          const deliveryCost = toNum(row.deliveryCost);
-          const markUpCost = toNum(row.markUpCost);
-          const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost; // l
-          const rate = finalTotal; // d
-          const amount = quantity * rate; // e
-          const gstStr = row.gst || "";
-          const gstPct = parseGstPercent(gstStr); // f
-          const total = amount * (1 + gstPct / 100); // g = e + GST
+    // AUTO-GENERATE operationsBreakdown from items' suggestedBreakdown if not provided
+    let builtOperationsBreakdown;
+    if (Array.isArray(operationsBreakdown) && operationsBreakdown.length > 0) {
+      // Use provided operationsBreakdown (manual override)
+      builtOperationsBreakdown = operationsBreakdown.map((row, idx) => {
+        const slNo = row.slNo || idx + 1;
+        const product = row.product || "";
+        const quantity = toNum(row.quantity);
+        const ourCost = toNum(row.ourCost);
+        const brandingCost = toNum(row.brandingCost);
+        const deliveryCost = toNum(row.deliveryCost);
+        const markUpCost = toNum(row.markUpCost);
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+        const rate = finalTotal;
+        const amount = quantity * rate;
+        const gstStr = row.gst || "";
+        const gstPct = parseGstPercent(gstStr);
+        const total = amount * (1 + gstPct / 100);
 
-          return {
-            slNo,
-            product,
-            quantity,
-            rate,
-            amount,
-            gst: gstStr,
-            total,
-            ourCost,
-            brandingCost,
-            deliveryCost,
-            markUpCost,
-            finalTotal,
-            vendor: row.vendor || "",
-          };
-        })
-      : [];
+        return {
+          slNo,
+          product,
+          quantity,
+          rate,
+          amount,
+          gst: gstStr,
+          total,
+          ourCost,
+          brandingCost,
+          deliveryCost,
+          markUpCost,
+          finalTotal,
+          vendor: row.vendor || "",
+        };
+      });
+    } else {
+      // AUTO-GENERATE from builtItems
+      builtOperationsBreakdown = buildOperationsBreakdownFromItems(builtItems);
+    }
 
     const totalAmount = builtItems.reduce((sum, x) => sum + x.amount, 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + x.total, 0);
 
-    // Draft inference: explicit isDraft OR special __DRAFT__ remark
     const isDraftFlag =
       typeof isDraft === "boolean"
         ? isDraft
@@ -237,8 +281,8 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
       operations: builtOperations,
       operationsBreakdown: builtOperationsBreakdown,
       remarks: Array.isArray(remarks) ? remarks : [],
-      isDraft: !!isDraftFlag,               // NEW
-      sourceQuotationId: sourceQuotationId || null, // optional
+      isDraft: !!isDraftFlag,
+      sourceQuotationId: sourceQuotationId || null,
       createdBy: req.user.email,
     });
 
@@ -605,39 +649,43 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         })
       : existing.operations;
 
-    const builtOperationsBreakdown = Array.isArray(operationsBreakdown)
-      ? operationsBreakdown.map((row, idx) => {
-          const slNo = row.slNo || idx + 1;
-          const product = row.product || "";
-          const quantity = toNum(row.quantity);
-          const ourCost = toNum(row.ourCost);
-          const brandingCost = toNum(row.brandingCost);
-          const deliveryCost = toNum(row.deliveryCost);
-          const markUpCost = toNum(row.markUpCost);
-          const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost; // l
-          const rate = finalTotal; // d
-          const amount = quantity * rate; // e
-          const gstStr = row.gst || "";
-          const gstPct = parseGstPercent(gstStr); // f
-          const total = amount * (1 + gstPct / 100); // g
+    // AUTO-GENERATE operationsBreakdown from items' suggestedBreakdown if not provided
+    let builtOperationsBreakdown;
+    if (Array.isArray(operationsBreakdown) && operationsBreakdown.length > 0) {
+      builtOperationsBreakdown = operationsBreakdown.map((row, idx) => {
+        const slNo = row.slNo || idx + 1;
+        const product = row.product || "";
+        const quantity = toNum(row.quantity);
+        const ourCost = toNum(row.ourCost);
+        const brandingCost = toNum(row.brandingCost);
+        const deliveryCost = toNum(row.deliveryCost);
+        const markUpCost = toNum(row.markUpCost);
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+        const rate = finalTotal;
+        const amount = quantity * rate;
+        const gstStr = row.gst || "";
+        const gstPct = parseGstPercent(gstStr);
+        const total = amount * (1 + gstPct / 100);
 
-          return {
-            slNo,
-            product,
-            quantity,
-            rate,
-            amount,
-            gst: gstStr,
-            total,
-            ourCost,
-            brandingCost,
-            deliveryCost,
-            markUpCost,
-            finalTotal,
-            vendor: row.vendor || "",
-          };
-        })
-      : existing.operationsBreakdown;
+        return {
+          slNo,
+          product,
+          quantity,
+          rate,
+          amount,
+          gst: gstStr,
+          total,
+          ourCost,
+          brandingCost,
+          deliveryCost,
+          markUpCost,
+          finalTotal,
+          vendor: row.vendor || "",
+        };
+      });
+    } else {
+      builtOperationsBreakdown = buildOperationsBreakdownFromItems(builtItems);
+    }
 
     const totalAmount = builtItems.reduce((sum, x) => sum + (x.amount || 0), 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + (x.total || 0), 0);
@@ -663,7 +711,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       operations: builtOperations,
       operationsBreakdown: builtOperationsBreakdown,
       createdBy: req.user.email,
-      // sourceQuotationId: existing._id, // enable if your model has this field
+      sourceQuotationId: existing._id,
     });
 
     const saved = await newQuotation.save();
@@ -887,7 +935,7 @@ router.put(
     try {
       const updatedQuotation = await Quotation.findByIdAndUpdate(
         req.params.id,
-        { approveStatus: true, isDraft: false }, // publish on approve
+        { approveStatus: true, isDraft: false },
         { new: true }
       );
       if (!updatedQuotation)
@@ -1025,12 +1073,12 @@ router.put(
         const brandingCost = toNum(row.brandingCost);
         const deliveryCost = toNum(row.deliveryCost);
         const markUpCost = toNum(row.markUpCost);
-        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost; // l
-        const rate = finalTotal; // d
-        const amount = quantity * rate; // e
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+        const rate = finalTotal;
+        const amount = quantity * rate;
         const gstStr = row.gst || "";
-        const gstPct = parseGstPercent(gstStr); // f
-        const total = amount * (1 + gstPct / 100); // g
+        const gstPct = parseGstPercent(gstStr);
+        const total = amount * (1 + gstPct / 100);
 
         return {
           slNo,
@@ -1129,8 +1177,6 @@ router.put(
 // ─────────────────────────────────────────────────────────────────────────────
 /** Latest logs for many quotations (match your frontend POST /logs/latest) */
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTE: Your frontend calls POST /api/admin/logs/latest (no :id).
-// Keeping your original one intact if used elsewhere, but adding a clean route.
 router.post("/logs/latest", authenticate, async (req, res) => {
   try {
     const { quotationIds } = req.body;
@@ -1195,7 +1241,6 @@ router.post("/logs/latest", authenticate, async (req, res) => {
   }
 });
 
-// (Keep your older route if some other caller uses it)
 router.post("/logs/:id/latest", authenticate, async (req, res) => {
   try {
     const { quotationIds } = req.body;
@@ -1261,7 +1306,7 @@ router.post("/logs/:id/latest", authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E-Invoice Routes (unchanged except imports/helpers already present)
+// E-Invoice Routes
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(
   "/quotations/:id/einvoice/authenticate",
@@ -1405,7 +1450,6 @@ router.get(
   }
 );
 
-// Invoice helpers
 function padDigits(n, len = 3) {
   return n.toString().padStart(len, "0");
 }

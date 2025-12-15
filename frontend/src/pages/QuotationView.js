@@ -215,31 +215,49 @@ export default function QuotationView() {
     );
   };
 
-  // PREFILL: if no operationsBreakdown and items exist, prefill product + quantity
+  // PREFILL: if no operationsBreakdown and items exist, prefill from items' suggestedBreakdown
   useEffect(() => {
     if (!editableQuotation) return;
     if (opRows.length > 0) return;
     const items = editableQuotation.items || [];
     if (items.length === 0) return;
-    const prefilled = items.map((it, idx) =>
-      recalcRow({
+
+    const prefilled = items.map((it, idx) => {
+      const sb = it.suggestedBreakdown || {};
+      const quantity = num(it.quantity) || 0;
+      
+      // Map from quotation item's suggestedBreakdown fields
+      const ourCost = num(sb.baseCost) || 0;          // Base Cost
+      const brandingCost = num(sb.brandingCost) || 0; // Branding Cost
+      const deliveryCost = num(sb.logisticsCost) || 0; // Logistics Cost
+      const markUpCost = num(sb.marginAmount) || 0;   // Margin Amount
+      
+      const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+      const rate = finalTotal;
+      const amount = quantity * rate;
+      const gstStr = it.productGST != null ? String(it.productGST) : "";
+      const gstPct = parseGstPercent(gstStr);
+      const total = amount * (1 + gstPct / 100);
+
+      return recalcRow({
         slNo: idx + 1,
         product: it.product || "",
-        quantity: num(it.quantity) || 0,
-        rate: 0,
-        amount: 0,
-        gst: it.productGST != null ? String(it.productGST) : "",
-        total: 0,
-        ourCost: 0,
-        brandingCost: 0,
-        deliveryCost: 0,
-        markUpCost: 0,
-        finalTotal: 0,
+        quantity,
+        rate,
+        amount,
+        gst: gstStr,
+        total,
+        ourCost,        // from baseCost
+        brandingCost,   // from brandingCost
+        deliveryCost,   // from logisticsCost
+        markUpCost,     // from marginAmount
+        finalTotal,
         vendor: "",
-      })
-    );
+      });
+    });
+    
     setOpRows(prefilled);
-  }, [editableQuotation, opRows.length]); // only operations section behavior
+  }, [editableQuotation, opRows.length]);
 
   // NEW: Save ONLY operationsBreakdown to current quotation (no new quotation)
   async function handleSaveOperationsBreakdownOnly() {
@@ -948,7 +966,7 @@ export default function QuotationView() {
             }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-xs"
           >
-            Operations Cost (New)
+            Operations Cost (Auto-filled from Items)
           </button>
         </div>
       </div>
@@ -960,7 +978,7 @@ export default function QuotationView() {
       >
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs font-semibold">
-            Operations Cost — Detailed Table
+            Operations Cost — Auto-filled from Quotation Items (Editable)
           </div>
 
           <div className="flex items-center gap-2">
@@ -999,10 +1017,21 @@ export default function QuotationView() {
                 <th className="border px-2 py-1 align-top w-16">Amount</th>
                 <th className="border px-2 py-1 align-top w-14">GST</th>
                 <th className="border px-2 py-1 align-top w-20">Total</th>
-                <th className="border px-2 py-1 align-top w-20">Our Cost</th>
-                <th className="border px-2 py-1 align-top w-16">Branding Cost</th>
-                <th className="border px-2 py-1 align-top w-20">Delivery Cost</th>
-                <th className="border px-2 py-1 align-top w-16">Markup</th>
+                <th className="border px-2 py-1 align-top w-20">
+                  Base Cost
+                  
+                </th>
+                <th className="border px-2 py-1 align-top w-16">
+                  Branding Cost
+                  
+                </th>
+                <th className="border px-2 py-1 align-top w-20">
+                  Logistics Cost
+                  
+                </th>
+                <th className="border px-2 py-1 align-top w-16">
+                  Margin Amount
+                </th>
                 <th className="border px-2 py-1 align-top w-24">Final Total</th>
                 <th className="border px-2 py-1 align-top w-32">Vendor</th>
                 <th className="border px-2 py-1 align-top w-16">Action</th>

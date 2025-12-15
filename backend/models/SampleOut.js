@@ -29,11 +29,21 @@ const sampleOutSchema = new mongoose.Schema({
   outSince:           { type: Number, default: 0 },
   sampleBackDate:     { type: Date },
 
-  // NEW: manual input
+  // Manual input
   opportunityNumber:  { type: String, default: "" },
 
-  // NEW: reason field when not received back
+  // Reason field when not received back
   notReceivedReason:  { type: String, default: "" },
+
+  // NEW: General remarks field
+  remarks:            { type: String, default: "" },
+
+  // NEW: Status dropdown when receivedBack is false
+  receivedBackStatus: { 
+    type: String, 
+    enum: ["Bad Debts", "Invoice", "Yet to come back", ""], 
+    default: "" 
+  },
 
   createdAt:          { type: Date, default: Date.now },
   updatedAt:          { type: Date, default: Date.now },

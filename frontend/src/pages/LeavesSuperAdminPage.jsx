@@ -40,8 +40,15 @@ const RH_SORT_KEYS = ["holidayDate", "createdAt", "updatedAt"];
 function fmtDate(d) {
   if (!d) return "";
   const dt = new Date(d);
-  return isNaN(dt) ? "" : dt.toISOString().slice(0, 10);
+  if (isNaN(dt)) return "";
+  
+  const day = String(dt.getDate()).padStart(2, '0');
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const year = dt.getFullYear();
+  
+  return `${day}-${month}-${year}`;
 }
+
 function daysBetween(a, b) {
   const A = new Date(a),
     B = new Date(b);

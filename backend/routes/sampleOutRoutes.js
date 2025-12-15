@@ -61,9 +61,12 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       returned:            b.returned,
       sampleBackDate:      b.sampleBackDate,
 
-      // NEW
       opportunityNumber:   (b.opportunityNumber || "").trim(),
       notReceivedReason:   (b.notReceivedReason || "").trim(),
+      
+      // NEW: remarks and receivedBackStatus
+      remarks:             (b.remarks || "").trim(),
+      receivedBackStatus:  b.receivedBack ? "" : (b.receivedBackStatus || "").trim(),
     });
 
     await so.save();
@@ -83,7 +86,9 @@ router.get("/", authenticate, authorizeAdmin, async (req, res) => {
           $or: [
             { sampleReferenceCode: { $regex: search, $options: "i" } },
             { opportunityNumber:   { $regex: search, $options: "i" } },
-            { notReceivedReason:   { $regex: search, $options: "i" } }, // NEW: allow searching reason too
+            { notReceivedReason:   { $regex: search, $options: "i" } },
+            { remarks:             { $regex: search, $options: "i" } }, // NEW: search remarks
+            { receivedBackStatus:  { $regex: search, $options: "i" } }, // NEW: search status
           ],
         }
       : {};
@@ -154,14 +159,29 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       if (typeof b[field] !== "undefined") so[field] = b[field];
     });
 
-    // NEW: opportunityNumber
+    // opportunityNumber
     if (typeof b.opportunityNumber !== "undefined") {
       so.opportunityNumber = (b.opportunityNumber || "").trim();
     }
 
-    // NEW: notReceivedReason
+    // notReceivedReason
     if (typeof b.notReceivedReason !== "undefined") {
       so.notReceivedReason = (b.notReceivedReason || "").trim();
+    }
+
+    // NEW: remarks
+    if (typeof b.remarks !== "undefined") {
+      so.remarks = (b.remarks || "").trim();
+    }
+
+    // NEW: receivedBackStatus (only set when receivedBack is false)
+    if (typeof b.receivedBackStatus !== "undefined") {
+      so.receivedBackStatus = b.receivedBack ? "" : (b.receivedBackStatus || "").trim();
+    }
+
+    // Clear receivedBackStatus if receivedBack becomes true
+    if (b.receivedBack === true) {
+      so.receivedBackStatus = "";
     }
 
     await so.save();

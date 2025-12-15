@@ -15,6 +15,7 @@ const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const WFH = require("../models/WFH");
 const User = require("../models/User");
+const { notifyLeaveApplication, notifyLeaveStatusChange } = require("../utils/leaveNotifications");
 
 // Holidays + RH request
 const Holiday = require("../models/Holiday");
@@ -978,17 +979,37 @@ router.patch("/hrms/leaves/:id/status", authenticate, requireSuperAdmin, async (
     if (!allowed.includes(status)) {
       return res.status(400).json({ message: `status must be one of: ${allowed.join(", ")}` });
     }
+
+    const uid = getUserId(req);
+    const user = await User.findById(uid, "name").lean();
+    
     const row = await Leave.findByIdAndUpdate(
       id,
-      { $set: { status, approvedBy: getUserId(req) } },
+      { 
+        $set: { 
+          status, 
+          approvedBy: uid,
+          statusChangedBy: uid,
+          statusChangedByName: user?.name || "Super Admin",
+          statusChangedAt: new Date(),
+        } 
+      },
       { new: true }
     );
+    
     if (!row) return res.status(404).json({ message: "Not found" });
+
+    // Send email notification to employee about status change
+    notifyLeaveStatusChange(row, user).catch(err => 
+      console.error("Email notification error:", err)
+    );
+
     res.json(row);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 });
+
 
 /* ========================= Restricted Holidays (admin) ========================= */
 
@@ -1190,6 +1211,10 @@ router.post("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid start/end date" });
     }
     const days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
+    
+    const uid = getUserId(req);
+    const user = await User.findById(uid, "name").lean();
+    
     const leave = await Leave.create({
       employeeId: String(employeeId).trim(),
       type,
@@ -1198,8 +1223,17 @@ router.post("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
       days,
       purpose,
       status: "pending",
-      requestedBy: getUserId(req),
+      requestedBy: uid,
+      statusChangedBy: uid,
+      statusChangedByName: user?.name || "Admin",
+      statusChangedAt: new Date(),
     });
+
+    // Send email notification to super admins
+    notifyLeaveApplication(leave).catch(err => 
+      console.error("Email notification error:", err)
+    );
+
     res.status(201).json(leave);
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -1215,12 +1249,29 @@ router.patch("/hrms/leaves/:id/decision", authenticate, requireAdmin, async (req
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid id" });
     }
+
+    const uid = getUserId(req);
+    const user = await User.findById(uid, "name").lean();
+
     const up = await Leave.findByIdAndUpdate(
       req.params.id,
-      { status, approvedBy: getUserId(req) },
+      { 
+        status, 
+        approvedBy: uid,
+        statusChangedBy: uid,
+        statusChangedByName: user?.name || "Admin",
+        statusChangedAt: new Date(),
+      },
       { new: true }
     );
+    
     if (!up) return res.status(404).json({ message: "Not found" });
+
+    // Send email notification to employee
+    notifyLeaveStatusChange(up, user).catch(err => 
+      console.error("Email notification error:", err)
+    );
+
     res.json(up);
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -1610,6 +1661,9 @@ router.post("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) 
 
     const days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
 
+    // Get user details for tracking
+    const user = await User.findById(uid, "name").lean();
+
     const row = await Leave.create({
       employeeId: String(empId).trim(),
       type: "additional",
@@ -1619,7 +1673,15 @@ router.post("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) 
       purpose: purpose || "",
       status: "applied",
       requestedBy: uid,
+      statusChangedBy: uid,
+      statusChangedByName: user?.name || "Employee",
+      statusChangedAt: new Date(),
     });
+
+    // Send email notification to super admins (don't await - run in background)
+    notifyLeaveApplication(row).catch(err => 
+      console.error("Email notification error:", err)
+    );
 
     res.status(201).json(row);
   } catch (e) {
@@ -1644,12 +1706,25 @@ router.patch("/hrms/self/leaves/:id/cancel", authenticate, ensureAuthUser, async
     if (["approved", "rejected"].includes(row.status)) {
       return res.status(400).json({ message: `Cannot cancel a ${row.status} request` });
     }
+
+    const user = await User.findById(uid, "name").lean();
+
     row.status = "cancelled";
+    row.statusChangedBy = uid;
+    row.statusChangedByName = user?.name || "Employee";
+    row.statusChangedAt = new Date();
     await row.save();
+
+    // Optionally notify admins about cancellation
+    notifyLeaveStatusChange(row, user).catch(err => 
+      console.error("Email notification error:", err)
+    );
+
     res.json(row);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 });
+
 
 module.exports = router;

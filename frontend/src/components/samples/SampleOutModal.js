@@ -31,11 +31,17 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
     sampleBackDate: null,
     sampleQty: 0,
 
-    // NEW: manual opportunity number
+    // Manual opportunity number
     opportunityNumber: "",
 
-    // NEW: reason field when not received back
+    // Reason field when not received back
     notReceivedReason: "",
+
+    // NEW: General remarks
+    remarks: "",
+
+    // NEW: Status dropdown when receivedBack is false
+    receivedBackStatus: "",
   });
 
   // suggestions & lists
@@ -77,9 +83,13 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         ? new Date(initialData.sampleBackDate)
         : null,
 
-      // NEW: prefill opp number and reason
+      // Prefill opp number and reason
       opportunityNumber: initialData.opportunityNumber || "",
       notReceivedReason: initialData.notReceivedReason || "",
+
+      // NEW: Prefill remarks and receivedBackStatus
+      remarks: initialData.remarks || "",
+      receivedBackStatus: initialData.receivedBackStatus || "",
     }));
   }, [initialData]);
 
@@ -272,7 +282,16 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
 
   // 7) handleChange + validation
   const handleChange = (key, val) => {
-    setForm((f) => ({ ...f, [key]: val }));
+    setForm((f) => {
+      const updated = { ...f, [key]: val };
+      
+      // Clear receivedBackStatus when receivedBack becomes true
+      if (key === "receivedBack" && val === true) {
+        updated.receivedBackStatus = "";
+      }
+      
+      return updated;
+    });
 
     if (key === "qty") {
       const out = Number(val);
@@ -309,6 +328,8 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
         // ensure trimmed strings to API
         opportunityNumber: (form.opportunityNumber || "").trim(),
         notReceivedReason: (form.notReceivedReason || "").trim(),
+        remarks: (form.remarks || "").trim(),
+        receivedBackStatus: form.receivedBack ? "" : (form.receivedBackStatus || "").trim(),
       };
 
       if (isEdit) {
@@ -382,7 +403,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             />
           </div>
 
-          {/* NEW: Opportunity Number (manual input) */}
+          {/* Opportunity Number */}
           <div>
             <label className="block mb-1">Opportunity #</label>
             <input
@@ -659,7 +680,7 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             </select>
           </div>
 
-          {/* Sample Back Date */}
+          {/* Sample Back Date - Only show when Received Back is true */}
           {form.receivedBack && (
             <div>
               <label className="block mb-1">Sample Back Date</label>
@@ -674,19 +695,48 @@ export default function SampleOutModal({ initialData, onClose, onSave }) {
             </div>
           )}
 
+          {/* NEW: Received Back Status - Only show when Received Back is false */}
+          {!form.receivedBack && (
+            <div>
+              <label className="block mb-1">Status</label>
+              <select
+                className="border rounded p-2 w-full"
+                value={form.receivedBackStatus}
+                onChange={(e) => handleChange("receivedBackStatus", e.target.value)}
+              >
+                <option value="">Select Status</option>
+                <option value="Bad Debts">Bad Debts</option>
+                <option value="Invoice">Invoice</option>
+                <option value="Yet to come back">Yet to come back</option>
+              </select>
+            </div>
+          )}
+
           {/* Not Received Reason - Only show when Received Back is false */}
           {!form.receivedBack && (
             <div className="md:col-span-3">
               <label className="block mb-1">Reason for Not Receiving Back</label>
               <textarea
                 className="border rounded p-2 w-full"
-                rows="3"
+                rows="2"
                 value={form.notReceivedReason}
                 onChange={(e) => handleChange("notReceivedReason", e.target.value)}
                 placeholder="Enter reason why sample was not received back..."
               />
             </div>
           )}
+
+          {/* NEW: General Remarks - Always shown */}
+          <div className="md:col-span-3">
+            <label className="block mb-1">Remarks</label>
+            <textarea
+              className="border rounded p-2 w-full"
+              rows="3"
+              value={form.remarks}
+              onChange={(e) => handleChange("remarks", e.target.value)}
+              placeholder="Enter general remarks or notes..."
+            />
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end space-x-2">
