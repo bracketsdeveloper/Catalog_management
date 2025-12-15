@@ -176,6 +176,10 @@ const attendanceRoutes = require('./routes/attendance');
 // Use the routes
 app.use('/api/attendance', attendanceRoutes);
 
+// In your main server.js or app.js
+const suspenseAccountRoutes = require("./routes/suspenseAccounts");
+app.use("/api/suspense-accounts", suspenseAccountRoutes);
+
 
 
 

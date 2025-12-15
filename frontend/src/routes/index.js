@@ -89,6 +89,7 @@ import FileManagement from "../pages/FileManagement";
 import AttendanceSummaryPage from "../pages/AttendanceSummaryPage";
 import AttendanceUploadModal from "../components/attendance/AttendanceUploadModal";
 import BankStatementUpload from "../pages/BankStatementUpload";
+import SuspenseAccountManager from "../pages/SuspenseAccountManager";
 
 
 const router = createBrowserRouter([
@@ -459,6 +460,10 @@ const router = createBrowserRouter([
                     {
                         path:"bank-statement",
                         element:<BankStatementUpload/>
+                    },
+                    {
+                        path:"suspense",
+                        element:<SuspenseAccountManager/>
                     }
                 ]
             }

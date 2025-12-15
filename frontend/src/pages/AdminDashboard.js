@@ -48,6 +48,7 @@ const adminPages = [
     icon: <BanknotesIcon className="w-8 h-8 shrink-0" />,
     subItems: [
       { name: "Bank Statements", path: "/admin-dashboard/bank-statement", permission: "bank-statements" },
+      { name: "Suspense Account", path: "/admin-dashboard/suspense", permission: "suspense" }
     ],
   },
   {
