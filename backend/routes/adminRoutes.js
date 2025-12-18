@@ -94,90 +94,75 @@ async function computeAllHashes(imageUrls) {
  */
 async function generateProductId(category, subCategory, brandName, productName) {
   try {
-    // Helper to get 2-3 character code
-    function getCode(str, existingCodes = []) {
-      if (!str) return '';
+    // Helper to get exactly 2 character code (fixed length for consistency)
+    function getCode(str) {
+      if (!str) return 'XX';
       
-      const words = str.toString().trim().split(/\s+/);
-      let code = '';
+      const cleaned = str.toString().trim().toUpperCase();
+      const words = cleaned.split(/\s+/);
       
       if (words.length === 1) {
-        // Single word: use first 2-3 letters
-        code = words[0].substring(0, 2).toUpperCase();
-        
-        // Check if 2-letter code already exists in the list
-        if (existingCodes.includes(code)) {
-          // Try 3 letters
-          code = words[0].substring(0, 3).toUpperCase();
-          if (existingCodes.includes(code)) {
-            // Use 2 letters with a number
-            code = words[0].substring(0, 2).toUpperCase() + '1';
-          }
-        }
+        // Single word: use first 2 letters
+        return cleaned.substring(0, 2).padEnd(2, 'X');
       } else {
-        // Multiple words: use first letter of first 2-3 words
-        code = words.slice(0, Math.min(3, words.length))
-          .map(w => w.charAt(0).toUpperCase())
-          .join('');
-        
-        // Ensure 2-3 characters
-        code = code.substring(0, Math.min(3, code.length));
-        
-        // Handle duplicates
-        if (existingCodes.includes(code)) {
-          // Add number
-          for (let i = 2; i <= 9; i++) {
-            const newCode = code.substring(0, 2) + i;
-            if (!existingCodes.includes(newCode)) {
-              code = newCode;
-              break;
-            }
-          }
-        }
+        // Multiple words: use first letter of first 2 words
+        return words.slice(0, 2).map(w => w.charAt(0)).join('').padEnd(2, 'X');
       }
-      
-      return code;
     }
     
-    // Get all existing product IDs to check for duplicates
-    const existingProducts = await Product.find({}, 'productId');
-    const existingIds = existingProducts.map(p => p.productId);
+    const catCode = getCode(category);
+    const subCatCode = getCode(subCategory);
+    const brandCode = getCode(brandName);
+    const nameCode = getCode(productName);
     
-    // Collect existing codes for each part to avoid duplication
-    const catCodes = existingIds.map(id => id.substring(0, 2));
-    const subCatCodes = existingIds.map(id => id.substring(2, 4));
-    const brandCodes = existingIds.map(id => id.substring(4, 6));
-    const nameCodes = existingIds.map(id => id.substring(6, 8));
+    const prefix = `${catCode}${subCatCode}${brandCode}${nameCode}`;
     
-    // Generate codes
-    const catCode = getCode(category, catCodes);
-    const subCatCode = getCode(subCategory, subCatCodes) || 'XX';
-    const brandCode = getCode(brandName, brandCodes) || 'XX';
-    const nameCode = getCode(productName, nameCodes) || 'XX';
+    // Find all products with this exact prefix using regex
+    // Escape any special regex characters in prefix
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existingProducts = await Product.find(
+      { productId: { $regex: `^${escapedPrefix}\\d+$` } },
+      'productId'
+    ).lean();
     
-    // Find the next number in sequence
     let nextNumber = 111;
-    const existingNumbers = existingIds
-      .filter(id => id.startsWith(catCode + subCatCode + brandCode + nameCode))
-      .map(id => parseInt(id.substring(8)) || 0);
     
-    if (existingNumbers.length > 0) {
-      nextNumber = Math.max(...existingNumbers) + 1;
+    if (existingProducts.length > 0) {
+      // Extract numbers from the end of each product ID
+      const existingNumbers = existingProducts
+        .map(p => {
+          // Use regex to extract trailing digits
+          const match = p.productId.match(/(\d+)$/);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter(n => n > 0);
+      
+      if (existingNumbers.length > 0) {
+        nextNumber = Math.max(...existingNumbers) + 1;
+      }
     }
     
-    // Ensure number is at least 111
+    // Ensure minimum of 111
     nextNumber = Math.max(nextNumber, 111);
     
-    const productId = `${catCode}${subCatCode}${brandCode}${nameCode}${nextNumber}`;
+    let productId = `${prefix}${nextNumber}`;
     
-    // Final check for uniqueness
-    const exists = await Product.findOne({ productId });
-    if (exists) {
-      // If by chance duplicate exists, increment number
-      return `${catCode}${subCatCode}${brandCode}${nameCode}${nextNumber + 1}`;
+    // Final uniqueness check (handles race conditions)
+    let attempts = 0;
+    while (attempts < 10) {
+      const exists = await Product.findOne({ productId }).lean();
+      if (!exists) {
+        return productId;
+      }
+      // Increment and try again
+      nextNumber++;
+      productId = `${prefix}${nextNumber}`;
+      attempts++;
     }
     
-    return productId;
+    // Fallback: use timestamp for guaranteed uniqueness
+    return `${prefix}${Date.now().toString().slice(-8)}`;
+    
   } catch (error) {
     console.error("Error generating product ID:", error);
     // Fallback: timestamp-based ID
