@@ -234,7 +234,7 @@ async function isHolidayDate(d) {
 // CREATE / UPDATE (upsert) employee (entered by HR only)
 router.post("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
   try {
-    const { personal, org, assets, financial, biometricId, mappedUser } = req.body;
+    const { personal, org, assets, financial, schedule, biometricId, mappedUser } = req.body;
 
     if (!personal?.employeeId || !personal?.name) {
       return res.status(400).json({ message: "employeeId and name are required." });
@@ -244,6 +244,7 @@ router.post("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
     personal.employeeId = String(personal.employeeId).trim();
 
     const update = { personal, org, assets, financial };
+    if (schedule) update.schedule = schedule;  // NEW: Add schedule
     if (typeof biometricId === "string") update.biometricId = biometricId.trim();
     if (mappedUser) update.mappedUser = mappedUser;
 
@@ -262,7 +263,7 @@ router.post("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
 // UPDATE specific employee by employeeId (edit modal save)
 router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req, res) => {
   try {
-    const { personal, org, assets, financial, biometricId, mappedUser, isActive } = req.body;
+    const { personal, org, assets, financial, schedule, biometricId, mappedUser, isActive } = req.body;
 
     const update = {};
     if (personal) {
@@ -272,6 +273,7 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
     if (org) update.org = org;
     if (assets) update.assets = assets;
     if (financial) update.financial = financial;
+    if (schedule) update.schedule = schedule;  // NEW: Add schedule
     if (typeof biometricId === "string") update.biometricId = biometricId.trim();
     if (typeof isActive === "boolean") update.isActive = isActive;
     if (mappedUser === null) {

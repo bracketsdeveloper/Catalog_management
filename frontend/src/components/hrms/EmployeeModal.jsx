@@ -2,6 +2,70 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HRMS } from "../../api/hrmsClient";
 import { toast } from "react-toastify";
 
+// Time picker component for 12-hour format
+function TimePicker12Hr({ value, onChange, label }) {
+  // Parse existing value like "09:30 AM" into parts
+  const parseTime = (timeStr) => {
+    if (!timeStr) return { hour: "09", minute: "00", period: "AM" };
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      return {
+        hour: match[1].padStart(2, "0"),
+        minute: match[2],
+        period: match[3].toUpperCase(),
+      };
+    }
+    return { hour: "09", minute: "00", period: "AM" };
+  };
+
+  const { hour, minute, period } = parseTime(value);
+
+  const handleChange = (field, val) => {
+    const current = parseTime(value);
+    current[field] = val;
+    const formatted = `${current.hour.padStart(2, "0")}:${current.minute} ${current.period}`;
+    onChange(formatted);
+  };
+
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const minutes = ["00", "15", "30", "45"];
+
+  return (
+    <div>
+      <label className="text-xs">{label}</label>
+      <div className="flex gap-1">
+        <select
+          className="border rounded px-2 py-1 text-sm"
+          value={hour}
+          onChange={(e) => handleChange("hour", e.target.value)}
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <span className="self-center">:</span>
+        <select
+          className="border rounded px-2 py-1 text-sm"
+          value={minute}
+          onChange={(e) => handleChange("minute", e.target.value)}
+        >
+          {minutes.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <select
+          className="border rounded px-2 py-1 text-sm"
+          value={period}
+          onChange={(e) => handleChange("period", e.target.value)}
+        >
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
 export default function EmployeeModal({ onClose, onSaved, initial }) {
   const isEdit = Boolean(initial);
 
@@ -39,7 +103,13 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     nextAppraisalOn: initial?.financial?.nextAppraisalOn ? initial.financial.nextAppraisalOn.slice(0, 10) : "",
   }));
 
-  // NEW: biometric + mapping
+  // NEW: Schedule state for expected login/logout times
+  const [schedule, setSchedule] = useState(() => ({
+    expectedLoginTime: initial?.schedule?.expectedLoginTime || "",
+    expectedLogoutTime: initial?.schedule?.expectedLogoutTime || "",
+  }));
+
+  // biometric + mapping
   const [biometricId, setBiometricId] = useState(initial?.biometricId || "");
 
   // stable selected user state (decoupled from userOptions)
@@ -70,7 +140,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
   // debounced search, skip if a user is already selected
   useEffect(() => {
     const q = userQuery.trim();
-    if (mappedUserId) return; // don’t search while selected
+    if (mappedUserId) return; // don't search while selected
     if (!q) {
       setUserOptions([]);
       setShowUserList(false);
@@ -126,6 +196,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
           lastRevisedSalaryAt: financial.lastRevisedSalaryAt ? new Date(financial.lastRevisedSalaryAt) : undefined,
           nextAppraisalOn: financial.nextAppraisalOn ? new Date(financial.nextAppraisalOn) : undefined,
         },
+        schedule, // NEW: Include schedule in payload
         biometricId: biometricId || "",
         mappedUser: mappedUserId || undefined,
       };
@@ -250,6 +321,28 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
           </div>
         </div>
 
+        {/* NEW: Schedule - Expected Login/Logout Times */}
+        <div className="mt-4 p-4 border rounded bg-gray-50">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700">Work Schedule</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TimePicker12Hr
+              label="Expected Login Time"
+              value={schedule.expectedLoginTime}
+              onChange={(val) => setSchedule((s) => ({ ...s, expectedLoginTime: val }))}
+            />
+            <TimePicker12Hr
+              label="Expected Logout Time"
+              value={schedule.expectedLogoutTime}
+              onChange={(val) => setSchedule((s) => ({ ...s, expectedLogoutTime: val }))}
+            />
+          </div>
+          {schedule.expectedLoginTime && schedule.expectedLogoutTime && (
+            <div className="mt-2 text-xs text-gray-500">
+              Schedule: {schedule.expectedLoginTime} — {schedule.expectedLogoutTime}
+            </div>
+          )}
+        </div>
+
         {/* Assets */}
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -343,7 +436,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
           </div>
         </div>
 
-        {/* NEW: Biometric + User Mapping */}
+        {/* Biometric + User Mapping */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-xs">Biometric ID (eSSL)</label>

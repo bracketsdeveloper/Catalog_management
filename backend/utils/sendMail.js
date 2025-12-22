@@ -11,7 +11,7 @@ const transporter = nodemailer.createTransport({
 async function sendMail({ to, subject, text, html }) {
   try {
     const mailOptions = {
-      from: `"Catalog Manager" <${process.env.EMAIL_FROM}>`,
+      from: `"PACER" <${process.env.EMAIL_FROM}>`,
       to,
       subject,
       text, // plain text body

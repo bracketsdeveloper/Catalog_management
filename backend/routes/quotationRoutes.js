@@ -66,14 +66,15 @@ function buildOperationsBreakdownFromItems(items) {
     const quantity = Number(item.quantity) || 0;
     
     // Map from suggestedBreakdown fields
-    const ourCost = Number(sb.baseCost) || 0;          // Base Cost
+    const ourCost = Number(sb.baseCost) || 0; // Base Cost
     const brandingCost = Number(sb.brandingCost) || 0; // Branding Cost
-    const deliveryCost = Number(sb.logisticsCost) || 0; // Logistics Cost
-    const markUpCost = Number(sb.marginAmount) || 0;   // Margin Amount
+    const deliveryCost = Number(sb.logisticsCost) || 0; // Logistic Cost
+    const markUpCost = Number(sb.marginAmount) || 0; // Mark Up
+    const successFee = Number(sb.successFee) || 0; // Optional Success Fee if present
     
     // Calculate derived fields
-    const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
-    const rate = finalTotal;
+    const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost + successFee;
+    const rate = finalTotal; // Rate (Total)
     const amount = quantity * rate;
     
     // Get GST from item
@@ -89,12 +90,14 @@ function buildOperationsBreakdownFromItems(items) {
       amount,
       gst: gstStr,
       total,
-      ourCost,        // from baseCost
-      brandingCost,   // from brandingCost
-      deliveryCost,   // from logisticsCost
-      markUpCost,     // from marginAmount
+      ourCost, // Base Cost
+      brandingCost, // Branding
+      deliveryCost, // Logistic Cost
+      markUpCost, // Mark Up
+      successFee,
       finalTotal,
       vendor: "",
+      remarks: "",
     };
   });
 }
@@ -219,11 +222,13 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
         const slNo = row.slNo || idx + 1;
         const product = row.product || "";
         const quantity = toNum(row.quantity);
+        const catalogPrice = toNum(row.catalogPrice);
         const ourCost = toNum(row.ourCost);
         const brandingCost = toNum(row.brandingCost);
         const deliveryCost = toNum(row.deliveryCost);
         const markUpCost = toNum(row.markUpCost);
-        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+        const successFee = toNum(row.successFee);
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost + successFee;
         const rate = finalTotal;
         const amount = quantity * rate;
         const gstStr = row.gst || "";
@@ -232,6 +237,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
 
         return {
           slNo,
+          catalogPrice,
           product,
           quantity,
           rate,
@@ -242,8 +248,10 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
           brandingCost,
           deliveryCost,
           markUpCost,
+          successFee,
           finalTotal,
           vendor: row.vendor || "",
+          remarks: row.remarks || "",
         };
       });
     } else {
@@ -656,11 +664,13 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         const slNo = row.slNo || idx + 1;
         const product = row.product || "";
         const quantity = toNum(row.quantity);
+        const catalogPrice = toNum(row.catalogPrice);
         const ourCost = toNum(row.ourCost);
         const brandingCost = toNum(row.brandingCost);
         const deliveryCost = toNum(row.deliveryCost);
         const markUpCost = toNum(row.markUpCost);
-        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
+        const successFee = toNum(row.successFee);
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost + successFee;
         const rate = finalTotal;
         const amount = quantity * rate;
         const gstStr = row.gst || "";
@@ -669,6 +679,7 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
 
         return {
           slNo,
+          catalogPrice,
           product,
           quantity,
           rate,
@@ -679,8 +690,10 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           brandingCost,
           deliveryCost,
           markUpCost,
+          successFee,
           finalTotal,
           vendor: row.vendor || "",
+          remarks: row.remarks || "",
         };
       });
     } else {
@@ -1064,17 +1077,19 @@ router.put(
         return res.status(400).json({ message: "operationsBreakdown must be an array" });
       }
 
-      // Normalize + recalc like create() does
+      // Normalize + recalc like create() does (including new fields)
       const builtOperationsBreakdown = operationsBreakdown.map((row, idx) => {
         const slNo = row.slNo || idx + 1;
         const product = row.product || "";
         const quantity = toNum(row.quantity);
+        const catalogPrice = toNum(row.catalogPrice);
         const ourCost = toNum(row.ourCost);
         const brandingCost = toNum(row.brandingCost);
         const deliveryCost = toNum(row.deliveryCost);
         const markUpCost = toNum(row.markUpCost);
-        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
-        const rate = finalTotal;
+        const successFee = toNum(row.successFee);
+        const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost + successFee;
+        const rate = finalTotal; // Rate (Total)
         const amount = quantity * rate;
         const gstStr = row.gst || "";
         const gstPct = parseGstPercent(gstStr);
@@ -1082,6 +1097,7 @@ router.put(
 
         return {
           slNo,
+          catalogPrice,
           product,
           quantity,
           rate,
@@ -1092,8 +1108,10 @@ router.put(
           brandingCost,
           deliveryCost,
           markUpCost,
+          successFee,
           finalTotal,
           vendor: row.vendor || "",
+          remarks: row.remarks || "",
         };
       });
 

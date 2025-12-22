@@ -13,21 +13,34 @@ const operationsSchema = new mongoose.Schema({
 });
 
 // NEW: Operations Breakdown Row schema (your table)
-const operationsBreakdownRowSchema = new mongoose.Schema({
-  slNo: { type: Number, required: true },
-  product: { type: String, default: "" },
-  quantity: { type: Number, default: 0 },
-  rate: { type: Number, default: 0 },
-  amount: { type: Number, default: 0 },
-  gst: { type: String, default: "" },
-  total: { type: Number, default: 0 },
-  ourCost: { type: Number, default: 0 },
-  brandingCost: { type: Number, default: 0 },
-  deliveryCost: { type: Number, default: 0 },
-  markUpCost: { type: Number, default: 0 },
-  finalTotal: { type: Number, default: 0 },
-  vendor: { type: String, default: "" },
-}, { _id: false });
+// Updated to align with new operations cost table:
+// Catalog Price, Product, Qty, Base Cost, Branding, Logistic Cost, Mark Up,
+// Success Fee, Rate (Total), GST, Total Rate per piece With GST, Vendor Name, Remarks
+const operationsBreakdownRowSchema = new mongoose.Schema(
+  {
+    slNo: { type: Number, required: true },
+    // Optional reference/catalog price (from catalog/products)
+    catalogPrice: { type: Number, default: 0 },
+    product: { type: String, default: "" },
+    quantity: { type: Number, default: 0 },
+    // Derived fields
+    rate: { type: Number, default: 0 }, // Rate (Total) = base + branding + logistics + markup + successFee
+    amount: { type: Number, default: 0 },
+    gst: { type: String, default: "" }, // e.g. "18" or "18%"
+    total: { type: Number, default: 0 }, // Total rate per piece incl. GST
+    // Cost components
+    ourCost: { type: Number, default: 0 }, // Base Cost
+    brandingCost: { type: Number, default: 0 }, // Branding
+    deliveryCost: { type: Number, default: 0 }, // Logistic Cost
+    markUpCost: { type: Number, default: 0 }, // Mark Up
+    successFee: { type: Number, default: 0 }, // Success Fee (SF)
+    // Kept for backward compatibility; equal to "rate"
+    finalTotal: { type: Number, default: 0 },
+    vendor: { type: String, default: "" },
+    remarks: { type: String, default: "" },
+  },
+  { _id: false }
+);
 
 const quotationItemSchema = new mongoose.Schema({
   slNo: { type: Number, default: 1 },

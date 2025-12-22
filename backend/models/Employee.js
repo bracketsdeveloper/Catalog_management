@@ -52,11 +52,18 @@ const financialSchema = new mongoose.Schema({
   nextAppraisalOn: { type: Date },
 }, { _id: false });
 
+// --- Schedule (expected work timings) ---
+const scheduleSchema = new mongoose.Schema({
+  expectedLoginTime: { type: String, default: "" },   // Format: "09:00 AM"
+  expectedLogoutTime: { type: String, default: "" },  // Format: "06:00 PM"
+}, { _id: false });
+
 const employeeSchema = new mongoose.Schema({
   personal: { type: personalSchema, required: true },
   org: { type: orgSchema, default: {} },
   assets: { type: assetsSchema, default: {} },
   financial: { type: financialSchema, default: {} },
+  schedule: { type: scheduleSchema, default: {} },  // NEW: Schedule field
 
   biometricId: { type: String, index: true, default: "" }, // eSSL Biometric ID
   mappedUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },

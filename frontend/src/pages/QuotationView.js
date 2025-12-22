@@ -1,12 +1,56 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Indian number formatting helper
+const formatIndianNumber = (num) => {
+  if (num === null || num === undefined || isNaN(num)) return "0.00";
+  const number = parseFloat(num);
+  const isNegative = number < 0;
+  const absoluteNum = Math.abs(number);
+  
+  const parts = absoluteNum.toFixed(2).split(".");
+  let integerPart = parts[0];
+  const decimalPart = parts[1];
+  
+  let lastThree = integerPart.substring(integerPart.length - 3);
+  const otherNumbers = integerPart.substring(0, integerPart.length - 3);
+  
+  if (otherNumbers !== "") {
+    lastThree = "," + lastThree;
+  }
+  
+  const formatted = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + lastThree;
+  
+  return (isNegative ? "-" : "") + formatted + "." + decimalPart;
+};
+
+// Format integer without decimals
+const formatIndianInteger = (num) => {
+  if (num === null || num === undefined || isNaN(num)) return "0";
+  const number = Math.round(parseFloat(num));
+  const isNegative = number < 0;
+  const absoluteNum = Math.abs(number);
+  
+  let integerPart = absoluteNum.toString();
+  
+  let lastThree = integerPart.substring(integerPart.length - 3);
+  const otherNumbers = integerPart.substring(0, integerPart.length - 3);
+  
+  if (otherNumbers !== "") {
+    lastThree = "," + lastThree;
+  }
+  
+  const formatted = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + lastThree;
+  
+  return (isNegative ? "-" : "") + formatted;
+};
 
 export default function QuotationView() {
   const { id } = useParams();
@@ -27,10 +71,9 @@ export default function QuotationView() {
   const [errorMessage, setErrorMessage] = useState("");
   const [jsonView, setJsonView] = useState("json");
   const token = localStorage.getItem("token");
-  // NEW: Operations Breakdown table state
+  // Operations Breakdown table state
   const [opRows, setOpRows] = useState([]);
-  // NEW: expand / minimize state for operations breakdown panel
-  const [isOpsExpanded, setIsOpsExpanded] = useState(false);
+  const [catalogData, setCatalogData] = useState(null);
 
   const fieldNameMapping = {
     txn: "Transaction",
@@ -103,6 +146,43 @@ export default function QuotationView() {
     }
   }
 
+  // Fetch catalog data to get catalog prices
+  async function fetchCatalogByName(catalogName) {
+    if (!catalogName) return null;
+    try {
+      const res = await axios.get(`${BACKEND_URL}/api/admin/catalogs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const catalogs = res.data || [];
+      // Find catalog by name (case-insensitive)
+      const matchedCatalog = catalogs.find(
+        (c) => c.catalogName?.toLowerCase() === catalogName?.toLowerCase()
+      );
+      if (matchedCatalog) {
+        setCatalogData(matchedCatalog);
+        return matchedCatalog;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching catalog:", error.response?.data || error.message);
+      return null;
+    }
+  }
+
+  // Get catalog price for a product by matching product name
+  function getCatalogPriceForProduct(productName, catalog) {
+    if (!catalog || !catalog.products || !productName) return 0;
+    const matchedProduct = catalog.products.find(
+      (p) => 
+        p.productName?.toLowerCase() === productName?.toLowerCase() ||
+        p.productId?.name?.toLowerCase() === productName?.toLowerCase()
+    );
+    if (matchedProduct) {
+      return Number(matchedProduct.productCost) || Number(matchedProduct.baseCost) || 0;
+    }
+    return 0;
+  }
+
   async function fetchQuotation() {
     try {
       setLoading(true);
@@ -122,22 +202,72 @@ export default function QuotationView() {
         hsnCode: item.hsnCode || item.productId?.hsnCode || "",
       }));
 
-      // init operationsBreakdown table
-      const initialOps = (data.operationsBreakdown || []).map((r, idx) => ({
-        slNo: r.slNo || idx + 1,
-        product: r.product || "",
-        quantity: Number(r.quantity) || 0,
-        rate: Number(r.rate) || 0,
-        amount: Number(r.amount) || 0,
-        gst: r.gst || "",
-        total: Number(r.total) || 0,
-        ourCost: Number(r.ourCost) || 0,
-        brandingCost: Number(r.brandingCost) || 0,
-        deliveryCost: Number(r.deliveryCost) || 0,
-        markUpCost: Number(r.markUpCost) || 0,
-        finalTotal: Number(r.finalTotal) || 0,
-        vendor: r.vendor || "",
-      }));
+      // Fetch catalog data to get catalog prices
+      let catalog = null;
+      if (data.catalogName) {
+        catalog = await fetchCatalogByName(data.catalogName);
+      }
+
+      // init operationsBreakdown table with new structure
+      const initialOps = (data.operationsBreakdown || []).map((r, idx) => {
+        const linkedItem = sanitizedItems[idx] || {};
+        // Try to get catalog price from catalog if not already set
+        let catalogPrice = Number(r.catalogPrice) || 0;
+        if (catalogPrice === 0 && catalog && r.product) {
+          catalogPrice = getCatalogPriceForProduct(r.product, catalog);
+        }
+        // Quantity: prefer ops row, else fall back to item quantity
+        const quantity = Number(r.quantity) || num(linkedItem.quantity) || 0;
+
+        // Base cost: prefer explicit base/ourCost, else fall back to item rate
+        const baseCost =
+          Number(r.baseCost) || Number(r.ourCost) || num(linkedItem.rate);
+
+        const brandingCost = Number(r.brandingCost) || 0;
+        const logisticCost =
+          Number(r.logisticCost) || Number(r.deliveryCost) || 0;
+        const markUp = Number(r.markUp) || Number(r.markUpCost) || 0;
+        const successFee = Number(r.successFee) || Number(r.sfCost) || 0;
+
+        // GST string: prefer ops row, else from item / quotation
+        const gstStr =
+          r.gst ||
+          (linkedItem.productGST != null
+            ? String(linkedItem.productGST)
+            : data.gst != null
+            ? String(data.gst)
+            : "");
+        const gstPct = parseGstPercent(gstStr);
+
+        // Rate and totals: if not present on ops row, derive from item values
+        let rate = Number(r.rate) || 0;
+        if (!rate) {
+          rate = num(linkedItem.rate);
+        }
+
+        let totalWithGst = Number(r.totalWithGst) || Number(r.total) || 0;
+        if (!totalWithGst && rate && quantity) {
+          const amt = quantity * rate;
+          totalWithGst = amt * (1 + gstPct / 100);
+        }
+
+        return {
+          slNo: r.slNo || idx + 1,
+          catalogPrice,
+          product: r.product || linkedItem.product || "",
+          quantity,
+          baseCost,
+          brandingCost,
+          logisticCost,
+          markUp,
+          successFee,
+          rate,
+          gst: gstStr,
+          totalWithGst,
+          vendor: r.vendor || "",
+          remarks: r.remarks || "",
+        };
+      });
 
       setQuotation({ ...data, items: sanitizedItems });
       setEditableQuotation({ ...data, items: sanitizedItems });
@@ -162,58 +292,191 @@ export default function QuotationView() {
     const n = parseFloat(s.replace("%", ""));
     return isNaN(n) ? 0 : n;
   };
+  
+  // Updated recalcRow with new formula:
+  // Rate (Total) = Base Cost + Branding + Logistic Cost + Mark Up + Success Fee
+  // Total Rate per piece With GST = Rate * (1 + GST/100)
   const recalcRow = (row) => {
-    const h = num(row.ourCost);
-    const i = num(row.brandingCost);
-    const j = num(row.deliveryCost);
-    const k = num(row.markUpCost);
-    const c = num(row.quantity);
-    const l = h + i + j + k; // finalTotal
-    const d = l; // rate
-    const e = c * d; // amount
-    const fPct = parseGstPercent(row.gst); // GST %
-    const g = e * (1 + fPct / 100); // total including GST
-    return { ...row, finalTotal: l, rate: d, amount: e, total: g };
+    const baseCost = num(row.baseCost);
+    const brandingCost = num(row.brandingCost);
+    const logisticCost = num(row.logisticCost);
+    const markUp = num(row.markUp);
+    const successFee = num(row.successFee);
+    const quantity = num(row.quantity);
+    
+    // Rate (Total) = Base + Branding + Logistic + MarkUp + SuccessFee (auto-calculated)
+    const rate = baseCost + brandingCost + logisticCost + markUp + successFee;
+    
+    // Total Rate per piece With GST = Rate * (1 + GST/100) (auto-calculated)
+    const gstPct = parseGstPercent(row.gst);
+    const totalWithGst = rate * (1 + gstPct / 100);
+    
+    // Amount for line item (qty * rate)
+    const amount = quantity * rate;
+    // Total amount with GST
+    const totalAmount = quantity * totalWithGst;
+    
+    return { 
+      ...row, 
+      rate, 
+      totalWithGst,
+      amount,
+      totalAmount
+    };
   };
+  
   const addOpRow = () => {
     const nextSl = (opRows[opRows.length - 1]?.slNo || 0) + 1;
     setOpRows((prev) => [
       ...prev,
       recalcRow({
         slNo: nextSl,
+        catalogPrice: 0,
         product: "",
         quantity: 0,
-        rate: 0,
-        amount: 0,
-        gst: "",
-        total: 0,
-        ourCost: 0,
+        baseCost: 0,
         brandingCost: 0,
-        deliveryCost: 0,
-        markUpCost: 0,
-        finalTotal: 0,
+        logisticCost: 0,
+        markUp: 0,
+        successFee: 0,
+        rate: 0,
+        gst: "",
+        totalWithGst: 0,
         vendor: "",
+        remarks: "",
       }),
     ]);
   };
+  
+  // Duplicate row function for same product multiple times
+  const duplicateOpRow = (idx) => {
+    const rowToDuplicate = opRows[idx];
+    const nextSl = (opRows[opRows.length - 1]?.slNo || 0) + 1;
+    const newRow = recalcRow({
+      ...rowToDuplicate,
+      slNo: nextSl,
+    });
+    setOpRows((prev) => [...prev, newRow]);
+  };
+  
   const updateOpRow = (idx, field, value) => {
     setOpRows((prev) => {
       const copy = [...prev];
       copy[idx] = recalcRow({
         ...copy[idx],
         [field]:
-          field === "product" || field === "gst" || field === "vendor"
+          field === "product" || field === "gst" || field === "vendor" || field === "remarks"
             ? value
             : num(value),
       });
       return copy;
     });
   };
+  
   const removeOpRow = (idx) => {
     setOpRows((prev) =>
       prev.filter((_, i) => i !== idx).map((r, i2) => ({ ...r, slNo: i2 + 1 }))
     );
   };
+
+  // Fetch catalog price for a specific row
+  const fetchCatalogPriceForRow = async (idx) => {
+    const row = opRows[idx];
+    if (!row || !row.product) {
+      alert("No product name to fetch catalog price for");
+      return;
+    }
+    
+    let catalog = catalogData;
+    if (!catalog && editableQuotation?.catalogName) {
+      catalog = await fetchCatalogByName(editableQuotation.catalogName);
+    }
+    
+    if (!catalog) {
+      alert("No catalog found for this quotation");
+      return;
+    }
+    
+    const price = getCatalogPriceForProduct(row.product, catalog);
+    if (price > 0) {
+      updateOpRow(idx, "catalogPrice", price);
+    } else {
+      alert(`No catalog price found for "${row.product}"`);
+    }
+  };
+
+  // Fetch all catalog prices
+  const fetchAllCatalogPrices = async () => {
+    let catalog = catalogData;
+    if (!catalog && editableQuotation?.catalogName) {
+      catalog = await fetchCatalogByName(editableQuotation.catalogName);
+    }
+    
+    if (!catalog) {
+      alert("No catalog found for this quotation");
+      return;
+    }
+    
+    setOpRows((prev) => 
+      prev.map((row) => {
+        const price = getCatalogPriceForProduct(row.product, catalog);
+        if (price > 0) {
+          return { ...row, catalogPrice: price };
+        }
+        return row;
+      })
+    );
+  };
+
+  // Sync operations breakdown to quotation items - auto-fetch details
+  // IMPORTANT: never overwrite existing values with 0; only override when ops row has real data
+  const syncOpsToQuotation = useCallback(() => {
+    if (!editableQuotation || opRows.length === 0) return;
+
+    const updatedItems = opRows.map((opRow, idx) => {
+      const existingItem = editableQuotation.items[idx] || {};
+
+      const existingQty = num(existingItem.quantity) || 0;
+      const existingRate = num(existingItem.rate) || 0;
+      const existingGst =
+        existingItem.productGST != null ? num(existingItem.productGST) : 0;
+
+      const opQty = num(opRow.quantity);
+      const opRate = num(opRow.rate);
+      const opGst = parseGstPercent(opRow.gst);
+
+      const quantity = opQty > 0 ? opQty : existingQty || 1;
+      const rate = opRate > 0 ? opRate : existingRate;
+      const productGST = opGst > 0 ? opGst : existingGst;
+
+      const amount = quantity * rate;
+      const total = amount * (1 + productGST / 100);
+
+      return {
+        ...existingItem,
+        slNo: opRow.slNo ?? existingItem.slNo ?? idx + 1,
+        product: opRow.product || existingItem.product,
+        quantity,
+        rate,
+        productGST,
+        amount,
+        total,
+        hsnCode: existingItem.hsnCode || "",
+      };
+    });
+
+    setEditableQuotation((prev) => ({
+      ...prev,
+      items: updatedItems,
+    }));
+  }, [opRows, editableQuotation]);
+
+  // Auto-sync when opRows change
+  useEffect(() => {
+    if (opRows.length > 0 && editableQuotation) {
+      syncOpsToQuotation();
+    }
+  }, [opRows]);
 
   // PREFILL: if no operationsBreakdown and items exist, prefill from items' suggestedBreakdown
   useEffect(() => {
@@ -226,57 +489,70 @@ export default function QuotationView() {
       const sb = it.suggestedBreakdown || {};
       const quantity = num(it.quantity) || 0;
       
-      // Map from quotation item's suggestedBreakdown fields
-      const ourCost = num(sb.baseCost) || 0;          // Base Cost
-      const brandingCost = num(sb.brandingCost) || 0; // Branding Cost
-      const deliveryCost = num(sb.logisticsCost) || 0; // Logistics Cost
-      const markUpCost = num(sb.marginAmount) || 0;   // Margin Amount
+      // Try to get catalog price from catalog data first, then from suggestedBreakdown, then from item rate
+      let catalogPrice = 0;
+      if (catalogData && it.product) {
+        catalogPrice = getCatalogPriceForProduct(it.product, catalogData);
+      }
+      if (catalogPrice === 0) {
+        catalogPrice = num(sb.catalogPrice) || num(it.rate) || 0;
+      }
       
-      const finalTotal = ourCost + brandingCost + deliveryCost + markUpCost;
-      const rate = finalTotal;
-      const amount = quantity * rate;
+      const baseCost = num(sb.baseCost) || 0;
+      const brandingCost = num(sb.brandingCost) || 0;
+      const logisticCost = num(sb.logisticsCost) || 0;
+      const markUp = num(sb.marginAmount) || 0;
+      const successFee = num(sb.sfCost) || num(sb.successFee) || 0;
+      
       const gstStr = it.productGST != null ? String(it.productGST) : "";
-      const gstPct = parseGstPercent(gstStr);
-      const total = amount * (1 + gstPct / 100);
 
       return recalcRow({
         slNo: idx + 1,
+        catalogPrice,
         product: it.product || "",
         quantity,
-        rate,
-        amount,
+        baseCost,
+        brandingCost,
+        logisticCost,
+        markUp,
+        successFee,
+        rate: 0,
         gst: gstStr,
-        total,
-        ourCost,        // from baseCost
-        brandingCost,   // from brandingCost
-        deliveryCost,   // from logisticsCost
-        markUpCost,     // from marginAmount
-        finalTotal,
+        totalWithGst: 0,
         vendor: "",
+        remarks: "",
       });
     });
     
     setOpRows(prefilled);
-  }, [editableQuotation, opRows.length]);
+  }, [editableQuotation, opRows.length, catalogData]);
 
-  // NEW: Save ONLY operationsBreakdown to current quotation (no new quotation)
+  // Save ONLY operationsBreakdown to current quotation (no new quotation)
   async function handleSaveOperationsBreakdownOnly() {
     try {
       const payload = {
         operationsBreakdown: opRows.map((r) => ({
           slNo: r.slNo,
+          catalogPrice: num(r.catalogPrice),
           product: r.product,
           quantity: num(r.quantity),
-          rate: num(r.rate),
-          amount: num(r.amount),
-          gst: r.gst,
-          total: num(r.total),
-          ourCost: num(r.ourCost),
+          baseCost: num(r.baseCost),
           brandingCost: num(r.brandingCost),
-          deliveryCost: num(r.deliveryCost),
-          markUpCost: num(r.markUpCost),
-          finalTotal: num(r.finalTotal),
+          logisticCost: num(r.logisticCost),
+          markUp: num(r.markUp),
+          successFee: num(r.successFee),
+          rate: num(r.rate),
+          gst: r.gst,
+          totalWithGst: num(r.totalWithGst),
           vendor: r.vendor,
+          remarks: r.remarks,
+          // Legacy field mappings for backward compatibility
+          ourCost: num(r.baseCost),
+          deliveryCost: num(r.logisticCost),
+          markUpCost: num(r.markUp),
+          sfCost: num(r.successFee),
+          amount: num(r.amount),
+          total: num(r.totalAmount),
         })),
       };
 
@@ -287,37 +563,35 @@ export default function QuotationView() {
       );
 
       if (res?.data?.quotation) {
-        // refresh local state from server response
         setEditableQuotation(res.data.quotation);
         setQuotation(res.data.quotation);
 
         const fresh = (res.data.quotation.operationsBreakdown || []).map(
           (r, idx) => ({
             slNo: r.slNo || idx + 1,
+            catalogPrice: Number(r.catalogPrice) || 0,
             product: r.product || "",
             quantity: Number(r.quantity) || 0,
-            rate: Number(r.rate) || 0,
-            amount: Number(r.amount) || 0,
-            gst: r.gst || "",
-            total: Number(r.total) || 0,
-            ourCost: Number(r.ourCost) || 0,
+            baseCost: Number(r.baseCost) || Number(r.ourCost) || 0,
             brandingCost: Number(r.brandingCost) || 0,
-            deliveryCost: Number(r.deliveryCost) || 0,
-            markUpCost: Number(r.markUpCost) || 0,
-            finalTotal: Number(r.finalTotal) || 0,
+            logisticCost: Number(r.logisticCost) || Number(r.deliveryCost) || 0,
+            markUp: Number(r.markUp) || Number(r.markUpCost) || 0,
+            successFee: Number(r.successFee) || Number(r.sfCost) || 0,
+            rate: Number(r.rate) || 0,
+            gst: r.gst || "",
+            totalWithGst: Number(r.totalWithGst) || Number(r.total) || 0,
             vendor: r.vendor || "",
+            remarks: r.remarks || "",
           })
         );
-        setOpRows(fresh);
+        setOpRows(fresh.map(r => recalcRow(r)));
       }
 
-      alert(
-        "Operations breakdown saved to this quotation (no new quotation created)."
-      );
+      alert("Operations breakdown saved successfully.");
     } catch (err) {
-      console.error("Save operations breakdown only error:", err);
+      console.error("Save operations breakdown error:", err);
       alert(
-        "Failed to save operations breakdown on this quotation: " +
+        "Failed to save operations breakdown: " +
           (err.response?.data?.message || err.message)
       );
     }
@@ -496,7 +770,7 @@ export default function QuotationView() {
       });
 
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg-grid-cols-3 gap-4">
           {fields}
         </div>
       );
@@ -529,32 +803,27 @@ export default function QuotationView() {
             {editableQuotation.items.map((item, index) => {
               const baseRate = parseFloat(item.rate) || 0;
               const effRate = baseRate * marginFactor;
-              const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(
-                2
-              );
+              const amount = effRate * (parseFloat(item.quantity) || 1);
               const gstRate =
                 item.productGST != null
                   ? parseFloat(item.productGST)
                   : editableQuotation.gst
                   ? parseFloat(editableQuotation.gst)
                   : 0;
-              const total = (
-                parseFloat(amount) +
-                (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
-              ).toFixed(2);
+              const total = amount + (gstRate > 0 ? amount * (gstRate / 100) : 0);
 
               return (
                 <tr key={index} className="border-b hover:bg-gray-50">
                   <td className="p-2">{item.slNo || index + 1}</td>
-                  <td className="p-2">{item.product}</td>
+                  <td className="p-2 wrap-text">{item.product}</td>
                   <td className="p-2">
                     {item.hsnCode || item.productId?.hsnCode || ""}
                   </td>
-                  <td className="p-2">{item.quantity}</td>
-                  <td className="p-2">{item.rate}</td>
-                  <td className="p-2">{amount}</td>
+                  <td className="p-2">{formatIndianInteger(item.quantity)}</td>
+                  <td className="p-2">{formatIndianNumber(item.rate)}</td>
+                  <td className="p-2">{formatIndianNumber(amount)}</td>
                   <td className="p-2">{gstRate}</td>
-                  <td className="p-2">{total}</td>
+                  <td className="p-2">{formatIndianNumber(total)}</td>
                 </tr>
               );
             })}
@@ -652,6 +921,9 @@ export default function QuotationView() {
         priceRange,
       } = editableQuotation;
 
+      // FIXED: Ensure terms are preserved - use existing terms or default
+      const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
+
       const updatedItems = items.map((item) => {
         const baseRate = parseFloat(item.rate) || 0;
         const quantity = parseFloat(item.quantity) || 1;
@@ -692,27 +964,34 @@ export default function QuotationView() {
         margin: updatedMargin,
         gst,
         items: updatedItems,
-        terms,
+        terms: quotationTerms, // FIXED: Always include terms
         fieldsToDisplay,
         displayTotals,
         displayHSNCodes,
         operations,
         priceRange,
-        // IMPORTANT: operationsBreakdown is sent so new quotation gets these rows
         operationsBreakdown: opRows.map((r) => ({
           slNo: r.slNo,
+          catalogPrice: num(r.catalogPrice),
           product: r.product,
           quantity: num(r.quantity),
-          rate: num(r.rate),
-          amount: num(r.amount),
-          gst: r.gst,
-          total: num(r.total),
-          ourCost: num(r.ourCost),
+          baseCost: num(r.baseCost),
           brandingCost: num(r.brandingCost),
-          deliveryCost: num(r.deliveryCost),
-          markUpCost: num(r.markUpCost),
-          finalTotal: num(r.finalTotal),
+          logisticCost: num(r.logisticCost),
+          markUp: num(r.markUp),
+          successFee: num(r.successFee),
+          rate: num(r.rate),
+          gst: r.gst,
+          totalWithGst: num(r.totalWithGst),
           vendor: r.vendor,
+          remarks: r.remarks,
+          // Legacy mappings
+          ourCost: num(r.baseCost),
+          deliveryCost: num(r.logisticCost),
+          markUpCost: num(r.markUp),
+          sfCost: num(r.successFee),
+          amount: num(r.amount),
+          total: num(r.totalAmount),
         })),
       };
 
@@ -774,7 +1053,6 @@ export default function QuotationView() {
     try {
       const res = await axios.post(
         `${BACKEND_URL}/api/admin/invoices/from-quotation/${id}`,
-        // Pass optional format string; fallback is APP/{FY}/{SEQ4}
         format ? { format } : {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -839,7 +1117,7 @@ export default function QuotationView() {
     if (newTerm.heading && newTerm.content) {
       setEditableQuotation((prev) => ({
         ...prev,
-        terms: [...prev.terms, newTerm],
+        terms: [...(prev.terms || []), newTerm],
       }));
       setNewTerm({ heading: "", content: "" });
       setTermModalOpen(false);
@@ -854,7 +1132,7 @@ export default function QuotationView() {
   }
 
   function handleUpdateTerm() {
-    const updatedTerms = [...editableQuotation.terms];
+    const updatedTerms = [...(editableQuotation.terms || [])];
     updatedTerms[editingTermIdx] = {
       heading: newTerm.heading,
       content: newTerm.content,
@@ -862,6 +1140,7 @@ export default function QuotationView() {
     setEditableQuotation((prev) => ({ ...prev, terms: updatedTerms }));
     setTermModalOpen(false);
     setEditingTermIdx(null);
+    setNewTerm({ heading: "", content: "" });
   }
 
   const handleExportPDF = () => {
@@ -875,364 +1154,521 @@ export default function QuotationView() {
 
   const marginFactor = 1 + (parseFloat(editableQuotation?.margin) || 0) / 100;
 
-  // NEW: vertical totals for operations breakdown
+  // Vertical totals for operations breakdown
   const opTotals = opRows.reduce(
     (acc, r) => {
       acc.quantity += num(r.quantity);
-      acc.amount += num(r.amount);
-      acc.total += num(r.total);
-      acc.ourCost += num(r.ourCost);
+      acc.catalogPrice += num(r.catalogPrice);
+      acc.baseCost += num(r.baseCost);
       acc.brandingCost += num(r.brandingCost);
-      acc.deliveryCost += num(r.deliveryCost);
-      acc.markUpCost += num(r.markUpCost);
-      acc.finalTotal += num(r.finalTotal);
+      acc.logisticCost += num(r.logisticCost);
+      acc.markUp += num(r.markUp);
+      acc.successFee += num(r.successFee);
+      acc.rate += num(r.rate);
+      acc.totalWithGst += num(r.totalWithGst);
+      acc.amount += num(r.amount);
+      acc.totalAmount += num(r.totalAmount);
       return acc;
     },
     {
       quantity: 0,
-      amount: 0,
-      total: 0,
-      ourCost: 0,
+      catalogPrice: 0,
+      baseCost: 0,
       brandingCost: 0,
-      deliveryCost: 0,
-      markUpCost: 0,
-      finalTotal: 0,
+      logisticCost: 0,
+      markUp: 0,
+      successFee: 0,
+      rate: 0,
+      totalWithGst: 0,
+      amount: 0,
+      totalAmount: 0,
     }
   );
 
-  if (loading) return <div className="p-6 text-gray-400">Loading quotation...</div>;
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (loading) return <div className="p-4 text-gray-400">Loading quotation...</div>;
+  if (error) return <div className="p-4 text-red-500">{error}</div>;
   if (!editableQuotation || !editableQuotation.items)
-    return <div className="p-6 text-gray-400">Quotation not found.</div>;
+    return <div className="p-4 text-gray-400">Quotation not found.</div>;
 
   return (
-    <div className="p-6 bg-white text-black min-h-screen" id="quotation-content">
-      <div className="flex justify-between items-center mb-4">
-        <button
-          onClick={handleExportPDF}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-xs"
-        >
-          Export to PDF
-        </button>
+    <div className="p-3 bg-white text-black min-h-screen text-xs" id="quotation-content">
+      {/* CSS to hide number input spinners and handle text wrapping */}
+      <style>{`
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type=number] {
+          -moz-appearance: textfield;
+        }
+        /* Add this for text wrapping in table cells */
+        .wrap-text {
+          white-space: normal !important;
+          word-wrap: break-word !important;
+          overflow-wrap: break-word !important;
+          word-break: break-word !important;
+        }
+        /* Add this for the operations table */
+        #op-breakdown-panel table {
+          table-layout: fixed;
+        }
+        #op-breakdown-panel td,
+        #op-breakdown-panel th {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          word-wrap: break-word;
+        }
+        /* Specifically for the product column */
+        #op-breakdown-panel td:nth-child(3),
+        #op-breakdown-panel th:nth-child(3) {
+          white-space: normal;
+          word-break: break-word;
+        }
+      `}</style>
 
-        <div className="flex space-x-4">
-          <button
-            onClick={() => {
-              const defFmt = "APP/{FY}/{SEQ4}";
-              const fmt = window.prompt(
-                `Enter invoice number format (tokens: {FY}, {SEQn}).\nExample: ${defFmt}`,
-                defFmt
-              );
-              if (fmt === null) return;
-              handleCreateInvoice(fmt.trim());
-            }}
-            className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded text-xs"
-          >
-            Create Invoice
-          </button>
-
-          <button
-            onClick={handleSaveQuotation}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
-          >
-            Save Changes
-          </button>
-
-          <button
-            onClick={() =>
-              setEditableQuotation((prev) => ({
-                ...prev,
-                displayTotals: !prev.displayTotals,
-              }))
-            }
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-xs"
-          >
-            {editableQuotation.displayTotals ? "Hide Totals" : "Show Totals"}
-          </button>
-
-          <button
-            onClick={handleToggleHSNCodes}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
-          >
-            {editableQuotation.displayHSNCodes
-              ? "Disable HSN Codes in DB"
-              : "Enable HSN Codes in DB"}
-          </button>
-
-          <button
-            onClick={() => {
-              const el = document.getElementById("op-breakdown-panel");
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-xs"
-          >
-            Operations Cost (Auto-filled from Items)
-          </button>
+      {/* Quotation Number Header - Always visible at top */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white px-3 py-2 rounded-lg mb-3 flex justify-between items-center">
+        <div>
+          <h1 className="text-base font-bold">
+            Quotation #{editableQuotation.quotationNumber || "N/A"}
+          </h1>
+          <p className="text-[10px] opacity-90">
+            {editableQuotation.customerCompany} | {editableQuotation.opportunityNumber}
+          </p>
+        </div>
+        <div className="text-right text-[10px]">
+          <p>Created: {new Date(editableQuotation.createdAt).toLocaleDateString()}</p>
+          <p>By: {editableQuotation.createdBy}</p>
         </div>
       </div>
 
-      {/* OPERATIONS COST: sticky, expand/minimize, internal scroll when minimized */}
+      {/* Compact Action Buttons */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        <button
+          onClick={handleExportPDF}
+          className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-[10px]"
+        >
+          PDF
+        </button>
+        <button
+          onClick={() => {
+            const defFmt = "APP/{FY}/{SEQ4}";
+            const fmt = window.prompt(
+              `Enter invoice number format (tokens: {FY}, {SEQn}).\nExample: ${defFmt}`,
+              defFmt
+            );
+            if (fmt === null) return;
+            handleCreateInvoice(fmt.trim());
+          }}
+          className="bg-teal-600 hover:bg-teal-700 text-white px-2 py-1 rounded text-[10px]"
+        >
+          Invoice
+        </button>
+        <button
+          onClick={handleSaveQuotation}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-[10px]"
+        >
+          Save
+        </button>
+        <button
+          onClick={() =>
+            setEditableQuotation((prev) => ({
+              ...prev,
+              displayTotals: !prev.displayTotals,
+            }))
+          }
+          className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-[10px]"
+        >
+          {editableQuotation.displayTotals ? "Hide $" : "Show $"}
+        </button>
+        <button
+          onClick={handleToggleHSNCodes}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-[10px]"
+        >
+          {editableQuotation.displayHSNCodes ? "Hide HSN" : "Show HSN"}
+        </button>
+      </div>
+
+      {/* OPERATIONS COST TABLE - New Structure */}
       <div
         id="op-breakdown-panel"
-        className="sticky top-16 z-30 bg-white border border-gray-300 shadow p-3 rounded mb-6"
+        className="sticky top-0 z-30 bg-white border border-gray-300 shadow-lg rounded mb-3"
       >
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs font-semibold">
-            Operations Cost — Auto-filled from Quotation Items (Editable)
+        <div className="bg-gray-100 px-2 py-1.5 border-b flex items-center justify-between">
+          <div className="font-semibold text-xs text-gray-800">
+            Operations Cost — Quotation #{editableQuotation.quotationNumber || "N/A"}
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsOpsExpanded((prev) => !prev)}
-              className="bg-gray-700 hover:bg-gray-800 text-white px-3 py-1.5 rounded text-xs"
-            >
-              {isOpsExpanded ? "Minimize" : "Expand"}
-            </button>
-
+          <div className="flex items-center gap-1.5">
             <button
               onClick={handleSaveOperationsBreakdownOnly}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs"
-              title="Save operations breakdown to this quotation without creating a new one"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-[10px]"
             >
-              Save Operations Breakdown
+              Save Ops
             </button>
           </div>
         </div>
 
-        {/* when minimized: fixed height with scroll; when expanded: full height allowed to overlap */}
-        <div
-          className={
-            isOpsExpanded
-              ? "overflow-visible"
-              : "max-h-40 overflow-y-auto" // header + ~2 rows visible, rest scrollable
-          }
-        >
-          <table className="table-auto w-full text-[11px] border-collapse">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border px-2 py-1 align-top w-10">Sl</th>
-                <th className="border px-2 py-1 align-top w-64">Product</th>
-                <th className="border px-2 py-1 align-top w-20">Qty</th>
-                <th className="border px-2 py-1 align-top w-16">Rate</th>
-                <th className="border px-2 py-1 align-top w-16">Amount</th>
-                <th className="border px-2 py-1 align-top w-14">GST</th>
-                <th className="border px-2 py-1 align-top w-20">Total</th>
-                <th className="border px-2 py-1 align-top w-20">
-                  Base Cost
-                  
+        {/* Scrollable table container with frozen header */}
+        <div className="max-h-[50vh] overflow-auto">
+          <table className="w-full text-[10px] border-collapse">
+            <thead className="sticky top-0 bg-gray-200 z-10">
+              <tr>
+                <th className="border px-1 py-1 text-center bg-gray-300" style={{width: "25px"}}>Sl</th>
+                <th className="border px-1 py-1 text-right bg-yellow-100" style={{width: "70px"}}>
+                  <div className="flex items-center justify-between">
+                    <span>Catalog</span>
+                    <button
+                      onClick={fetchAllCatalogPrices}
+                      className="text-[8px] bg-blue-500 text-white px-1 rounded hover:bg-blue-600"
+                      title="Fetch all catalog prices"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                  <div className="text-[8px] text-gray-500">Price</div>
                 </th>
-                <th className="border px-2 py-1 align-top w-16">
-                  Branding Cost
-                  
+                <th className="border px-1 py-1 text-left bg-blue-50 wrap-text" style={{minWidth: "140px", width: "18%"}}>
+                  <div>Product</div>
+                  <div className="text-[8px] text-gray-500">Fetch from catalog</div>
                 </th>
-                <th className="border px-2 py-1 align-top w-20">
-                  Logistics Cost
-                  
+                <th className="border px-1 py-1 text-center bg-blue-50" style={{width: "45px"}}>
+                  <div>Qty</div>
+                  <div className="text-[8px] text-gray-500">Fetch</div>
                 </th>
-                <th className="border px-2 py-1 align-top w-16">
-                  Margin Amount
+                <th className="border px-1 py-1 text-right bg-green-50" style={{width: "55px"}}>
+                  <div>Base</div>
+                  <div className="text-[8px] text-gray-500">Cost</div>
                 </th>
-                <th className="border px-2 py-1 align-top w-24">Final Total</th>
-                <th className="border px-2 py-1 align-top w-32">Vendor</th>
-                <th className="border px-2 py-1 align-top w-16">Action</th>
+                <th className="border px-1 py-1 text-right bg-green-50" style={{width: "50px"}}>
+                  <div>Branding</div>
+                  <div className="text-[8px] text-gray-500">Fetch</div>
+                </th>
+                <th className="border px-1 py-1 text-right bg-green-50" style={{width: "50px"}}>
+                  <div>Logistic</div>
+                  <div className="text-[8px] text-gray-500">Cost</div>
+                </th>
+                <th className="border px-1 py-1 text-right bg-orange-50" style={{width: "50px"}}>
+                  <div>Mark Up</div>
+                  <div className="text-[8px] text-gray-500">Manual</div>
+                </th>
+                <th className="border px-1 py-1 text-right bg-orange-50" style={{width: "55px"}}>
+                  <div>Success</div>
+                  <div className="text-[8px] text-gray-500">Fee</div>
+                </th>
+                <th className="border px-1 py-1 text-right bg-purple-100" style={{width: "65px"}}>
+                  <div>Rate</div>
+                  <div className="text-[8px] text-gray-500">(Total)</div>
+                </th>
+                <th className="border px-1 py-1 text-center bg-gray-100" style={{width: "35px"}}>
+                  <div>GST</div>
+                  <div className="text-[8px] text-gray-500">%</div>
+                </th>
+                <th className="border px-1 py-1 text-right bg-purple-100" style={{width: "70px"}}>
+                  <div>Total/pc</div>
+                  <div className="text-[8px] text-gray-500">With GST</div>
+                </th>
+                <th className="border px-1 py-1 text-left bg-gray-100" style={{width: "65px"}}>
+                  <div>Vendor</div>
+                </th>
+                <th className="border px-1 py-1 text-left bg-gray-100" style={{width: "70px"}}>
+                  <div>Remarks</div>
+                </th>
+                <th className="border px-1 py-1 text-center bg-gray-300" style={{width: "45px"}}>Action</th>
               </tr>
             </thead>
 
             <tbody>
               {opRows.map((r, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="border px-2 py-1 text-center whitespace-nowrap">
-                    {r.slNo}
+                <tr key={idx} className="hover:bg-blue-50">
+                  <td className="border px-1 py-0.5 text-center bg-gray-50">{r.slNo}</td>
+
+                  {/* Catalog Price - Editable with Fetch */}
+                  <td className="border px-1 py-0.5 bg-yellow-50">
+                    <div className="flex items-center gap-0.5">
+                      <input
+                        type="number"
+                        value={r.catalogPrice}
+                        onChange={(e) => updateOpRow(idx, "catalogPrice", e.target.value)}
+                        className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                      />
+                      <button
+                        onClick={() => fetchCatalogPriceForRow(idx)}
+                        className="text-[8px] text-blue-600 hover:text-blue-800 px-0.5"
+                        title="Fetch from catalog"
+                      >
+                        ↓
+                      </button>
+                    </div>
                   </td>
 
-                  <td className="border px-2 py-1 w-64">
-                    <input
+                  {/* Product - Editable with text wrapping */}
+                  <td className="border px-1 py-0.5 wrap-text">
+                    <textarea
                       value={r.product}
                       onChange={(e) => updateOpRow(idx, "product", e.target.value)}
-                      className="block w-full min-w-0 border px-2 py-1 rounded whitespace-normal break-words box-border"
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded px-0.5 text-[10px] resize-none"
+                      rows={Math.max(1, Math.ceil(r.product.length / 20))}
+                      style={{
+                        minHeight: '20px',
+                        lineHeight: '1.2',
+                        overflow: 'hidden',
+                        resize: 'vertical',
+                      }}
                     />
                   </td>
 
-                  <td className="border px-2 py-1 w-20">
+                  {/* Qty - Editable */}
+                  <td className="border px-1 py-0.5">
                     <input
                       type="number"
                       value={r.quantity}
                       onChange={(e) => updateOpRow(idx, "quantity", e.target.value)}
-                      className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-center text-[10px]"
                       min="0"
                     />
                   </td>
 
-                  <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
-                    {r.rate.toFixed(2)}
-                  </td>
-
-                  <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
-                    {r.amount.toFixed(2)}
-                  </td>
-
-                  <td className="border px-2 py-1 w-14">
-                    <input
-                      value={r.gst}
-                      onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
-                      placeholder="18 or 18%"
-                      className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
-                    />
-                  </td>
-
-                  <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
-                    {r.total.toFixed(2)}
-                  </td>
-
-                  <td className="border px-2 py-1 w-20">
+                  {/* Base Cost - Editable */}
+                  <td className="border px-1 py-0.5 bg-green-50">
                     <input
                       type="number"
-                      value={r.ourCost}
-                      onChange={(e) => updateOpRow(idx, "ourCost", e.target.value)}
-                      className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+                      value={r.baseCost}
+                      onChange={(e) => updateOpRow(idx, "baseCost", e.target.value)}
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
                     />
                   </td>
 
-                  <td className="border px-2 py-1 w-16">
+                  {/* Branding - Editable */}
+                  <td className="border px-1 py-0.5 bg-green-50">
                     <input
                       type="number"
                       value={r.brandingCost}
-                      onChange={(e) =>
-                        updateOpRow(idx, "brandingCost", e.target.value)
-                      }
-                      className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+                      onChange={(e) => updateOpRow(idx, "brandingCost", e.target.value)}
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
                     />
                   </td>
 
-                  <td className="border px-2 py-1 w-20">
+                  {/* Logistic Cost - Editable */}
+                  <td className="border px-1 py-0.5 bg-green-50">
                     <input
                       type="number"
-                      value={r.deliveryCost}
-                      onChange={(e) =>
-                        updateOpRow(idx, "deliveryCost", e.target.value)
-                      }
-                      className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+                      value={r.logisticCost}
+                      onChange={(e) => updateOpRow(idx, "logisticCost", e.target.value)}
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
                     />
                   </td>
 
-                  <td className="border px-2 py-1 w-16">
+                  {/* Mark Up - Manual Enter */}
+                  <td className="border px-1 py-0.5 bg-orange-50">
                     <input
                       type="number"
-                      value={r.markUpCost}
-                      onChange={(e) =>
-                        updateOpRow(idx, "markUpCost", e.target.value)
-                      }
-                      className="block w-full min-w-0 border px-2 py-1 rounded text-right box-border"
+                      value={r.markUp}
+                      onChange={(e) => updateOpRow(idx, "markUp", e.target.value)}
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
                     />
                   </td>
 
-                  <td className="border px-2 py-1 bg-gray-100 text-gray-600 text-right whitespace-nowrap">
-                    {r.finalTotal.toFixed(2)}
+                  {/* Success Fee - Manual Enter */}
+                  <td className="border px-1 py-0.5 bg-orange-50">
+                    <input
+                      type="number"
+                      value={r.successFee}
+                      onChange={(e) => updateOpRow(idx, "successFee", e.target.value)}
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                    />
                   </td>
 
-                  <td className="border px-2 py-1 w-32">
+                  {/* Rate (Total) - Auto Calculate */}
+                  <td className="border px-1 py-0.5 bg-purple-50 text-right font-medium text-purple-800">
+                    {formatIndianNumber(r.rate)}
+                  </td>
+
+                  {/* GST - Editable */}
+                  <td className="border px-1 py-0.5">
                     <input
+                      value={r.gst}
+                      onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
+                      placeholder="%"
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-center text-[10px]"
+                    />
+                  </td>
+
+                  {/* Total Rate per piece With GST - Auto Calculate */}
+                  <td className="border px-1 py-0.5 bg-purple-50 text-right font-bold text-green-700">
+                    {formatIndianNumber(r.totalWithGst)}
+                  </td>
+
+                  {/* Vendor Name - Editable */}
+                  <td className="border px-1 py-0.5">
+                    <textarea
                       value={r.vendor}
                       onChange={(e) => updateOpRow(idx, "vendor", e.target.value)}
-                      className="block w-full min-w-0 border px-2 py-1 rounded whitespace-normal break-words box-border"
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-[10px] resize-none"
+                      rows={1}
+                      style={{
+                        minHeight: '20px',
+                        lineHeight: '1.2',
+                        overflow: 'hidden',
+                        resize: 'vertical',
+                      }}
                     />
                   </td>
 
-                  <td className="border px-2 py-1 text-center">
+                  {/* Remarks - Editable */}
+                  <td className="border px-1 py-0.5">
+                    <textarea
+                      value={r.remarks}
+                      onChange={(e) => updateOpRow(idx, "remarks", e.target.value)}
+                      className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-[10px] resize-none"
+                      rows={1}
+                      style={{
+                        minHeight: '20px',
+                        lineHeight: '1.2',
+                        overflow: 'hidden',
+                        resize: 'vertical',
+                      }}
+                    />
+                  </td>
+
+                  {/* Action */}
+                  <td className="border px-1 py-0.5 text-center bg-gray-50">
+                    <button
+                      onClick={() => duplicateOpRow(idx)}
+                      className="text-blue-600 text-[9px] hover:underline mr-1"
+                      title="Duplicate row for same product"
+                    >
+                      +
+                    </button>
                     <button
                       onClick={() => removeOpRow(idx)}
-                      className="text-red-600 text-xs hover:underline"
+                      className="text-red-600 text-[9px] hover:underline"
+                      title="Remove row"
                     >
-                      Remove
+                      ×
                     </button>
                   </td>
                 </tr>
               ))}
 
-              {/* vertical totals row */}
+              {/* Totals row - sticky at bottom */}
               {opRows.length > 0 && (
-                <tr className="bg-gray-50 font-semibold">
-                  <td className="border px-2 py-1 text-center">Σ</td>
-                  <td className="border px-2 py-1 text-right text-[10px]">
-                    Totals
+                <tr className="bg-blue-100 font-semibold sticky bottom-0">
+                  <td className="border px-1 py-1 text-center bg-blue-200">Σ</td>
+                  <td className="border px-1 py-1 text-right bg-yellow-100">
+                    {formatIndianNumber(opTotals.catalogPrice)}
                   </td>
-                  <td className="border px-2 py-1 text-right whitespace-nowrap">
-                    {opTotals.quantity.toFixed(2)}
+                  <td className="border px-1 py-1 text-right wrap-text">
+                    <span className="text-[9px]">({opRows.length} items)</span>
                   </td>
-                  <td className="border px-2 py-1 bg-gray-100" />
-                  <td className="border px-2 py-1 bg-gray-100 text-right whitespace-nowrap">
-                    {opTotals.amount.toFixed(2)}
+                  <td className="border px-1 py-1 text-center">
+                    {formatIndianInteger(opTotals.quantity)}
                   </td>
-                  <td className="border px-2 py-1" />
-                  <td className="border px-2 py-1 bg-gray-100 text-right whitespace-nowrap">
-                    {opTotals.total.toFixed(2)}
+                  <td className="border px-1 py-1 text-right bg-green-100">
+                    {formatIndianNumber(opTotals.baseCost)}
                   </td>
-                  <td className="border px-2 py-1 text-right whitespace-nowrap">
-                    {opTotals.ourCost.toFixed(2)}
+                  <td className="border px-1 py-1 text-right bg-green-100">
+                    {formatIndianNumber(opTotals.brandingCost)}
                   </td>
-                  <td className="border px-2 py-1 text-right whitespace-nowrap">
-                    {opTotals.brandingCost.toFixed(2)}
+                  <td className="border px-1 py-1 text-right bg-green-100">
+                    {formatIndianNumber(opTotals.logisticCost)}
                   </td>
-                  <td className="border px-2 py-1 text-right whitespace-nowrap">
-                    {opTotals.deliveryCost.toFixed(2)}
+                  <td className="border px-1 py-1 text-right bg-orange-100">
+                    {formatIndianNumber(opTotals.markUp)}
                   </td>
-                  <td className="border px-2 py-1 text-right whitespace-nowrap">
-                    {opTotals.markUpCost.toFixed(2)}
+                  <td className="border px-1 py-1 text-right bg-orange-100">
+                    {formatIndianNumber(opTotals.successFee)}
                   </td>
-                  <td className="border px-2 py-1 bg-gray-100 text-right whitespace-nowrap">
-                    {opTotals.finalTotal.toFixed(2)}
+                  <td className="border px-1 py-1 text-right bg-purple-100">
+                    {formatIndianNumber(opTotals.rate)}
                   </td>
-                  <td className="border px-2 py-1" />
-                  <td className="border px-2 py-1" />
+                  <td className="border px-1 py-1"></td>
+                  <td className="border px-1 py-1 text-right bg-purple-100 text-green-700">
+                    {formatIndianNumber(opTotals.totalWithGst)}
+                  </td>
+                  <td className="border px-1 py-1"></td>
+                  <td className="border px-1 py-1"></td>
+                  <td className="border px-1 py-1 text-center bg-blue-200">
+                    <button
+                      onClick={addOpRow}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 rounded text-[9px]"
+                    >
+                      +Row
+                    </button>
+                  </td>
                 </tr>
               )}
 
-              <tr>
-                <td colSpan={14} className="border px-2 py-2 text-right">
-                  <button
-                    onClick={addOpRow}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs"
-                  >
-                    + Add Row
-                  </button>
-                </td>
-              </tr>
+              {opRows.length === 0 && (
+                <tr>
+                  <td colSpan={15} className="border px-2 py-2 text-center text-gray-500 wrap-text">
+                    No operations data.{" "}
+                    <button
+                      onClick={addOpRow}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Add first row
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-      </div>
 
-      <div className="mb-4 space-y-2 text-xs">
-        {editableQuotation.customerName && (
-          <div>
-            <span
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(e) => handleHeaderBlur("salutation", e)}
-            >
-              {editableQuotation.salutation || "Mr."}
-            </span>{" "}
-            <span
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(e) => handleHeaderBlur("customerName", e)}
-            >
-              {editableQuotation.customerName}
+        {/* Grand Total Summary Bar */}
+        {opRows.length > 0 && (
+          <div className="bg-green-50 px-2 py-1.5 border-t flex justify-between items-center">
+            <span className="text-[10px] font-medium text-gray-700">
+              Items: {opRows.length} | Total Qty: {formatIndianInteger(opTotals.quantity)}
             </span>
+            <div className="text-right flex items-center gap-4">
+              <span className="text-[10px] text-gray-600">
+                Total Amount: <span className="font-semibold">₹{formatIndianNumber(opTotals.amount)}</span>
+              </span>
+              <span className="text-[10px] text-gray-600">
+                Grand Total (with GST): <span className="text-sm font-bold text-green-700">₹{formatIndianNumber(opTotals.totalAmount)}</span>
+              </span>
+            </div>
           </div>
         )}
-        <div>
+      </div>
+
+      {/* Customer Details - Compact */}
+      <div className="mb-3 space-y-0.5 text-[10px] bg-gray-50 p-2 rounded">
+        <div className="flex flex-wrap gap-2">
+          {editableQuotation.customerName && (
+            <span>
+              <span
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={(e) => handleHeaderBlur("salutation", e)}
+                className="font-medium"
+              >
+                {editableQuotation.salutation || "Mr."}
+              </span>{" "}
+              <span
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={(e) => handleHeaderBlur("customerName", e)}
+              >
+                {editableQuotation.customerName}
+              </span>
+            </span>
+          )}
+          <span className="text-gray-400">|</span>
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={(e) => handleHeaderBlur("customerCompany", e)}
-            >
+            className="font-semibold"
+          >
             {editableQuotation.customerCompany}
           </span>
         </div>
         {editableQuotation.customerAddress && (
           <div>
-            <span className="font-bold uppercase">Address:</span>{" "}
+            <span className="font-bold text-gray-500">Addr:</span>{" "}
             <span
               contentEditable
               suppressContentEditableWarning
@@ -1242,59 +1678,69 @@ export default function QuotationView() {
             </span>
           </div>
         )}
-        {editableQuotation.customerEmail && (
-          <div>
-            <span className="font-bold uppercase">Email:</span>{" "}
-            <span
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(e) => handleHeaderBlur("customerEmail", e)}
-            >
-              {editableQuotation.customerEmail}
+        <div className="flex items-center gap-2">
+          {editableQuotation.customerEmail && (
+            <span>
+              <span className="font-bold text-gray-500">Email:</span>{" "}
+              <span
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={(e) => handleHeaderBlur("customerEmail", e)}
+              >
+                {editableQuotation.customerEmail}
+              </span>
             </span>
-          </div>
-        )}
-        <button
-          onClick={handleAddEmail}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
-        >
-          {editableQuotation.customerEmail ? "Edit Email" : "Add Email"}
-        </button>
+          )}
+          <button
+            onClick={handleAddEmail}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 rounded text-[9px]"
+          >
+            {editableQuotation.customerEmail ? "Edit" : "Add"} Email
+          </button>
+        </div>
       </div>
 
-      <div className="mb-6">
-        <button
-          onClick={() => setTermModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4 text-xs"
-        >
-          + Add Terms
-        </button>
-        {editableQuotation.terms.map((term, idx) => (
-          <div key={idx} className="mb-4 text-xs">
-            <div className="font-semibold">{term.heading}</div>
-            <div className="whitespace-pre-line">{term.content}</div>
-            <button
-              onClick={() => handleEditTerm(idx)}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded mt-2 text-xs"
-            >
-              Edit
-            </button>
-          </div>
-        ))}
+      {/* Terms Section - Compact */}
+      <div className="mb-3 bg-yellow-50 p-2 rounded">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-[11px]">Terms & Conditions</h3>
+          <button
+            onClick={() => {
+              setEditingTermIdx(null);
+              setNewTerm({ heading: "", content: "" });
+              setTermModalOpen(true);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 rounded text-[9px]"
+          >
+            + Add
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {(editableQuotation.terms || []).map((term, idx) => (
+            <div key={idx} className="text-[10px] border-l-2 border-yellow-400 pl-1.5 wrap-text">
+              <div className="font-semibold text-gray-800">{term.heading}</div>
+              <div className="text-gray-600 line-clamp-2">{term.content}</div>
+              <button
+                onClick={() => handleEditTerm(idx)}
+                className="text-blue-600 hover:underline text-[9px]"
+              >
+                Edit
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
+      {/* Term Modal */}
       {termModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" />
-
-          {/* Modal */}
-          <div className="relative z-[70] bg-white p-6 rounded w-full max-w-lg shadow-xl">
-            <h2 className="text-xl font-semibold mb-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setTermModalOpen(false)} />
+          <div className="relative z-[70] bg-white p-4 rounded w-full max-w-md shadow-xl">
+            <h2 className="text-sm font-semibold mb-3">
               {editingTermIdx !== null ? "Edit Term" : "Add Term"}
             </h2>
 
-            <div className="mb-4">
+            <div className="mb-3">
               <input
                 type="text"
                 value={newTerm.heading}
@@ -1302,221 +1748,126 @@ export default function QuotationView() {
                 onChange={(e) =>
                   setNewTerm((prev) => ({ ...prev, heading: e.target.value }))
                 }
-                className="border p-2 w-full text-xs"
-                readOnly={editingTermIdx !== null}
+                className="border p-1.5 w-full text-xs rounded"
               />
             </div>
 
-            <div className="mb-4">
+            <div className="mb-3">
               <textarea
                 value={newTerm.content}
                 placeholder="Term Content"
                 onChange={(e) =>
                   setNewTerm((prev) => ({ ...prev, content: e.target.value }))
                 }
-                className="border p-2 w-full text-xs"
-                rows={4}
+                className="border p-1.5 w-full text-xs rounded"
+                rows={3}
               />
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
                   setTermModalOpen(false);
                   setNewTerm({ heading: "", content: "" });
                   setEditingTermIdx(null);
                 }}
-                className="bg-gray-500 text-white px-4 py-2 rounded text-xs"
+                className="bg-gray-500 text-white px-3 py-1.5 rounded text-xs"
               >
                 Cancel
               </button>
               <button
-                onClick={
-                  editingTermIdx !== null ? handleUpdateTerm : handleAddTerm
-                }
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+                onClick={editingTermIdx !== null ? handleUpdateTerm : handleAddTerm}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs"
               >
-                {editingTermIdx !== null ? "Update Term" : "Add Term"}
+                {editingTermIdx !== null ? "Update" : "Add"}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* E-Invoice Modal */}
       {eInvoiceModalOpen && (
         <div className="fixed inset-0 flex justify-center items-center bg-gray-500 bg-opacity-50 z-50">
-          <div className="bg-white p-8 rounded-lg w-3/4 max_h-[80vh] overflow-y-auto shadow-xl">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800">
+          <div className="bg-white p-6 rounded-lg w-3/4 max-h-[80vh] overflow-y-auto shadow-xl">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800">
               Generate E-Invoice
             </h2>
             {errorMessage && (
-              <div className="text-red-500 mb-4 text-xs bg-red-100 p-2 rounded">
+              <div className="text-red-500 mb-3 text-xs bg-red-100 p-2 rounded">
                 {errorMessage}
               </div>
             )}
 
-            <div className="mb-6">
+            <div className="mb-4">
               <button
                 onClick={handleAuthenticate}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs"
                 disabled={isAuthenticated}
               >
                 {isAuthenticated ? "Authenticated" : "Generate Token"}
               </button>
-              {isAuthenticated && (
-                <div className="mt-2 text-xs text-gray-600">
-                  <p>Auth Token: {eInvoiceData?.authToken}</p>
-                  <p>
-                    Token Expiry:{" "}
-                    {new Date(eInvoiceData?.tokenExpiry).toLocaleString()}
-                  </p>
+              {isAuthenticated && eInvoiceData && (
+                <div className="mt-1 text-[10px] text-gray-600">
+                  <p>Token: {eInvoiceData?.authToken?.substring(0, 20)}...</p>
+                  <p>Expiry: {new Date(eInvoiceData?.tokenExpiry).toLocaleString()}</p>
                 </div>
               )}
             </div>
 
             {isAuthenticated && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <button
                   onClick={handleFetchCustomerDetails}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-xs"
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs"
                   disabled={customerDetails}
                 >
-                  {customerDetails
-                    ? "Customer Details Fetched"
-                    : "Get Customer Details"}
+                  {customerDetails ? "Customer Fetched" : "Get Customer"}
                 </button>
                 {customerDetails && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <p>
-                      <span className="font-semibold">GSTIN:</span>{" "}
-                      {customerDetails.gstin}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Legal Name:</span>{" "}
-                      {customerDetails.legalName}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Trade Name:</span>{" "}
-                      {customerDetails.tradeName}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Address:</span>{" "}
-                      {customerDetails.address1}
-                      {customerDetails.address2
-                        ? `, ${customerDetails.address2}`
-                        : ""}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Location:</span>{" "}
-                      {customerDetails.location}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Pincode:</span>{" "}
-                      {customerDetails.pincode}
-                    </p>
-                    <p>
-                      <span className="font-semibold">State Code:</span>{" "}
-                      {customerDetails.stateCode}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Phone:</span>{" "}
-                      {customerDetails.phone}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Email:</span>{" "}
-                      {customerDetails.email}
-                    </p>
+                  <div className="mt-1 text-[10px] text-gray-600 grid grid-cols-2 gap-1">
+                    <p><b>GSTIN:</b> {customerDetails.gstin}</p>
+                    <p><b>Legal:</b> {customerDetails.legalName}</p>
+                    <p><b>Location:</b> {customerDetails.location}</p>
+                    <p><b>State:</b> {customerDetails.stateCode}</p>
                   </div>
                 )}
               </div>
             )}
 
             {customerDetails && (
-              <div className="mb-6">
+              <div className="mb-4">
                 {renderProductTable()}
-                <div className="flex space-x-2 mb-4">
+                <div className="flex space-x-2 mb-3">
                   <button
                     onClick={handleGenerateReferenceJson}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-xs"
-                    disabled={referenceJson && eInvoiceData?.referenceJson}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-xs"
                   >
-                    {referenceJson && eInvoiceData?.referenceJson
-                      ? "Reference JSON Generated"
-                      : "Generate Reference JSON"}
+                    {referenceJson && eInvoiceData?.referenceJson ? "Regenerate" : "Generate"} JSON
                   </button>
-                  {referenceJson && eInvoiceData?.referenceJson && (
-                    <button
-                      onClick={handleGenerateReferenceJson}
-                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-xs"
-                    >
-                      Regenerate
-                    </button>
-                  )}
                   <button
-                    onClick={() =>
-                      setJsonView(jsonView === "json" ? "form" : "json")
-                    }
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-xs"
+                    onClick={() => setJsonView(jsonView === "json" ? "form" : "json")}
+                    className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs"
                   >
-                    {jsonView === "json" ? "Show Form View" : "Show JSON View"}
+                    {jsonView === "json" ? "Form" : "JSON"}
                   </button>
                 </div>
                 {referenceJson && (
                   <div className="mt-2">
                     {jsonView === "json" ? (
-                      <>
-                        <textarea
-                          value={referenceJson}
-                          onChange={(e) => setReferenceJson(e.target.value)}
-                          className={`border p-2 w-full text-xs font-mono h-64 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            referenceJson &&
-                            (() => {
-                              try {
-                                const parsed = JSON.parse(referenceJson);
-                                return parsed.RefDtls?.InvRm &&
-                                  (parsed.RefDtls.InvRm.length < 3 ||
-                                    parsed.RefDtls.InvRm.length > 100)
-                                  ? "border-red-500"
-                                  : "border-gray-300";
-                              } catch {
-                                return "border-red-500";
-                              }
-                            })()
-                          }`}
-                        />
-                        {referenceJson &&
-                          (() => {
-                            try {
-                              const parsed = JSON.parse(referenceJson);
-                              if (
-                                parsed.RefDtls?.InvRm &&
-                                (parsed.RefDtls.InvRm.length < 3 ||
-                                  parsed.RefDtls.InvRm.length > 100)
-                              ) {
-                                return (
-                                  <p className="text-red-500 text-xs mt-1">
-                                    Invoice remarks must be 3–100 characters
-                                  </p>
-                                );
-                              }
-                            } catch {
-                              return (
-                                <p className="text-red-500 text-xs mt-1">
-                                  Invalid JSON format
-                                </p>
-                              );
-                            }
-                            return null;
-                          })()}
-                      </>
+                      <textarea
+                        value={referenceJson}
+                        onChange={(e) => setReferenceJson(e.target.value)}
+                        className="border p-2 w-full text-[10px] font-mono h-48 rounded-md"
+                      />
                     ) : (
                       renderJsonForm()
                     )}
                     <button
                       onClick={handleSaveReferenceJson}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs mt-4"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs mt-2"
                     >
-                      Save Reference JSON
+                      Save JSON
                     </button>
                   </div>
                 )}
@@ -1524,71 +1875,32 @@ export default function QuotationView() {
             )}
 
             {referenceJson && eInvoiceData?.referenceJson && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <button
                   onClick={handleGenerateIRN}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-xs"
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs"
                   disabled={eInvoiceData?.irn}
                 >
-                  {eInvoiceData?.irn
-                    ? "IRN Generated"
-                    : "Create E-Invoice (Generate IRN)"}
+                  {eInvoiceData?.irn ? "IRN Generated" : "Generate IRN"}
                 </button>
                 {eInvoiceData?.irn && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <p>
-                      <span className="font-semibold">IRN:</span>{" "}
-                      {eInvoiceData.irn}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Ack No:</span>{" "}
-                      {eInvoiceData.ackNo}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Ack Date:</span>{" "}
-                      {new Date(eInvoiceData.ackDt).toLocaleString()}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Status:</span>{" "}
-                      {eInvoiceData.status}
-                    </p>
-                    {eInvoiceData.ewbNo && (
-                      <p>
-                        <span className="font-semibold">EWB No:</span>{" "}
-                        {eInvoiceData.ewbNo}
-                      </p>
-                    )}
-                    {eInvoiceData.ewbDt && (
-                      <p>
-                        <span className="font-semibold">EWB Date:</span>{" "}
-                        {new Date(eInvoiceData.ewbDt).toLocaleString()}
-                      </p>
-                    )}
-                    {eInvoiceData.ewbValidTill && (
-                      <p>
-                        <span className="font-semibold">
-                          EWB Valid Till:
-                        </span>{" "}
-                        {new Date(
-                          eInvoiceData.ewbValidTill
-                        ).toLocaleString()}
-                      </p>
-                    )}
+                  <div className="mt-1 text-[10px] text-gray-600">
+                    <p><b>IRN:</b> {eInvoiceData.irn}</p>
+                    <p><b>Ack:</b> {eInvoiceData.ackNo}</p>
+                    <p><b>Status:</b> {eInvoiceData.status}</p>
                   </div>
                 )}
               </div>
             )}
 
             {eInvoiceData?.irn && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <button
                   onClick={handleCancelEInvoice}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-xs"
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs"
                   disabled={eInvoiceData?.cancelled}
                 >
-                  {eInvoiceData?.cancelled
-                    ? "E-Invoice Cancelled"
-                    : "Cancel E-Invoice"}
+                  {eInvoiceData?.cancelled ? "Cancelled" : "Cancel E-Invoice"}
                 </button>
               </div>
             )}
@@ -1596,7 +1908,7 @@ export default function QuotationView() {
             <div className="flex justify-end">
               <button
                 onClick={() => setEInvoiceModalOpen(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-xs"
+                className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs"
               >
                 Close
               </button>
@@ -1605,42 +1917,30 @@ export default function QuotationView() {
         </div>
       )}
 
+      {/* Legacy Operations Costs */}
       {editableQuotation.operations?.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-4 text-xs">Operations Costs</h3>
-          <table className="w-full border-collapse mb-6 text-xs">
+        <div className="mb-3">
+          <h3 className="text-[11px] font-semibold mb-1">Legacy Operations</h3>
+          <table className="w-full border-collapse text-[10px]">
             <thead>
-              <tr className="border-b">
-                <th className="p-2 text-left">Our Cost</th>
-                <th className="p-2 text-left">Branding</th>
-                <th className="p-2 text-left">Delivery</th>
-                <th className="p-2 text-left">Markup</th>
-                <th className="p-2 text-left">Total</th>
-                <th className="p-2 text-left">Vendor</th>
-                <th className="p-2 text-left">Remarks</th>
-                <th className="p-2 text-left">Reference</th>
-                <th className="p-2 text-left">Action</th>
+              <tr className="border-b bg-gray-100">
+                <th className="p-1 text-left">Cost</th>
+                <th className="p-1 text-left">Brand</th>
+                <th className="p-1 text-left">Deliv</th>
+                <th className="p-1 text-left">Mark</th>
+                <th className="p-1 text-left">Total</th>
+                <th className="p-1 text-left">Vendor</th>
               </tr>
             </thead>
             <tbody>
               {editableQuotation.operations.map((op, idx) => (
                 <tr key={op._id || idx} className="border-b">
-                  <td className="p-2">{op.ourCost || "0"}</td>
-                  <td className="p-2">{op.branding || "0"}</td>
-                  <td className="p-2">{op.delivery || "0"}</td>
-                  <td className="p-2">{op.markup || "0"}</td>
-                  <td className="p-2">{op.total || "0"}</td>
-                  <td className="p-2">{op.vendor || ""}</td>
-                  <td className="p-2">{op.remarks || ""}</td>
-                  <td className="p-2">{op.reference || ""}</td>
-                  <td className="p-2">
-                    <button
-                      onClick={() => handleViewOperation(op)}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs"
-                    >
-                      Edit
-                    </button>
-                  </td>
+                  <td className="p-1">{formatIndianNumber(op.ourCost)}</td>
+                  <td className="p-1">{formatIndianNumber(op.branding)}</td>
+                  <td className="p-1">{formatIndianNumber(op.delivery)}</td>
+                  <td className="p-1">{formatIndianNumber(op.markup)}</td>
+                  <td className="p-1">{formatIndianNumber(op.total)}</td>
+                  <td className="p-1 wrap-text">{op.vendor || ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -1648,148 +1948,33 @@ export default function QuotationView() {
         </div>
       )}
 
-      <table className="w-full border-collapse mb-6 text-xs">
-        <thead>
-          <tr className="border-b">
-            <th className="p-2 text-left">Sl. No.</th>
-            <th className="p-2 text-left">Image</th>
-            <th className="p-2 text-left">Product</th>
-            <th className="p-2 text-left">HSN</th>
-            <th className="p-2 text-left">Quantity</th>
-            <th className="p-2 text-left">Rate</th>
-            {editableQuotation.displayTotals && (
-              <>
-                <th className="p-2 text-left">Amount</th>
-                <th className="p-2 text-left">GST (%)</th>
-                <th className="p-2 text-left">Total</th>
-              </>
-            )}
-            <th className="p-2 text-left">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {editableQuotation.items.map((item, index) => {
-            const baseRate = parseFloat(item.rate) || 0;
-            const effRate = baseRate * marginFactor;
-            const amount = (effRate * (parseFloat(item.quantity) || 1)).toFixed(
-              2
-            );
-            const gstRate =
-              item.productGST != null
-                ? parseFloat(item.productGST)
-                : editableQuotation.gst
-                ? parseFloat(editableQuotation.gst)
-                : 0;
-            const total = (
-              parseFloat(amount) +
-              (gstRate > 0 ? parseFloat(amount) * (gstRate / 100) : 0)
-            ).toFixed(2);
-
-            return (
-              <tr key={index} className="border-b">
-                <td className="p-2">{item.slNo || index + 1}</td>
-                <td className="p-2">
-                  {item.productId?.images?.[item.imageIndex || 0] ? (
-                    <img
-                      src={item.productId.images[item.imageIndex || 0]}
-                      alt="Product"
-                      className="w-16 h-16 object-cover"
-                    />
-                  ) : (
-                    "No Image"
-                  )}
-                </td>
-                <td className="p-2">
-                  <input
-                    type="text"
-                    value={item.product}
-                    onChange={(e) =>
-                      updateItemField(index, "product", e.target.value)
-                    }
-                    className="border p-1 w-full text-xs"
-                  />
-                </td>
-                <td className="p-2">
-                  <input
-                    type="text"
-                    value={item.hsnCode || item.productId?.hsnCode || ""}
-                    onChange={(e) =>
-                      updateItemField(index, "hsnCode", e.target.value)
-                    }
-                    className="border p-1 w-full text-xs"
-                  />
-                </td>
-                <td className="p-2">
-                  <input
-                    type="number"
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateItemField(index, "quantity", e.target.value)
-                    }
-                    className="border p-1 w-16 text-xs"
-                    min="1"
-                  />
-                </td>
-                <td className="p-2">
-                  <input
-                    type="number"
-                    value={item.rate}
-                    onChange={(e) =>
-                      updateItemField(index, "rate", e.target.value)
-                    }
-                    className="border p-1 w-20 text-xs"
-                    min="0"
-                    step="0.01"
-                  />
-                </td>
+      {/* Quotation Items Table - synced from Ops */}
+      <div className="mb-3">
+        <h3 className="text-[11px] font-semibold mb-1">Quotation Items (synced from Ops)</h3>
+        <div className="max-h-[40vh] overflow-auto border rounded">
+          <table className="w-full border-collapse text-[10px]">
+            <thead className="sticky top-0 bg-gray-100 z-10">
+              <tr className="border-b">
+                <th className="p-1 text-left" style={{width: "30px"}}>Sl</th>
+                <th className="p-1 text-left" style={{width: "50px"}}>Img</th>
+                <th className="p-1 text-left wrap-text" style={{minWidth: "150px", width: "30%"}}>Product</th>
+                {editableQuotation.displayHSNCodes && (
+                  <th className="p-1 text-left" style={{width: "50px"}}>HSN</th>
+                )}
+                <th className="p-1 text-center" style={{width: "50px"}}>Qty</th>
+                <th className="p-1 text-right" style={{width: "70px"}}>Rate</th>
                 {editableQuotation.displayTotals && (
                   <>
-                    <td className="p-2">{amount}</td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        value={item.productGST}
-                        onChange={(e) =>
-                          updateItemField(index, "productGST", e.target.value)
-                        }
-                        className="border p-1 w-16 text-xs"
-                        min="0"
-                        step="0.1"
-                      />
-                    </td>
-                    <td className="p-2">{total}</td>
+                    <th className="p-1 text-right" style={{width: "75px"}}>Amount</th>
+                    <th className="p-1 text-center" style={{width: "40px"}}>GST%</th>
+                    <th className="p-1 text-right" style={{width: "80px"}}>Total</th>
                   </>
                 )}
-                <td className="p-2">
-                  <button
-                    onClick={() => removeItem(index)}
-                    className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs"
-                  >
-                    Remove
-                  </button>
-                </td>
+                <th className="p-1 text-center" style={{width: "50px"}}>Act</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      {editableQuotation.displayTotals && (
-        <div className="text-right text-xs">
-          <p>
-            Total Amount:{" "}
-            {editableQuotation.items
-              .reduce((sum, item) => {
-                const baseRate = parseFloat(item.rate) || 0;
-                const effRate = baseRate * marginFactor;
-                return sum + effRate * (parseFloat(item.quantity) || 1);
-              }, 0)
-              .toFixed(2)}
-          </p>
-          <p>
-            Grand Total:
-            {editableQuotation.items
-              .reduce((sum, item) => {
+            </thead>
+            <tbody>
+              {editableQuotation.items.map((item, index) => {
                 const baseRate = parseFloat(item.rate) || 0;
                 const effRate = baseRate * marginFactor;
                 const amount = effRate * (parseFloat(item.quantity) || 1);
@@ -1799,15 +1984,125 @@ export default function QuotationView() {
                     : editableQuotation.gst
                     ? parseFloat(editableQuotation.gst)
                     : 0;
+                const total = amount + (gstRate > 0 ? amount * (gstRate / 100) : 0);
+
                 return (
-                  sum +
-                  (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0))
+                  <tr key={index} className="border-b hover:bg-gray-50">
+                    <td className="p-1">{item.slNo || index + 1}</td>
+                    <td className="p-1">
+                      {item.productId?.images?.[item.imageIndex || 0] ? (
+                        <img
+                          src={item.productId.images[item.imageIndex || 0]}
+                          alt="Prod"
+                          className="w-8 h-8 object-cover rounded"
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-[9px]">-</span>
+                      )}
+                    </td>
+                    <td className="p-1 wrap-text">
+                      <input
+                        type="text"
+                        value={item.product}
+                        onChange={(e) => updateItemField(index, "product", e.target.value)}
+                        className="border p-0.5 w-full text-[10px] rounded wrap-text"
+                      />
+                    </td>
+                    {editableQuotation.displayHSNCodes && (
+                      <td className="p-1">
+                        <input
+                          type="text"
+                          value={item.hsnCode || item.productId?.hsnCode || ""}
+                          onChange={(e) => updateItemField(index, "hsnCode", e.target.value)}
+                          className="border p-0.5 w-full text-[10px] rounded"
+                        />
+                      </td>
+                    )}
+                    <td className="p-1">
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateItemField(index, "quantity", e.target.value)}
+                        className="border p-0.5 w-full text-[10px] text-center rounded"
+                        min="1"
+                      />
+                    </td>
+                    <td className="p-1">
+                      <input
+                        type="number"
+                        value={item.rate}
+                        onChange={(e) => updateItemField(index, "rate", e.target.value)}
+                        className="border p-0.5 w-full text-[10px] text-right rounded"
+                        min="0"
+                        step="0.01"
+                      />
+                    </td>
+                    {editableQuotation.displayTotals && (
+                      <>
+                        <td className="p-1 text-right">{formatIndianNumber(amount)}</td>
+                        <td className="p-1">
+                          <input
+                            type="number"
+                            value={item.productGST}
+                            onChange={(e) => updateItemField(index, "productGST", e.target.value)}
+                            className="border p-0.5 w-full text-[10px] text-center rounded"
+                            min="0"
+                            step="0.1"
+                          />
+                        </td>
+                        <td className="p-1 text-right font-medium">{formatIndianNumber(total)}</td>
+                      </>
+                    )}
+                    <td className="p-1 text-center">
+                      <button
+                        onClick={() => removeItem(index)}
+                        className="text-red-500 hover:text-red-700 text-[10px]"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
                 );
-              }, 0)
-              .toFixed(2)}
-          </p>
+              })}
+            </tbody>
+          </table>
         </div>
-      )}  
+      </div>
+
+      {/* Totals Summary - always show line items total */}
+      <div className="text-right text-[11px] bg-gray-100 p-2 rounded">
+        <p className="mb-0.5">
+          <span className="text-gray-600">Total Amount:</span>{" "}
+          <span className="font-medium">
+            ₹{formatIndianNumber(
+              editableQuotation.items.reduce((sum, item) => {
+                const baseRate = parseFloat(item.rate) || 0;
+                const effRate = baseRate * marginFactor;
+                return sum + effRate * (parseFloat(item.quantity) || 1);
+              }, 0)
+            )}
+          </span>
+        </p>
+        <p>
+          <span className="text-gray-600">Grand Total (incl. GST):</span>{" "}
+          <span className="font-bold text-green-700 text-sm">
+            ₹{formatIndianNumber(
+              editableQuotation.items.reduce((sum, item) => {
+                const baseRate = parseFloat(item.rate) || 0;
+                const effRate = baseRate * marginFactor;
+                const amount = effRate * (parseFloat(item.quantity) || 1);
+                const gstRate =
+                  item.productGST != null
+                    ? parseFloat(item.productGST)
+                    : editableQuotation.gst
+                    ? parseFloat(editableQuotation.gst)
+                    : 0;
+                return sum + (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0));
+              }, 0)
+            )}
+          </span>
+        </p>
+      </div>
     </div>
   );
 }

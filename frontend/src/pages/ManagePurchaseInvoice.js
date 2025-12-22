@@ -556,8 +556,10 @@ export default function ManagePurchaseInvoice() {
       )}
 
       {/* Table */}
-      <table className="min-w-full border-collapse border border-gray-300 text-xs">
-        <thead className="bg-gray-50">
+      
+<div className="overflow-auto" style={{ maxHeight: "calc(115vh - 300px)" }}>
+  <table className="min-w-full border-collapse border border-gray-300 text-xs">
+  <thead className="bg-gray-50 sticky top-0 z-10">
           <tr>
             {HEADER_COLS.map((c) => (
               <th
@@ -621,6 +623,7 @@ export default function ManagePurchaseInvoice() {
           ))}
         </tbody>
       </table>
+      </div>
 
       <JobSheetGlobal
         jobSheetNumber={selectedJobSheetNumber}

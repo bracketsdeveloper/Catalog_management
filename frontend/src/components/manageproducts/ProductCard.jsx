@@ -1,5 +1,83 @@
 import React from "react";
 
+// Helper function to get CSS color from color name
+const getColorValue = (colorName) => {
+  if (!colorName) return null;
+  
+  const colorMap = {
+    // Common color mappings
+    "red": "#EF4444",
+    "blue": "#3B82F6",
+    "green": "#22C55E",
+    "yellow": "#EAB308",
+    "orange": "#F97316",
+    "purple": "#A855F7",
+    "pink": "#EC4899",
+    "black": "#000000",
+    "white": "#FFFFFF",
+    "gray": "#6B7280",
+    "grey": "#6B7280",
+    "brown": "#92400E",
+    "navy": "#1E3A8A",
+    "navy blue": "#1E3A8A",
+    "sky blue": "#0EA5E9",
+    "light blue": "#93C5FD",
+    "dark blue": "#1E40AF",
+    "maroon": "#7F1D1D",
+    "beige": "#D4C4A8",
+    "cream": "#FFFDD0",
+    "gold": "#FFD700",
+    "silver": "#C0C0C0",
+    "rose": "#FB7185",
+    "rose gold": "#B76E79",
+    "teal": "#14B8A6",
+    "cyan": "#06B6D4",
+    "magenta": "#D946EF",
+    "olive": "#84CC16",
+    "coral": "#F97171",
+    "peach": "#FDBA74",
+    "mint": "#86EFAC",
+    "lavender": "#C4B5FD",
+    "burgundy": "#800020",
+    "tan": "#D2B48C",
+    "ivory": "#FFFFF0",
+    "charcoal": "#374151",
+    "turquoise": "#40E0D0",
+    "indigo": "#6366F1",
+    "violet": "#8B5CF6",
+    "aqua": "#00FFFF",
+    "lime": "#84CC16",
+    "khaki": "#C3B091",
+    "multicolor": "linear-gradient(90deg, #EF4444, #F97316, #EAB308, #22C55E, #3B82F6, #A855F7)",
+    "multi": "linear-gradient(90deg, #EF4444, #F97316, #EAB308, #22C55E, #3B82F6, #A855F7)",
+    "assorted": "linear-gradient(90deg, #EF4444, #F97316, #EAB308, #22C55E, #3B82F6, #A855F7)",
+  };
+
+  const lowerColor = colorName.toLowerCase().trim();
+  
+  // Check if it's in our map
+  if (colorMap[lowerColor]) {
+    return colorMap[lowerColor];
+  }
+  
+  // Check if it's a valid hex color
+  if (/^#([0-9A-F]{3}){1,2}$/i.test(colorName)) {
+    return colorName;
+  }
+  
+  // Check if it's a valid CSS color name (browser will handle it)
+  return colorName.toLowerCase();
+};
+
+// Parse colors from comma-separated string
+const parseColors = (colorString) => {
+  if (!colorString) return [];
+  return colorString
+    .split(',')
+    .map(c => c.trim())
+    .filter(c => c.length > 0);
+};
+
 export default function ProductCard({
   product,
   handleViewProduct,
@@ -12,6 +90,8 @@ export default function ProductCard({
   const currentIndex = carouselIndexMap[product._id] || 0;
   const images = product.images || [];
   const currentImg = images[currentIndex] || "";
+  
+  const colors = parseColors(product.color);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 p-4 relative">
@@ -45,6 +125,35 @@ export default function ProductCard({
             </>
           ) : (
             <span className="text-sm text-gray-400">No image available</span>
+          )}
+          
+          {/* Color indicator with multiple color boxes - bottom right of image */}
+          {colors.length > 0 && (
+            <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm border border-gray-200 flex items-center gap-1.5 max-w-[120px]">
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                {colors.slice(0, 5).map((color, index) => {
+                  const colorValue = getColorValue(color);
+                  const isGradient = colorValue?.includes('gradient');
+                  return (
+                    <div
+                      key={index}
+                      className="w-3.5 h-3.5 rounded-sm border border-gray-300 flex-shrink-0"
+                      style={{
+                        background: isGradient ? colorValue : undefined,
+                        backgroundColor: !isGradient ? colorValue : undefined,
+                      }}
+                      title={color}
+                    />
+                  );
+                })}
+                {colors.length > 5 && (
+                  <span className="text-[10px] text-gray-500 ml-0.5">+{colors.length - 5}</span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium text-gray-600 truncate" title={product.color}>
+                {colors.length === 1 ? colors[0] : `${colors.length} colors`}
+              </span>
+            </div>
           )}
         </div>
 
