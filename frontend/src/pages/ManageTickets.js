@@ -152,7 +152,7 @@ export default function ManageTicketsPage() {
   };
 
   // Reopen a ticket
-  const handleReopen = async (taskId, newClosingDate) => {
+  const handleReopen = async (taskId, newClosingDate, reopenDescription) => {
     try {
       const task = tasks.find((t) => t._id === taskId);
       if (!task) throw new Error("Task not found");
@@ -160,6 +160,7 @@ export default function ManageTicketsPage() {
         ...task,
         toBeClosedBy: newClosingDate,
         reopened: true,
+        reopenDescription: reopenDescription || "",
         completedOn: "Not Done",
       };
       delete updateData._id;

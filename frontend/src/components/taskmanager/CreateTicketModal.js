@@ -16,6 +16,7 @@ export default function CreateTicketModal({
   const [formData, setFormData] = useState({
     _id: initialData._id || null,
     ticketName: initialData.ticketName || "",
+    taskDescription: initialData.taskDescription || "", // New field
     opportunityId:
       initialData.opportunityId?._id || initialData.opportunityId || null,
     opportunitySearch:
@@ -24,10 +25,10 @@ export default function CreateTicketModal({
         ? `${initialData.opportunityId.opportunityCode} - ${initialData.opportunityId.opportunityName}`
         : ""),
     assignedTo:
-      initialData.assignedTo?._id ||
-      (isSuperAdmin ? "" : currentUser?._id || ""),
+      initialData.assignedTo?.map(user => user._id) ||
+      (isSuperAdmin ? [] : currentUser?._id ? [currentUser._id] : []), // Changed to array
     assignedToSearch: initialData.assignedTo
-      ? `${initialData.assignedTo.name} (${initialData.assignedTo.email})`
+      ? initialData.assignedTo.map(user => `${user.name} (${user.email})`).join(", ")
       : isSuperAdmin
       ? ""
       : currentUser
@@ -52,6 +53,7 @@ export default function CreateTicketModal({
           .slice(0, 16)
       : new Date().toISOString().slice(0, 16),
     completedOn: initialData.completedOn || "Not Done",
+    completionRemarks: initialData.completionRemarks || "", // New field
     selectedDates: initialData.selectedDates
       ? [
           ...new Set(
@@ -64,12 +66,24 @@ export default function CreateTicketModal({
         ]
       : [],
     reopened: initialData.reopened || false,
+    reopenDescription: initialData.reopenDescription || "", // New field
   });
 
   // --- Dropdown visibility state ---
   const [showOpportunitySuggestions, setShowOpportunitySuggestions] =
     useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState(
+    initialData.assignedTo?.map(user => ({
+      _id: user._id,
+      name: user.name,
+      email: user.email
+    })) || (isSuperAdmin ? [] : currentUser ? [{
+      _id: currentUser._id,
+      name: currentUser.name,
+      email: currentUser.email
+    }] : [])
+  );
 
   // --- Filtered lists ---
   const safeOpportunities = Array.isArray(opportunities)
@@ -152,6 +166,7 @@ export default function CreateTicketModal({
         ...prev,
         [name]: type === "checkbox" ? checked : value,
       };
+      
       if (name === "schedule" && !isEditing) {
         updated.selectedDates = generateDates(
           value,
@@ -159,12 +174,15 @@ export default function CreateTicketModal({
           prev.toDate
         );
       }
-      if (name === "opportunitySearch" && !value) {
+      
+      // Only clear opportunityId if search is completely cleared
+      if (name === "opportunitySearch" && value === "") {
         updated.opportunityId = null;
       }
+      
       return updated;
     });
-
+  
     if (name === "opportunitySearch") {
       setShowOpportunitySuggestions(!!value && safeOpportunities.length > 0);
     }
@@ -185,23 +203,54 @@ export default function CreateTicketModal({
 
   // --- Pick a user ---
   const handleUserSuggestionClick = (user) => {
-    setFormData((prev) => ({
-      ...prev,
-      assignedTo: user._id,
-      assignedToSearch: `${user.name} (${user.email})`,
-    }));
+    if (!selectedUsers.some(u => u._id === user._id)) {
+      const newSelectedUsers = [...selectedUsers, {
+        _id: user._id,
+        name: user.name,
+        email: user.email
+      }];
+      setSelectedUsers(newSelectedUsers);
+      setFormData(prev => ({
+        ...prev,
+        assignedTo: newSelectedUsers.map(u => u._id),
+        assignedToSearch: newSelectedUsers.map(u => `${u.name} (${u.email})`).join(", ")
+      }));
+    }
     setShowUserSuggestions(false);
+  };
+
+  // --- Remove a selected user ---
+  const removeSelectedUser = (userId) => {
+    const newSelectedUsers = selectedUsers.filter(user => user._id !== userId);
+    setSelectedUsers(newSelectedUsers);
+    setFormData(prev => ({
+      ...prev,
+      assignedTo: newSelectedUsers.map(u => u._id),
+      assignedToSearch: newSelectedUsers.map(u => `${u.name} (${u.email})`).join(", ")
+    }));
   };
 
   // --- Submit form ---
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Determine opportunityId and opportunityCode
+    let opportunityId = formData.opportunityId;
+    let opportunityCode = formData.opportunitySearch || "";
+    
+    // If opportunitySearch is empty, set both to null/empty
+    if (formData.opportunitySearch === "") {
+      opportunityId = null;
+      opportunityCode = "";
+    }
+
     // Prepare base payload
     const base = {
       ticketName: formData.ticketName,
-      opportunityId: formData.opportunityId || null,
-      assignedTo: formData.assignedTo || null,
+      taskDescription: formData.taskDescription,
+      opportunityId: opportunityId,
+      opportunityCode: opportunityCode, // Send the code explicitly
+      assignedTo: formData.assignedTo || [],
       schedule: formData.schedule,
       fromDate:
         formData.schedule !== "None"
@@ -212,7 +261,9 @@ export default function CreateTicketModal({
           ? new Date(new Date(formData.toDate).getTime() - 5.5 * 3600 * 1000).toISOString()
           : null,
       completedOn: formData.completedOn,
+      completionRemarks: formData.completionRemarks,
       reopened: formData.reopened,
+      reopenDescription: formData.reopenDescription,
     };
 
     if (isEditing && formData._id) {
@@ -276,14 +327,14 @@ export default function CreateTicketModal({
   // --- Render ---
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg w-full max-w-md">
+      <div className="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold mb-4">
           {isEditing ? "Edit Ticket" : "Create Ticket"}
         </h2>
         <form onSubmit={handleSubmit}>
           {/* Ticket Name */}
           <div className="mb-4">
-            <label className="block text-sm font-medium">Ticket Name</label>
+            <label className="block text-sm font-medium">Ticket Name *</label>
             <input
               type="text"
               name="ticketName"
@@ -291,6 +342,19 @@ export default function CreateTicketModal({
               onChange={handleChange}
               required
               className="w-full border p-2 rounded h-10"
+            />
+          </div>
+
+          {/* Task Description */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium">Task Description</label>
+            <textarea
+              name="taskDescription"
+              value={formData.taskDescription}
+              onChange={handleChange}
+              rows="3"
+              className="w-full border p-2 rounded"
+              placeholder="Describe the task details..."
             />
           </div>
 
@@ -335,9 +399,9 @@ export default function CreateTicketModal({
               )}
           </div>
 
-          {/* Assign To */}
+          {/* Assign To (Multiple Users) */}
           <div className="mb-4 relative">
-            <label className="block text-sm font-medium">Assign To</label>
+            <label className="block text-sm font-medium">Assign To *</label>
             <input
               type="text"
               name="assignedToSearch"
@@ -349,9 +413,7 @@ export default function CreateTicketModal({
               }
               placeholder="Type to search users..."
               className="w-full border p-2 rounded h-10"
-              disabled={
-                !isSuperAdmin && formData.assignedTo === currentUser?._id
-              }
+              disabled={!isSuperAdmin && selectedUsers.some(u => u._id === currentUser?._id)}
             />
             {showUserSuggestions && filteredUsers.length > 0 && (
               <div className="absolute z-10 w-full bg-white border rounded mt-1 max-h-40 overflow-y-auto">
@@ -369,6 +431,29 @@ export default function CreateTicketModal({
             {showUserSuggestions && filteredUsers.length === 0 && (
               <div className="absolute z-10 w-full bg-white border rounded mt-1 p-2 text-sm text-gray-500">
                 No users found
+              </div>
+            )}
+            
+            {/* Selected Users Display */}
+            {selectedUsers.length > 0 && (
+              <div className="mt-2">
+                <div className="flex flex-wrap gap-2">
+                  {selectedUsers.map((user) => (
+                    <div
+                      key={user._id}
+                      className="flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+                    >
+                      <span>{user.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedUser(user._id)}
+                        className="ml-2 text-blue-600 hover:text-blue-800"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -420,7 +505,7 @@ export default function CreateTicketModal({
           {/* Single due date if no schedule */}
           {formData.schedule === "None" && (
             <div className="mb-4">
-              <label className="block text-sm font-medium">To Be Closed By</label>
+              <label className="block text-sm font-medium">To Be Closed By *</label>
               <input
                 type="datetime-local"
                 name="toBeClosedBy"
@@ -446,18 +531,48 @@ export default function CreateTicketModal({
             </select>
           </div>
 
-          {/* Reopened toggle for super-admins */}
-          {isSuperAdmin && isEditing && (
-            <div className="mb-4 flex items-center">
-              <input
-                type="checkbox"
-                name="reopened"
-                checked={formData.reopened}
+          {/* Completion Remarks (only shown when marking as Done) */}
+          {formData.completedOn === "Done" && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Completion Remarks</label>
+              <textarea
+                name="completionRemarks"
+                value={formData.completionRemarks}
                 onChange={handleChange}
-                className="h-4 w-4 mr-2"
+                rows="2"
+                className="w-full border p-2 rounded"
+                placeholder="Add remarks about completion..."
               />
-              <label className="text-sm">Mark as Reopened</label>
             </div>
+          )}
+
+          {/* Reopened toggle and description for super-admins */}
+          {isSuperAdmin && isEditing && (
+            <>
+              <div className="mb-4 flex items-center">
+                <input
+                  type="checkbox"
+                  name="reopened"
+                  checked={formData.reopened}
+                  onChange={handleChange}
+                  className="h-4 w-4 mr-2"
+                />
+                <label className="text-sm">Mark as Reopened</label>
+              </div>
+              {formData.reopened && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium">Reopen Description</label>
+                  <textarea
+                    name="reopenDescription"
+                    value={formData.reopenDescription}
+                    onChange={handleChange}
+                    rows="2"
+                    className="w-full border p-2 rounded"
+                    placeholder="Reason for reopening..."
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Selected Dates picker */}

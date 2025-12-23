@@ -19,6 +19,7 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
   const headers = [
     { key: "taskRef", label: "Task #" },
     { key: "ticketName", label: "Ticket Name" },
+    { key: "taskDescription", label: "Description" }, // New column
     { key: "opportunityCode", label: "OPP #" },
     { key: "assignedBy", label: "Assigned By" },
     { key: "assignedTo", label: "Assigned To" },
@@ -28,7 +29,7 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
     { key: "actions", label: "Actions" },
   ];
 
-  const now = new Date(); // Current date/time: June 13, 2025, 10:26 AM IST
+  const now = new Date();
 
   // Calculate counts for each filter category
   const openTicketsCount = tasks.filter((task) => {
@@ -83,7 +84,9 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
     }
 
     if (isSuperAdmin && assignedToFilter !== "all") {
-      filteredTasks = filteredTasks.filter((task) => task.assignedTo?._id === assignedToFilter);
+      filteredTasks = filteredTasks.filter((task) => 
+        task.assignedTo?.some(user => user._id === assignedToFilter)
+      );
     }
 
     if (dateFilter) {
@@ -116,6 +119,12 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
     const startDate = new Date(task.selectedDates[0]).toLocaleDateString();
     const endDate = new Date(task.selectedDates[task.selectedDates.length - 1]).toLocaleDateString();
     return `${startDate} to ${endDate} (${task.schedule})`;
+  };
+
+  const getAssignedUsersDisplay = (task) => {
+    if (!task.assignedTo || task.assignedTo.length === 0) return "-";
+    if (task.assignedTo.length === 1) return task.assignedTo[0]?.name || "-";
+    return `${task.assignedTo[0]?.name} + ${task.assignedTo.length - 1} more`;
   };
 
   const filteredTasks = getFilteredTasks();
@@ -241,9 +250,18 @@ function TicketsTable({ tasks, formatDate, handleSort, sortConfig, onReopen, onD
                 >
                   <td className="border text-center">{task.taskRef || "-"}</td>
                   <td className="border text-center">{task.ticketName || "-"}</td>
+                  <td className="border text-center" title={task.taskDescription}>
+                    {task.taskDescription ? 
+                      (task.taskDescription.length > 30 ? 
+                        `${task.taskDescription.substring(0, 30)}...` : 
+                        task.taskDescription) 
+                      : "-"}
+                  </td>
                   <td className="border text-center">{task.opportunityCode || "-"}</td>
                   <td className="border text-center">{task.assignedBy?.name || "-"}</td>
-                  <td className="border text-center">{task.assignedTo?.name || "-"}</td>
+                  <td className="border text-center" title={task.assignedTo?.map(u => u.name).join(", ")}>
+                    {getAssignedUsersDisplay(task)}
+                  </td>
                   <td className="border text-center">{formatDate(task.toBeClosedBy)}</td>
                   <td className="border text-center">{getScheduleSummary(task)}</td>
                   <td className="border text-center">

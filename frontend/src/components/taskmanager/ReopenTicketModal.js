@@ -2,10 +2,11 @@ import React, { useState } from "react";
 
 function ReopenTicketModal({ task, onClose, onSubmit }) {
   const [newClosingDate, setNewClosingDate] = useState("");
+  const [reopenDescription, setReopenDescription] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(task._id, newClosingDate);
+    onSubmit(task._id, newClosingDate, reopenDescription);
   };
 
   return (
@@ -23,6 +24,15 @@ function ReopenTicketModal({ task, onClose, onSubmit }) {
             />
           </div>
           <div className="mb-4">
+            <label className="block text-sm font-medium">Task Description</label>
+            <textarea
+              value={task.taskDescription || "No description"}
+              disabled
+              rows="2"
+              className="w-full border p-2 rounded bg-gray-100"
+            />
+          </div>
+          <div className="mb-4">
             <label className="block text-sm font-medium">OPP #</label>
             <input
               type="text"
@@ -32,7 +42,7 @@ function ReopenTicketModal({ task, onClose, onSubmit }) {
             />
           </div>
           <div className="mb-4">
-            <label className="block text-sm font-medium">New Closing Date</label>
+            <label className="block text-sm font-medium">New Closing Date *</label>
             <input
               type="datetime-local"
               value={newClosingDate}
@@ -42,8 +52,19 @@ function ReopenTicketModal({ task, onClose, onSubmit }) {
             />
           </div>
           <div className="mb-4">
+            <label className="block text-sm font-medium">Reopen Description</label>
+            <textarea
+              value={reopenDescription}
+              onChange={(e) => setReopenDescription(e.target.value)}
+              rows="3"
+              className="w-full border p-2 rounded"
+              placeholder="Reason for reopening the task..."
+            />
+          </div>
+          <div className="mb-4">
             <p className="text-sm text-gray-600">
               Note: This ticket will be marked as <span className="font-medium text-yellow-800">Re-Opened</span> upon submission.
+              An email notification will be sent to all assigned users.
             </p>
           </div>
           <div className="flex gap-2">

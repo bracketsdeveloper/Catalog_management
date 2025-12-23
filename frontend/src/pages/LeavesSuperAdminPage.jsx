@@ -29,10 +29,7 @@ const EmployeesAPI = {
 };
 
 /* ---------- constants ---------- */
-const LEAVE_TYPES = ["earned", "sick", "additional", "special"];
 const STATUSES = ["applied", "pending", "approved", "rejected", "cancelled"];
-
-/* Sort whitelists must match backend route logic */
 const LEAVES_SORT_KEYS = ["startDate", "endDate", "createdAt", "updatedAt"];
 const RH_SORT_KEYS = ["holidayDate", "createdAt", "updatedAt"];
 
@@ -41,11 +38,9 @@ function fmtDate(d) {
   if (!d) return "";
   const dt = new Date(d);
   if (isNaN(dt)) return "";
-  
-  const day = String(dt.getDate()).padStart(2, '0');
-  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, "0");
+  const month = String(dt.getMonth() + 1).padStart(2, "0");
   const year = dt.getFullYear();
-  
   return `${day}-${month}-${year}`;
 }
 
@@ -56,7 +51,6 @@ function daysBetween(a, b) {
   return Math.max(1, Math.ceil((B - A) / (1000 * 60 * 60 * 24)) + 1);
 }
 
-/** Normalize employee object coming from backend hydration */
 function resolveEmployee(row) {
   const e = row?.employee || {};
   return {
@@ -71,16 +65,20 @@ function resolveEmployee(row) {
    PAGE
    ======================================================================= */
 export default function TimeOffAdmin() {
-  const [tab, setTab] = useState("leaves"); // "leaves" | "rh"
+  const [tab, setTab] = useState("leaves");
 
-  /* Shared query state */
+  /* Global search */
   const [q, setQ] = useState("");
-  const [sortBy, setSortBy] = useState("startDate"); // default valid for "leaves"
+
+  /* Sorting */
+  const [sortBy, setSortBy] = useState("startDate");
   const [dir, setDir] = useState("desc");
+
+  /* Pagination */
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
-  /* Leaves filters (applied) */
+  /* Leaves header filters - directly applied */
   const [L_employeeId, setL_employeeId] = useState("");
   const [L_employeeName, setL_employeeName] = useState("");
   const [L_type, setL_type] = useState("");
@@ -88,60 +86,258 @@ export default function TimeOffAdmin() {
   const [L_from, setL_from] = useState("");
   const [L_to, setL_to] = useState("");
 
-  /* Leaves header filter inputs (staged) */
-  const [LF_employeeId, setLF_employeeId] = useState("");
-  const [LF_employeeName, setLF_employeeName] = useState("");
-  const [LF_type, setLF_type] = useState("");
-  const [LF_status, setLF_status] = useState("");
-  const [LF_from, setLF_from] = useState("");
-  const [LF_to, setLF_to] = useState("");
-
-  /* RH filters (applied) */
+  /* RH header filters - directly applied */
   const [R_employeeId, setR_employeeId] = useState("");
   const [R_employeeName, setR_employeeName] = useState("");
   const [R_status, setR_status] = useState("");
+  const [R_holidayName, setR_holidayName] = useState("");
   const [R_from, setR_from] = useState("");
   const [R_to, setR_to] = useState("");
 
-  /* RH header filter inputs (staged) */
-  const [RF_employeeId, setRF_employeeId] = useState("");
-  const [RF_employeeName, setRF_employeeName] = useState("");
-  const [RF_status, setRF_status] = useState("");
-  const [RF_from, setRF_from] = useState("");
-  const [RF_to, setRF_to] = useState("");
-
-  /* Data state: Leaves */
-  const [L_rows, setL_rows] = useState([]);
-  const [L_total, setL_total] = useState(0);
+  /* Raw data from API */
+  const [L_rawRows, setL_rawRows] = useState([]);
   const [L_loading, setL_loading] = useState(false);
 
-  /* Data state: RH */
-  const [R_rows, setR_rows] = useState([]);
-  const [R_total, setR_total] = useState(0);
+  const [R_rawRows, setR_rawRows] = useState([]);
   const [R_loading, setR_loading] = useState(false);
 
-  /* Simple cache to avoid re-fetching the same employee again and again */
-  const empCacheRef = useRef(new Map()); // key: employeeId -> value: {name, role, department}
+  const empCacheRef = useRef(new Map());
 
-  /* Pagination calc */
-  const totalPages = useMemo(() => {
-    const total = tab === "leaves" ? L_total : R_total;
-    return Math.max(1, Math.ceil(total / limit));
-  }, [tab, L_total, R_total, limit]);
+  /* ===================== EXTRACT FILTER OPTIONS FROM DATA ===================== */
+  const L_filterOptions = useMemo(() => {
+    const employeesMap = new Map();
+    const types = new Set();
+    const statuses = new Set();
 
-  /* Validate and normalize sortBy on tab switch or manual edits */
-  useEffect(() => {
-    const keys = tab === "leaves" ? LEAVES_SORT_KEYS : RH_SORT_KEYS;
-    if (!keys.includes(sortBy)) {
-      setSortBy(tab === "leaves" ? "startDate" : "holidayDate");
-      setDir("desc");
-      setPage(1);
+    L_rawRows.forEach((r) => {
+      const emp = resolveEmployee(r);
+      if (emp.employeeId && emp.employeeId !== "-") {
+        employeesMap.set(emp.employeeId, emp.name !== "-" ? emp.name : emp.employeeId);
+      }
+      if (r.type) types.add(r.type);
+      if (r.status) statuses.add(r.status);
+    });
+
+    return {
+      employees: Array.from(employeesMap.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      types: Array.from(types).sort(),
+      statuses: Array.from(statuses).sort(),
+    };
+  }, [L_rawRows]);
+
+  const R_filterOptions = useMemo(() => {
+    const employeesMap = new Map();
+    const statuses = new Set();
+    const holidayNames = new Set();
+
+    R_rawRows.forEach((r) => {
+      const emp = resolveEmployee(r);
+      if (emp.employeeId && emp.employeeId !== "-") {
+        employeesMap.set(emp.employeeId, emp.name !== "-" ? emp.name : emp.employeeId);
+      }
+      if (r.status) statuses.add(r.status);
+      if (r.holidayName) holidayNames.add(r.holidayName);
+    });
+
+    return {
+      employees: Array.from(employeesMap.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      statuses: Array.from(statuses).sort(),
+      holidayNames: Array.from(holidayNames).sort(),
+    };
+  }, [R_rawRows]);
+
+  /* ===================== CLIENT-SIDE FILTERING ===================== */
+  const L_filteredRows = useMemo(() => {
+    let rows = [...L_rawRows];
+
+    // Global search
+    if (q.trim()) {
+      const search = q.toLowerCase().trim();
+      rows = rows.filter((r) => {
+        const emp = resolveEmployee(r);
+        return (
+          emp.name.toLowerCase().includes(search) ||
+          emp.employeeId.toLowerCase().includes(search) ||
+          (r.purpose || "").toLowerCase().includes(search) ||
+          (r.type || "").toLowerCase().includes(search) ||
+          (r.status || "").toLowerCase().includes(search)
+        );
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
 
-  /* Fetch and hydrate missing employee names by employeeId (server already hydrates when possible).
-     This is a fallback for rows where employee.name is still empty but we have employeeId. */
+    // Employee Name filter
+    if (L_employeeName) {
+      rows = rows.filter((r) => {
+        const emp = resolveEmployee(r);
+        return emp.name.toLowerCase().includes(L_employeeName.toLowerCase());
+      });
+    }
+
+    // Employee ID filter
+    if (L_employeeId) {
+      rows = rows.filter((r) => {
+        const emp = resolveEmployee(r);
+        return emp.employeeId === L_employeeId;
+      });
+    }
+
+    // Type filter
+    if (L_type) {
+      rows = rows.filter((r) => r.type === L_type);
+    }
+
+    // Status filter
+    if (L_status) {
+      rows = rows.filter((r) => r.status === L_status);
+    }
+
+    // Date From filter
+    if (L_from) {
+      const fromDate = new Date(L_from);
+      fromDate.setHours(0, 0, 0, 0);
+      rows = rows.filter((r) => {
+        const startDate = new Date(r.startDate);
+        return startDate >= fromDate;
+      });
+    }
+
+    // Date To filter
+    if (L_to) {
+      const toDate = new Date(L_to);
+      toDate.setHours(23, 59, 59, 999);
+      rows = rows.filter((r) => {
+        const endDate = new Date(r.endDate);
+        return endDate <= toDate;
+      });
+    }
+
+    // Sorting
+    rows.sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+
+      if (sortBy.includes("Date") || sortBy === "createdAt" || sortBy === "updatedAt") {
+        aVal = new Date(aVal || 0);
+        bVal = new Date(bVal || 0);
+      }
+
+      if (aVal < bVal) return dir === "asc" ? -1 : 1;
+      if (aVal > bVal) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return rows;
+  }, [L_rawRows, q, L_employeeName, L_employeeId, L_type, L_status, L_from, L_to, sortBy, dir]);
+
+  const R_filteredRows = useMemo(() => {
+    let rows = [...R_rawRows];
+
+    // Global search
+    if (q.trim()) {
+      const search = q.toLowerCase().trim();
+      rows = rows.filter((r) => {
+        const emp = resolveEmployee(r);
+        return (
+          emp.name.toLowerCase().includes(search) ||
+          emp.employeeId.toLowerCase().includes(search) ||
+          (r.holidayName || "").toLowerCase().includes(search) ||
+          (r.note || "").toLowerCase().includes(search) ||
+          (r.status || "").toLowerCase().includes(search)
+        );
+      });
+    }
+
+    // Employee Name filter
+    if (R_employeeName) {
+      rows = rows.filter((r) => {
+        const emp = resolveEmployee(r);
+        return emp.name.toLowerCase().includes(R_employeeName.toLowerCase());
+      });
+    }
+
+    // Employee ID filter
+    if (R_employeeId) {
+      rows = rows.filter((r) => {
+        const emp = resolveEmployee(r);
+        return emp.employeeId === R_employeeId;
+      });
+    }
+
+    // Status filter
+    if (R_status) {
+      rows = rows.filter((r) => r.status === R_status);
+    }
+
+    // Holiday Name filter
+    if (R_holidayName) {
+      rows = rows.filter((r) => r.holidayName === R_holidayName);
+    }
+
+    // Date From filter
+    if (R_from) {
+      const fromDate = new Date(R_from);
+      fromDate.setHours(0, 0, 0, 0);
+      rows = rows.filter((r) => {
+        const holidayDate = new Date(r.holidayDate);
+        return holidayDate >= fromDate;
+      });
+    }
+
+    // Date To filter
+    if (R_to) {
+      const toDate = new Date(R_to);
+      toDate.setHours(23, 59, 59, 999);
+      rows = rows.filter((r) => {
+        const holidayDate = new Date(r.holidayDate);
+        return holidayDate <= toDate;
+      });
+    }
+
+    // Sorting
+    const sortKey = sortBy === "startDate" ? "holidayDate" : sortBy;
+    rows.sort((a, b) => {
+      let aVal = a[sortKey];
+      let bVal = b[sortKey];
+
+      if (sortKey.includes("Date") || sortKey === "createdAt" || sortKey === "updatedAt") {
+        aVal = new Date(aVal || 0);
+        bVal = new Date(bVal || 0);
+      }
+
+      if (aVal < bVal) return dir === "asc" ? -1 : 1;
+      if (aVal > bVal) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return rows;
+  }, [R_rawRows, q, R_employeeName, R_employeeId, R_status, R_holidayName, R_from, R_to, sortBy, dir]);
+
+  /* ===================== PAGINATION ===================== */
+  const totalPages = useMemo(() => {
+    const total = tab === "leaves" ? L_filteredRows.length : R_filteredRows.length;
+    return Math.max(1, Math.ceil(total / limit));
+  }, [tab, L_filteredRows.length, R_filteredRows.length, limit]);
+
+  const L_paginatedRows = useMemo(() => {
+    const start = (page - 1) * limit;
+    return L_filteredRows.slice(start, start + limit);
+  }, [L_filteredRows, page, limit]);
+
+  const R_paginatedRows = useMemo(() => {
+    const start = (page - 1) * limit;
+    return R_filteredRows.slice(start, start + limit);
+  }, [R_filteredRows, page, limit]);
+
+  /* Reset page when filters change */
+  useEffect(() => {
+    setPage(1);
+  }, [q, L_employeeId, L_employeeName, L_type, L_status, L_from, L_to, R_employeeId, R_employeeName, R_status, R_holidayName, R_from, R_to]);
+
+  /* ===================== HYDRATE EMPLOYEE NAMES ===================== */
   async function hydrateMissingEmployeeNames(rows, setRows) {
     try {
       const missingIds = [];
@@ -156,45 +352,34 @@ export default function TimeOffAdmin() {
       const uniq = [...new Set(missingIds)];
       if (!uniq.length) return rows;
 
-      const chunks = [];
-      const CHUNK_SIZE = 8;
-      for (let i = 0; i < uniq.length; i += CHUNK_SIZE) {
-        chunks.push(uniq.slice(i, i + CHUNK_SIZE));
-      }
-
-      for (const batch of chunks) {
-        const fetches = batch.map((eid) =>
-          EmployeesAPI.getByEmployeeId(eid)
-            .then(({ data }) => {
-              const name = data?.personal?.name || "";
-              const role = data?.org?.role || "";
-              const department = data?.org?.department || "";
-              empCacheRef.current.set(eid, { name, role, department });
-            })
-            .catch(() => {
-              empCacheRef.current.set(eid, { name: "", role: "", department: "" });
-            })
-        );
-        await Promise.all(fetches);
+      for (const eid of uniq) {
+        try {
+          const { data } = await EmployeesAPI.getByEmployeeId(eid);
+          empCacheRef.current.set(eid, {
+            name: data?.personal?.name || "",
+            role: data?.org?.role || "",
+            department: data?.org?.department || "",
+          });
+        } catch {
+          empCacheRef.current.set(eid, { name: "", role: "", department: "" });
+        }
       }
 
       const patched = rows.map((r) => {
         const emp = resolveEmployee(r);
         const id = (emp.employeeId || "").trim();
         const cacheHit = id ? empCacheRef.current.get(id) : null;
-        if (!emp.name || emp.name === "-") {
-          if (cacheHit && cacheHit.name) {
-            return {
-              ...r,
-              employee: {
-                ...(r.employee || {}),
-                employeeId: id || r.employeeId,
-                name: cacheHit.name,
-                role: cacheHit.role || (r.employee?.role || ""),
-                department: cacheHit.department || (r.employee?.department || ""),
-              },
-            };
-          }
+        if ((!emp.name || emp.name === "-") && cacheHit?.name) {
+          return {
+            ...r,
+            employee: {
+              ...(r.employee || {}),
+              employeeId: id || r.employeeId,
+              name: cacheHit.name,
+              role: cacheHit.role || "",
+              department: cacheHit.department || "",
+            },
+          };
         }
         return r;
       });
@@ -206,29 +391,17 @@ export default function TimeOffAdmin() {
     }
   }
 
-  /* Fetch leaves */
+  /* ===================== FETCH DATA ===================== */
   async function fetchLeaves() {
     try {
       setL_loading(true);
-      const safeSort = LEAVES_SORT_KEYS.includes(sortBy) ? sortBy : "startDate";
       const { data } = await LeavesAPI.list({
-        q,
-        employeeId: L_employeeId,
-        employeeName: L_employeeName,
-        type: L_type,
-        status: L_status,
-        from: L_from,
-        to: L_to,
-        sortBy: safeSort,
-        dir,
-        page,
-        limit,
+        limit: 1000,
         includeEmployee: "1",
       });
       const baseRows = data.rows || [];
-      setL_rows(baseRows);
-      setL_total(data.total || 0);
-      hydrateMissingEmployeeNames(baseRows, setL_rows);
+      setL_rawRows(baseRows);
+      hydrateMissingEmployeeNames(baseRows, setL_rawRows);
     } catch (e) {
       toast.error(e?.response?.data?.message || "Failed to load leaves");
     } finally {
@@ -236,221 +409,128 @@ export default function TimeOffAdmin() {
     }
   }
 
-  /* Fetch RH */
   async function fetchRH() {
     try {
       setR_loading(true);
-      const safeSort = RH_SORT_KEYS.includes(sortBy) ? sortBy : "holidayDate";
       const { data } = await RHAPI.list({
-        q,
-        employeeId: R_employeeId,
-        employeeName: R_employeeName,
-        status: R_status,
-        from: R_from,
-        to: R_to,
-        sortBy: safeSort,
-        dir,
-        page,
-        limit,
+        limit: 1000,
       });
       const baseRows = data.rows || [];
-      setR_rows(baseRows);
-      setR_total(data.total || 0);
-      hydrateMissingEmployeeNames(baseRows, setR_rows);
+      setR_rawRows(baseRows);
+      hydrateMissingEmployeeNames(baseRows, setR_rawRows);
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Failed to load restricted holiday requests");
+      toast.error(e?.response?.data?.message || "Failed to load RH requests");
     } finally {
       setR_loading(false);
     }
   }
 
-  /* Load on dependency change */
   useEffect(() => {
-    if (tab === "leaves") fetchLeaves();
-    if (tab === "rh") fetchRH();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    tab,
-    q,
-    sortBy,
-    dir,
-    page,
-    limit,
-    L_employeeId,
-    L_employeeName,
-    L_type,
-    L_status,
-    L_from,
-    L_to,
-    R_employeeId,
-    R_employeeName,
-    R_status,
-    R_from,
-    R_to,
-  ]);
+    fetchLeaves();
+    fetchRH();
+  }, []);
 
-  /* Sorting */
+  /* ===================== SORTING ===================== */
   function toggleSort(col) {
-    const keys = tab === "leaves" ? LEAVES_SORT_KEYS : RH_SORT_KEYS;
-    if (!keys.includes(col)) return; // ignore invalid for current tab
     if (sortBy === col) {
       setDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(col);
-      setDir("asc");
+      setDir("desc");
     }
   }
 
-  /* Apply/Reset header filters */
-  function applyLeavesHeaderFilters() {
-    setL_employeeId(LF_employeeId.trim());
-    setL_employeeName(LF_employeeName.trim());
-    setL_type(LF_type);
-    setL_status(LF_status);
-    setL_from(LF_from);
-    setL_to(LF_to);
-    setPage(1);
-  }
-  function resetLeavesHeaderFilters() {
-    setLF_employeeId("");
-    setLF_employeeName("");
-    setLF_type("");
-    setLF_status("");
-    setLF_from("");
-    setLF_to("");
+  /* ===================== RESET FILTERS ===================== */
+  function resetLeavesFilters() {
     setL_employeeId("");
     setL_employeeName("");
     setL_type("");
     setL_status("");
     setL_from("");
     setL_to("");
-    setPage(1);
+    setQ("");
   }
 
-  function applyRHHeaderFilters() {
-    setR_employeeId(RF_employeeId.trim());
-    setR_employeeName(RF_employeeName.trim());
-    setR_status(RF_status);
-    setR_from(RF_from);
-    setR_to(RF_to);
-    setPage(1);
-  }
-  function resetRHHeaderFilters() {
-    setRF_employeeId("");
-    setRF_employeeName("");
-    setRF_status("");
-    setRF_from("");
-    setRF_to("");
+  function resetRHFilters() {
     setR_employeeId("");
     setR_employeeName("");
     setR_status("");
+    setR_holidayName("");
     setR_from("");
     setR_to("");
-    setPage(1);
+    setQ("");
   }
 
-  /* Status updates */
+  /* ===================== STATUS UPDATES ===================== */
   async function updateLeaveStatus(id, newStatus) {
     try {
       await LeavesAPI.setStatus(id, newStatus);
-      setL_rows((prev) => prev.map((r) => (r._id === id ? { ...r, status: newStatus } : r)));
+      setL_rawRows((prev) => prev.map((r) => (r._id === id ? { ...r, status: newStatus } : r)));
       toast.success("Leave status updated");
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Failed to update leave status");
+      toast.error(e?.response?.data?.message || "Failed to update");
     }
   }
+
   async function updateRHStatus(id, newStatus) {
     try {
       await RHAPI.setStatus(id, newStatus);
-      setR_rows((prev) => prev.map((r) => (r._id === id ? { ...r, status: newStatus } : r)));
+      setR_rawRows((prev) => prev.map((r) => (r._id === id ? { ...r, status: newStatus } : r)));
       toast.success("RH status updated");
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Failed to update RH status");
+      toast.error(e?.response?.data?.message || "Failed to update");
     }
   }
 
-  /* Tab-specific sort options */
-  const sortOptions = tab === "leaves" ? LEAVES_SORT_KEYS : RH_SORT_KEYS;
+  /* ===================== CHECK IF FILTERS ACTIVE ===================== */
+  const hasLeavesFilters = q || L_employeeId || L_employeeName || L_type || L_status || L_from || L_to;
+  const hasRHFilters = q || R_employeeId || R_employeeName || R_status || R_holidayName || R_from || R_to;
 
+  /* ===================== RENDER ===================== */
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-semibold mb-4">Time Off — Super Admin</h1>
 
-      {/* Switch tabs */}
+      {/* Tabs */}
       <div className="inline-flex overflow-hidden rounded-lg border mb-4">
         <button
           className={`px-4 py-2 text-sm ${tab === "leaves" ? "bg-blue-600 text-white" : "bg-white"}`}
           onClick={() => {
             setTab("leaves");
             setPage(1);
-            setSortBy("startDate"); // valid default for leaves
-            setDir("desc");
+            setSortBy("startDate");
           }}
         >
-          Leave Applications
+          Leave Applications ({L_rawRows.length})
         </button>
         <button
           className={`px-4 py-2 text-sm ${tab === "rh" ? "bg-blue-600 text-white" : "bg-white"}`}
           onClick={() => {
             setTab("rh");
             setPage(1);
-            setSortBy("holidayDate"); // valid default for RH
-            setDir("desc");
+            setSortBy("holidayDate");
           }}
         >
-          Restricted Holidays
+          Restricted Holidays ({R_rawRows.length})
         </button>
       </div>
 
-      {/* Top toolbar */}
+      {/* Global Search & Controls */}
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="flex-1 min-w-[240px]">
-          <label className="text-xs block mb-1">Common search</label>
+          <label className="text-xs block mb-1">Search</label>
           <input
-            className="w-full border rounded px-2 py-1"
-            placeholder={
-              tab === "leaves"
-                ? "Purpose or Employee ID"
-                : "Holiday name, note, or Employee ID"
-            }
+            className="w-full border rounded px-3 py-2"
+            placeholder="Search by name, ID, purpose, status..."
             value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setQ(e.target.value)}
           />
-        </div>
-
-        <div>
-          <label className="text-xs block mb-1">Sort by</label>
-          <select
-            className="border rounded px-2 py-1"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
-            {sortOptions.map((k) => (
-              <option key={k} value={k}>
-                {k}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs block mb-1">Direction</label>
-          <select
-            className="border rounded px-2 py-1"
-            value={dir}
-            onChange={(e) => setDir(e.target.value)}
-          >
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
         </div>
 
         <div>
           <label className="text-xs block mb-1">Per page</label>
           <select
-            className="border rounded px-2 py-1"
+            className="border rounded px-3 py-2"
             value={limit}
             onChange={(e) => {
               setLimit(+e.target.value);
@@ -458,133 +538,134 @@ export default function TimeOffAdmin() {
             }}
           >
             {[10, 25, 50, 100].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
+              <option key={n} value={n}>{n}</option>
             ))}
           </select>
         </div>
+
+        <button
+          className="px-4 py-2 bg-gray-100 border rounded hover:bg-gray-200"
+          onClick={() => {
+            if (tab === "leaves") fetchLeaves();
+            else fetchRH();
+          }}
+        >
+          Refresh
+        </button>
       </div>
 
-      {/* Leaves tab */}
+      {/* ===================== LEAVES TABLE ===================== */}
       {tab === "leaves" && (
-        <div className="border rounded overflow-x-auto">
+        <div className="border rounded overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
           <table className="table-auto w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="border px-2 py-2">Employee</th>
-                <th className="border px-2 py-2">Emp ID</th>
-
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                <th className="border px-2 py-2 text-left">Employee</th>
+                <th className="border px-2 py-2 text-left">Emp ID</th>
                 <th
-                  className="border px-2 py-2 cursor-pointer select-none"
+                  className="border px-2 py-2 text-left cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort("startDate")}
                 >
-                  Start {sortBy === "startDate" ? (dir === "asc" ? "↑" : "↓") : ""}
+                  Start {sortBy === "startDate" && (dir === "asc" ? "↑" : "↓")}
                 </th>
                 <th
-                  className="border px-2 py-2 cursor-pointer select-none"
+                  className="border px-2 py-2 text-left cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort("endDate")}
                 >
-                  End {sortBy === "endDate" ? (dir === "asc" ? "↑" : "↓") : ""}
+                  End {sortBy === "endDate" && (dir === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="border px-2 py-2">Days</th>
-
-                <th className="border px-2 py-2">Type</th>
-                <th className="border px-2 py-2">Status</th>
-                <th className="border px-2 py-2">Purpose</th>
-
+                <th className="border px-2 py-2 text-left">Days</th>
+                <th className="border px-2 py-2 text-left">Type</th>
+                <th className="border px-2 py-2 text-left">Status</th>
+                <th className="border px-2 py-2 text-left">Purpose</th>
                 <th
-                  className="border px-2 py-2 cursor-pointer select-none"
+                  className="border px-2 py-2 text-left cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort("createdAt")}
                 >
-                  Created {sortBy === "createdAt" ? (dir === "asc" ? "↑" : "↓") : ""}
+                  Created {sortBy === "createdAt" && (dir === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="border px-2 py-2">Actions</th>
               </tr>
 
-              {/* header filters */}
+              {/* Filter Row */}
               <tr className="bg-gray-100">
-                <th className="border px-2 py-1">
+                <th className="border px-1 py-1">
                   <input
-                    className="w-full border rounded px-2 py-1"
-                    placeholder="Name"
-                    value={LF_employeeName}
-                    onChange={(e) => setLF_employeeName(e.target.value)}
+                    type="text"
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    placeholder="Filter name..."
+                    value={L_employeeName}
+                    onChange={(e) => setL_employeeName(e.target.value)}
                   />
                 </th>
-                <th className="border px-2 py-1">
-                  <input
-                    className="w-full border rounded px-2 py-1"
-                    placeholder="EMP-0001"
-                    value={LF_employeeId}
-                    onChange={(e) => setLF_employeeId(e.target.value)}
-                  />
-                </th>
-
-                <th className="border px-2 py-1">
-                  <input
-                    type="date"
-                    className="w-full border rounded px-2 py-1"
-                    value={LF_from}
-                    onChange={(e) => setLF_from(e.target.value)}
-                  />
-                </th>
-                <th className="border px-2 py-1">
-                  <input
-                    type="date"
-                    className="w-full border rounded px-2 py-1"
-                    value={LF_to}
-                    onChange={(e) => setLF_to(e.target.value)}
-                  />
-                </th>
-                <th className="border px-2 py-1">
-                  <span className="text-xs text-gray-400">—</span>
-                </th>
-
-                <th className="border px-2 py-1">
+                <th className="border px-1 py-1">
                   <select
-                    className="w-full border rounded px-2 py-1"
-                    value={LF_type}
-                    onChange={(e) => setLF_type(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={L_employeeId}
+                    onChange={(e) => setL_employeeId(e.target.value)}
                   >
                     <option value="">All</option>
-                    {LEAVE_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                    {L_filterOptions.employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.id}
                       </option>
                     ))}
                   </select>
                 </th>
-                <th className="border px-2 py-1">
+                <th className="border px-1 py-1">
+                  <input
+                    type="date"
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={L_from}
+                    onChange={(e) => setL_from(e.target.value)}
+                  />
+                </th>
+                <th className="border px-1 py-1">
+                  <input
+                    type="date"
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={L_to}
+                    onChange={(e) => setL_to(e.target.value)}
+                  />
+                </th>
+                <th className="border px-1 py-1">
+                  <span className="text-gray-400 font-normal">—</span>
+                </th>
+                <th className="border px-1 py-1">
                   <select
-                    className="w-full border rounded px-2 py-1"
-                    value={LF_status}
-                    onChange={(e) => setLF_status(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={L_type}
+                    onChange={(e) => setL_type(e.target.value)}
                   >
                     <option value="">All</option>
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
+                    {L_filterOptions.types.map((t) => (
+                      <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
                 </th>
-                <th className="border px-2 py-1">
-                  <span className="text-xs text-gray-400">—</span>
+                <th className="border px-1 py-1">
+                  <select
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={L_status}
+                    onChange={(e) => setL_status(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {L_filterOptions.statuses.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </th>
-
-                <th className="border px-2 py-1">
-                  <span className="text-xs text-gray-400">—</span>
+                <th className="border px-1 py-1">
+                  <span className="text-gray-400 font-normal">—</span>
                 </th>
-                <th className="border px-2 py-1">
-                  <div className="flex gap-2">
-                    <button className="px-2 py-1 border rounded" onClick={applyLeavesHeaderFilters}>
-                      Apply
+                <th className="border px-1 py-1">
+                  {hasLeavesFilters && (
+                    <button
+                      className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      onClick={resetLeavesFilters}
+                    >
+                      Clear All
                     </button>
-                    <button className="px-2 py-1 border rounded" onClick={resetLeavesHeaderFilters}>
-                      Reset
-                    </button>
-                  </div>
+                  )}
                 </th>
               </tr>
             </thead>
@@ -592,167 +673,162 @@ export default function TimeOffAdmin() {
             <tbody>
               {L_loading ? (
                 <tr>
-                  <td className="border px-2 py-6 text-center" colSpan={10}>
-                    Loading…
+                  <td colSpan={9} className="border px-2 py-8 text-center text-gray-500">
+                    Loading...
                   </td>
                 </tr>
-              ) : L_rows.length ? (
-                L_rows.map((r) => {
+              ) : L_paginatedRows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="border px-2 py-8 text-center text-gray-500">
+                    No leaves found
+                  </td>
+                </tr>
+              ) : (
+                L_paginatedRows.map((r) => {
                   const emp = resolveEmployee(r);
                   return (
-                    <tr key={r._id} className="odd:bg-white even:bg-gray-50">
-                      <td className="border px-2 py-1">
-                        {emp.name}
-                        {emp.role || emp.department ? (
+                    <tr key={r._id} className="hover:bg-blue-50">
+                      <td className="border px-2 py-2">
+                        <div className="font-medium">{emp.name}</div>
+                        {(emp.role || emp.department) && (
                           <div className="text-xs text-gray-500">
-                            {emp.role}
-                            {emp.department ? ` • ${emp.department}` : ""}
+                            {emp.role}{emp.department ? ` • ${emp.department}` : ""}
                           </div>
-                        ) : null}
+                        )}
                       </td>
-                      <td className="border px-2 py-1">{emp.employeeId}</td>
-
-                      <td className="border px-2 py-1">{fmtDate(r.startDate)}</td>
-                      <td className="border px-2 py-1">{fmtDate(r.endDate)}</td>
-                      <td className="border px-2 py-1">
-                        {r.days ?? daysBetween(r.startDate, r.endDate)}
-                      </td>
-
-                      <td className="border px-2 py-1">{r.type}</td>
-                      <td className="border px-2 py-1">
+                      <td className="border px-2 py-2">{emp.employeeId}</td>
+                      <td className="border px-2 py-2">{fmtDate(r.startDate)}</td>
+                      <td className="border px-2 py-2">{fmtDate(r.endDate)}</td>
+                      <td className="border px-2 py-2">{r.days ?? daysBetween(r.startDate, r.endDate)}</td>
+                      <td className="border px-2 py-2 capitalize">{r.type}</td>
+                      <td className="border px-2 py-2">
                         <select
-                          className="border rounded px-2 py-1"
+                          className="border rounded px-2 py-1 text-sm"
                           value={r.status}
                           onChange={(e) => updateLeaveStatus(r._id, e.target.value)}
                         >
                           {STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
+                            <option key={s} value={s}>{s}</option>
                           ))}
                         </select>
                       </td>
-                      <td className="border px-2 py-1">{r.purpose || "-"}</td>
-
-                      <td className="border px-2 py-1">{fmtDate(r.createdAt)}</td>
-                      <td className="border px-2 py-1">
-                        <span className="text-xs text-gray-400">—</span>
+                      <td className="border px-2 py-2 max-w-[200px] truncate" title={r.purpose}>
+                        {r.purpose || "-"}
                       </td>
+                      <td className="border px-2 py-2">{fmtDate(r.createdAt)}</td>
                     </tr>
                   );
                 })
-              ) : (
-                <tr>
-                  <td className="border px-2 py-6 text-center text-gray-500" colSpan={10}>
-                    No leaves found
-                  </td>
-                </tr>
               )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* RH tab */}
+      {/* ===================== RH TABLE ===================== */}
       {tab === "rh" && (
-        <div className="border rounded overflow-x-auto">
+        <div className="border rounded overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
           <table className="table-auto w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="border px-2 py-2">Employee</th>
-                <th className="border px-2 py-2">Emp ID</th>
-                <th className="border px-2 py-2">Holiday</th>
-
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                <th className="border px-2 py-2 text-left">Employee</th>
+                <th className="border px-2 py-2 text-left">Emp ID</th>
+                <th className="border px-2 py-2 text-left">Holiday</th>
                 <th
-                  className="border px-2 py-2 cursor-pointer select-none"
+                  className="border px-2 py-2 text-left cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort("holidayDate")}
                 >
-                  Date {sortBy === "holidayDate" ? (dir === "asc" ? "↑" : "↓") : ""}
+                  Date {sortBy === "holidayDate" && (dir === "asc" ? "↑" : "↓")}
                 </th>
-
-                <th className="border px-2 py-2">Status</th>
-                <th className="border px-2 py-2">Note</th>
+                <th className="border px-2 py-2 text-left">Status</th>
+                <th className="border px-2 py-2 text-left">Note</th>
                 <th
-                  className="border px-2 py-2 cursor-pointer select-none"
+                  className="border px-2 py-2 text-left cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort("createdAt")}
                 >
-                  Created {sortBy === "createdAt" ? (dir === "asc" ? "↑" : "↓") : ""}
+                  Created {sortBy === "createdAt" && (dir === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="border px-2 py-2">Actions</th>
               </tr>
 
-              {/* header filters */}
+              {/* Filter Row */}
               <tr className="bg-gray-100">
-                <th className="border px-2 py-1">
+                <th className="border px-1 py-1">
                   <input
-                    className="w-full border rounded px-2 py-1"
-                    placeholder="Name"
-                    value={RF_employeeName}
-                    onChange={(e) => setRF_employeeName(e.target.value)}
+                    type="text"
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    placeholder="Filter name..."
+                    value={R_employeeName}
+                    onChange={(e) => setR_employeeName(e.target.value)}
                   />
                 </th>
-                <th className="border px-2 py-1">
-                  <input
-                    className="w-full border rounded px-2 py-1"
-                    placeholder="EMP-0001"
-                    value={RF_employeeId}
-                    onChange={(e) => setRF_employeeId(e.target.value)}
-                  />
-                </th>
-                <th className="border px-2 py-1">
-                  <input
-                    className="w-full border rounded px-2 py-1"
-                    placeholder="Holiday name"
-                    disabled
-                  />
-                </th>
-
-                <th className="border px-2 py-1">
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      className="border rounded px-2 py-1"
-                      value={RF_from}
-                      onChange={(e) => setRF_from(e.target.value)}
-                    />
-                    <input
-                      type="date"
-                      className="border rounded px-2 py-1"
-                      value={RF_to}
-                      onChange={(e) => setRF_to(e.target.value)}
-                    />
-                  </div>
-                </th>
-
-                <th className="border px-2 py-1">
+                <th className="border px-1 py-1">
                   <select
-                    className="w-full border rounded px-2 py-1"
-                    value={RF_status}
-                    onChange={(e) => setRF_status(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={R_employeeId}
+                    onChange={(e) => setR_employeeId(e.target.value)}
                   >
                     <option value="">All</option>
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    {R_filterOptions.employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.id}
                       </option>
                     ))}
                   </select>
                 </th>
-                <th className="border px-2 py-1">
-                  <span className="text-xs text-gray-400">—</span>
+                <th className="border px-1 py-1">
+                  <select
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={R_holidayName}
+                    onChange={(e) => setR_holidayName(e.target.value)}
+                  >
+                    <option value="">All Holidays</option>
+                    {R_filterOptions.holidayNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
                 </th>
-                <th className="border px-2 py-1">
-                  <span className="text-xs text-gray-400">—</span>
-                </th>
-                <th className="border px-2 py-1">
-                  <div className="flex gap-2">
-                    <button className="px-2 py-1 border rounded" onClick={applyRHHeaderFilters}>
-                      Apply
-                    </button>
-                    <button className="px-2 py-1 border rounded" onClick={resetRHHeaderFilters}>
-                      Reset
-                    </button>
+                <th className="border px-1 py-1">
+                  <div className="flex gap-1">
+                    <input
+                      type="date"
+                      className="w-1/2 border rounded px-1 py-1 text-xs font-normal"
+                      value={R_from}
+                      onChange={(e) => setR_from(e.target.value)}
+                      title="From"
+                    />
+                    <input
+                      type="date"
+                      className="w-1/2 border rounded px-1 py-1 text-xs font-normal"
+                      value={R_to}
+                      onChange={(e) => setR_to(e.target.value)}
+                      title="To"
+                    />
                   </div>
+                </th>
+                <th className="border px-1 py-1">
+                  <select
+                    className="w-full border rounded px-2 py-1 text-sm font-normal"
+                    value={R_status}
+                    onChange={(e) => setR_status(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {R_filterOptions.statuses.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </th>
+                <th className="border px-1 py-1">
+                  <span className="text-gray-400 font-normal">—</span>
+                </th>
+                <th className="border px-1 py-1">
+                  {hasRHFilters && (
+                    <button
+                      className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      onClick={resetRHFilters}
+                    >
+                      Clear All
+                    </button>
+                  )}
                 </th>
               </tr>
             </thead>
@@ -760,80 +836,80 @@ export default function TimeOffAdmin() {
             <tbody>
               {R_loading ? (
                 <tr>
-                  <td className="border px-2 py-6 text-center" colSpan={8}>
-                    Loading…
+                  <td colSpan={7} className="border px-2 py-8 text-center text-gray-500">
+                    Loading...
                   </td>
                 </tr>
-              ) : R_rows.length ? (
-                R_rows.map((r) => {
+              ) : R_paginatedRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="border px-2 py-8 text-center text-gray-500">
+                    No RH requests found
+                  </td>
+                </tr>
+              ) : (
+                R_paginatedRows.map((r) => {
                   const emp = resolveEmployee(r);
                   return (
-                    <tr key={r._id} className="odd:bg-white even:bg-gray-50">
-                      <td className="border px-2 py-1">
-                        {emp.name}
-                        {emp.role || emp.department ? (
+                    <tr key={r._id} className="hover:bg-blue-50">
+                      <td className="border px-2 py-2">
+                        <div className="font-medium">{emp.name}</div>
+                        {(emp.role || emp.department) && (
                           <div className="text-xs text-gray-500">
-                            {emp.role}
-                            {emp.department ? ` • ${emp.department}` : ""}
+                            {emp.role}{emp.department ? ` • ${emp.department}` : ""}
                           </div>
-                        ) : null}
+                        )}
                       </td>
-                      <td className="border px-2 py-1">{emp.employeeId}</td>
-                      <td className="border px-2 py-1">{r.holidayName || "-"}</td>
-
-                      <td className="border px-2 py-1">{fmtDate(r.holidayDate)}</td>
-
-                      <td className="border px-2 py-1">
+                      <td className="border px-2 py-2">{emp.employeeId}</td>
+                      <td className="border px-2 py-2">{r.holidayName || "-"}</td>
+                      <td className="border px-2 py-2">{fmtDate(r.holidayDate)}</td>
+                      <td className="border px-2 py-2">
                         <select
-                          className="border rounded px-2 py-1"
+                          className="border rounded px-2 py-1 text-sm"
                           value={r.status}
                           onChange={(e) => updateRHStatus(r._id, e.target.value)}
                         >
                           {STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
+                            <option key={s} value={s}>{s}</option>
                           ))}
                         </select>
                       </td>
-                      <td className="border px-2 py-1">{r.note || "-"}</td>
-                      <td className="border px-2 py-1">{fmtDate(r.createdAt)}</td>
-                      <td className="border px-2 py-1">
-                        <span className="text-xs text-gray-400">—</span>
+                      <td className="border px-2 py-2 max-w-[200px] truncate" title={r.note}>
+                        {r.note || "-"}
                       </td>
+                      <td className="border px-2 py-2">{fmtDate(r.createdAt)}</td>
                     </tr>
                   );
                 })
-              ) : (
-                <tr>
-                  <td className="border px-2 py-6 text-center text-gray-500" colSpan={8}>
-                    No RH requests found
-                  </td>
-                </tr>
               )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Pagination */}
+      {/* ===================== PAGINATION ===================== */}
       <div className="flex items-center justify-between mt-4">
         <div className="text-sm text-gray-600">
           {tab === "leaves" ? (
             <>
-              Showing {L_rows.length ? (page - 1) * limit + 1 : 0}–
-              {(page - 1) * limit + L_rows.length} of {L_total}
+              Showing {L_paginatedRows.length ? (page - 1) * limit + 1 : 0}–
+              {(page - 1) * limit + L_paginatedRows.length} of {L_filteredRows.length}
+              {hasLeavesFilters && L_filteredRows.length !== L_rawRows.length && (
+                <span className="text-blue-600"> (filtered from {L_rawRows.length})</span>
+              )}
             </>
           ) : (
             <>
-              Showing {R_rows.length ? (page - 1) * limit + 1 : 0}–
-              {(page - 1) * limit + R_rows.length} of {R_total}
+              Showing {R_paginatedRows.length ? (page - 1) * limit + 1 : 0}–
+              {(page - 1) * limit + R_paginatedRows.length} of {R_filteredRows.length}
+              {hasRHFilters && R_filteredRows.length !== R_rawRows.length && (
+                <span className="text-blue-600"> (filtered from {R_rawRows.length})</span>
+              )}
             </>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
-            className="px-3 py-1 border rounded disabled:opacity-50"
+            className="px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
@@ -843,7 +919,7 @@ export default function TimeOffAdmin() {
             Page {page} / {totalPages}
           </span>
           <button
-            className="px-3 py-1 border rounded disabled:opacity-50"
+            className="px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
