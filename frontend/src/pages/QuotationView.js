@@ -74,6 +74,8 @@ export default function QuotationView() {
   // Operations Breakdown table state
   const [opRows, setOpRows] = useState([]);
   const [catalogData, setCatalogData] = useState(null);
+  // Track if quotation has a catalog
+  const [hasCatalog, setHasCatalog] = useState(false);
 
   const fieldNameMapping = {
     txn: "Transaction",
@@ -160,6 +162,7 @@ export default function QuotationView() {
       );
       if (matchedCatalog) {
         setCatalogData(matchedCatalog);
+        setHasCatalog(true);
         return matchedCatalog;
       }
       return null;
@@ -183,6 +186,93 @@ export default function QuotationView() {
     return 0;
   }
 
+  // --- Ops table helpers (calculations) ---
+  const num = (v) => {
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  };
+  
+  const parseGstPercent = (raw) => {
+    if (!raw) return 0;
+    const s = String(raw).trim();
+    const n = parseFloat(s.replace("%", ""));
+    return isNaN(n) ? 0 : n;
+  };
+
+  // Debug function to see price sources
+  const debugPriceSource = (row, idx) => {
+    const linkedItem = editableQuotation?.items?.find(
+      (item, itemIdx) => 
+        idx === itemIdx || 
+        (item.product?.toLowerCase() === row.product?.toLowerCase())
+    );
+    const sources = [];
+    
+    if (hasCatalog && catalogData) {
+      const catalogPrice = getCatalogPriceForProduct(row.product, catalogData);
+      sources.push(`Catalog: ${catalogPrice}`);
+    }
+    
+    if (linkedItem?.suggestedBreakdown?.finalPrice) {
+      sources.push(`Suggested: ${num(linkedItem.suggestedBreakdown.finalPrice)}`);
+    }
+    
+    if (linkedItem?.rate) {
+      sources.push(`Item Rate: ${num(linkedItem.rate)}`);
+    }
+    
+    console.log(`Row ${idx} (${row.product}) price sources:`, sources.join(' → '));
+    alert(`Price sources for ${row.product}:\n${sources.join('\n')}`);
+  };
+
+  /**
+   * Build operations breakdown row from a quotation item
+   * Uses suggestedBreakdown for field mapping when no catalog is present
+   */
+  function buildOpRowFromItem(item, idx, catalog = null) {
+    const sb = item.suggestedBreakdown || {};
+    const quantity = num(item.quantity) || 0;
+    
+    // Determine catalog price with fallback logic
+    let catalogPrice = 0;
+    
+    if (catalog && item.product) {
+      catalogPrice = getCatalogPriceForProduct(item.product, catalog);
+    }
+    
+    // Fallback to suggestedBreakdown.finalPrice if catalog price is 0
+    if (catalogPrice === 0) {
+      catalogPrice = num(sb.finalPrice) || num(item.rate) || 0;
+    }
+    
+    // Map suggestedBreakdown fields to operations breakdown fields
+    const baseCost = num(sb.baseCost) || 0;
+    const brandingCost = num(sb.brandingCost) || 0;
+    const logisticCost = num(sb.logisticsCost) || 0;
+    const markUp = num(sb.marginAmount) || 0;
+    const successFee = num(sb.successFee) || 0;
+
+    const gstStr = item.productGST != null ? String(item.productGST) : "";
+
+    return {
+      slNo: idx + 1,
+      catalogPrice,
+      product: item.product || "",
+      quantity,
+      baseCost,
+      brandingCost,
+      logisticCost,
+      markUp,
+      successFee,
+      rate: 0,
+      gst: gstStr,
+      totalWithGst: 0,
+      vendor: "",
+      remarks: "",
+      _source: catalog ? "catalog" : "suggestedBreakdown",
+    };
+  }
+
   async function fetchQuotation() {
     try {
       setLoading(true);
@@ -202,72 +292,85 @@ export default function QuotationView() {
         hsnCode: item.hsnCode || item.productId?.hsnCode || "",
       }));
 
-      // Fetch catalog data to get catalog prices
+      // Check if quotation has a catalog and fetch it
       let catalog = null;
-      if (data.catalogName) {
+      const quotationHasCatalog = !!(data.catalogName && data.catalogName.trim());
+      setHasCatalog(quotationHasCatalog);
+      
+      if (quotationHasCatalog) {
         catalog = await fetchCatalogByName(data.catalogName);
       }
 
-      // init operationsBreakdown table with new structure
-      const initialOps = (data.operationsBreakdown || []).map((r, idx) => {
-        const linkedItem = sanitizedItems[idx] || {};
-        // Try to get catalog price from catalog if not already set
-        let catalogPrice = Number(r.catalogPrice) || 0;
-        if (catalogPrice === 0 && catalog && r.product) {
-          catalogPrice = getCatalogPriceForProduct(r.product, catalog);
-        }
-        // Quantity: prefer ops row, else fall back to item quantity
-        const quantity = Number(r.quantity) || num(linkedItem.quantity) || 0;
+      // Initialize operationsBreakdown table
+      let initialOps = [];
+      
+      if (data.operationsBreakdown && data.operationsBreakdown.length > 0) {
+        // Use existing operationsBreakdown data
+        initialOps = data.operationsBreakdown.map((r, idx) => {
+          const linkedItem = sanitizedItems[idx] || {};
+          
+          // Get catalog price with fallback logic
+          let catalogPrice = Number(r.catalogPrice) || 0;
+          
+          // If catalog price is 0, try to get from catalog
+          if (catalogPrice === 0 && catalog && r.product) {
+            catalogPrice = getCatalogPriceForProduct(r.product, catalog);
+          }
+          
+          // If still 0, fallback to suggestedBreakdown
+          if (catalogPrice === 0 && linkedItem.suggestedBreakdown) {
+            catalogPrice = num(linkedItem.suggestedBreakdown.finalPrice) || num(linkedItem.rate) || 0;
+          }
+          
+          const quantity = Number(r.quantity) || num(linkedItem.quantity) || 0;
+          const baseCost = Number(r.baseCost) || Number(r.ourCost) || 0;
+          const brandingCost = Number(r.brandingCost) || 0;
+          const logisticCost = Number(r.logisticCost) || Number(r.deliveryCost) || 0;
+          const markUp = Number(r.markUp) || Number(r.markUpCost) || 0;
+          const successFee = Number(r.successFee) || Number(r.sfCost) || 0;
+          
+          const gstStr =
+            r.gst ||
+            (linkedItem.productGST != null
+              ? String(linkedItem.productGST)
+              : data.gst != null
+              ? String(data.gst)
+              : "");
 
-        // Base cost: prefer explicit base/ourCost, else fall back to item rate
-        const baseCost =
-          Number(r.baseCost) || Number(r.ourCost) || num(linkedItem.rate);
+          let rate = Number(r.rate) || 0;
+          if (!rate) {
+            rate = num(linkedItem.rate);
+          }
 
-        const brandingCost = Number(r.brandingCost) || 0;
-        const logisticCost =
-          Number(r.logisticCost) || Number(r.deliveryCost) || 0;
-        const markUp = Number(r.markUp) || Number(r.markUpCost) || 0;
-        const successFee = Number(r.successFee) || Number(r.sfCost) || 0;
+          let totalWithGst = Number(r.totalWithGst) || Number(r.total) || 0;
+          
+          return {
+            slNo: r.slNo || idx + 1,
+            catalogPrice,
+            product: r.product || linkedItem.product || "",
+            quantity,
+            baseCost,
+            brandingCost,
+            logisticCost,
+            markUp,
+            successFee,
+            rate,
+            gst: gstStr,
+            totalWithGst,
+            vendor: r.vendor || "",
+            remarks: r.remarks || "",
+            _source: catalog ? "catalog" : "suggestedBreakdown",
+          };
+        });
+      } else {
+        // Build from items using suggestedBreakdown
+        initialOps = sanitizedItems.map((item, idx) => 
+          buildOpRowFromItem(item, idx, catalog)
+        );
+      }
 
-        // GST string: prefer ops row, else from item / quotation
-        const gstStr =
-          r.gst ||
-          (linkedItem.productGST != null
-            ? String(linkedItem.productGST)
-            : data.gst != null
-            ? String(data.gst)
-            : "");
-        const gstPct = parseGstPercent(gstStr);
-
-        // Rate and totals: if not present on ops row, derive from item values
-        let rate = Number(r.rate) || 0;
-        if (!rate) {
-          rate = num(linkedItem.rate);
-        }
-
-        let totalWithGst = Number(r.totalWithGst) || Number(r.total) || 0;
-        if (!totalWithGst && rate && quantity) {
-          const amt = quantity * rate;
-          totalWithGst = amt * (1 + gstPct / 100);
-        }
-
-        return {
-          slNo: r.slNo || idx + 1,
-          catalogPrice,
-          product: r.product || linkedItem.product || "",
-          quantity,
-          baseCost,
-          brandingCost,
-          logisticCost,
-          markUp,
-          successFee,
-          rate,
-          gst: gstStr,
-          totalWithGst,
-          vendor: r.vendor || "",
-          remarks: r.remarks || "",
-        };
-      });
+      // Recalculate all rows
+      initialOps = initialOps.map(r => recalcRow(r));
 
       setQuotation({ ...data, items: sanitizedItems });
       setEditableQuotation({ ...data, items: sanitizedItems });
@@ -281,18 +384,6 @@ export default function QuotationView() {
     }
   }
 
-  // --- Ops table helpers (calculations) ---
-  const num = (v) => {
-    const n = parseFloat(v);
-    return isNaN(n) ? 0 : n;
-  };
-  const parseGstPercent = (raw) => {
-    if (!raw) return 0;
-    const s = String(raw).trim();
-    const n = parseFloat(s.replace("%", ""));
-    return isNaN(n) ? 0 : n;
-  };
-  
   // Updated recalcRow with new formula:
   // Rate (Total) = Base Cost + Branding + Logistic Cost + Mark Up + Success Fee
   // Total Rate per piece With GST = Rate * (1 + GST/100)
@@ -344,6 +435,7 @@ export default function QuotationView() {
         totalWithGst: 0,
         vendor: "",
         remarks: "",
+        _source: hasCatalog ? "catalog" : "manual",
       }),
     ]);
   };
@@ -379,7 +471,7 @@ export default function QuotationView() {
     );
   };
 
-  // Fetch catalog price for a specific row
+  // Fetch catalog price for a specific row with proper fallback
   const fetchCatalogPriceForRow = async (idx) => {
     const row = opRows[idx];
     if (!row || !row.product) {
@@ -387,49 +479,146 @@ export default function QuotationView() {
       return;
     }
     
-    let catalog = catalogData;
-    if (!catalog && editableQuotation?.catalogName) {
-      catalog = await fetchCatalogByName(editableQuotation.catalogName);
+    // Priority 1: Try to get from catalog if available
+    if (hasCatalog) {
+      let catalog = catalogData;
+      if (!catalog && editableQuotation?.catalogName) {
+        catalog = await fetchCatalogByName(editableQuotation.catalogName);
+      }
+      
+      if (catalog) {
+        const price = getCatalogPriceForProduct(row.product, catalog);
+        if (price > 0) {
+          updateOpRow(idx, "catalogPrice", price);
+          alert(`Catalog price fetched: ${price}`);
+          return;
+        }
+      }
     }
     
-    if (!catalog) {
-      alert("No catalog found for this quotation");
+    // Priority 2: Fallback to suggestedBreakdown.finalPrice from quotation items
+    const linkedItem = editableQuotation?.items?.find(
+      (item, itemIdx) => 
+        idx === itemIdx || 
+        (item.product?.toLowerCase() === row.product?.toLowerCase())
+    );
+    
+    if (linkedItem?.suggestedBreakdown?.finalPrice) {
+      const price = num(linkedItem.suggestedBreakdown.finalPrice);
+      updateOpRow(idx, "catalogPrice", price);
+      alert(`Using suggested breakdown price: ${price}`);
       return;
     }
     
-    const price = getCatalogPriceForProduct(row.product, catalog);
-    if (price > 0) {
+    // Priority 3: Fallback to item's rate
+    if (linkedItem?.rate) {
+      const price = num(linkedItem.rate);
       updateOpRow(idx, "catalogPrice", price);
-    } else {
-      alert(`No catalog price found for "${row.product}"`);
+      alert(`Using item rate: ${price}`);
+      return;
     }
+    
+    alert(`No price found for "${row.product}". Check: Catalog (if available), Suggested Breakdown, or Item Rate`);
   };
 
-  // Fetch all catalog prices
+  // Fetch all catalog prices with proper fallback
   const fetchAllCatalogPrices = async () => {
     let catalog = catalogData;
-    if (!catalog && editableQuotation?.catalogName) {
+    if (hasCatalog && !catalog && editableQuotation?.catalogName) {
       catalog = await fetchCatalogByName(editableQuotation.catalogName);
-    }
-    
-    if (!catalog) {
-      alert("No catalog found for this quotation");
-      return;
     }
     
     setOpRows((prev) => 
-      prev.map((row) => {
-        const price = getCatalogPriceForProduct(row.product, catalog);
-        if (price > 0) {
-          return { ...row, catalogPrice: price };
+      prev.map((row, idx) => {
+        let catalogPrice = 0;
+        
+        // Priority 1: From catalog if available
+        if (catalog) {
+          catalogPrice = getCatalogPriceForProduct(row.product, catalog);
+        }
+        
+        // Priority 2: From suggestedBreakdown if catalog price is 0
+        if (catalogPrice === 0) {
+          const linkedItem = editableQuotation?.items?.[idx] || 
+                           editableQuotation?.items?.find(
+                             item => item.product?.toLowerCase() === row.product?.toLowerCase()
+                           );
+          
+          if (linkedItem?.suggestedBreakdown?.finalPrice) {
+            catalogPrice = num(linkedItem.suggestedBreakdown.finalPrice);
+          }
+        }
+        
+        // Priority 3: From item rate if still 0
+        if (catalogPrice === 0) {
+          const linkedItem = editableQuotation?.items?.[idx];
+          if (linkedItem?.rate) {
+            catalogPrice = num(linkedItem.rate);
+          }
+        }
+        
+        if (catalogPrice > 0) {
+          return recalcRow({ ...row, catalogPrice });
         }
         return row;
       })
     );
+    
+    alert(`Fetched prices for ${opRows.length} rows`);
   };
 
-  // Sync operations breakdown to quotation items - auto-fetch details
-  // IMPORTANT: never overwrite existing values with 0; only override when ops row has real data
+  // Populate all breakdown fields from suggestedBreakdown as primary source
+  const populateFromSuggestedBreakdown = () => {
+    if (!editableQuotation?.items) {
+      alert("No quotation items to populate from");
+      return;
+    }
+    
+    setOpRows((prev) => 
+      prev.map((row, idx) => {
+        const linkedItem = editableQuotation.items[idx];
+        if (!linkedItem?.suggestedBreakdown) {
+          // Try to find by product name if index doesn't match
+          const matchedItem = editableQuotation.items.find(
+            item => item.product?.toLowerCase() === row.product?.toLowerCase()
+          );
+          
+          if (matchedItem?.suggestedBreakdown) {
+            const sb = matchedItem.suggestedBreakdown;
+            return recalcRow({
+              ...row,
+              catalogPrice: num(sb.finalPrice) || num(matchedItem.rate) || row.catalogPrice,
+              baseCost: num(sb.baseCost) || row.baseCost,
+              brandingCost: num(sb.brandingCost) || row.brandingCost,
+              logisticCost: num(sb.logisticsCost) || row.logisticCost,
+              markUp: num(sb.marginAmount) || row.markUp,
+              quantity: num(matchedItem.quantity) || row.quantity,
+              product: matchedItem.product || row.product,
+              gst: matchedItem.productGST != null ? String(matchedItem.productGST) : row.gst,
+            });
+          }
+          return row;
+        }
+        
+        const sb = linkedItem.suggestedBreakdown;
+        return recalcRow({
+          ...row,
+          catalogPrice: num(sb.finalPrice) || num(linkedItem.rate) || row.catalogPrice,
+          baseCost: num(sb.baseCost) || row.baseCost,
+          brandingCost: num(sb.brandingCost) || row.brandingCost,
+          logisticCost: num(sb.logisticsCost) || row.logisticCost,
+          markUp: num(sb.marginAmount) || row.markUp,
+          quantity: num(linkedItem.quantity) || row.quantity,
+          product: linkedItem.product || row.product,
+          gst: linkedItem.productGST != null ? String(linkedItem.productGST) : row.gst,
+        });
+      })
+    );
+    
+    alert("Populated fields from suggested breakdown");
+  };
+
+  // Sync operations breakdown to quotation items
   const syncOpsToQuotation = useCallback(() => {
     if (!editableQuotation || opRows.length === 0) return;
 
@@ -485,44 +674,9 @@ export default function QuotationView() {
     const items = editableQuotation.items || [];
     if (items.length === 0) return;
 
-    const prefilled = items.map((it, idx) => {
-      const sb = it.suggestedBreakdown || {};
-      const quantity = num(it.quantity) || 0;
-      
-      // Try to get catalog price from catalog data first, then from suggestedBreakdown, then from item rate
-      let catalogPrice = 0;
-      if (catalogData && it.product) {
-        catalogPrice = getCatalogPriceForProduct(it.product, catalogData);
-      }
-      if (catalogPrice === 0) {
-        catalogPrice = num(sb.catalogPrice) || num(it.rate) || 0;
-      }
-      
-      const baseCost = num(sb.baseCost) || 0;
-      const brandingCost = num(sb.brandingCost) || 0;
-      const logisticCost = num(sb.logisticsCost) || 0;
-      const markUp = num(sb.marginAmount) || 0;
-      const successFee = num(sb.sfCost) || num(sb.successFee) || 0;
-      
-      const gstStr = it.productGST != null ? String(it.productGST) : "";
-
-      return recalcRow({
-        slNo: idx + 1,
-        catalogPrice,
-        product: it.product || "",
-        quantity,
-        baseCost,
-        brandingCost,
-        logisticCost,
-        markUp,
-        successFee,
-        rate: 0,
-        gst: gstStr,
-        totalWithGst: 0,
-        vendor: "",
-        remarks: "",
-      });
-    });
+    const prefilled = items.map((item, idx) => 
+      buildOpRowFromItem(item, idx, catalogData)
+    ).map(r => recalcRow(r));
     
     setOpRows(prefilled);
   }, [editableQuotation, opRows.length, catalogData]);
@@ -1240,6 +1394,10 @@ export default function QuotationView() {
         <div className="text-right text-[10px]">
           <p>Created: {new Date(editableQuotation.createdAt).toLocaleDateString()}</p>
           <p>By: {editableQuotation.createdBy}</p>
+          {/* Show data source indicator */}
+          <p className={`font-medium ${hasCatalog ? 'text-green-200' : 'text-yellow-200'}`}>
+            {hasCatalog ? `📁 Catalog: ${editableQuotation.catalogName}` : '📝 Direct (No Catalog)'}
+          </p>
         </div>
       </div>
 
@@ -1298,8 +1456,26 @@ export default function QuotationView() {
         <div className="bg-gray-100 px-2 py-1.5 border-b flex items-center justify-between">
           <div className="font-semibold text-xs text-gray-800">
             Operations Cost — Quotation #{editableQuotation.quotationNumber || "N/A"}
+            {/* Data source badge */}
+            <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] ${
+              hasCatalog 
+                ? 'bg-green-100 text-green-700' 
+                : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              {hasCatalog ? '📁 From Catalog' : '📝 From SuggestedBreakdown'}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
+            {/* Button to populate from suggestedBreakdown */}
+            {!hasCatalog && (
+              <button
+                onClick={populateFromSuggestedBreakdown}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-[10px]"
+                title="Populate all fields from item's suggestedBreakdown"
+              >
+                ↻ Reload Breakdown
+              </button>
+            )}
             <button
               onClick={handleSaveOperationsBreakdownOnly}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-[10px]"
@@ -1309,6 +1485,18 @@ export default function QuotationView() {
           </div>
         </div>
 
+        {/* Field mapping info for non-catalog quotations */}
+        {!hasCatalog && (
+          <div className="bg-yellow-50 px-2 py-1 border-b text-[9px] text-yellow-800">
+            <strong>Field Mapping:</strong> 
+            Catalog Price ← finalPrice | 
+            Base Cost ← baseCost | 
+            Branding ← brandingCost | 
+            Logistic ← logisticsCost | 
+            Mark Up ← marginAmount
+          </div>
+        )}
+
         {/* Scrollable table container with frozen header */}
         <div className="max-h-[50vh] overflow-auto">
           <table className="w-full text-[10px] border-collapse">
@@ -1317,11 +1505,11 @@ export default function QuotationView() {
                 <th className="border px-1 py-1 text-center bg-gray-300" style={{width: "25px"}}>Sl</th>
                 <th className="border px-1 py-1 text-right bg-yellow-100" style={{width: "70px"}}>
                   <div className="flex items-center justify-between">
-                    <span>Catalog</span>
+                    <span>{hasCatalog ? 'Catalog' : 'Ref'}</span>
                     <button
                       onClick={fetchAllCatalogPrices}
                       className="text-[8px] bg-blue-500 text-white px-1 rounded hover:bg-blue-600"
-                      title="Fetch all catalog prices"
+                      title="Fetch price from: Catalog → Suggested Breakdown → Item Rate"
                     >
                       ↓
                     </button>
@@ -1330,11 +1518,12 @@ export default function QuotationView() {
                 </th>
                 <th className="border px-1 py-1 text-left bg-blue-50 wrap-text" style={{minWidth: "140px", width: "18%"}}>
                   <div>Product</div>
-                  <div className="text-[8px] text-gray-500">Fetch from catalog</div>
+                  <div className="text-[8px] text-gray-500">
+                    {hasCatalog ? 'From catalog' : 'From quotation'}
+                  </div>
                 </th>
                 <th className="border px-1 py-1 text-center bg-blue-50" style={{width: "45px"}}>
                   <div>Qty</div>
-                  <div className="text-[8px] text-gray-500">Fetch</div>
                 </th>
                 <th className="border px-1 py-1 text-right bg-green-50" style={{width: "55px"}}>
                   <div>Base</div>
@@ -1342,7 +1531,6 @@ export default function QuotationView() {
                 </th>
                 <th className="border px-1 py-1 text-right bg-green-50" style={{width: "50px"}}>
                   <div>Branding</div>
-                  <div className="text-[8px] text-gray-500">Fetch</div>
                 </th>
                 <th className="border px-1 py-1 text-right bg-green-50" style={{width: "50px"}}>
                   <div>Logistic</div>
@@ -1350,7 +1538,6 @@ export default function QuotationView() {
                 </th>
                 <th className="border px-1 py-1 text-right bg-orange-50" style={{width: "50px"}}>
                   <div>Mark Up</div>
-                  <div className="text-[8px] text-gray-500">Manual</div>
                 </th>
                 <th className="border px-1 py-1 text-right bg-orange-50" style={{width: "55px"}}>
                   <div>Success</div>
@@ -1383,7 +1570,7 @@ export default function QuotationView() {
                 <tr key={idx} className="hover:bg-blue-50">
                   <td className="border px-1 py-0.5 text-center bg-gray-50">{r.slNo}</td>
 
-                  {/* Catalog Price - Editable with Fetch */}
+                  {/* Catalog/Reference Price - Editable with Fetch */}
                   <td className="border px-1 py-0.5 bg-yellow-50">
                     <div className="flex items-center gap-0.5">
                       <input
@@ -1395,9 +1582,16 @@ export default function QuotationView() {
                       <button
                         onClick={() => fetchCatalogPriceForRow(idx)}
                         className="text-[8px] text-blue-600 hover:text-blue-800 px-0.5"
-                        title="Fetch from catalog"
+                        title="Fetch from: Catalog → Suggested Breakdown → Item Rate"
                       >
                         ↓
+                      </button>
+                      <button
+                        onClick={() => debugPriceSource(r, idx)}
+                        className="text-[8px] text-gray-500 hover:text-gray-700 px-0.5"
+                        title="Debug price source"
+                      >
+                        ?
                       </button>
                     </div>
                   </td>
