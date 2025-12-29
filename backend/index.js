@@ -181,7 +181,7 @@ const suspenseAccountRoutes = require("./routes/suspenseAccounts");
 app.use("/api/suspense-accounts", suspenseAccountRoutes);
 
 
-const salaryRoutes = require('./routes/SalaryRoutes.js');
+const salaryRoutes = require('./routes/SalaryRoutes');
 app.use('/api/hrms/salary', salaryRoutes);
 
 
