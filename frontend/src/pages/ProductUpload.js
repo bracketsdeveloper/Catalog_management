@@ -126,8 +126,10 @@ export default function ProductManagementPage() {
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   
-  // ADD THIS: Refresh trigger to force re-fetch
+  // Refresh trigger to force re-fetch
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  // Latest logs for each product
+  const [productLogs, setProductLogs] = useState({});
 
   const limit = 100;
 
@@ -154,6 +156,32 @@ export default function ProductManagementPage() {
   useEffect(() => { saveState("productCarouselIndexMap", carouselIndexMap); }, [carouselIndexMap]);
 
   const norm = (s) => (s ? s.toString().trim().toLowerCase() : "");
+
+  // Fetch latest logs for products
+  useEffect(() => {
+    const fetchLatestLogs = async () => {
+      if (products.length === 0) return;
+      
+      try {
+        const token = localStorage.getItem("token");
+        const productIds = products.map(p => p._id);
+        
+        const response = await axios.post(
+          `${BACKEND_URL}/api/admin/products/logs/latest`,
+          { productIds },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (response.data && response.data.latestLogs) {
+          setProductLogs(response.data.latestLogs);
+        }
+      } catch (error) {
+        console.error("Error fetching product logs:", error);
+      }
+    };
+
+    fetchLatestLogs();
+  }, [products, BACKEND_URL]);
 
   useEffect(() => {
     (async () => {
@@ -183,7 +211,6 @@ export default function ProductManagementPage() {
     })();
   }, [BACKEND_URL]);
 
-  // UPDATED useEffect: Added refreshTrigger to dependency array
   useEffect(() => {
     const cancelSrc = axios.CancelToken.source();
     (async () => {
@@ -244,7 +271,7 @@ export default function ProductManagementPage() {
     selectedPriceRanges,
     selectedVariationHinges,
     initialLoad,
-    refreshTrigger, // ADDED: This will trigger re-fetch when changed
+    refreshTrigger,
   ]);
 
   const { getRootProps: advRoot, getInputProps: advInput } = useDropzone({
@@ -346,13 +373,11 @@ export default function ProductManagementPage() {
     localStorage.removeItem("productCarouselIndexMap");
   };
 
-  // Helper: find the product object (with populated preferredVendors) by ID
   const findProductById = (id) =>
     products.find((x) => x._id === id) ||
     advancedSearchResults.find((x) => x._id === id) ||
     null;
 
-  // Compute the initialSelectedVendors (array of populated vendor docs) for the modal
   const initialSelectedVendors =
     editProductId && findProductById(editProductId) && Array.isArray(findProductById(editProductId).preferredVendors)
       ? findProductById(editProductId).preferredVendors
@@ -582,6 +607,7 @@ export default function ProductManagementPage() {
                 <ProductCard
                   key={p._id}
                   product={p}
+                  lastUpdatedLog={productLogs[p._id]}
                   handleViewProduct={openDetails}
                   handleDeleteProduct={async (id) => {
                     if (!window.confirm("Are you sure you want to delete this product?")) return;
@@ -590,7 +616,6 @@ export default function ProductManagementPage() {
                       await axios.delete(`${BACKEND_URL}/api/admin/products/${id}`, {
                         headers: { Authorization: `Bearer ${token}` },
                       });
-                      // ADD THIS: Trigger refresh after deletion
                       setRefreshTrigger(prev => prev + 1);
                       setCurrentPage(1);
                     } catch (err) {
@@ -602,7 +627,6 @@ export default function ProductManagementPage() {
                     setEditProductId(p._id);
                     setNewProductData({
                       ...p,
-                      // Defensive mapping: supports undefined, string IDs, or populated docs
                       preferredVendors: Array.isArray(p.preferredVendors)
                         ? p.preferredVendors
                             .map((v) => (typeof v === "string" ? v : v?._id))
@@ -684,7 +708,6 @@ export default function ProductManagementPage() {
                 });
               }
               setSingleModalOpen(false);
-              // ADD THIS: Trigger refresh after successful save
               setRefreshTrigger(prev => prev + 1);
               setCurrentPage(1);
             } catch (err) {
@@ -793,7 +816,6 @@ export default function ProductManagementPage() {
               });
               alert("Bulk upload successful!");
               setBulkOpen(false);
-              // ADD THIS: Trigger refresh after bulk upload
               setRefreshTrigger(prev => prev + 1);
               setCurrentPage(1);
             } catch (err) {
@@ -827,6 +849,7 @@ export default function ProductManagementPage() {
             <div className="p-6">
               <AdminProductDetails
                 product={displayList[selectedProductIndex]}
+                lastUpdatedLog={productLogs[displayList[selectedProductIndex]?._id]}
                 onEditToggle={() => {
                   setProductDetailsOpen(false);
                   const sel = displayList[selectedProductIndex];

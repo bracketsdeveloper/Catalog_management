@@ -98,6 +98,23 @@ export const dateUtils = {
       month: '2-digit',
       year: 'numeric'
     });
+  },
+  
+  formatCurrency(amount) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(amount || 0);
+  },
+  
+  formatCurrencyDecimal(amount) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount || 0);
   }
 };
 
@@ -451,11 +468,175 @@ export const excelUtils = {
     XLSX.utils.book_append_sheet(workbook, infoSheet, "Employee Info");
 
     return workbook;
+  },
+
+  // Export salary records to Excel
+  exportSalaryToExcel(records, month, year) {
+    const headers = [
+      "S.No",
+      "Employee ID",
+      "Employee Name",
+      "Days in Month",
+      "Working Days",
+      "Days Attended",
+      "Total Leaves",
+      "Paid Leaves",
+      "Pay Loss Days",
+      "Days to Pay",
+      "Expected Hours",
+      "Hours Worked",
+      "Hours Shortfall",
+      "Salary Offered",
+      "Per Day Salary",
+      "Gross Salary",
+      "Hourly Deduction",
+      "PF Deduction",
+      "PT Deduction",
+      "Other Deductions",
+      "Total Deductions",
+      "Incentive",
+      "Bonus",
+      "Total Additions",
+      "Net Payable",
+      "Status"
+    ];
+
+    const excelData = records.map((r, i) => ({
+      "S.No": i + 1,
+      "Employee ID": r.employeeId,
+      "Employee Name": r.employeeName,
+      "Days in Month": r.daysInMonth,
+      "Working Days": r.totalWorkingDays,
+      "Days Attended": r.daysAttended,
+      "Total Leaves": r.totalLeavesTaken,
+      "Paid Leaves": r.paidLeavesUsed,
+      "Pay Loss Days": r.payLossDays,
+      "Days to Pay": r.daysToBePaidFor,
+      "Expected Hours": r.totalExpectedHours,
+      "Hours Worked": r.totalHoursWorked?.toFixed(2) || 0,
+      "Hours Shortfall": r.hoursShortfall?.toFixed(2) || 0,
+      "Salary Offered": r.salaryOffered,
+      "Per Day Salary": r.perDaySalary?.toFixed(2) || 0,
+      "Gross Salary": r.grossSalary,
+      "Hourly Deduction": r.deductions?.hourlyDeduction || 0,
+      "PF Deduction": r.deductions?.pfDeduction || 0,
+      "PT Deduction": r.deductions?.professionalTax || 0,
+      "Other Deductions": r.deductions?.otherDeductions || 0,
+      "Total Deductions": r.totalDeductions,
+      "Incentive": r.additions?.incentive || 0,
+      "Bonus": r.additions?.bonus || 0,
+      "Total Additions": r.totalAdditions,
+      "Net Payable": r.netPayable,
+      "Status": r.status
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData, { header: headers });
+    
+    const colWidths = headers.map(h => ({ wch: Math.max(h.length, 12) }));
+    worksheet['!cols'] = colWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Salary Records");
+
+    // Add summary sheet
+    const totalGross = records.reduce((sum, r) => sum + r.grossSalary, 0);
+    const totalDeductions = records.reduce((sum, r) => sum + r.totalDeductions, 0);
+    const totalNet = records.reduce((sum, r) => sum + r.netPayable, 0);
+
+    const summaryStats = [
+      ["SALARY REPORT"],
+      [`Month: ${dateUtils.getMonthName(month)} ${year}`],
+      [`Generated: ${new Date().toLocaleDateString()}`],
+      [""],
+      ["Summary", "Amount"],
+      ["Total Employees", records.length],
+      ["Total Gross Salary", dateUtils.formatCurrency(totalGross)],
+      ["Total Deductions", dateUtils.formatCurrency(totalDeductions)],
+      ["Total Net Payable", dateUtils.formatCurrency(totalNet)],
+      [""],
+      ["Deductions Breakdown", "Amount"],
+      ["Hourly Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.hourlyDeduction || 0), 0))],
+      ["PF Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.pfDeduction || 0), 0))],
+      ["PT Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.professionalTax || 0), 0))],
+      ["ESI Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.esiDeduction || 0), 0))],
+      ["TDS Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.tdsDeduction || 0), 0))],
+      [""],
+      ["Status Breakdown", "Count"],
+      ["Calculated", records.filter(r => r.status === 'calculated').length],
+      ["Approved", records.filter(r => r.status === 'approved').length],
+      ["Paid", records.filter(r => r.status === 'paid').length]
+    ];
+
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryStats);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+
+    return workbook;
+  },
+
+  // Generate payslip data for Excel
+  generatePayslipExcel(record) {
+    const payslipData = [
+      ["PAYSLIP"],
+      [`Month: ${dateUtils.getMonthName(record.month)} ${record.year}`],
+      [""],
+      ["Employee Details", ""],
+      ["Employee ID", record.employeeId],
+      ["Employee Name", record.employeeName],
+      [""],
+      ["Attendance Summary", ""],
+      ["Days in Month", record.daysInMonth],
+      ["Working Days", record.totalWorkingDays],
+      ["Days Attended", record.daysAttended],
+      ["Leaves Taken", record.totalLeavesTaken],
+      ["Paid Leaves", record.paidLeavesUsed],
+      ["Pay Loss Days", record.payLossDays],
+      ["Days Paid For", record.daysToBePaidFor],
+      [""],
+      ["Hours Summary", ""],
+      ["Expected Hours", record.totalExpectedHours],
+      ["Hours Worked", record.totalHoursWorked?.toFixed(2) || 0],
+      ["Hours Shortfall", record.hoursShortfall?.toFixed(2) || 0],
+      ["Overtime Hours", record.overtimeHours?.toFixed(2) || 0],
+      [""],
+      ["Earnings", "Amount (₹)"],
+      ["Salary Offered", record.salaryOffered],
+      ["Per Day Salary", record.perDaySalary?.toFixed(2) || 0],
+      ["Gross Salary", record.grossSalary],
+      ["Incentive", record.additions?.incentive || 0],
+      ["Bonus", record.additions?.bonus || 0],
+      ["Other Additions", record.additions?.otherAdditions || 0],
+      ["Total Earnings", record.grossSalary + record.totalAdditions],
+      [""],
+      ["Deductions", "Amount (₹)"],
+      ["Hourly Shortfall", record.deductions?.hourlyDeduction || 0],
+      ["PF", record.deductions?.pfDeduction || 0],
+      ["ESI", record.deductions?.esiDeduction || 0],
+      ["Professional Tax", record.deductions?.professionalTax || 0],
+      ["TDS", record.deductions?.tdsDeduction || 0],
+      ["Damages", record.deductions?.damages || 0],
+      ["Advance Recovery", record.deductions?.advanceSalaryRecovery || 0],
+      ["Other Deductions", record.deductions?.otherDeductions || 0],
+      ["Total Deductions", record.totalDeductions],
+      [""],
+      ["NET PAYABLE", record.netPayable],
+      [""],
+      [`Generated on: ${new Date().toLocaleDateString()}`]
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(payslipData);
+    worksheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Payslip");
+
+    return workbook;
   }
 };
 
 export const HRMS = {
-  // Employee Management
+  // ─────────────────────────────────────────────────────────────────────────
+  // EMPLOYEE MANAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
   listEmployees(params = {}) {
     return api.get("/api/hrms/employees", { params });
   },
@@ -475,7 +656,9 @@ export const HRMS = {
     return api.get("/api/hrms/users/search", { params: { q } });
   },
 
-  // Attendance - Individual View
+  // ─────────────────────────────────────────────────────────────────────────
+  // ATTENDANCE - Individual View
+  // ─────────────────────────────────────────────────────────────────────────
   uploadAttendance(formData) {
     return api.post("/api/attendance/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -497,7 +680,9 @@ export const HRMS = {
     return api.post("/api/attendance/manual", data);
   },
 
-  // Attendance - Summary & Calendar View
+  // ─────────────────────────────────────────────────────────────────────────
+  // ATTENDANCE - Summary & Calendar View
+  // ─────────────────────────────────────────────────────────────────────────
   getAttendanceSummaryAll(params = {}) {
     return api.get("/api/attendance/summary/all", { params });
   },
@@ -511,18 +696,28 @@ export const HRMS = {
     return api.post("/api/attendance/bulk-update", data);
   },
 
-  // Leave Management
+  // ─────────────────────────────────────────────────────────────────────────
+  // LEAVE MANAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
   listLeaves(params = {}) {
     return api.get("/api/hrms/leaves", { params });
   },
   createLeave(data) {
     return api.post("/api/hrms/leaves", data);
   },
-  updateLeaveStatus(id, status) {
-    return api.patch(`/api/hrms/leaves/${id}/status`, { status });
+  updateLeaveStatus(id, status, remarks = '') {
+    return api.patch(`/api/hrms/leaves/${id}/status`, { status, remarks });
+  },
+  cancelLeave(id) {
+    return api.post(`/api/hrms/leaves/${id}/cancel`);
+  },
+  getLeaveBalance(employeeId) {
+    return api.get(`/api/hrms/leaves/balance/${employeeId}`);
   },
 
-  // WFH Management
+  // ─────────────────────────────────────────────────────────────────────────
+  // WFH MANAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
   listWFH(params = {}) {
     return api.get("/api/hrms/wfh", { params });
   },
@@ -530,7 +725,25 @@ export const HRMS = {
     return api.post("/api/hrms/wfh", data);
   },
 
-  // Restricted Holidays
+  // ─────────────────────────────────────────────────────────────────────────
+  // HOLIDAY MANAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
+  listHolidays(params = {}) {
+    return api.get("/api/admin/holidays", { params });
+  },
+  createHoliday(data) {
+    return api.post("/api/admin/holidays", data);
+  },
+  updateHoliday(id, data) {
+    return api.put(`/api/admin/holidays/${id}`, data);
+  },
+  deleteHoliday(id) {
+    return api.delete(`/api/admin/holidays/${id}`);
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RESTRICTED HOLIDAYS
+  // ─────────────────────────────────────────────────────────────────────────
   listRestrictedHolidays() {
     return api.get("/api/hrms/holidays/restricted");
   },
@@ -540,8 +753,67 @@ export const HRMS = {
   createRHRequest(data) {
     return api.post("/api/hrms/self/rh", data);
   },
+  updateRHRequestStatus(id, status) {
+    return api.patch(`/api/hrms/rh/requests/${id}/status`, { status });
+  },
 
-  // Profile Management
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALARY CONFIGURATION
+  // ─────────────────────────────────────────────────────────────────────────
+  getSalaryConfig(employeeId) {
+    return api.get(`/api/hrms/salary/config/${employeeId}`);
+  },
+  saveSalaryConfig(config) {
+    return api.post("/api/hrms/salary/config", config);
+  },
+  getAllSalaryConfigs() {
+    return api.get("/api/hrms/salary/configs");
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALARY CALCULATION
+  // ─────────────────────────────────────────────────────────────────────────
+  calculateEmployeeSalary(employeeId, data) {
+    return api.post(`/api/hrms/salary/calculate/${employeeId}`, data);
+  },
+  calculateAllSalaries(data) {
+    return api.post("/api/hrms/salary/calculate-all", data);
+  },
+  previewSalary(employeeId, data) {
+    return api.post(`/api/hrms/salary/preview/${employeeId}`, data);
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALARY RECORDS
+  // ─────────────────────────────────────────────────────────────────────────
+  getSalaryRecords(params = {}) {
+    return api.get("/api/hrms/salary/records", { params });
+  },
+  getSalaryRecord(employeeId, month, year) {
+    return api.get(`/api/hrms/salary/record/${employeeId}/${month}/${year}`);
+  },
+  updateSalaryRecord(id, data) {
+    return api.put(`/api/hrms/salary/record/${id}`, data);
+  },
+  addSalaryAdjustment(id, adjustment) {
+    return api.post(`/api/hrms/salary/record/${id}/adjustment`, adjustment);
+  },
+  approveSalaryRecord(id) {
+    return api.post(`/api/hrms/salary/record/${id}/approve`);
+  },
+  markSalaryPaid(id, data = {}) {
+    return api.post(`/api/hrms/salary/record/${id}/mark-paid`, data);
+  },
+  exportSalaryRecords(params = {}) {
+    return api.get("/api/hrms/salary/export", {
+      params,
+      responseType: "blob",
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROFILE MANAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
   getProfile() {
     return api.get("/api/me/profile");
   },
@@ -549,15 +821,9 @@ export const HRMS = {
     return api.put("/api/me/profile", data);
   },
 
-  // Salary Management
-  calculateSalary(params = {}) {
-    return api.get("/api/hrms/salary/calc", { params });
-  },
-  finalizeSalary(data) {
-    return api.post("/api/hrms/salary/finalize", data);
-  },
-
-  // Bulk Operations
+  // ─────────────────────────────────────────────────────────────────────────
+  // BULK OPERATIONS
+  // ─────────────────────────────────────────────────────────────────────────
   importAttendanceBulk(data) {
     return api.post("/api/hrms/attendance/bulk", data);
   },
@@ -567,7 +833,9 @@ export const HRMS = {
     });
   },
 
-  // Helper Methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // HELPER METHODS
+  // ─────────────────────────────────────────────────────────────────────────
   downloadFile(blob, filename) {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -603,16 +871,30 @@ export const HRMS = {
     }
   },
 
-  // Quick Export Methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // QUICK EXPORT METHODS
+  // ─────────────────────────────────────────────────────────────────────────
   exportSummaryExcel(data, month, year, filename = null) {
     const workbook = excelUtils.exportSummaryToExcel(data, month, year);
     const defaultFilename = `Attendance_Summary_${dateUtils.getMonthName(month)}_${year}.xlsx`;
-    excelUtils.downloadTemplate(filename || defaultFilename);
+    XLSX.writeFile(workbook, filename || defaultFilename);
   },
 
   exportCalendarExcel(calendarData, employee, month, year, filename = null) {
     const workbook = excelUtils.exportCalendarToExcel(calendarData, employee, month, year);
     const defaultFilename = `Attendance_Calendar_${employee.name}_${dateUtils.getMonthName(month)}_${year}.xlsx`;
+    XLSX.writeFile(workbook, filename || defaultFilename);
+  },
+
+  exportSalaryExcel(records, month, year, filename = null) {
+    const workbook = excelUtils.exportSalaryToExcel(records, month, year);
+    const defaultFilename = `Salary_Report_${dateUtils.getMonthName(month)}_${year}.xlsx`;
+    XLSX.writeFile(workbook, filename || defaultFilename);
+  },
+
+  downloadPayslip(record, filename = null) {
+    const workbook = excelUtils.generatePayslipExcel(record);
+    const defaultFilename = `Payslip_${record.employeeName}_${dateUtils.getMonthName(record.month)}_${record.year}.xlsx`;
     XLSX.writeFile(workbook, filename || defaultFilename);
   }
 };

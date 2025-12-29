@@ -398,224 +398,282 @@ export default function CatalogManagementPage() {
   }
 
   async function handleExportCombinedPDF(catalog, templateId = "1") {
-    try {
-      const tmpl = templateConfig[templateId];
-      if (!tmpl) {
-        alert("Invalid template selection");
-        return;
+  try {
+    const tmpl = templateConfig[templateId];
+    if (!tmpl) {
+      alert("Invalid template selection");
+      return;
+    }
+
+    const pdf1Bytes = await fetch(tmpl.pdf1).then((res) => res.arrayBuffer());
+    const pdf2Bytes = await fetch(tmpl.pdf2).then((res) => res.arrayBuffer());
+    const pdf3Bytes = await fetch(tmpl.pdf3).then((res) => res.arrayBuffer());
+
+    const pdf1Doc = await PDFDocument.load(pdf1Bytes);
+    const pdf2Doc = await PDFDocument.load(pdf2Bytes);
+    const pdf3Doc = await PDFDocument.load(pdf3Bytes);
+
+    const newPdf = await PDFDocument.create();
+    const pdf1Pages = await newPdf.copyPages(pdf1Doc, pdf1Doc.getPageIndices());
+    pdf1Pages.forEach((page) => newPdf.addPage(page));
+
+    const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
+    const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
+
+    for (let i = 0; i < (catalog.products || []).length; i++) {
+      const sub = catalog.products[i];
+      const prod =
+        sub.productId && typeof sub.productId === "object" ? sub.productId : {};
+
+      // Get product ID - handle both object and string formats
+      const productId = prod.productId || 
+                       (typeof sub.productId === 'string' ? sub.productId : 
+                       (sub.productId && sub.productId.productId) || 
+                       sub.productCode || 
+                       "N/A");
+
+      const [page] = await newPdf.copyPages(pdf2Doc, [0]);
+      const { width, height } = page.getSize();
+      const fixedHeight = 550;
+      const imageX = 100;
+      const imageY = height - 780;
+      let mainImg =
+        (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
+      if (mainImg && mainImg.startsWith("http://")) {
+        mainImg = mainImg.replace("http://", "https://");
+      }
+      let imageData = "";
+      if (mainImg) {
+        try {
+          imageData = await getBase64ImageFromUrl(mainImg);
+        } catch (err) {
+          console.error("Error fetching product image:", err);
+        }
+      }
+      if (imageData) {
+        let embeddedImage;
+        if (imageData.startsWith("data:image/png")) {
+          embeddedImage = await newPdf.embedPng(imageData);
+        } else {
+          embeddedImage = await newPdf.embedJpg(imageData);
+        }
+        const autoWidth = (embeddedImage.width / embeddedImage.height) * fixedHeight;
+        page.drawImage(embeddedImage, { x: imageX, y: imageY, width: autoWidth, height: fixedHeight });
+        
+        // Draw product ID badge on image
+        page.drawRectangle({
+          x: imageX + autoWidth - 120, // Right side of image
+          y: imageY + fixedHeight - 35, // Top of image
+          width: 120,
+          height: 35,
+          color: rgb(0.2, 0.2, 0.2), // Dark background
+          borderColor: rgb(1, 1, 1),
+          borderWidth: 1,
+        });
+        
+        page.drawText(`ID: ${productId}`, {
+          x: imageX + autoWidth - 115,
+          y: imageY + fixedHeight - 25,
+          size: 12,
+          font: boldFont,
+          color: rgb(1, 1, 1), // White text
+        });
+      } else {
+        page.drawRectangle({
+          x: imageX,
+          y: imageY,
+          width: 600,
+          height: fixedHeight,
+          borderColor: rgb(0.8, 0.8, 0.8),
+          borderWidth: 1,
+        });
+        page.drawText("No Image", {
+          x: imageX + 40,
+          y: imageY + 60,
+          size: 5,
+          font: normalFont,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+        
+        // Still show product ID even without image
+        page.drawRectangle({
+          x: imageX + 480,
+          y: imageY + fixedHeight - 35,
+          width: 120,
+          height: 35,
+          color: rgb(0.2, 0.2, 0.2),
+          borderColor: rgb(1, 1, 1),
+          borderWidth: 1,
+        });
+        
+        page.drawText(`ID: ${productId}`, {
+          x: imageX + 485,
+          y: imageY + fixedHeight - 25,
+          size: 12,
+          font: boldFont,
+          color: rgb(1, 1, 1),
+        });
       }
 
-      const pdf1Bytes = await fetch(tmpl.pdf1).then((res) => res.arrayBuffer());
-      const pdf2Bytes = await fetch(tmpl.pdf2).then((res) => res.arrayBuffer());
-      const pdf3Bytes = await fetch(tmpl.pdf3).then((res) => res.arrayBuffer());
+      let xText = 1000;
+      let yText = height - 200;
+      const lineHeight = 48;
+      
+      // Product Name
+      page.drawText(prod.name || sub.productName || "", {
+        x: xText,
+        y: yText,
+        size: 32,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+        maxWidth: 800,
+      });
+      yText -= lineHeight * 0.7;
+      
+      // Product ID below name
+      page.drawText(`Product ID: ${productId}`, {
+        x: xText,
+        y: yText,
+        size: 20,
+        font: normalFont,
+        color: rgb(0.4, 0.4, 0.4),
+        maxWidth: 800,
+      });
+      yText -= lineHeight * 1.5;
 
-      const pdf1Doc = await PDFDocument.load(pdf1Bytes);
-      const pdf2Doc = await PDFDocument.load(pdf2Bytes);
-      const pdf3Doc = await PDFDocument.load(pdf3Bytes);
-
-      const newPdf = await PDFDocument.create();
-      const pdf1Pages = await newPdf.copyPages(pdf1Doc, pdf1Doc.getPageIndices());
-      pdf1Pages.forEach((page) => newPdf.addPage(page));
-
-      const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
-      const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
-
-      for (let i = 0; i < (catalog.products || []).length; i++) {
-        const sub = catalog.products[i];
-        const prod =
-          sub.productId && typeof sub.productId === "object" ? sub.productId : {};
-
-        const [page] = await newPdf.copyPages(pdf2Doc, [0]);
-        const { width, height } = page.getSize();
-        const fixedHeight = 550;
-        const imageX = 100;
-        const imageY = height - 780;
-        let mainImg =
-          (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
-        if (mainImg && mainImg.startsWith("http://")) {
-          mainImg = mainImg.replace("http://", "https://");
-        }
-        let imageData = "";
-        if (mainImg) {
-          try {
-            imageData = await getBase64ImageFromUrl(mainImg);
-          } catch (err) {
-            console.error("Error fetching product image:", err);
-          }
-        }
-        if (imageData) {
-          let embeddedImage;
-          if (imageData.startsWith("data:image/png")) {
-            embeddedImage = await newPdf.embedPng(imageData);
-          } else {
-            embeddedImage = await newPdf.embedJpg(imageData);
-          }
-          const autoWidth = (embeddedImage.width / embeddedImage.height) * fixedHeight;
-          page.drawImage(embeddedImage, { x: imageX, y: imageY, width: autoWidth, height: fixedHeight });
-        } else {
-          page.drawRectangle({
-            x: imageX,
-            y: imageY,
-            width: 600,
-            height: fixedHeight,
-            borderColor: rgb(0.8, 0.8, 0.8),
-            borderWidth: 1,
-          });
-          page.drawText("No Image", {
-            x: imageX + 40,
-            y: imageY + 60,
-            size: 5,
-            font: normalFont,
-            color: rgb(0.5, 0.5, 0.5),
-          });
-        }
-
-        let xText = 1000;
-        let yText = height - 200;
-        const lineHeight = 48;
-        page.drawText(prod.name || sub.productName || "", {
+      if (prod.ProductBrand || sub.ProductBrand) {
+        page.drawText("Brand Name: ", {
           x: xText,
           y: yText,
-          size: 32,
+          size: 25,
           font: boldFont,
           color: rgb(0, 0, 0),
           maxWidth: 800,
         });
-        yText -= lineHeight * 2;
-
-        if (prod.ProductBrand || sub.ProductBrand) {
-          page.drawText("Brand Name: ", {
-            x: xText,
-            y: yText,
-            size: 25,
-            font: boldFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          page.drawText(prod.ProductBrand || sub.ProductBrand || "", {
-            x: xText + 310,
-            y: yText,
-            size: 25,
-            font: normalFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          yText -= lineHeight;
-        }
-
-        if (prod.ProductDescription || sub.ProductDescription) {
-          page.drawText("Description:", {
-            x: xText,
-            y: yText,
-            size: 25,
-            font: boldFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          yText -= lineHeight;
-
-          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(
-            /\n/g,
-            " "
-          );
-          const wrapped = wrapText(descriptionText, 500, normalFont, 7);
-          wrapped.forEach((line) => {
-            page.drawText(line, {
-              x: xText,
-              y: yText,
-              size: 20,
-              font: normalFont,
-              color: rgb(0, 0, 0),
-              maxWidth: 800,
-            });
-            yText -= lineHeight;
-          });
-          yText -= lineHeight * 0.5;
-        }
-
-        if (sub.quantity) {
-          page.drawText("Qty: ", {
-            x: xText,
-            y: yText,
-            size: 25,
-            font: boldFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          page.drawText(String(sub.quantity), {
-            x: xText + 310,
-            y: yText,
-            size: 25,
-            font: normalFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          yText -= lineHeight;
-        }
-
-        if (sub.productCost !== undefined) {
-          const baseCost = sub.productCost;
-          const margin = catalog.margin || 0;
-          const effPrice = baseCost * (1 + margin / 100);
-          page.drawText("Rate in INR (per pc): ", {
-            x: xText,
-            y: yText,
-            size: 25,
-            font: boldFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          page.drawText(`${effPrice.toFixed(2)}/-`, {
-            x: xText + 310,
-            y: yText,
-            size: 25,
-            font: normalFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          yText -= lineHeight;
-        }
-
-        if (sub.productGST !== undefined) {
-          page.drawText("GST (Additional): ", {
-            x: xText,
-            y: yText,
-            size: 25,
-            font: boldFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          page.drawText(String(sub.productGST) + "%", {
-            x: xText + 310,
-            y: yText,
-            size: 25,
-            font: normalFont,
-            color: rgb(0, 0, 0),
-            maxWidth: 800,
-          });
-          yText -= lineHeight;
-        }
-
-        newPdf.addPage(page);
+        page.drawText(prod.ProductBrand || sub.ProductBrand || "", {
+          x: xText + 310,
+          y: yText,
+          size: 25,
+          font: normalFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        yText -= lineHeight;
       }
 
-      const pdf3Pages = await newPdf.copyPages(pdf3Doc, pdf3Doc.getPageIndices());
-      pdf3Pages.forEach((page) => newPdf.addPage(page));
+      if (prod.ProductDescription || sub.ProductDescription) {
+        page.drawText("Description:", {
+          x: xText,
+          y: yText,
+          size: 25,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        yText -= lineHeight;
 
-      const finalPdfBytes = await newPdf.save();
-      const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `Catalog-${catalog.catalogName}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Combined PDF export error:", error);
-      alert("Combined PDF export failed");
+        const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(
+          /\n/g,
+          " "
+        );
+        const wrapped = wrapText(descriptionText, 500, normalFont, 7);
+        wrapped.forEach((line) => {
+          page.drawText(line, {
+            x: xText,
+            y: yText,
+            size: 20,
+            font: normalFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          yText -= lineHeight;
+        });
+        yText -= lineHeight * 0.5;
+      }
+
+      if (sub.quantity) {
+        page.drawText("Qty: ", {
+          x: xText,
+          y: yText,
+          size: 25,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        page.drawText(String(sub.quantity), {
+          x: xText + 310,
+          y: yText,
+          size: 25,
+          font: normalFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        yText -= lineHeight;
+      }
+
+      if (sub.productCost !== undefined) {
+        const baseCost = sub.productCost;
+        const margin = catalog.margin || 0;
+        const effPrice = baseCost * (1 + margin / 100);
+        page.drawText("Rate in INR (per pc): ", {
+          x: xText,
+          y: yText,
+          size: 25,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        page.drawText(`${effPrice.toFixed(2)}/-`, {
+          x: xText + 310,
+          y: yText,
+          size: 25,
+          font: normalFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        yText -= lineHeight;
+      }
+
+      if (sub.productGST !== undefined) {
+        page.drawText("GST (Additional): ", {
+          x: xText,
+          y: yText,
+          size: 25,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        page.drawText(String(sub.productGST) + "%", {
+          x: xText + 310,
+          y: yText,
+          size: 25,
+          font: normalFont,
+          color: rgb(0, 0, 0),
+          maxWidth: 800,
+        });
+        yText -= lineHeight;
+      }
+
+      newPdf.addPage(page);
     }
+
+    const pdf3Pages = await newPdf.copyPages(pdf3Doc, pdf3Doc.getPageIndices());
+    pdf3Pages.forEach((page) => newPdf.addPage(page));
+
+    const finalPdfBytes = await newPdf.save();
+    const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Catalog-${catalog.catalogName}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error("Combined PDF export error:", error);
+    alert("Combined PDF export failed");
   }
+}
 
   async function handleExportPPT(catalog) {
     try {

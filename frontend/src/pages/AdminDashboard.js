@@ -160,6 +160,7 @@ const adminPages = [
     icon: <UserGroupIcon className="w-8 h-8 shrink-0" />,
     subItems: [
       { name: "Employees", path: "/admin-dashboard/hrms/employees", permission: "hrms-employees" },
+      { name: "Salary", path: "/admin-dashboard/salary", permission: "hrms-employees" },
       { name: "Holidays", path: "/admin-dashboard/holidays", permission: "holidays" },
       { name: "Leave Tracker", path: "/admin-dashboard/leaves-super-admin", permission: "leaves" },
       { name: "Upload Attendance", path: "/admin-dashboard/hrms/attendance", permission: "hrms-attendance" },

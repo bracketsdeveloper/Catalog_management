@@ -181,6 +181,10 @@ const suspenseAccountRoutes = require("./routes/suspenseAccounts");
 app.use("/api/suspense-accounts", suspenseAccountRoutes);
 
 
+const salaryRoutes = require('./routes/SalaryRoutes.js');
+app.use('/api/hrms/salary', salaryRoutes);
+
+
 
 
 // 7) Health check

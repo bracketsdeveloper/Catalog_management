@@ -9,6 +9,8 @@ const { authenticate, requireAdmin } = require("../middleware/hrmsAuth");
 const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
 const Holiday = require("../models/Holiday");
+const Leave = require("../models/Leave");
+const RestrictedHolidayRequest = require("../models/RestrictedHolidayRequest");
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads", "attendance_excel");
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -43,6 +45,10 @@ const upload = multer({
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TIME PARSING & CALCULATION HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function normalizeHeader(header) {
   return String(header || "")
     .toLowerCase()
@@ -63,40 +69,313 @@ function parseDateString(dateString) {
   return new Date(dateString);
 }
 
-function parseTimeString(timeStr) {
-  if (!timeStr) return null;
-  const str = String(timeStr).trim();
-  if (!isNaN(parseFloat(str))) {
-    return parseFloat(str);
+/**
+ * Parse time from various formats:
+ * - Excel decimal (fraction of day): 0.420833 = 10:06
+ * - 12-hour format: "09:00 AM", "6:30 PM"
+ * - 24-hour format: "09:00", "18:30"
+ * - Date object
+ * 
+ * Returns object { hours, minutes, totalMinutes, formatted }
+ */
+function parseTimeValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
   }
-  const match = str.match(/^(\d{1,2}):(\d{2})$/);
-  if (match) {
-    const hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    return hours + (minutes / 60);
+
+  let hours = 0;
+  let minutes = 0;
+
+  // Handle Date objects
+  if (value instanceof Date && !isNaN(value)) {
+    hours = value.getHours();
+    minutes = value.getMinutes();
   }
-  return null;
+  // Handle numeric values (Excel stores times as fraction of day)
+  else if (typeof value === 'number' || (!isNaN(parseFloat(value)) && !String(value).includes(':'))) {
+    const num = parseFloat(value);
+    
+    if (num >= 0 && num < 1) {
+      // Excel fraction of day: 0.420833 = 10:06
+      const totalMinutesInDay = Math.round(num * 24 * 60);
+      hours = Math.floor(totalMinutesInDay / 60);
+      minutes = totalMinutesInDay % 60;
+    } else if (num >= 1 && num <= 24) {
+      // Decimal hours: 10.5 = 10:30
+      hours = Math.floor(num);
+      minutes = Math.round((num - hours) * 60);
+    } else {
+      return null;
+    }
+  }
+  // Handle string time formats
+  else if (typeof value === 'string') {
+    const str = value.trim();
+    
+    // Check for 12-hour format: "09:00 AM", "9:30 PM"
+    const ampmMatch = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
+    if (ampmMatch) {
+      hours = parseInt(ampmMatch[1], 10);
+      minutes = parseInt(ampmMatch[2], 10);
+      const period = ampmMatch[4].toUpperCase();
+      
+      // Convert to 24-hour format
+      if (period === 'PM' && hours !== 12) {
+        hours += 12;
+      } else if (period === 'AM' && hours === 12) {
+        hours = 0;
+      }
+    }
+    // Check for 24-hour format: "09:00", "18:30"
+    else {
+      const match24 = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (match24) {
+        hours = parseInt(match24[1], 10);
+        minutes = parseInt(match24[2], 10);
+      } else {
+        return null;
+      }
+    }
+    
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+  } else {
+    return null;
+  }
+
+  const totalMinutes = hours * 60 + minutes;
+  const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+
+  return {
+    hours,
+    minutes,
+    totalMinutes,
+    formatted,
+    decimalHours: hours + (minutes / 60)
+  };
 }
 
+/**
+ * Parse duration string (handles both HH:MM and decimal formats)
+ * Returns decimal hours
+ */
+function parseDuration(durationStr) {
+  if (!durationStr) return 0;
+
+  const parsed = parseTimeValue(durationStr);
+  if (parsed) {
+    return parsed.decimalHours;
+  }
+
+  const str = String(durationStr).trim();
+  const num = parseFloat(str);
+  if (!isNaN(num) && num >= 0 && num <= 24) {
+    return num;
+  }
+
+  return 0;
+}
+
+/**
+ * Format decimal hours to HH:MM string
+ */
 function formatTimeFromDecimal(decimalHours) {
-  if (decimalHours === null || decimalHours === undefined) return "";
-  const hours = Math.floor(decimalHours);
-  const minutes = Math.round((decimalHours - hours) * 60);
+  if (decimalHours === null || decimalHours === undefined || isNaN(decimalHours)) {
+    return "";
+  }
+  
+  const totalMinutes = Math.round(Math.max(0, decimalHours) * 60);
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
-async function isHoliday(date) {
+/**
+ * Calculate work metrics based on employee's expected schedule
+ */
+function calculateWorkMetrics(inTime, outTime, expectedLoginTime, expectedLogoutTime) {
+  const result = {
+    hoursWorked: 0,
+    regularHours: 0,
+    overtimeHours: 0,
+    isLateArrival: false,
+    isEarlyDeparture: false,
+    lateByMinutes: 0,
+    earlyByMinutes: 0,
+    workDuration: "",
+    remarks: []
+  };
+
+  const inParsed = parseTimeValue(inTime);
+  const outParsed = parseTimeValue(outTime);
+
+  if (!inParsed || !outParsed) {
+    return result;
+  }
+
+  // Calculate total work minutes
+  let workMinutes = outParsed.totalMinutes - inParsed.totalMinutes;
+  if (workMinutes < 0) {
+    workMinutes += 24 * 60; // Handle overnight shifts
+  }
+
+  result.hoursWorked = workMinutes / 60;
+  result.workDuration = formatTimeFromDecimal(result.hoursWorked);
+
+  // Parse expected schedule
+  const expectedIn = parseTimeValue(expectedLoginTime);
+  const expectedOut = parseTimeValue(expectedLogoutTime);
+
+  if (expectedIn && expectedOut) {
+    // Calculate expected work duration
+    let expectedMinutes = expectedOut.totalMinutes - expectedIn.totalMinutes;
+    if (expectedMinutes < 0) {
+      expectedMinutes += 24 * 60;
+    }
+    const expectedHours = expectedMinutes / 60;
+
+    // Check late arrival (grace period: 15 minutes)
+    const gracePeriod = 15;
+    if (inParsed.totalMinutes > expectedIn.totalMinutes + gracePeriod) {
+      result.isLateArrival = true;
+      result.lateByMinutes = inParsed.totalMinutes - expectedIn.totalMinutes;
+      result.remarks.push(`Late by ${result.lateByMinutes} mins`);
+    }
+
+    // Check early departure (grace period: 15 minutes)
+    if (outParsed.totalMinutes < expectedOut.totalMinutes - gracePeriod) {
+      result.isEarlyDeparture = true;
+      result.earlyByMinutes = expectedOut.totalMinutes - outParsed.totalMinutes;
+      result.remarks.push(`Left early by ${result.earlyByMinutes} mins`);
+    }
+
+    // Calculate regular vs overtime hours
+    if (result.hoursWorked <= expectedHours) {
+      result.regularHours = result.hoursWorked;
+      result.overtimeHours = 0;
+    } else {
+      result.regularHours = expectedHours;
+      result.overtimeHours = result.hoursWorked - expectedHours;
+    }
+  } else {
+    // No expected schedule, assume 8-hour workday
+    const standardHours = 8;
+    if (result.hoursWorked <= standardHours) {
+      result.regularHours = result.hoursWorked;
+      result.overtimeHours = 0;
+    } else {
+      result.regularHours = standardHours;
+      result.overtimeHours = result.hoursWorked - standardHours;
+    }
+  }
+
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOLIDAY & LEAVE HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check if a date is a PUBLIC holiday (applies to all employees)
+ */
+async function isPublicHoliday(date) {
   const start = new Date(date);
   start.setUTCHours(0, 0, 0, 0);
   const end = new Date(date);
   end.setUTCHours(23, 59, 59, 999);
+  
   const holiday = await Holiday.findOne({
+    type: "PUBLIC",
     date: { $gte: start, $lte: end }
-  });
-  return !!holiday;
+  }).lean();
+  
+  return holiday;
 }
 
-// Helper function to find employee with flexible ID matching
+/**
+ * Check if a date is an approved RESTRICTED holiday for a specific employee
+ */
+async function isApprovedRestrictedHoliday(date, employeeId, userId) {
+  const start = new Date(date);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setUTCHours(23, 59, 59, 999);
+  
+  // First check if there's a restricted holiday on this date
+  const holiday = await Holiday.findOne({
+    type: "RESTRICTED",
+    date: { $gte: start, $lte: end }
+  }).lean();
+  
+  if (!holiday) return null;
+  
+  // Then check if this employee has an approved request for it
+  const request = await RestrictedHolidayRequest.findOne({
+    holidayId: holiday._id,
+    $or: [
+      { employeeId: employeeId },
+      { userId: userId }
+    ],
+    status: "approved"
+  }).lean();
+  
+  if (request) {
+    return { ...holiday, requestApproved: true };
+  }
+  
+  return null;
+}
+
+/**
+ * Check if employee has approved leave for a specific date
+ */
+async function getApprovedLeaveForDate(employeeId, date) {
+  const checkDate = new Date(date);
+  checkDate.setUTCHours(0, 0, 0, 0);
+  
+  const leave = await Leave.findOne({
+    employeeId: employeeId,
+    status: "approved",
+    startDate: { $lte: checkDate },
+    endDate: { $gte: checkDate }
+  }).lean();
+  
+  return leave;
+}
+
+/**
+ * Get all approved leaves for an employee in a date range
+ */
+async function getApprovedLeavesInRange(employeeId, startDate, endDate) {
+  return await Leave.find({
+    employeeId: employeeId,
+    status: "approved",
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate }
+  }).lean();
+}
+
+/**
+ * Get all approved restricted holiday requests for an employee in a date range
+ */
+async function getApprovedRHRequestsInRange(employeeId, userId, startDate, endDate) {
+  return await RestrictedHolidayRequest.find({
+    $or: [
+      { employeeId: employeeId },
+      { userId: userId }
+    ],
+    status: "approved",
+    holidayDate: { $gte: startDate, $lte: endDate }
+  }).lean();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE LOOKUP HELPER
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
   if (!employeeIdFromExcel) return null;
   
@@ -105,7 +384,7 @@ async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
   // Try exact match first
   let employee = await Employee.findOne({ 
     "personal.employeeId": id 
-  }, { "personal.name": 1 });
+  }, { "personal.name": 1, "personal.employeeId": 1, "schedule": 1, "mappedUser": 1 }).lean();
   
   if (employee) {
     return { employee, matchedId: id };
@@ -116,7 +395,7 @@ async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
   if (cleanId !== id) {
     employee = await Employee.findOne({ 
       "personal.employeeId": cleanId 
-    }, { "personal.name": 1 });
+    }, { "personal.name": 1, "personal.employeeId": 1, "schedule": 1, "mappedUser": 1 }).lean();
     
     if (employee) {
       return { employee, matchedId: cleanId };
@@ -126,18 +405,17 @@ async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
   // Try adding leading zeros (common patterns)
   const numericId = parseInt(id, 10);
   if (!isNaN(numericId)) {
-    // Try common zero-padded formats
     const paddedIds = [
-      numericId.toString().padStart(3, '0'),  // "005"
-      numericId.toString().padStart(4, '0'),  // "0005"
-      numericId.toString().padStart(5, '0'),  // "00005"
-      numericId.toString().padStart(6, '0')   // "000005"
+      numericId.toString().padStart(3, '0'),
+      numericId.toString().padStart(4, '0'),
+      numericId.toString().padStart(5, '0'),
+      numericId.toString().padStart(6, '0')
     ];
     
     for (const paddedId of paddedIds) {
       employee = await Employee.findOne({ 
         "personal.employeeId": paddedId 
-      }, { "personal.name": 1 });
+      }, { "personal.name": 1, "personal.employeeId": 1, "schedule": 1, "mappedUser": 1 }).lean();
       
       if (employee) {
         return { employee, matchedId: paddedId };
@@ -147,6 +425,10 @@ async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
   
   return null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UPLOAD ENDPOINT
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/upload", authenticate, requireAdmin, upload.single("file"), async (req, res) => {
   try {
@@ -170,10 +452,14 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
       });
     }
     
-    const workbook = XLSX.readFile(filePath);
+    // Read Excel
+    const workbook = XLSX.readFile(filePath, { 
+      cellDates: false,
+      raw: true
+    });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: true });
     
     if (!rows || rows.length === 0) {
       fs.unlinkSync(filePath);
@@ -196,7 +482,7 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
       fs.unlinkSync(filePath);
       return res.status(400).json({ 
         success: false, 
-        message: "Employee ID column not found. Looking for columns like: ecode, e code, employee code, emp code" 
+        message: "Employee ID column not found" 
       });
     }
     
@@ -210,8 +496,11 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
     };
     
     const bulkOps = [];
-    const holidayCheck = await isHoliday(attendanceDate);
-    const employeeIdMap = {}; // Cache for found employees
+    
+    // Check for PUBLIC holiday (applies to all)
+    const publicHoliday = await isPublicHoliday(attendanceDate);
+    
+    const employeeIdMap = {};
     
     for (let i = 0; i < rows.length; i++) {
       results.total++;
@@ -227,15 +516,12 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
         
         const employeeIdFromExcel = String(employeeIdRaw).trim();
         
-        // Check cache first
         let employeeData = employeeIdMap[employeeIdFromExcel];
         
-        // If not in cache, find employee
         if (!employeeData) {
           employeeData = await findEmployeeWithFlexibleId(employeeIdFromExcel);
           
           if (employeeData) {
-            // Cache the result
             employeeIdMap[employeeIdFromExcel] = employeeData;
           } else {
             results.warnings.push(`Row ${originalRowNum}: Employee not found for ID "${employeeIdFromExcel}"`);
@@ -246,20 +532,21 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
         const { employee, matchedId } = employeeData;
         
         const attendanceData = {
-          employeeId: matchedId, // Use the matched ID from database
+          employeeId: matchedId,
           date: attendanceDate,
           name: employee.personal.name,
           importedAt: new Date(),
           importBatchId
         };
         
+        // Parse columns
         const columnMappings = {
           'shift': ['shift'],
-          'intime': ['intime', 'in time', 'in', 'intime(00:00)', 'punchin', 'punch in'],
-          'outtime': ['outtime', 'out time', 'out', 'outtime(00:00)', 'punchout', 'punch out'],
-          'workdur': ['work dur', 'workdur', 'work dur.(00:00)', 'working hours', 'wh'],
-          'ot': ['ot', 'overtime', 'ot(00:00)', 'overtime hours'],
-          'totdur': ['tot dur', 'total dur', 'tot. dur.(8:42)', 'total hours', 'th'],
+          'intime': ['intime', 'in time', 'in', 'intime0000', 'punchin', 'punch in'],
+          'outtime': ['outtime', 'out time', 'out', 'outtime0000', 'punchout', 'punch out'],
+          'workdur': ['work dur', 'workdur', 'work dur0000', 'working hours', 'wh'],
+          'ot': ['ot', 'overtime', 'ot0000', 'overtime hours'],
+          'totdur': ['tot dur', 'total dur', 'tot dur0000', 'tot dur842', 'total hours', 'th'],
           'status': ['status', 'attendance status', 'attstatus'],
           'remarks': ['remarks', 'note', 'comments']
         };
@@ -270,26 +557,53 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
               const value = row[normalizedHeaders[alias]];
               if (value !== "" && value !== null) {
                 switch (field) {
-                  case 'intime':
-                    attendanceData.inTime = formatTimeFromDecimal(parseTimeString(value)) || String(value);
+                  case 'intime': {
+                    const parsed = parseTimeValue(value);
+                    attendanceData.inTime = parsed ? parsed.formatted : String(value).trim();
                     break;
-                  case 'outtime':
-                    attendanceData.outTime = formatTimeFromDecimal(parseTimeString(value)) || String(value);
+                  }
+                  case 'outtime': {
+                    const parsed = parseTimeValue(value);
+                    attendanceData.outTime = parsed ? parsed.formatted : String(value).trim();
                     break;
-                  case 'workdur':
-                    attendanceData.workDuration = String(value);
-                    attendanceData.hoursWorked = parseTimeString(value) || 0;
-                    break;
-                  case 'ot':
-                    attendanceData.overTime = String(value);
-                    attendanceData.hoursOT = parseTimeString(value) || 0;
-                    break;
-                  case 'totdur':
-                    attendanceData.totalDuration = String(value);
-                    if (!attendanceData.hoursWorked) {
-                      attendanceData.hoursWorked = parseTimeString(value) || 0;
+                  }
+                  case 'workdur': {
+                    const parsed = parseTimeValue(value);
+                    if (parsed) {
+                      attendanceData.workDuration = parsed.formatted;
+                      attendanceData.hoursWorked = parsed.decimalHours;
+                    } else {
+                      attendanceData.workDuration = String(value);
+                      attendanceData.hoursWorked = parseDuration(value);
                     }
                     break;
+                  }
+                  case 'ot': {
+                    const parsed = parseTimeValue(value);
+                    if (parsed) {
+                      attendanceData.overTime = parsed.formatted;
+                      attendanceData.hoursOT = parsed.decimalHours;
+                    } else {
+                      attendanceData.overTime = String(value);
+                      attendanceData.hoursOT = parseDuration(value);
+                    }
+                    break;
+                  }
+                  case 'totdur': {
+                    const parsed = parseTimeValue(value);
+                    if (parsed) {
+                      attendanceData.totalDuration = parsed.formatted;
+                      if (!attendanceData.hoursWorked) {
+                        attendanceData.hoursWorked = parsed.decimalHours;
+                      }
+                    } else {
+                      attendanceData.totalDuration = String(value);
+                      if (!attendanceData.hoursWorked) {
+                        attendanceData.hoursWorked = parseDuration(value);
+                      }
+                    }
+                    break;
+                  }
                   case 'status':
                     attendanceData.status = String(value).trim();
                     break;
@@ -302,7 +616,66 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
           }
         }
         
-        // If no status found, calculate it
+        // Calculate work metrics based on employee's schedule
+        if (attendanceData.inTime && attendanceData.outTime) {
+          const metrics = calculateWorkMetrics(
+            attendanceData.inTime,
+            attendanceData.outTime,
+            employee.schedule?.expectedLoginTime,
+            employee.schedule?.expectedLogoutTime
+          );
+          
+          attendanceData.hoursWorked = metrics.hoursWorked;
+          attendanceData.hoursOT = metrics.overtimeHours;
+          attendanceData.workDuration = metrics.workDuration;
+          attendanceData.isLateArrival = metrics.isLateArrival;
+          attendanceData.isEarlyDeparture = metrics.isEarlyDeparture;
+          attendanceData.lateByMinutes = metrics.lateByMinutes;
+          attendanceData.earlyByMinutes = metrics.earlyByMinutes;
+          
+          if (metrics.remarks.length > 0 && !attendanceData.remarks) {
+            attendanceData.remarks = metrics.remarks.join('; ');
+          }
+        }
+        
+        // Check for approved leave (override Absent status)
+        const approvedLeave = await getApprovedLeaveForDate(matchedId, attendanceDate);
+        if (approvedLeave) {
+          attendanceData.status = 'Leave';
+          attendanceData.leaveType = approvedLeave.type;
+          attendanceData.leaveId = approvedLeave._id;
+          attendanceData.remarks = attendanceData.remarks 
+            ? `${attendanceData.remarks}; Leave: ${approvedLeave.type}` 
+            : `Leave: ${approvedLeave.type}`;
+        }
+        
+        // Handle holidays
+        if (publicHoliday) {
+          attendanceData.isHoliday = true;
+          attendanceData.holidayName = publicHoliday.name;
+          attendanceData.holidayType = 'PUBLIC';
+          if (!approvedLeave) {
+            attendanceData.status = 'Holiday';
+          }
+        } else {
+          // Check for approved restricted holiday for this specific employee
+          const restrictedHoliday = await isApprovedRestrictedHoliday(
+            attendanceDate, 
+            matchedId, 
+            employee.mappedUser
+          );
+          
+          if (restrictedHoliday) {
+            attendanceData.isHoliday = true;
+            attendanceData.holidayName = restrictedHoliday.name;
+            attendanceData.holidayType = 'RESTRICTED';
+            if (!approvedLeave) {
+              attendanceData.status = 'Restricted Holiday';
+            }
+          }
+        }
+        
+        // Default status if not set
         if (!attendanceData.status) {
           if (attendanceData.inTime && attendanceData.outTime) {
             attendanceData.status = 'Present';
@@ -313,27 +686,10 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
           }
         }
         
-        attendanceData.isHoliday = holidayCheck;
-        if (attendanceData.status && attendanceData.status.toLowerCase().includes('holiday')) {
-          attendanceData.isHoliday = true;
-        }
-        
+        // Set weekend flags
         const dayOfWeek = attendanceDate.getUTCDay();
         attendanceData.isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         attendanceData.dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
-        
-        // If hours worked not calculated from durations, calculate from in/out times
-        if (!attendanceData.hoursWorked && attendanceData.inTime && attendanceData.outTime) {
-          const inMinutes = Attendance.timeToMinutes(attendanceData.inTime);
-          const outMinutes = Attendance.timeToMinutes(attendanceData.outTime);
-          if (inMinutes !== null && outMinutes !== null) {
-            const workMinutes = outMinutes - inMinutes;
-            if (workMinutes > 0) {
-              attendanceData.hoursWorked = workMinutes / 60;
-              attendanceData.workDuration = Attendance.minutesToTime(workMinutes);
-            }
-          }
-        }
         
         bulkOps.push({
           updateOne: {
@@ -360,7 +716,6 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
     
     fs.unlinkSync(filePath);
     
-    // Log ID mapping issues if any
     const idMappingWarnings = Object.entries(employeeIdMap)
       .filter(([excelId, data]) => excelId !== data.matchedId)
       .map(([excelId, data]) => `Excel ID "${excelId}" mapped to DB ID "${data.matchedId}"`);
@@ -380,7 +735,8 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
         imported: results.success,
         failed: results.failed,
         idMappings: idMappingWarnings.length,
-        importBatchId
+        importBatchId,
+        publicHoliday: publicHoliday ? publicHoliday.name : null
       }
     });
     
@@ -396,6 +752,10 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
     });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET EMPLOYEE ATTENDANCE
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/employee/:employeeId", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -427,21 +787,31 @@ router.get("/employee/:employeeId", authenticate, requireAdmin, async (req, res)
     
     const employee = await Employee.findOne(
       { "personal.employeeId": employeeId },
-      { "personal.name": 1, "org.role": 1, "org.department": 1 }
+      { "personal.name": 1, "org.role": 1, "org.department": 1, "schedule": 1 }
     ).lean();
     
     let totalDays = attendance.length;
     let presentDays = 0;
     let absentDays = 0;
+    let leaveDays = 0;
     let totalHours = 0;
     let totalOT = 0;
+    let lateArrivals = 0;
+    let earlyDepartures = 0;
     
     attendance.forEach(record => {
-      if (record.status && record.status.toLowerCase().includes('present')) {
+      const status = record.status ? record.status.toLowerCase() : '';
+      
+      if (status.includes('present')) {
         presentDays++;
-      } else if (record.status && record.status.toLowerCase().includes('absent')) {
+        if (record.isLateArrival) lateArrivals++;
+        if (record.isEarlyDeparture) earlyDepartures++;
+      } else if (status.includes('absent')) {
         absentDays++;
+      } else if (status.includes('leave')) {
+        leaveDays++;
       }
+      
       totalHours += record.hoursWorked || 0;
       totalOT += record.hoursOT || 0;
     });
@@ -451,14 +821,18 @@ router.get("/employee/:employeeId", authenticate, requireAdmin, async (req, res)
       employee: employee ? {
         name: employee.personal.name,
         role: employee.org?.role,
-        department: employee.org?.department
+        department: employee.org?.department,
+        schedule: employee.schedule
       } : null,
       summary: {
         totalDays,
         presentDays,
         absentDays,
+        leaveDays,
         totalHours: parseFloat(totalHours.toFixed(2)),
         totalOT: parseFloat(totalOT.toFixed(2)),
+        lateArrivals,
+        earlyDepartures,
         attendanceRate: totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(2) : 0
       },
       attendance,
@@ -479,6 +853,264 @@ router.get("/employee/:employeeId", authenticate, requireAdmin, async (req, res)
     });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE CALENDAR WITH LEAVES & HOLIDAYS
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/employee/:employeeId/calendar", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { month, year } = req.query;
+    
+    const currentYear = year ? parseInt(year) : new Date().getFullYear();
+    const currentMonth = month ? parseInt(month) - 1 : new Date().getMonth();
+    
+    const startDate = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0, 0));
+    const endDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
+    
+    // Get employee details
+    const employee = await Employee.findOne(
+      { "personal.employeeId": employeeId },
+      {
+        "personal.name": 1,
+        "personal.employeeId": 1,
+        "org.role": 1,
+        "org.department": 1,
+        "personal.dateOfJoining": 1,
+        "schedule": 1,
+        "mappedUser": 1
+      }
+    ).lean();
+    
+    if (!employee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Employee not found" 
+      });
+    }
+    
+    // Get attendance records
+    const attendance = await Attendance.find({
+      employeeId,
+      date: { $gte: startDate, $lte: endDate }
+    }).lean();
+    
+    // Get PUBLIC holidays in this month
+    const publicHolidays = await Holiday.find({
+      type: "PUBLIC",
+      date: { $gte: startDate, $lte: endDate }
+    }).lean();
+    
+    // Get RESTRICTED holidays in this month
+    const restrictedHolidays = await Holiday.find({
+      type: "RESTRICTED",
+      date: { $gte: startDate, $lte: endDate }
+    }).lean();
+    
+    // Get approved RH requests for this employee
+    const approvedRHRequests = await getApprovedRHRequestsInRange(
+      employeeId, 
+      employee.mappedUser, 
+      startDate, 
+      endDate
+    );
+    const approvedRHIds = new Set(approvedRHRequests.map(r => r.holidayId.toString()));
+    
+    // Get approved leaves for this employee
+    const approvedLeaves = await getApprovedLeavesInRange(employeeId, startDate, endDate);
+    
+    // Create maps for quick lookup
+    const publicHolidayMap = {};
+    publicHolidays.forEach(h => {
+      const dateStr = new Date(h.date).toISOString().split('T')[0];
+      publicHolidayMap[dateStr] = h;
+    });
+    
+    const restrictedHolidayMap = {};
+    restrictedHolidays.forEach(h => {
+      const dateStr = new Date(h.date).toISOString().split('T')[0];
+      // Only include if employee has approved request
+      if (approvedRHIds.has(h._id.toString())) {
+        restrictedHolidayMap[dateStr] = h;
+      }
+    });
+    
+    // Create leave date map
+    const leaveDateMap = {};
+    approvedLeaves.forEach(leave => {
+      const start = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        leaveDateMap[dateStr] = leave;
+      }
+    });
+    
+    // Build calendar data
+    const calendarData = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const dayOfWeek = currentDate.getUTCDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      // Find attendance record
+      const attendanceRecord = attendance.find(record => 
+        new Date(record.date).toISOString().split('T')[0] === dateStr
+      );
+      
+      // Check holidays and leaves
+      const publicHoliday = publicHolidayMap[dateStr];
+      const restrictedHoliday = restrictedHolidayMap[dateStr];
+      const leave = leaveDateMap[dateStr];
+      
+      let status = 'Not Marked';
+      let statusClass = 'bg-gray-100 text-gray-800';
+      let holidayInfo = null;
+      let leaveInfo = null;
+      
+      // Priority: Leave > Holiday > Attendance > Weekend > Not Marked
+      if (leave) {
+        status = `Leave (${leave.type})`;
+        statusClass = 'bg-blue-100 text-blue-800';
+        leaveInfo = {
+          type: leave.type,
+          purpose: leave.purpose,
+          days: leave.days
+        };
+      } else if (publicHoliday) {
+        status = 'Holiday';
+        statusClass = 'bg-indigo-100 text-indigo-800';
+        holidayInfo = {
+          name: publicHoliday.name,
+          type: 'PUBLIC'
+        };
+      } else if (restrictedHoliday) {
+        status = 'Restricted Holiday';
+        statusClass = 'bg-purple-100 text-purple-800';
+        holidayInfo = {
+          name: restrictedHoliday.name,
+          type: 'RESTRICTED'
+        };
+      } else if (attendanceRecord) {
+        status = attendanceRecord.status || 'Present';
+        const statusLower = status.toLowerCase();
+        
+        // Override "Absent" if there's actually a leave (double-check)
+        if (statusLower.includes('absent') && leave) {
+          status = `Leave (${leave.type})`;
+          statusClass = 'bg-blue-100 text-blue-800';
+        } else if (statusLower.includes('present')) {
+          statusClass = 'bg-green-100 text-green-800';
+        } else if (statusLower.includes('absent')) {
+          statusClass = 'bg-red-100 text-red-800';
+        } else if (statusLower.includes('leave')) {
+          statusClass = 'bg-blue-100 text-blue-800';
+        } else if (statusLower.includes('wfh')) {
+          statusClass = 'bg-purple-100 text-purple-800';
+        } else if (statusLower.includes('weeklyoff')) {
+          statusClass = 'bg-yellow-100 text-yellow-800';
+        } else if (statusLower.includes('holiday')) {
+          statusClass = 'bg-indigo-100 text-indigo-800';
+        }
+      } else if (isWeekend) {
+        status = 'Weekend';
+        statusClass = 'bg-gray-200 text-gray-600';
+      }
+      
+      calendarData.push({
+        date: dateStr,
+        day: currentDate.getUTCDate(),
+        dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek],
+        isWeekend,
+        isHoliday: !!(publicHoliday || restrictedHoliday),
+        holidayInfo,
+        leaveInfo,
+        attendance: attendanceRecord ? {
+          inTime: attendanceRecord.inTime,
+          outTime: attendanceRecord.outTime,
+          workHours: attendanceRecord.hoursWorked,
+          otHours: attendanceRecord.hoursOT,
+          remarks: attendanceRecord.remarks,
+          status: attendanceRecord.status,
+          isLateArrival: attendanceRecord.isLateArrival,
+          isEarlyDeparture: attendanceRecord.isEarlyDeparture,
+          lateByMinutes: attendanceRecord.lateByMinutes,
+          earlyByMinutes: attendanceRecord.earlyByMinutes
+        } : null,
+        status,
+        statusClass
+      });
+      
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+    
+    // Calculate summary
+    let summary = {
+      totalDays: calendarData.length,
+      workingDays: calendarData.filter(d => !d.isWeekend && !d.isHoliday && !d.leaveInfo).length,
+      presentDays: 0,
+      absentDays: 0,
+      leaveDays: approvedLeaves.reduce((sum, l) => sum + l.days, 0),
+      wfhDays: 0,
+      holidayDays: calendarData.filter(d => d.isHoliday).length,
+      totalHours: 0,
+      totalOT: 0,
+      lateArrivals: 0,
+      earlyDepartures: 0
+    };
+    
+    attendance.forEach(record => {
+      const status = record.status ? record.status.toLowerCase() : '';
+      if (status.includes('present')) {
+        summary.presentDays++;
+        if (record.isLateArrival) summary.lateArrivals++;
+        if (record.isEarlyDeparture) summary.earlyDepartures++;
+      } else if (status.includes('absent')) {
+        summary.absentDays++;
+      } else if (status.includes('wfh')) {
+        summary.wfhDays++;
+      }
+      
+      summary.totalHours += record.hoursWorked || 0;
+      summary.totalOT += record.hoursOT || 0;
+    });
+    
+    summary.attendanceRate = summary.workingDays > 0 
+      ? ((summary.presentDays / summary.workingDays) * 100).toFixed(2)
+      : 0;
+    
+    res.json({
+      success: true,
+      employee: {
+        name: employee.personal.name,
+        employeeId: employee.personal.employeeId,
+        role: employee.org?.role,
+        department: employee.org?.department,
+        dateOfJoining: employee.personal.dateOfJoining,
+        schedule: employee.schedule
+      },
+      month: currentMonth + 1,
+      year: currentYear,
+      summary,
+      calendarData
+    });
+    
+  } catch (error) {
+    console.error("Calendar error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error fetching calendar data", 
+      error: error.message 
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT ENDPOINT
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/export", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -532,31 +1164,15 @@ router.get("/export", authenticate, requireAdmin, async (req, res) => {
       "Tot. Dur.": record.totalDuration || "",
       "Status": record.status || "",
       "Remarks": record.remarks || "",
-      "Hours Worked": record.hoursWorked || 0,
-      "OT Hours": record.hoursOT || 0
+      "Hours Worked": record.hoursWorked ? record.hoursWorked.toFixed(2) : 0,
+      "OT Hours": record.hoursOT ? record.hoursOT.toFixed(2) : 0,
+      "Late Arrival": record.isLateArrival ? "Yes" : "No",
+      "Early Departure": record.isEarlyDeparture ? "Yes" : "No",
+      "Holiday": record.isHoliday ? (record.holidayName || "Yes") : "No"
     }));
     
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(excelData);
-    
-    const colWidths = [
-      { wch: 5 },
-      { wch: 10 },
-      { wch: 20 },
-      { wch: 12 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 12 },
-      { wch: 8 },
-      { wch: 12 },
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 12 },
-      { wch: 10 }
-    ];
-    worksheet['!cols'] = colWidths;
     
     XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
     
@@ -577,6 +1193,10 @@ router.get("/export", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SUMMARY ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────────
+
 router.get("/summary", authenticate, requireAdmin, async (req, res) => {
   try {
     const { date } = req.query;
@@ -591,6 +1211,9 @@ router.get("/summary", authenticate, requireAdmin, async (req, res) => {
     
     const totalEmployees = await Employee.countDocuments({ isActive: true });
     
+    // Check if it's a public holiday
+    const publicHoliday = await isPublicHoliday(targetDate);
+    
     const summary = {
       date: new Date(targetDate).toISOString().split('T')[0],
       totalEmployees,
@@ -599,7 +1222,9 @@ router.get("/summary", authenticate, requireAdmin, async (req, res) => {
       leave: 0,
       wfh: 0,
       weeklyOff: 0,
-      holiday: 0
+      holiday: 0,
+      isPublicHoliday: !!publicHoliday,
+      publicHolidayName: publicHoliday ? publicHoliday.name : null
     };
     
     attendance.forEach(record => {
@@ -630,324 +1255,191 @@ router.get("/summary", authenticate, requireAdmin, async (req, res) => {
 });
 
 router.get("/summary/all", authenticate, requireAdmin, async (req, res) => {
-    try {
-      const { month, year, department, role } = req.query;
-      
-      // Calculate date range for the month
-      const currentYear = year ? parseInt(year) : new Date().getFullYear();
-      const currentMonth = month ? parseInt(month) - 1 : new Date().getMonth();
-      
-      const startDate = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0, 0));
-      const endDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
-      
-      // Build employee filter
-      const employeeFilter = { isActive: true };
-      if (department) {
-        employeeFilter["org.department"] = department;
-      }
-      if (role) {
-        employeeFilter["org.role"] = role;
-      }
-      
-      // Get all active employees
-      const employees = await Employee.find(
-        employeeFilter,
-        {
-          "personal.employeeId": 1,
-          "personal.name": 1,
-          "org.role": 1,
-          "org.department": 1,
-          "personal.dateOfJoining": 1
-        }
-      ).lean();
-      
-      const results = [];
-      
-      for (const emp of employees) {
-        const employeeId = emp.personal.employeeId;
-        
-        // Get attendance for the month
-        const attendance = await Attendance.find({
-          employeeId,
-          date: { $gte: startDate, $lte: endDate }
-        }).lean();
-        
-        // Calculate totals
-        let totalDays = attendance.length;
-        let presentDays = 0;
-        let absentDays = 0;
-        let leaveDays = 0;
-        let wfhDays = 0;
-        let weeklyOffDays = 0;
-        let holidayDays = 0;
-        let totalHours = 0;
-        let totalOT = 0;
-        let lateArrivals = 0;
-        let earlyDepartures = 0;
-        
-        attendance.forEach(record => {
-          const status = record.status ? record.status.toLowerCase() : '';
-          
-          if (status.includes('present')) {
-            presentDays++;
-            
-            // Check for late arrival (after 10:00 AM)
-            if (record.inTime) {
-              const [hours] = record.inTime.split(':').map(Number);
-              if (hours >= 10) lateArrivals++;
-            }
-            
-            // Check for early departure (before 6:00 PM)
-            if (record.outTime) {
-              const [hours] = record.outTime.split(':').map(Number);
-              if (hours < 18) earlyDepartures++;
-            }
-            
-          } else if (status.includes('absent')) {
-            absentDays++;
-          } else if (status.includes('leave')) {
-            leaveDays++;
-          } else if (status.includes('wfh')) {
-            wfhDays++;
-          } else if (status.includes('weeklyoff')) {
-            weeklyOffDays++;
-          } else if (status.includes('holiday')) {
-            holidayDays++;
-          }
-          
-          totalHours += record.hoursWorked || 0;
-          totalOT += record.hoursOT || 0;
-        });
-        
-        // Calculate working days in month
-        const workingDays = getWorkingDaysInMonth(currentYear, currentMonth);
-        const expectedHours = workingDays * 8; // Assuming 8 hours per day
-        const attendanceRate = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(2) : 0;
-        const utilizationRate = expectedHours > 0 ? ((totalHours / expectedHours) * 100).toFixed(2) : 0;
-        
-        results.push({
-          employeeId,
-          name: emp.personal.name,
-          role: emp.org?.role || '',
-          department: emp.org?.department || '',
-          dateOfJoining: emp.personal.dateOfJoining,
-          summary: {
-            totalDays,
-            presentDays,
-            absentDays,
-            leaveDays,
-            wfhDays,
-            weeklyOffDays,
-            holidayDays,
-            totalHours: parseFloat(totalHours.toFixed(2)),
-            totalOT: parseFloat(totalOT.toFixed(2)),
-            expectedHours,
-            attendanceRate: parseFloat(attendanceRate),
-            utilizationRate: parseFloat(utilizationRate),
-            lateArrivals,
-            earlyDepartures,
-            workingDays
-          }
-        });
-      }
-      
-      // Sort by name
-      results.sort((a, b) => a.name.localeCompare(b.name));
-      
-      res.json({
-        success: true,
-        month: currentMonth + 1,
-        year: currentYear,
-        startDate,
-        endDate,
-        totalEmployees: results.length,
-        results
-      });
-      
-    } catch (error) {
-      console.error("Summary error:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Error fetching attendance summary", 
-        error: error.message 
-      });
-    }
-  });
-  
-  // Helper function to calculate working days in month
-  function getWorkingDaysInMonth(year, month) {
-    const startDate = new Date(year, month, 1);
-    const endDate = new Date(year, month + 1, 0);
-    let workingDays = 0;
+  try {
+    const { month, year, department, role } = req.query;
     
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dayOfWeek = d.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
-        workingDays++;
-      }
-    }
+    const currentYear = year ? parseInt(year) : new Date().getFullYear();
+    const currentMonth = month ? parseInt(month) - 1 : new Date().getMonth();
     
-    return workingDays;
-  }
-  
-  // Add employee calendar data endpoint
-  router.get("/employee/:employeeId/calendar", authenticate, requireAdmin, async (req, res) => {
-    try {
-      const { employeeId } = req.params;
-      const { month, year } = req.query;
-      
-      // Calculate date range for the month
-      const currentYear = year ? parseInt(year) : new Date().getFullYear();
-      const currentMonth = month ? parseInt(month) - 1 : new Date().getMonth();
-      
-      const startDate = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0, 0));
-      const endDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
-      
-      // Get employee details
-      const employee = await Employee.findOne(
-        { "personal.employeeId": employeeId },
-        {
-          "personal.name": 1,
-          "personal.employeeId": 1,
-          "org.role": 1,
-          "org.department": 1,
-          "personal.dateOfJoining": 1
-        }
-      ).lean();
-      
-      if (!employee) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Employee not found" 
-        });
+    const startDate = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0, 0));
+    const endDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
+    
+    const employeeFilter = { isActive: true };
+    if (department) employeeFilter["org.department"] = department;
+    if (role) employeeFilter["org.role"] = role;
+    
+    const employees = await Employee.find(
+      employeeFilter,
+      {
+        "personal.employeeId": 1,
+        "personal.name": 1,
+        "org.role": 1,
+        "org.department": 1,
+        "personal.dateOfJoining": 1,
+        "schedule": 1,
+        "mappedUser": 1
       }
+    ).lean();
+    
+    // Get public holidays for the month
+    const publicHolidays = await Holiday.find({
+      type: "PUBLIC",
+      date: { $gte: startDate, $lte: endDate }
+    }).lean();
+    
+    const publicHolidayDates = new Set(
+      publicHolidays.map(h => new Date(h.date).toISOString().split('T')[0])
+    );
+    
+    const results = [];
+    
+    for (const emp of employees) {
+      const employeeId = emp.personal.employeeId;
       
-      // Get attendance for the month
+      // Get attendance
       const attendance = await Attendance.find({
         employeeId,
         date: { $gte: startDate, $lte: endDate }
       }).lean();
       
-      // Create calendar data
-      const calendarData = [];
-      const currentDate = new Date(startDate);
+      // Get approved leaves
+      const approvedLeaves = await getApprovedLeavesInRange(employeeId, startDate, endDate);
+      const leaveDays = approvedLeaves.reduce((sum, l) => sum + l.days, 0);
       
-      // Get all holidays in this month
-      const holidays = await Holiday.find({
-        date: { $gte: startDate, $lte: endDate }
-      }).lean();
+      // Get approved RH requests
+      const approvedRHRequests = await getApprovedRHRequestsInRange(
+        employeeId, 
+        emp.mappedUser, 
+        startDate, 
+        endDate
+      );
       
-      const holidayMap = {};
-      holidays.forEach(holiday => {
-        const dateStr = new Date(holiday.date).toISOString().split('T')[0];
-        holidayMap[dateStr] = holiday;
-      });
+      // Calculate totals
+      let totalDays = attendance.length;
+      let presentDays = 0;
+      let absentDays = 0;
+      let wfhDays = 0;
+      let weeklyOffDays = 0;
+      let holidayDays = publicHolidays.length + approvedRHRequests.length;
+      let totalHours = 0;
+      let totalOT = 0;
+      let lateArrivals = 0;
+      let earlyDepartures = 0;
       
-      while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        const dayOfWeek = currentDate.getUTCDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        
-        // Find attendance record for this date
-        const attendanceRecord = attendance.find(record => 
-          new Date(record.date).toISOString().split('T')[0] === dateStr
-        );
-        
-        // Check if holiday
-        const holiday = holidayMap[dateStr];
-        
-        let status = 'Not Marked';
-        let statusClass = 'bg-gray-100 text-gray-800';
-        
-        if (holiday) {
-          status = holiday.type === 'RESTRICTED' ? 'Restricted Holiday' : 'Holiday';
-          statusClass = 'bg-indigo-100 text-indigo-800';
-        } else if (attendanceRecord) {
-          status = attendanceRecord.status;
-          const statusLower = status.toLowerCase();
-          if (statusLower.includes('present')) statusClass = 'bg-green-100 text-green-800';
-          else if (statusLower.includes('absent')) statusClass = 'bg-red-100 text-red-800';
-          else if (statusLower.includes('leave')) statusClass = 'bg-blue-100 text-blue-800';
-          else if (statusLower.includes('wfh')) statusClass = 'bg-purple-100 text-purple-800';
-          else if (statusLower.includes('weeklyoff')) statusClass = 'bg-yellow-100 text-yellow-800';
-        } else if (isWeekend) {
-          status = 'Weekend';
-          statusClass = 'bg-gray-200 text-gray-600';
-        }
-        
-        calendarData.push({
-          date: dateStr,
-          day: currentDate.getUTCDate(),
-          dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek],
-          isWeekend,
-          isHoliday: !!holiday,
-          holidayName: holiday ? holiday.name : null,
-          attendance: attendanceRecord ? {
-            inTime: attendanceRecord.inTime,
-            outTime: attendanceRecord.outTime,
-            workHours: attendanceRecord.hoursWorked,
-            otHours: attendanceRecord.hoursOT,
-            remarks: attendanceRecord.remarks,
-            status: attendanceRecord.status
-          } : null,
-          status,
-          statusClass
-        });
-        
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-      }
-      
-      // Calculate summary for the month
-      let summary = {
-        totalDays: calendarData.length,
-        workingDays: calendarData.filter(d => !d.isWeekend && !d.isHoliday).length,
-        presentDays: 0,
-        absentDays: 0,
-        leaveDays: 0,
-        wfhDays: 0,
-        totalHours: 0,
-        totalOT: 0
-      };
+      const expectedIn = parseTimeValue(emp.schedule?.expectedLoginTime);
+      const expectedOut = parseTimeValue(emp.schedule?.expectedLogoutTime);
       
       attendance.forEach(record => {
         const status = record.status ? record.status.toLowerCase() : '';
-        if (status.includes('present')) summary.presentDays++;
-        else if (status.includes('absent')) summary.absentDays++;
-        else if (status.includes('leave')) summary.leaveDays++;
-        else if (status.includes('wfh')) summary.wfhDays++;
         
-        summary.totalHours += record.hoursWorked || 0;
-        summary.totalOT += record.hoursOT || 0;
+        if (status.includes('present')) {
+          presentDays++;
+          
+          // Check late arrival using employee's schedule
+          if (record.inTime && expectedIn) {
+            const inParsed = parseTimeValue(record.inTime);
+            if (inParsed && inParsed.totalMinutes > expectedIn.totalMinutes + 15) {
+              lateArrivals++;
+            }
+          } else if (record.isLateArrival) {
+            lateArrivals++;
+          }
+          
+          // Check early departure
+          if (record.outTime && expectedOut) {
+            const outParsed = parseTimeValue(record.outTime);
+            if (outParsed && outParsed.totalMinutes < expectedOut.totalMinutes - 15) {
+              earlyDepartures++;
+            }
+          } else if (record.isEarlyDeparture) {
+            earlyDepartures++;
+          }
+          
+        } else if (status.includes('absent')) {
+          absentDays++;
+        } else if (status.includes('wfh')) {
+          wfhDays++;
+        } else if (status.includes('weeklyoff')) {
+          weeklyOffDays++;
+        }
+        
+        totalHours += record.hoursWorked || 0;
+        totalOT += record.hoursOT || 0;
       });
       
-      summary.attendanceRate = summary.workingDays > 0 
-        ? ((summary.presentDays / summary.workingDays) * 100).toFixed(2)
-        : 0;
+      const workingDays = getWorkingDaysInMonth(currentYear, currentMonth) - publicHolidays.length;
+      const expectedHours = workingDays * 8;
+      const attendanceRate = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(2) : 0;
+      const utilizationRate = expectedHours > 0 ? ((totalHours / expectedHours) * 100).toFixed(2) : 0;
       
-      res.json({
-        success: true,
-        employee: {
-          name: employee.personal.name,
-          employeeId: employee.personal.employeeId,
-          role: employee.org?.role,
-          department: employee.org?.department,
-          dateOfJoining: employee.personal.dateOfJoining
-        },
-        month: currentMonth + 1,
-        year: currentYear,
-        summary,
-        calendarData
-      });
-      
-    } catch (error) {
-      console.error("Calendar error:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Error fetching calendar data", 
-        error: error.message 
+      results.push({
+        employeeId,
+        name: emp.personal.name,
+        role: emp.org?.role || '',
+        department: emp.org?.department || '',
+        dateOfJoining: emp.personal.dateOfJoining,
+        schedule: emp.schedule,
+        summary: {
+          totalDays,
+          presentDays,
+          absentDays,
+          leaveDays,
+          wfhDays,
+          weeklyOffDays,
+          holidayDays,
+          totalHours: parseFloat(totalHours.toFixed(2)),
+          totalOT: parseFloat(totalOT.toFixed(2)),
+          expectedHours,
+          attendanceRate: parseFloat(attendanceRate),
+          utilizationRate: parseFloat(utilizationRate),
+          lateArrivals,
+          earlyDepartures,
+          workingDays
+        }
       });
     }
-  });
+    
+    results.sort((a, b) => a.name.localeCompare(b.name));
+    
+    res.json({
+      success: true,
+      month: currentMonth + 1,
+      year: currentYear,
+      startDate,
+      endDate,
+      totalEmployees: results.length,
+      publicHolidays: publicHolidays.map(h => ({ name: h.name, date: h.date })),
+      results
+    });
+    
+  } catch (error) {
+    console.error("Summary error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error fetching attendance summary", 
+      error: error.message 
+    });
+  }
+});
+
+function getWorkingDaysInMonth(year, month) {
+  const startDate = new Date(year, month, 1);
+  const endDate = new Date(year, month + 1, 0);
+  let workingDays = 0;
+  
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      workingDays++;
+    }
+  }
+  
+  return workingDays;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANUAL ENTRY ENDPOINT
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/manual", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -969,7 +1461,6 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
     
     const attendanceDate = parseDateString(date);
     
-    // Use the flexible employee finder
     const employeeData = await findEmployeeWithFlexibleId(employeeId);
     if (!employeeData) {
       return res.status(404).json({ 
@@ -989,21 +1480,60 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
       status: status || "Present",
       remarks: remarks || "",
       correctedBy: req.user?._id,
-      correctionNote: "Manually entered"
+      correctionNote: "Manually entered",
+      isManualEntry: true
     };
     
+    // Calculate work metrics based on schedule
     if (inTime && outTime) {
-      const inMinutes = Attendance.timeToMinutes(inTime);
-      const outMinutes = Attendance.timeToMinutes(outTime);
-      if (inMinutes !== null && outMinutes !== null) {
-        const workMinutes = outMinutes - inMinutes;
-        if (workMinutes > 0) {
-          attendanceData.workDuration = Attendance.minutesToTime(workMinutes);
-          attendanceData.totalDuration = attendanceData.workDuration;
-          attendanceData.hoursWorked = workMinutes / 60;
-        }
+      const metrics = calculateWorkMetrics(
+        inTime,
+        outTime,
+        employee.schedule?.expectedLoginTime,
+        employee.schedule?.expectedLogoutTime
+      );
+      
+      attendanceData.hoursWorked = metrics.hoursWorked;
+      attendanceData.hoursOT = metrics.overtimeHours;
+      attendanceData.workDuration = metrics.workDuration;
+      attendanceData.totalDuration = metrics.workDuration;
+      attendanceData.isLateArrival = metrics.isLateArrival;
+      attendanceData.isEarlyDeparture = metrics.isEarlyDeparture;
+      attendanceData.lateByMinutes = metrics.lateByMinutes;
+      attendanceData.earlyByMinutes = metrics.earlyByMinutes;
+    }
+    
+    // Check for leave
+    const approvedLeave = await getApprovedLeaveForDate(matchedId, attendanceDate);
+    if (approvedLeave && status?.toLowerCase().includes('absent')) {
+      attendanceData.status = 'Leave';
+      attendanceData.leaveType = approvedLeave.type;
+      attendanceData.leaveId = approvedLeave._id;
+    }
+    
+    // Check for holidays
+    const publicHoliday = await isPublicHoliday(attendanceDate);
+    if (publicHoliday) {
+      attendanceData.isHoliday = true;
+      attendanceData.holidayName = publicHoliday.name;
+      attendanceData.holidayType = 'PUBLIC';
+    } else {
+      const restrictedHoliday = await isApprovedRestrictedHoliday(
+        attendanceDate, 
+        matchedId, 
+        employee.mappedUser
+      );
+      if (restrictedHoliday) {
+        attendanceData.isHoliday = true;
+        attendanceData.holidayName = restrictedHoliday.name;
+        attendanceData.holidayType = 'RESTRICTED';
       }
     }
+    
+    // Set day info
+    const dayOfWeek = attendanceDate.getUTCDay();
+    attendanceData.isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    attendanceData.dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
     
     const attendance = await Attendance.findOneAndUpdate(
       { employeeId: matchedId, date: attendanceDate },

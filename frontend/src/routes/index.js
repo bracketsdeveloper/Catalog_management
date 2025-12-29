@@ -464,6 +464,10 @@ const router = createBrowserRouter([
                     {
                         path:"suspense",
                         element:<SuspenseAccountManager/>
+                    },
+                    {
+                        path:"salary",
+                        element:<SalaryPage/>
                     }
                 ]
             }

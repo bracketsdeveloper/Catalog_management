@@ -516,7 +516,6 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       restBody.name
     );
 
-    // Check for duplicate productId before creation (just in case)
     const existingProduct = await Product.findOne({ productId: productId });
     if (existingProduct) {
       return res.status(400).json({
@@ -546,8 +545,19 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
 
     const imageHashes = images.length > 0 ? await computeAllHashes(images) : [];
 
+    // Create log entry for creation - Ensure we have req.user._id
+    const creationLog = {
+      action: "create",
+      field: null,
+      oldValue: null,
+      newValue: null,
+      performedBy: req.user._id || req.user.id, // Handle both formats
+      performedAt: new Date(),
+      ipAddress: req.ip,
+    };
+
     const newProduct = new Product({
-      productId, // Use auto-generated ID
+      productId,
       productTag: restBody.productTag,
       variantId: restBody.variantId || "",
       category: restBody.category,
@@ -574,16 +584,19 @@ router.post("/products", authenticate, authorizeAdmin, async (req, res) => {
       productCost_Unit: restBody.productCost_Unit || "",
       productGST: Number(restBody.productGST) || 0,
       preferredVendors,
+      createdBy: req.user._id || req.user.id,
+      logs: [creationLog],
     });
 
     await newProduct.save();
 
+    // Also create separate log entry
     await createLog(
       "create",
       null,
       null,
       newProduct,
-      req.user ? req.user._id : null,
+      req.user._id || req.user.id,
       req.ip
     );
 
@@ -648,7 +661,7 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     const updatedData = {
       productTag: req.body.productTag || existingProduct.productTag,
-      productId: existingProduct.productId, // Keep existing product ID during update
+      productId: existingProduct.productId,
       variantId: req.body.variantId || existingProduct.variantId,
       category: req.body.category || existingProduct.category,
       subCategory: req.body.subCategory || existingProduct.subCategory,
@@ -685,18 +698,51 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     const fieldDiffs = getFieldDifferences(existingProduct.toObject(), updatedData);
 
+    // Create log entries for each changed field - Ensure we have req.user._id
+    const logEntries = [];
+    fieldDiffs.forEach((diff) => {
+      logEntries.push({
+        action: "update",
+        field: diff.field,
+        oldValue: diff.oldValue,
+        newValue: diff.newValue,
+        performedBy: req.user._id || req.user.id, // Handle both formats
+        performedAt: new Date(),
+        ipAddress: req.ip,
+      });
+    });
+
+    // If no specific fields changed but we're updating, add a general update log
+    if (logEntries.length === 0 && Object.keys(req.body).length > 0) {
+      logEntries.push({
+        action: "update",
+        field: "general",
+        oldValue: null,
+        newValue: null,
+        performedBy: req.user._id || req.user.id,
+        performedAt: new Date(),
+        ipAddress: req.ip,
+      });
+    }
+
+    // Add logs to the product
+    if (logEntries.length > 0) {
+      updatedData.$push = { logs: { $each: logEntries } };
+    }
+
     const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
       new: true,
       runValidators: true,
     }).populate("preferredVendors", "vendorCompany vendorName");
 
+    // Also create separate log entries
     for (const diff of fieldDiffs) {
       await createLog(
         "update",
         diff.field,
         diff.oldValue,
         diff.newValue,
-        req.user ? req.user._id : null,
+        req.user._id || req.user.id,
         req.ip
       );
     }
@@ -705,6 +751,7 @@ router.put("/products/:id", authenticate, authorizeAdmin, async (req, res) => {
       success: true,
       message: "Product updated successfully",
       product: updatedProduct,
+      changes: fieldDiffs,
     });
   } catch (error) {
     console.error("Error updating product:", error);
@@ -943,6 +990,196 @@ router.post("/products/advanced-search", authenticate, upload.single("image"), a
   } catch (error) {
     console.error("Error in advanced search:", error.message);
     res.status(500).json({ message: "Server error during advanced search", error: error.message });
+  }
+});
+
+router.post("/products/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { productIds } = req.body;
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: "Invalid or empty product IDs" });
+    }
+
+    const objectIds = productIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (objectIds.length === 0) {
+      return res.status(400).json({ message: "No valid product IDs provided" });
+    }
+
+    const products = await Product.aggregate([
+      { $match: { _id: { $in: objectIds } } },
+      { $unwind: "$logs" },
+      { $sort: { "logs.performedAt": -1 } },
+      {
+        $group: {
+          _id: "$_id",
+          latestLog: { $first: "$logs" },
+          productName: { $first: "$name" },
+          productId: { $first: "$productId" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "latestLog.performedBy",
+          foreignField: "_id",
+          as: "performedBy",
+        },
+      },
+      { $unwind: { path: "$performedBy", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          productId: "$_id",
+          action: "$latestLog.action",
+          field: "$latestLog.field",
+          performedBy: {
+            $ifNull: [
+              { _id: "$performedBy._id", email: "$performedBy.email", name: "$performedBy.name" },
+              { email: "Unknown", name: "Unknown" },
+            ],
+          },
+          performedAt: "$latestLog.performedAt",
+          productName: 1,
+          productCode: "$productId",
+        },
+      },
+    ]);
+
+    const latestLogs = {};
+    productIds.forEach((id) => {
+      const log = products.find((l) => l.productId.toString() === id);
+      latestLogs[id] = log
+        ? {
+            action: log.action,
+            field: log.field,
+            performedBy: log.performedBy,
+            performedAt: log.performedAt,
+            productName: log.productName,
+            productCode: log.productCode,
+          }
+        : {};
+    });
+
+    res.json({ latestLogs });
+  } catch (error) {
+    console.error("Error fetching latest logs:", error);
+    res.status(500).json({ message: "Server error fetching latest logs" });
+  }
+});
+
+// GET all logs for a specific product
+router.get("/products/:id/logs", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id)
+      .populate("logs.performedBy", "name email")
+      .select("logs name productId")
+      .lean();
+    
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Sort logs by date (newest first)
+    const sortedLogs = (product.logs || []).sort(
+      (a, b) => new Date(b.performedAt) - new Date(a.performedAt)
+    );
+
+    res.json({
+      productName: product.name,
+      productId: product.productId,
+      logs: sortedLogs,
+    });
+  } catch (error) {
+    console.error("Error fetching product logs:", error);
+    res.status(500).json({ message: "Server error fetching product logs" });
+  }
+});
+
+// Update the /products/logs/latest route in your backend
+
+router.post("/products/logs/latest", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { productIds } = req.body;
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: "Invalid or empty product IDs" });
+    }
+
+    const objectIds = productIds
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (objectIds.length === 0) {
+      return res.status(400).json({ message: "No valid product IDs provided" });
+    }
+
+    const products = await Product.aggregate([
+      { $match: { _id: { $in: objectIds } } },
+      { $unwind: "$logs" },
+      { $sort: { "logs.performedAt": -1 } },
+      {
+        $group: {
+          _id: "$_id",
+          latestLog: { $first: "$logs" },
+          productName: { $first: "$name" },
+          productId: { $first: "$productId" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "latestLog.performedBy",
+          foreignField: "_id",
+          as: "performedBy",
+        },
+      },
+      { $unwind: { path: "$performedBy", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          productId: "$_id",
+          action: "$latestLog.action",
+          field: "$latestLog.field",
+          performedBy: {
+            _id: "$performedBy._id",
+            email: { $ifNull: ["$performedBy.email", "Unknown"] },
+            name: { $ifNull: ["$performedBy.name", "Unknown"] },
+          },
+          performedAt: "$latestLog.performedAt",
+          productName: 1,
+          productCode: "$productId",
+        },
+      },
+    ]);
+
+    const latestLogs = {};
+    productIds.forEach((id) => {
+      const log = products.find((l) => l.productId.toString() === id);
+      latestLogs[id] = log
+        ? {
+            action: log.action,
+            field: log.field,
+            performedBy: log.performedBy,
+            performedAt: log.performedAt,
+            productName: log.productName,
+            productCode: log.productCode,
+          }
+        : {
+            action: "unknown",
+            field: null,
+            performedBy: { _id: null, email: "Unknown", name: "Unknown" },
+            performedAt: null,
+            productName: "",
+            productCode: "",
+          };
+    });
+
+    res.json({ latestLogs });
+  } catch (error) {
+    console.error("Error fetching latest logs:", error);
+    res.status(500).json({ message: "Server error fetching latest logs" });
   }
 });
 
