@@ -64,7 +64,6 @@ async function sendTaskAssignmentEmail(task, assignedUsers, assignedByUser, isUp
 
 async function sendTaskCompletionEmail(task, completedByUser) {
   try {
-    // Send to assignedBy user
     const assignedByUser = await User.findById(task.assignedBy);
     if (!assignedByUser || !assignedByUser.email) return;
 
@@ -101,7 +100,6 @@ async function sendTaskCompletionEmail(task, completedByUser) {
 
 async function sendTaskReopenEmail(task, reopenedByUser) {
   try {
-    // Send to all assigned users
     const assignedUsers = await User.find({ _id: { $in: task.assignedTo } });
     const userEmails = assignedUsers.map(user => user.email).filter(email => email);
     
@@ -139,6 +137,46 @@ async function sendTaskReopenEmail(task, reopenedByUser) {
   }
 }
 
+// GET tasks assigned to current user
+router.get("/tasks/assigned-to-me", authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    const tasks = await Task.find({
+      assignedTo: userId,
+      isActive: true
+    })
+      .populate("assignedBy", "name email")
+      .populate("assignedTo", "name email")
+      .populate("opportunityId", "opportunityCode opportunityName")
+      .sort({ toBeClosedBy: 1 })
+      .lean();
+
+    const formattedTasks = tasks.map(task => {
+      if (!task.opportunityCode && task.opportunityId) {
+        return {
+          ...task,
+          opportunityCode: `${task.opportunityId.opportunityCode} - ${task.opportunityId.opportunityName}`
+        };
+      }
+      return task;
+    });
+
+    res.json({
+      success: true,
+      count: formattedTasks.length,
+      tasks: formattedTasks
+    });
+  } catch (error) {
+    console.error("Error fetching assigned tasks:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching assigned tasks"
+    });
+  }
+});
+
+// POST create task
 router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const tasksData = Array.isArray(req.body) ? req.body : [req.body];
@@ -147,7 +185,7 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
     for (const taskData of tasksData) {
       const { 
         opportunityId, 
-        opportunityCode: reqOpportunityCode, // Get opportunityCode from request body
+        opportunityCode: reqOpportunityCode,
         toBeClosedBy, 
         schedule, 
         selectedDates, 
@@ -160,18 +198,15 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
       let finalOpportunityCode = "";
       let validOpportunityId = null;
 
-      // If opportunityCode is provided in request body, use it
       if (reqOpportunityCode && reqOpportunityCode.trim() !== "") {
         finalOpportunityCode = reqOpportunityCode;
         console.log(`Using provided opportunity code from request: ${finalOpportunityCode}`);
       }
       
-      // Fetch opportunity details if opportunityId is provided
       if (opportunityId && mongoose.Types.ObjectId.isValid(opportunityId)) {
         const opp = await Opportunity.findById(opportunityId);
         if (!opp) return res.status(404).json({ message: "Opportunity not found" });
         
-        // Set both the ID and the formatted code
         validOpportunityId = opportunityId;
         finalOpportunityCode = opp.opportunityCode ? 
           `${opp.opportunityCode} - ${opp.opportunityName}` : 
@@ -179,12 +214,10 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
         
         console.log(`Opportunity found: ${finalOpportunityCode} for ID: ${opportunityId}`);
       } else if (opportunityId && opportunityId.trim() !== "") {
-        // If opportunityId is provided but not valid ObjectId, use it as a code
         finalOpportunityCode = opportunityId;
         console.log(`Using provided opportunityId as code: ${finalOpportunityCode}`);
       }
 
-      // Handle multiple assigned users
       let assignedUsers = [];
       if (assignedTo && Array.isArray(assignedTo)) {
         for (const userId of assignedTo) {
@@ -201,17 +234,22 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
       let toBeClosedByDate = toBeClosedBy ? new Date(toBeClosedBy) : null;
       if (toBeClosedByDate) {
         toBeClosedByDate.setHours(0, 0, 0, 0);
-        toBeClosedByDate = new Date(toBeClosedByDate.getTime() - 5.5 * 60 * 60 * 1000);
       }
-      const toBeClosedByNormalized = toBeClosedByDate ? toBeClosedByDate.toISOString().split("T")[0] : null;
+      const toBeClosedByNormalized = toBeClosedByDate ? toBeClosedByDate.toISOString() : null;
 
       if (toBeClosedByNormalized) {
+        const startOfDay = new Date(toBeClosedByNormalized);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(startOfDay);
+        endOfDay.setHours(23, 59, 59, 999);
+
         const existingTask = await Task.findOne({
           ticketName: taskData.ticketName,
           createdBy: req.user._id,
           toBeClosedBy: {
-            $gte: new Date(toBeClosedByNormalized),
-            $lt: new Date(new Date(toBeClosedByNormalized).setDate(new Date(toBeClosedByNormalized).getDate() + 1)),
+            $gte: startOfDay,
+            $lt: endOfDay,
           },
         });
 
@@ -227,17 +265,15 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
 
       if (fromDateNormalized) {
         fromDateNormalized.setHours(0, 0, 0, 0);
-        fromDateNormalized = new Date(fromDateNormalized.getTime() - 5.5 * 60 * 60 * 1000);
       }
       if (toDateNormalized) {
         toDateNormalized.setHours(0, 0, 0, 0);
-        toDateNormalized = new Date(toDateNormalized.getTime() - 5.5 * 60 * 60 * 1000);
       }
       if (selectedDatesNormalized.length) {
         selectedDatesNormalized = selectedDatesNormalized.map((d) => {
           const date = new Date(d);
           date.setHours(0, 0, 0, 0);
-          return new Date(date.getTime() - 5.5 * 60 * 60 * 1000);
+          return date;
         });
       }
 
@@ -245,7 +281,7 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
         ...taskData,
         taskDescription: taskDescription || "",
         opportunityId: validOpportunityId,
-        opportunityCode: finalOpportunityCode, // Use the final computed code
+        opportunityCode: finalOpportunityCode,
         assignedBy: req.user._id,
         createdBy: req.user._id,
         assignedTo: Array.isArray(assignedTo) ? assignedTo : (assignedTo ? [assignedTo] : [req.user._id]),
@@ -262,7 +298,6 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
       await task.save();
       createdTasks.push(task);
 
-      // Send email notification
       const assignedByUser = await User.findById(req.user._id);
       if (assignedByUser && assignedUsers.length > 0) {
         await sendTaskAssignmentEmail(task, assignedUsers, assignedByUser, false);
@@ -408,9 +443,7 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
     let opportunityCode = task.opportunityCode;
     let oldAssignedTo = [...task.assignedTo];
 
-    // Handle opportunity update
     if (opportunityId !== undefined || reqOpportunityCode !== undefined) {
-      // If opportunityId is null or empty string, clear it
       if ((opportunityId === null || opportunityId === "") && (reqOpportunityCode === null || reqOpportunityCode === "")) {
         if (task.opportunityId) {
           logs.push(createLogEntry(req, "update", "opportunityId", task.opportunityId, null));
@@ -420,17 +453,14 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
           opportunityCode = "";
         }
       } 
-      // If it's a valid ObjectId, fetch the opportunity
       else if (opportunityId && mongoose.Types.ObjectId.isValid(opportunityId)) {
         const opp = await Opportunity.findById(opportunityId);
         if (!opp) return res.status(404).json({ message: "Opportunity not found" });
         
-        // Update opportunity code
         opportunityCode = opp.opportunityCode ? 
           `${opp.opportunityCode} - ${opp.opportunityName}` : 
           `${opp._id} - ${opp.opportunityName}`;
         
-        // Check if opportunityId has actually changed
         const oldOppId = task.opportunityId ? task.opportunityId.toString() : null;
         const newOppId = opportunityId.toString();
         
@@ -440,12 +470,10 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
           task.opportunityId = opportunityId;
           task.opportunityCode = opportunityCode;
         } else if (task.opportunityCode !== opportunityCode) {
-          // If ID is same but code might be different (updated opportunity name)
           logs.push(createLogEntry(req, "update", "opportunityCode", task.opportunityCode, opportunityCode));
           task.opportunityCode = opportunityCode;
         }
       } else {
-        // If opportunityId is a string (not ObjectId) or opportunityCode is provided
         if (reqOpportunityCode !== undefined) {
           opportunityCode = reqOpportunityCode;
         } else if (opportunityId !== undefined) {
@@ -456,7 +484,6 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
           logs.push(createLogEntry(req, "update", "opportunityCode", task.opportunityCode, opportunityCode));
           task.opportunityCode = opportunityCode;
           
-          // Clear opportunityId since we're using a custom code
           if (task.opportunityId) {
             logs.push(createLogEntry(req, "update", "opportunityId", task.opportunityId, null));
             task.opportunityId = null;
@@ -465,37 +492,32 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // Update other fields
     fieldsToCheck.forEach((field) => {
-      if (req.body[field] !== undefined && field !== "opportunityId") { // Skip opportunityId as we handled it above
+      if (req.body[field] !== undefined && field !== "opportunityId") {
         const oldVal = task[field];
         let newVal = req.body[field];
         
-        // Handle date fields with timezone adjustment
         if (["toBeClosedBy", "fromDate", "toDate"].includes(field)) {
           if (req.body[field]) {
-            newVal = new Date(new Date(req.body[field]).getTime() - 5.5 * 60 * 60 * 1000);
+            newVal = new Date(req.body[field]);
             newVal.setHours(0, 0, 0, 0);
           } else {
             newVal = null;
           }
         }
         
-        // Handle selected dates array
         if (field === "selectedDates" && req.body[field]) {
           newVal = req.body[field].map((d) => {
-            const date = new Date(new Date(d).getTime() - 5.5 * 60 * 60 * 1000);
+            const date = new Date(d);
             date.setHours(0, 0, 0, 0);
             return date;
           });
         }
         
-        // Handle boolean fields
         if (field === "reopened") {
           newVal = Boolean(req.body[field]);
         }
         
-        // Handle assignedTo array
         if (field === "assignedTo") {
           if (Array.isArray(req.body[field])) {
             newVal = req.body[field];
@@ -506,7 +528,6 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
           }
         }
         
-        // Check if value actually changed
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           logs.push(createLogEntry(req, "update", field, oldVal, newVal));
           task[field] = newVal;
@@ -514,13 +535,11 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
-    // Update assignedBy if different from current user
     if (task.assignedBy?.toString() !== req.user._id.toString()) {
       logs.push(createLogEntry(req, "update", "assignedBy", task.assignedBy, req.user._id));
       task.assignedBy = req.user._id;
     }
 
-    // Validate assigned users
     if (task.assignedTo && task.assignedTo.length > 0) {
       for (const userId of task.assignedTo) {
         if (mongoose.Types.ObjectId.isValid(userId)) {
@@ -532,16 +551,14 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // Handle schedule-specific logic
     if (schedule === "None" || schedule === "SelectedDates") {
       task.selectedDates = selectedDates ? [...new Set(selectedDates.map((d) => {
-        const date = new Date(new Date(d).getTime() - 5.5 * 60 * 60 * 1000);
+        const date = new Date(d);
         date.setHours(0, 0, 0, 0);
         return date;
       }))] : [];
     }
 
-    // Handle completion with remarks
     if (completedOn === "Done" && task.completedOn !== "Done") {
       logs.push(createLogEntry(req, "update", "completedOn", task.completedOn, "Done", completionRemarks));
       task.completionRemarks = completionRemarks || "";
@@ -552,7 +569,6 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // Handle reopening with description
     if (reopened === true && task.reopened !== true) {
       logs.push(createLogEntry(req, "update", "reopened", task.reopened, true, reopenDescription));
       task.reopenDescription = reopenDescription || "";
@@ -563,12 +579,10 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    // Save the task if there are changes
     if (logs.length > 0) {
       task.logs.push(...logs);
       await task.save();
       
-      // Send email notification if assigned users changed
       const assignedToChanged = JSON.stringify(oldAssignedTo.sort()) !== JSON.stringify(task.assignedTo.sort());
       if (assignedToChanged) {
         const assignedUsers = await User.find({ _id: { $in: task.assignedTo } });

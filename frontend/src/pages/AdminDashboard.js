@@ -16,6 +16,7 @@ import {
   PencilIcon,
   BanknotesIcon,
 } from "@heroicons/react/24/outline";
+import NotificationBell from "../components/NotificationBell";
 
 /* ------------------------------------------------------------------ */
 /* TOP-LEVEL NAVIGATION CONFIG                                        */
@@ -323,14 +324,18 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
-      <Link
-        to="/admin-dashboard/my-profile"
-        aria-label="My Profile"
-        className="fixed top-3 right-3 z-50 inline-flex items-center justify-center h-12 w-12 rounded-full bg-white/90 backdrop-blur border border-gray-200 shadow hover:bg-white active:scale-[0.98] transition"
-        title="My Profile"
-      >
-        <UserCircleIcon className="h-7 w-7 text-gray-700" />
-      </Link>
+      <div className="flex">
+      <NotificationBell />
+
+<Link
+  to="/admin-dashboard/my-profile"
+  aria-label="My Profile"
+  className="fixed top-3 right-7 z-50 inline-flex items-center justify-center h-12 w-12 rounded-full bg-white/90 backdrop-blur border border-gray-200 shadow hover:bg-white active:scale-[0.98] transition"
+  title="My Profile"
+>
+  <UserCircleIcon className="h-7 w-7 text-gray-700" />
+</Link>
+      </div>
 
       <aside
         className="transition-all duration-300 overflow-y-auto overflow-x-hidden bg-[#Ff8045] text-white leading-tight"

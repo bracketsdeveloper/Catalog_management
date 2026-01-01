@@ -16,7 +16,7 @@ export default function CreateTicketModal({
   const [formData, setFormData] = useState({
     _id: initialData._id || null,
     ticketName: initialData.ticketName || "",
-    taskDescription: initialData.taskDescription || "", // New field
+    taskDescription: initialData.taskDescription || "",
     opportunityId:
       initialData.opportunityId?._id || initialData.opportunityId || null,
     opportunitySearch:
@@ -26,7 +26,7 @@ export default function CreateTicketModal({
         : ""),
     assignedTo:
       initialData.assignedTo?.map(user => user._id) ||
-      (isSuperAdmin ? [] : currentUser?._id ? [currentUser._id] : []), // Changed to array
+      (isSuperAdmin ? [] : currentUser?._id ? [currentUser._id] : []),
     assignedToSearch: initialData.assignedTo
       ? initialData.assignedTo.map(user => `${user.name} (${user.email})`).join(", ")
       : isSuperAdmin
@@ -36,37 +36,19 @@ export default function CreateTicketModal({
       : "",
     schedule: initialData.schedule || "None",
     fromDate: initialData.fromDate
-      ? new Date(new Date(initialData.fromDate).getTime() + 5.5 * 3600 * 1000)
-          .toISOString()
-          .slice(0, 16)
+      ? new Date(initialData.fromDate).toISOString().slice(0, 16)
       : new Date().toISOString().slice(0, 16),
     toDate: initialData.toDate
-      ? new Date(new Date(initialData.toDate).getTime() + 5.5 * 3600 * 1000)
-          .toISOString()
-          .slice(0, 16)
+      ? new Date(initialData.toDate).toISOString().slice(0, 16)
       : new Date().toISOString().slice(0, 16),
     toBeClosedBy: initialData.toBeClosedBy
-      ? new Date(
-          new Date(initialData.toBeClosedBy).getTime() + 5.5 * 3600 * 1000
-        )
-          .toISOString()
-          .slice(0, 16)
+      ? new Date(initialData.toBeClosedBy).toISOString().slice(0, 16)
       : new Date().toISOString().slice(0, 16),
     completedOn: initialData.completedOn || "Not Done",
-    completionRemarks: initialData.completionRemarks || "", // New field
-    selectedDates: initialData.selectedDates
-      ? [
-          ...new Set(
-            initialData.selectedDates.map((d) =>
-              new Date(new Date(d).getTime() + 5.5 * 3600 * 1000)
-                .toISOString()
-                .split("T")[0]
-            )
-          ),
-        ]
-      : [],
+    completionRemarks: initialData.completionRemarks || "",
+    selectedDates: initialData.selectedDates || [],
     reopened: initialData.reopened || false,
-    reopenDescription: initialData.reopenDescription || "", // New field
+    reopenDescription: initialData.reopenDescription || "",
   });
 
   // --- Dropdown visibility state ---
@@ -238,28 +220,21 @@ export default function CreateTicketModal({
     let opportunityId = formData.opportunityId;
     let opportunityCode = formData.opportunitySearch || "";
     
-    // If opportunitySearch is empty, set both to null/empty
     if (formData.opportunitySearch === "") {
       opportunityId = null;
       opportunityCode = "";
     }
 
-    // Prepare base payload
+    // Prepare base payload WITHOUT timezone adjustments
     const base = {
       ticketName: formData.ticketName,
       taskDescription: formData.taskDescription,
       opportunityId: opportunityId,
-      opportunityCode: opportunityCode, // Send the code explicitly
+      opportunityCode: opportunityCode,
       assignedTo: formData.assignedTo || [],
       schedule: formData.schedule,
-      fromDate:
-        formData.schedule !== "None"
-          ? new Date(new Date(formData.fromDate).getTime() - 5.5 * 3600 * 1000).toISOString()
-          : null,
-      toDate:
-        formData.schedule !== "None"
-          ? new Date(new Date(formData.toDate).getTime() - 5.5 * 3600 * 1000).toISOString()
-          : null,
+      fromDate: formData.schedule !== "None" ? formData.fromDate : null,
+      toDate: formData.schedule !== "None" ? formData.toDate : null,
       completedOn: formData.completedOn,
       completionRemarks: formData.completionRemarks,
       reopened: formData.reopened,
@@ -267,39 +242,33 @@ export default function CreateTicketModal({
     };
 
     if (isEditing && formData._id) {
-      // Single-update for existing ticket
+      // Single-update for existing ticket - NO timezone adjustment
       await onSubmit(
         {
           ...base,
           _id: formData._id,
-          toBeClosedBy: new Date(
-            new Date(formData.toBeClosedBy).getTime() - 5.5 * 3600 * 1000
-          ).toISOString(),
-          selectedDates: formData.selectedDates.map((d) =>
-            new Date(new Date(d).getTime() - 5.5 * 3600 * 1000).toISOString()
-          ),
+          toBeClosedBy: formData.toBeClosedBy,
+          selectedDates: formData.selectedDates,
         },
         true
       );
     } else if (formData.schedule === "None") {
-      // Single ticket if no schedule
+      // Single ticket if no schedule - NO timezone adjustment
       await onSubmit(
         {
           ...base,
-          toBeClosedBy: new Date(
-            new Date(formData.toBeClosedBy).getTime() - 5.5 * 3600 * 1000
-          ).toISOString(),
+          toBeClosedBy: formData.toBeClosedBy,
           selectedDates: [],
         },
         false
       );
     } else {
-      // Multi-ticket creation
+      // Multi-ticket creation - NO timezone adjustment
       const uniqueDates = [...new Set(formData.selectedDates)];
       const tasks = uniqueDates.map((date) => ({
         ...base,
-        toBeClosedBy: new Date(new Date(date).getTime() - 5.5 * 3600 * 1000).toISOString(),
-        selectedDates: [new Date(new Date(date).getTime() - 5.5 * 3600 * 1000).toISOString()],
+        toBeClosedBy: date,
+        selectedDates: [date],
       }));
       await onSubmit(tasks, false);
     }

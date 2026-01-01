@@ -9,17 +9,17 @@ const logSchema = new mongoose.Schema({
   performedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   performedAt: { type: Date, default: Date.now },
   ipAddress: { type: String },
-  description: { type: String }, // For task completion or reopen descriptions
+  description: { type: String },
 });
 
 const taskSchema = new mongoose.Schema({
   taskRef: { type: String, unique: true },
   ticketName: { type: String, required: true },
-  taskDescription: { type: String }, // New field
+  taskDescription: { type: String },
   opportunityId: { type: mongoose.Schema.Types.ObjectId, ref: "Opportunity" },
   opportunityCode: { type: String },
   assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  assignedTo: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Changed to array
+  assignedTo: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   assignedOn: { type: Date, default: Date.now },
   fromDate: { type: Date },
   toDate: { type: Date },
@@ -29,7 +29,7 @@ const taskSchema = new mongoose.Schema({
     enum: ["Done", "Not Done"], 
     default: "Not Done" 
   },
-  completionRemarks: { type: String }, // New field for completion remarks
+  completionRemarks: { type: String },
   schedule: {
     type: String,
     enum: ["None", "Daily", "Weekly", "Monthly", "AlternateDays", "SelectedDates"],
@@ -40,13 +40,19 @@ const taskSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   createdAt: { type: Date, default: Date.now },
   reopened: { type: Boolean, default: false },
-  reopenDescription: { type: String }, // New field for reopen description
+  reopenDescription: { type: String },
   logs: [logSchema],
+  notificationStatus: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      read: { type: Boolean, default: false },
+      readAt: { type: Date }
+    }
+  ],
 });
 
 taskSchema.pre("save", async function (next) {
   try {
-    // Generate taskRef if new task
     if (this.isNew && !this.taskRef) {
       const randomNum = Math.floor(10000000 + Math.random() * 90000000);
       const taskRef = `#${randomNum}`;
@@ -57,7 +63,6 @@ taskSchema.pre("save", async function (next) {
       this.taskRef = taskRef;
     }
 
-    // If opportunityId is provided but opportunityCode is empty/missing, fetch it
     if (this.opportunityId && (!this.opportunityCode || this.opportunityCode === "")) {
       try {
         const opportunity = await mongoose.model("Opportunity").findById(this.opportunityId);
@@ -70,11 +75,12 @@ taskSchema.pre("save", async function (next) {
       }
     }
 
-    // Handle schedule dates generation
     if (this.schedule !== "None" && this.schedule !== "SelectedDates" && this.fromDate && this.toDate) {
       const dates = [];
       let currentDate = new Date(this.fromDate);
       const endDate = new Date(this.toDate);
+      currentDate.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
       
       switch (this.schedule) {
         case "Daily":
@@ -110,6 +116,8 @@ taskSchema.pre("save", async function (next) {
         const dates = [];
         let currentDate = new Date(this.fromDate);
         const endDate = new Date(this.toDate);
+        currentDate.setHours(0, 0, 0, 0);
+        endDate.setHours(0, 0, 0, 0);
         
         switch (this.schedule) {
           case "Daily":
