@@ -16,8 +16,7 @@ const Leave = require("../models/Leave");
 const WFH = require("../models/WFH");
 const User = require("../models/User");
 const { notifyLeaveApplication, notifyLeaveStatusChange } = require("../utils/leaveNotifications");
-const SalaryConfig = require("../models/SalaryConfig");
-const SalaryRecord = require("../models/SalaryRecord");
+
 
 
 
