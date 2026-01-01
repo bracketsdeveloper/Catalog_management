@@ -7,3 +7,5 @@ frontend/.env
 /frontend/public/images
 /backend/scripts/
 /backend/uploads
+/backend/package-lock.json
+/frontend/package-lock.json
