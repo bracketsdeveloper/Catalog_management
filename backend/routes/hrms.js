@@ -17,9 +17,6 @@ const WFH = require("../models/WFH");
 const User = require("../models/User");
 const { notifyLeaveApplication, notifyLeaveStatusChange } = require("../utils/leaveNotifications");
 
-
-
-
 // Holidays + RH request
 const Holiday = require("../models/Holiday");
 const RestrictedHolidayRequest = require("../models/RestrictedHolidayRequest");
