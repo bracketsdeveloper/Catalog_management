@@ -12,6 +12,46 @@ export default function CreateTicketModal({
   currentUser,
   isEditing = false,
 }) {
+  // --- Helper function to format date for datetime-local input ---
+  // datetime-local expects "YYYY-MM-DDTHH:mm" in LOCAL time
+  function formatDateForInput(dateString) {
+    if (!dateString) {
+      // Default to current local time
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
+    // Parse the date - this handles both ISO strings and local strings
+    const d = new Date(dateString);
+    
+    // Get LOCAL time components (browser's timezone, which is IST for you)
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  // --- Helper function to convert datetime-local to ISO string for backend ---
+  // datetime-local gives us local time, toISOString() converts to UTC automatically
+  function convertToUTC(dateTimeLocal) {
+    if (!dateTimeLocal) return null;
+    
+    // Create date from datetime-local string (interpreted as local time)
+    const localDate = new Date(dateTimeLocal);
+    
+    // toISOString() automatically converts to UTC
+    // No manual offset needed - JavaScript handles this!
+    return localDate.toISOString();
+  }
+
   // --- Form state initialization ---
   const [formData, setFormData] = useState({
     _id: initialData._id || null,
@@ -35,15 +75,9 @@ export default function CreateTicketModal({
       ? `${currentUser.name} (${currentUser.email})`
       : "",
     schedule: initialData.schedule || "None",
-    fromDate: initialData.fromDate
-      ? new Date(initialData.fromDate).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
-    toDate: initialData.toDate
-      ? new Date(initialData.toDate).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
-    toBeClosedBy: initialData.toBeClosedBy
-      ? new Date(initialData.toBeClosedBy).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
+    fromDate: formatDateForInput(initialData.fromDate),
+    toDate: formatDateForInput(initialData.toDate),
+    toBeClosedBy: formatDateForInput(initialData.toBeClosedBy),
     completedOn: initialData.completedOn || "Not Done",
     completionRemarks: initialData.completionRemarks || "",
     selectedDates: initialData.selectedDates || [],
@@ -86,13 +120,23 @@ export default function CreateTicketModal({
     : [];
 
   // --- Generate dates based on schedule ---
-  const generateDates = (schedule, fromDate, toDate) => {
+  const generateDates = (schedule, fromDateLocal, toDateLocal) => {
     if (!schedule || schedule === "None") return [];
+    if (!fromDateLocal || !toDateLocal) return [];
+    
+    // Parse the local datetime-local strings
+    const from = new Date(fromDateLocal);
+    const to = new Date(toDateLocal);
+    
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) return [];
+    
     const dates = [];
-    let current = new Date(fromDate);
-    const end = new Date(toDate);
+    let current = new Date(from);
+    
+    // Reset to start of day for date generation
     current.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
+    const end = new Date(to);
+    end.setHours(23, 59, 59, 999);
 
     switch (schedule) {
       case "Daily":
@@ -225,7 +269,7 @@ export default function CreateTicketModal({
       opportunityCode = "";
     }
 
-    // Prepare base payload WITHOUT timezone adjustments
+    // Prepare base payload - convert local times to UTC ISO strings
     const base = {
       ticketName: formData.ticketName,
       taskDescription: formData.taskDescription,
@@ -233,8 +277,8 @@ export default function CreateTicketModal({
       opportunityCode: opportunityCode,
       assignedTo: formData.assignedTo || [],
       schedule: formData.schedule,
-      fromDate: formData.schedule !== "None" ? formData.fromDate : null,
-      toDate: formData.schedule !== "None" ? formData.toDate : null,
+      fromDate: formData.schedule !== "None" ? convertToUTC(formData.fromDate) : null,
+      toDate: formData.schedule !== "None" ? convertToUTC(formData.toDate) : null,
       completedOn: formData.completedOn,
       completionRemarks: formData.completionRemarks,
       reopened: formData.reopened,
@@ -242,34 +286,55 @@ export default function CreateTicketModal({
     };
 
     if (isEditing && formData._id) {
-      // Single-update for existing ticket - NO timezone adjustment
+      // Single-update for existing ticket
       await onSubmit(
         {
           ...base,
           _id: formData._id,
-          toBeClosedBy: formData.toBeClosedBy,
-          selectedDates: formData.selectedDates,
+          toBeClosedBy: convertToUTC(formData.toBeClosedBy),
+          selectedDates: formData.selectedDates.map(date => {
+            // For selected dates, combine date with time from toBeClosedBy
+            const dateOnly = typeof date === 'string' ? date.split('T')[0] : new Date(date).toISOString().split('T')[0];
+            const timePart = new Date(formData.toBeClosedBy);
+            const hours = timePart.getHours();
+            const minutes = timePart.getMinutes();
+            const combinedDate = new Date(dateOnly);
+            combinedDate.setHours(hours, minutes, 0, 0);
+            return combinedDate.toISOString();
+          }),
         },
         true
       );
     } else if (formData.schedule === "None") {
-      // Single ticket if no schedule - NO timezone adjustment
+      // Single ticket if no schedule
       await onSubmit(
         {
           ...base,
-          toBeClosedBy: formData.toBeClosedBy,
+          toBeClosedBy: convertToUTC(formData.toBeClosedBy),
           selectedDates: [],
         },
         false
       );
     } else {
-      // Multi-ticket creation - NO timezone adjustment
+      // Multi-ticket creation
       const uniqueDates = [...new Set(formData.selectedDates)];
-      const tasks = uniqueDates.map((date) => ({
-        ...base,
-        toBeClosedBy: date,
-        selectedDates: [date],
-      }));
+      const tasks = uniqueDates.map((date) => {
+        // For each date, preserve the time from the toBeClosedBy field
+        const dateOnly = typeof date === 'string' ? date.split('T')[0] : new Date(date).toISOString().split('T')[0];
+        const timePart = new Date(formData.toBeClosedBy);
+        const hours = timePart.getHours();
+        const minutes = timePart.getMinutes();
+        
+        // Create a new date with the date part and time from toBeClosedBy
+        const combinedDate = new Date(dateOnly);
+        combinedDate.setHours(hours, minutes, 0, 0);
+        
+        return {
+          ...base,
+          toBeClosedBy: combinedDate.toISOString(),
+          selectedDates: [combinedDate.toISOString()],
+        };
+      });
       await onSubmit(tasks, false);
     }
 
@@ -281,16 +346,39 @@ export default function CreateTicketModal({
     if (formData.schedule === "None" || formData.selectedDates.length === 0) {
       return "No dates generated.";
     }
-    const start = new Date(formData.selectedDates[0]).toLocaleDateString();
-    const end = new Date(
-      formData.selectedDates[formData.selectedDates.length - 1]
-    ).toLocaleDateString();
+    
+    // Display dates in local format
+    const startDateStr = formData.selectedDates[0];
+    const endDateStr = formData.selectedDates[formData.selectedDates.length - 1];
+    
+    const start = new Date(startDateStr).toLocaleDateString();
+    const end = new Date(endDateStr).toLocaleDateString();
     const pattern =
       formData.schedule === "SelectedDates"
         ? "on selected dates"
         : `repeats ${formData.schedule.toLowerCase()}`;
 
-    return `From ${start} to ${end} ${pattern}.`;
+    return `From ${start} to ${end} ${pattern}. (${formData.selectedDates.length} occurrence${formData.selectedDates.length > 1 ? 's' : ''})`;
+  };
+
+  // Get current local time for display
+  const getCurrentLocalTime = () => {
+    return new Date().toLocaleTimeString('en-IN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
+  // Format the entered time for display
+  const getEnteredTime = (dateTimeLocal) => {
+    if (!dateTimeLocal) return '';
+    const d = new Date(dateTimeLocal);
+    return d.toLocaleTimeString('en-IN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
   };
 
   // --- Render ---
@@ -449,7 +537,7 @@ export default function CreateTicketModal({
           {formData.schedule !== "None" && (
             <>
               <div className="mb-4">
-                <label className="block text-sm font-medium">From Date</label>
+                <label className="block text-sm font-medium">From Date & Time</label>
                 <input
                   type="datetime-local"
                   name="fromDate"
@@ -457,9 +545,12 @@ export default function CreateTicketModal({
                   onChange={handleChange}
                   className="w-full border p-2 rounded h-10"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Selected: {getEnteredTime(formData.fromDate)} | Current time: {getCurrentLocalTime()}
+                </p>
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium">To Date</label>
+                <label className="block text-sm font-medium">To Date & Time</label>
                 <input
                   type="datetime-local"
                   name="toDate"
@@ -467,6 +558,9 @@ export default function CreateTicketModal({
                   onChange={handleChange}
                   className="w-full border p-2 rounded h-10"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Selected: {getEnteredTime(formData.toDate)}
+                </p>
               </div>
             </>
           )}
@@ -483,6 +577,9 @@ export default function CreateTicketModal({
                 required
                 className="w-full border p-2 rounded h-10"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Selected: {getEnteredTime(formData.toBeClosedBy)} | Current time: {getCurrentLocalTime()}
+              </p>
             </div>
           )}
 
@@ -554,7 +651,7 @@ export default function CreateTicketModal({
                 type="date"
                 onChange={(e) => {
                   const d = e.target.value;
-                  if (!formData.selectedDates.includes(d)) {
+                  if (d && !formData.selectedDates.includes(d)) {
                     setFormData((prev) => ({
                       ...prev,
                       selectedDates: [...new Set([...prev.selectedDates, d])].sort(),
@@ -595,7 +692,7 @@ export default function CreateTicketModal({
           {formData.schedule !== "None" && (
             <div className="mb-4">
               <h4 className="text-sm font-medium">Generated Dates</h4>
-              <div className="border p-2 rounded max-h-20 overflow-y-auto text-sm">
+              <div className="border p-2 rounded max-h-20 overflow-y-auto text-sm bg-gray-50">
                 {getScheduleSummary()}
               </div>
             </div>

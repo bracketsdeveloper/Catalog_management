@@ -21,13 +21,24 @@ function createLogEntry(req, action, field, oldValue, newValue, description = nu
   };
 }
 
+// Helper to format date for display in emails (IST)
+function formatDateForDisplay(date) {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return d.toLocaleString('en-IN', { 
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+}
+
 async function sendTaskAssignmentEmail(task, assignedUsers, assignedByUser, isUpdate = false) {
   try {
     const userEmails = assignedUsers.map(user => user.email).filter(email => email);
     
     if (userEmails.length === 0) return;
 
-    const taskDate = new Date(task.toBeClosedBy).toLocaleDateString();
+    const taskDate = formatDateForDisplay(task.toBeClosedBy);
     const subject = isUpdate 
       ? `Task Updated: ${task.ticketName}`
       : `New Task Assigned: ${task.ticketName}`;
@@ -67,7 +78,7 @@ async function sendTaskCompletionEmail(task, completedByUser) {
     const assignedByUser = await User.findById(task.assignedBy);
     if (!assignedByUser || !assignedByUser.email) return;
 
-    const taskDate = new Date(task.toBeClosedBy).toLocaleDateString();
+    const taskDate = formatDateForDisplay(task.toBeClosedBy);
     const subject = `Task Completed: ${task.ticketName}`;
     
     const html = `
@@ -77,7 +88,7 @@ async function sendTaskCompletionEmail(task, completedByUser) {
           <h3 style="margin-top: 0;">${task.ticketName}</h3>
           <p><strong>Task Reference:</strong> ${task.taskRef || 'N/A'}</p>
           <p><strong>Completed By:</strong> ${completedByUser.name} (${completedByUser.email})</p>
-          <p><strong>Completion Date:</strong> ${new Date().toLocaleDateString()}</p>
+          <p><strong>Completion Date:</strong> ${formatDateForDisplay(new Date())}</p>
           <p><strong>Completion Remarks:</strong> ${task.completionRemarks || 'No remarks provided'}</p>
         </div>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
@@ -105,7 +116,7 @@ async function sendTaskReopenEmail(task, reopenedByUser) {
     
     if (userEmails.length === 0) return;
 
-    const taskDate = new Date(task.toBeClosedBy).toLocaleDateString();
+    const taskDate = formatDateForDisplay(task.toBeClosedBy);
     const subject = `Task Reopened: ${task.ticketName}`;
     
     const html = `
@@ -200,7 +211,6 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
 
       if (reqOpportunityCode && reqOpportunityCode.trim() !== "") {
         finalOpportunityCode = reqOpportunityCode;
-        console.log(`Using provided opportunity code from request: ${finalOpportunityCode}`);
       }
       
       if (opportunityId && mongoose.Types.ObjectId.isValid(opportunityId)) {
@@ -211,11 +221,8 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
         finalOpportunityCode = opp.opportunityCode ? 
           `${opp.opportunityCode} - ${opp.opportunityName}` : 
           `${opp._id} - ${opp.opportunityName}`;
-        
-        console.log(`Opportunity found: ${finalOpportunityCode} for ID: ${opportunityId}`);
       } else if (opportunityId && opportunityId.trim() !== "") {
         finalOpportunityCode = opportunityId;
-        console.log(`Using provided opportunityId as code: ${finalOpportunityCode}`);
       }
 
       let assignedUsers = [];
@@ -231,51 +238,41 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
         assignedUsers.push(user);
       }
 
+      // Frontend sends ISO string (UTC), parse it directly
+      // The date is already in UTC from the frontend's toISOString()
       let toBeClosedByDate = toBeClosedBy ? new Date(toBeClosedBy) : null;
+      
+      // Debug logging
       if (toBeClosedByDate) {
-        toBeClosedByDate.setHours(0, 0, 0, 0);
+        console.log(`[CREATE] Received toBeClosedBy: ${toBeClosedBy}`);
+        console.log(`[CREATE] Parsed as UTC: ${toBeClosedByDate.toISOString()}`);
+        console.log(`[CREATE] Display in IST: ${formatDateForDisplay(toBeClosedByDate)}`);
       }
-      const toBeClosedByNormalized = toBeClosedByDate ? toBeClosedByDate.toISOString() : null;
 
-      if (toBeClosedByNormalized) {
-        const startOfDay = new Date(toBeClosedByNormalized);
-        startOfDay.setHours(0, 0, 0, 0);
-        
-        const endOfDay = new Date(startOfDay);
-        endOfDay.setHours(23, 59, 59, 999);
-
+      if (toBeClosedByDate) {
+        // Check for duplicates within 5-minute window
+        const timeWindow = 5 * 60 * 1000;
         const existingTask = await Task.findOne({
           ticketName: taskData.ticketName,
           createdBy: req.user._id,
           toBeClosedBy: {
-            $gte: startOfDay,
-            $lt: endOfDay,
+            $gte: new Date(toBeClosedByDate.getTime() - timeWindow),
+            $lt: new Date(toBeClosedByDate.getTime() + timeWindow),
           },
         });
 
         if (existingTask) {
-          console.log(`Skipping duplicate task for ${taskData.ticketName} on ${toBeClosedByNormalized}`);
+          console.log(`Skipping duplicate task for ${taskData.ticketName}`);
           continue;
         }
       }
 
-      let fromDateNormalized = fromDate ? new Date(fromDate) : null;
-      let toDateNormalized = toDate ? new Date(toDate) : null;
-      let selectedDatesNormalized = selectedDates ? [...new Set(selectedDates.map((d) => new Date(d)))] : [];
-
-      if (fromDateNormalized) {
-        fromDateNormalized.setHours(0, 0, 0, 0);
-      }
-      if (toDateNormalized) {
-        toDateNormalized.setHours(0, 0, 0, 0);
-      }
-      if (selectedDatesNormalized.length) {
-        selectedDatesNormalized = selectedDatesNormalized.map((d) => {
-          const date = new Date(d);
-          date.setHours(0, 0, 0, 0);
-          return date;
-        });
-      }
+      // Parse other dates - frontend sends UTC ISO strings
+      let fromDateParsed = fromDate ? new Date(fromDate) : null;
+      let toDateParsed = toDate ? new Date(toDate) : null;
+      let selectedDatesParsed = selectedDates 
+        ? [...new Set(selectedDates.map((d) => new Date(d)))] 
+        : [];
 
       const task = new Task({
         ...taskData,
@@ -286,17 +283,17 @@ router.post("/tasks", authenticate, authorizeAdmin, async (req, res) => {
         createdBy: req.user._id,
         assignedTo: Array.isArray(assignedTo) ? assignedTo : (assignedTo ? [assignedTo] : [req.user._id]),
         toBeClosedBy: toBeClosedByDate,
-        fromDate: fromDateNormalized,
-        toDate: toDateNormalized,
-        selectedDates: selectedDatesNormalized,
+        fromDate: fromDateParsed,
+        toDate: toDateParsed,
+        selectedDates: selectedDatesParsed,
         reopened: taskData.reopened || false,
         logs: [createLogEntry(req, "create", null, null, null)],
       });
       
-      console.log(`Creating task with opportunityId: ${validOpportunityId}, opportunityCode: ${finalOpportunityCode}`);
-      
       await task.save();
       createdTasks.push(task);
+
+      console.log(`[CREATE] Task saved. Due: ${formatDateForDisplay(task.toBeClosedBy)}`);
 
       const assignedByUser = await User.findById(req.user._id);
       if (assignedByUser && assignedUsers.length > 0) {
@@ -339,7 +336,6 @@ router.get("/tasks", authenticate, authorizeAdmin, async (req, res) => {
       .populate("assignedBy", "name email")
       .populate("opportunityId", "opportunityCode opportunityName")
       .sort({ createdAt: -1 });
-    console.log("Tasks fetched for list:", tasks.length);
     res.json(tasks);
   } catch (error) {
     console.error("Error fetching tasks:", error);
@@ -368,13 +364,13 @@ router.get("/tasks/calendar", authenticate, authorizeAdmin, async (req, res) => 
     tasks.forEach((task) => {
       if (task.toBeClosedBy) {
         const date = new Date(task.toBeClosedBy);
-        if (!date) {
-          console.warn("Invalid toBeClosedBy date for task:", { taskId: task._id });
-          return;
-        }
-        const adjustedDate = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
-        const dateOnly = adjustedDate.toISOString().split("T")[0];
-        const isOverdue = new Date(date) < new Date() && task.completedOn === "Not Done";
+        
+        // For calendar display, get the date in IST
+        const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+        const dateOnly = istDate.toISOString().split("T")[0];
+        
+        const isOverdue = date < new Date() && task.completedOn === "Not Done";
+        
         flatTasks.push({
           task,
           dateKey: dateOnly,
@@ -389,7 +385,6 @@ router.get("/tasks/calendar", authenticate, authorizeAdmin, async (req, res) => 
       }
     });
 
-    console.log("Tasks fetched for calendar:", flatTasks.length);
     res.json(flatTasks.map((t) => t.eventObj));
   } catch (error) {
     console.error("Error fetching tasks for calendar:", error);
@@ -443,6 +438,7 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
     let opportunityCode = task.opportunityCode;
     let oldAssignedTo = [...task.assignedTo];
 
+    // Handle opportunity update
     if (opportunityId !== undefined || reqOpportunityCode !== undefined) {
       if ((opportunityId === null || opportunityId === "") && (reqOpportunityCode === null || reqOpportunityCode === "")) {
         if (task.opportunityId) {
@@ -492,32 +488,33 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
+    // Update other fields
     fieldsToCheck.forEach((field) => {
       if (req.body[field] !== undefined && field !== "opportunityId") {
         const oldVal = task[field];
         let newVal = req.body[field];
         
+        // Handle date fields - frontend sends ISO strings (UTC)
         if (["toBeClosedBy", "fromDate", "toDate"].includes(field)) {
           if (req.body[field]) {
             newVal = new Date(req.body[field]);
-            newVal.setHours(0, 0, 0, 0);
+            console.log(`[UPDATE] ${field}: ${req.body[field]} -> ${formatDateForDisplay(newVal)}`);
           } else {
             newVal = null;
           }
         }
         
+        // Handle selected dates array
         if (field === "selectedDates" && req.body[field]) {
-          newVal = req.body[field].map((d) => {
-            const date = new Date(d);
-            date.setHours(0, 0, 0, 0);
-            return date;
-          });
+          newVal = req.body[field].map((d) => new Date(d));
         }
         
+        // Handle boolean fields
         if (field === "reopened") {
           newVal = Boolean(req.body[field]);
         }
         
+        // Handle assignedTo array
         if (field === "assignedTo") {
           if (Array.isArray(req.body[field])) {
             newVal = req.body[field];
@@ -528,6 +525,7 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
           }
         }
         
+        // Check if value actually changed
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           logs.push(createLogEntry(req, "update", field, oldVal, newVal));
           task[field] = newVal;
@@ -535,11 +533,13 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     });
 
+    // Update assignedBy if different from current user
     if (task.assignedBy?.toString() !== req.user._id.toString()) {
       logs.push(createLogEntry(req, "update", "assignedBy", task.assignedBy, req.user._id));
       task.assignedBy = req.user._id;
     }
 
+    // Validate assigned users
     if (task.assignedTo && task.assignedTo.length > 0) {
       for (const userId of task.assignedTo) {
         if (mongoose.Types.ObjectId.isValid(userId)) {
@@ -551,14 +551,14 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
+    // Handle schedule-specific logic
     if (schedule === "None" || schedule === "SelectedDates") {
-      task.selectedDates = selectedDates ? [...new Set(selectedDates.map((d) => {
-        const date = new Date(d);
-        date.setHours(0, 0, 0, 0);
-        return date;
-      }))] : [];
+      task.selectedDates = selectedDates 
+        ? [...new Set(selectedDates.map((d) => new Date(d)))] 
+        : [];
     }
 
+    // Handle completion with remarks
     if (completedOn === "Done" && task.completedOn !== "Done") {
       logs.push(createLogEntry(req, "update", "completedOn", task.completedOn, "Done", completionRemarks));
       task.completionRemarks = completionRemarks || "";
@@ -569,6 +569,7 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
+    // Handle reopening with description
     if (reopened === true && task.reopened !== true) {
       logs.push(createLogEntry(req, "update", "reopened", task.reopened, true, reopenDescription));
       task.reopenDescription = reopenDescription || "";
@@ -579,10 +580,14 @@ router.put("/tasks/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
+    // Save the task if there are changes
     if (logs.length > 0) {
       task.logs.push(...logs);
       await task.save();
       
+      console.log(`[UPDATE] Task saved. Due: ${formatDateForDisplay(task.toBeClosedBy)}`);
+      
+      // Send email notification if assigned users changed
       const assignedToChanged = JSON.stringify(oldAssignedTo.sort()) !== JSON.stringify(task.assignedTo.sort());
       if (assignedToChanged) {
         const assignedUsers = await User.find({ _id: { $in: task.assignedTo } });
@@ -659,7 +664,6 @@ router.get("/tasks/opportunities", authenticate, authorizeAdmin, async (req, res
     const opportunities = await Opportunity.find(query)
       .select("opportunityCode opportunityName account opportunityStage createdAt")
       .sort({ createdAt: -1 });
-    console.log("Fetched opportunities:", opportunities.length);
     res.json(opportunities);
   } catch (error) {
     console.error("Error fetching opportunities:", error);
