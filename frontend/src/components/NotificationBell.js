@@ -243,7 +243,7 @@ const NotificationBell = () => {
                     return (
                       <Link
                         key={task._id}
-                        to="/admin-dashboard/manage-tasks"
+                        to="/admin-dashboard/manage-tickets"
                         onClick={() => setShowNotifications(false)}
                         className="block p-4 hover:bg-gray-50 transition-colors border-l-4 border-transparent hover:border-blue-300"
                       >
@@ -333,7 +333,7 @@ const NotificationBell = () => {
                     </div>
                   </div>
                   <Link
-                    to="/admin-dashboard/manage-tasks?filter=today"
+                    to="/admin-dashboard/manage-tickets?filter=today"
                     onClick={() => setShowNotifications(false)}
                     className="text-blue-600 hover:text-blue-800 font-medium"
                   >
