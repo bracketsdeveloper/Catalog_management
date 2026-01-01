@@ -218,7 +218,7 @@ const NotificationBell = () => {
                   </p>
                 </div>
                 <Link
-                  to="/admin-dashboard/manage-tasks"
+                  to="/admin-dashboard/manage-tickets"
                   onClick={() => setShowNotifications(false)}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
