@@ -573,8 +573,8 @@ export default function CreateTicketModal({
             </div>
           )}
 
-          {/* Reopened toggle and description for super-admins */}
-          {isSuperAdmin && isEditing && (
+          {/* Reopened toggle and description - Available to all users when editing */}
+          {isEditing && (
             <>
               <div className="mb-4 flex items-center">
                 <input

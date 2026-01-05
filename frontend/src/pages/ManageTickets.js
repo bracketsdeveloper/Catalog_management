@@ -9,7 +9,6 @@ import SearchBar from "../components/taskmanager/SearchBar";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
 export default function ManageTicketsPage() {
-  const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const [searchTerm, setSearchTerm] = useState("");
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -23,6 +22,7 @@ export default function ManageTicketsPage() {
   const [updatedSuperAdmin, setUpdatedSuperAdmin] = useState(false);
   const [updatedHandles, setUpdatedHandles] = useState([]);
   const handleOptions = ["CRM", "PURCHASE", "PRODUCTION", "SALES"];
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("taskFilter", filter);
@@ -40,20 +40,48 @@ export default function ManageTicketsPage() {
   useEffect(() => {
     axios
       .get(`${BACKEND_URL}/api/admin/users`, { headers: getAuthHeaders() })
-      .then((res) => setCurrentUser(res.data))
+      .then((res) => {
+        setCurrentUser(res.data);
+        setIsSuperAdmin(res.data.isSuperAdmin === true);
+      })
       .catch((err) => console.error("Error fetching current user:", err));
   }, []);
 
-  // Fetch users list (all if super admin, otherwise just self)
+  // Fetch users list - Use the tasks/users endpoint which is accessible to all authenticated users
   useEffect(() => {
-    const endpoint = isSuperAdmin
-      ? `${BACKEND_URL}/api/admin/users?all=true`
-      : `${BACKEND_URL}/api/admin/users`;
-    axios
-      .get(endpoint, { headers: getAuthHeaders() })
-      .then((res) => setUsers(isSuperAdmin ? res.data : [res.data]))
-      .catch((err) => console.error("Error fetching users:", err));
-  }, [isSuperAdmin]);
+    const fetchUsers = async () => {
+      try {
+        // Try the tasks/users endpoint first (available to all authenticated users)
+        const response = await axios.get(`${BACKEND_URL}/api/admin/tasks/users`, { 
+          headers: getAuthHeaders() 
+        });
+        setUsers(response.data || []);
+      } catch (error) {
+        console.error("Error fetching users from tasks endpoint:", error);
+        
+        // Fallback: Try to get users based on user role
+        try {
+          // If superadmin, get all users
+          if (isSuperAdmin) {
+            const adminResponse = await axios.get(`${BACKEND_URL}/api/admin/users?all=true`, {
+              headers: getAuthHeaders()
+            });
+            setUsers(adminResponse.data || []);
+          } else {
+            // For non-superadmins, at least include themselves
+            if (currentUser) {
+              setUsers([currentUser]);
+            }
+          }
+        } catch (fallbackError) {
+          console.error("Error in fallback user fetch:", fallbackError);
+          setUsers([]);
+        }
+      }
+    };
+
+    fetchUsers();
+  }, [isSuperAdmin, currentUser]);
 
   // Fetch tasks whenever searchTerm changes
   const fetchTasks = async () => {
@@ -174,8 +202,6 @@ export default function ManageTicketsPage() {
     }
   };
 
-  // ADD THESE NEW FUNCTIONS FOR TASK CONFIRMATION/REJECTION AND REPLIES:
-
   // Confirm task completion
   const handleConfirmTask = async (taskId) => {
     try {
@@ -202,12 +228,12 @@ export default function ManageTicketsPage() {
     }
   };
 
-  // Add reply to task - THIS IS THE MISSING FUNCTION
+  // Add reply to task
   const handleAddReply = async (taskId, message) => {
     try {
       console.log('Adding reply - Task ID:', taskId, 'Message:', message);
       const response = await axios.post(
-        `${BACKEND_URL}/api/admin/tasks/${taskId}/reply`, 
+        `${BACKEND_URL}/api/admin/tasks/${taskId}/reply`,
         { message }, 
         { 
           headers: getAuthHeaders(),
@@ -215,7 +241,7 @@ export default function ManageTicketsPage() {
         }
       );
       console.log('Reply added successfully:', response.data);
-      fetchTasks(); // Refresh tasks to show the new reply
+      fetchTasks();
       return response.data;
     } catch (error) {
       console.error("Error adding reply:", error);
@@ -226,8 +252,13 @@ export default function ManageTicketsPage() {
     }
   };
 
-  // Update user role/handles
+  // Update user role/handles - Only for superadmins
   const handleUpdateUser = async (userId) => {
+    if (!isSuperAdmin) {
+      alert("Only superadmins can update user roles and permissions.");
+      return;
+    }
+
     try {
       await axios.put(
         `${BACKEND_URL}/api/admin/users/${userId}/role`,
@@ -235,13 +266,11 @@ export default function ManageTicketsPage() {
         { headers: getAuthHeaders() }
       );
 
-      if (isSuperAdmin) {
-        await axios.put(
-          `${BACKEND_URL}/api/admin/users/${userId}/superadmin`,
-          { isSuperAdmin: updatedSuperAdmin },
-          { headers: getAuthHeaders() }
-        );
-      }
+      await axios.put(
+        `${BACKEND_URL}/api/admin/users/${userId}/superadmin`,
+        { isSuperAdmin: updatedSuperAdmin },
+        { headers: getAuthHeaders() }
+      );
 
       await axios.put(
         `${BACKEND_URL}/api/admin/users/${userId}/handles`,
@@ -255,13 +284,14 @@ export default function ManageTicketsPage() {
             ? {
                 ...u,
                 role: updatedRole,
-                isSuperAdmin: isSuperAdmin ? updatedSuperAdmin : u.isSuperAdmin,
+                isSuperAdmin: updatedSuperAdmin,
                 handles: updatedHandles,
               }
             : u
         )
       );
       setEditingUser(null);
+      alert("User updated successfully!");
     } catch (err) {
       console.error("Error updating user:", err.response || err.message);
       alert("Failed to update user. Please try again.");
@@ -269,6 +299,11 @@ export default function ManageTicketsPage() {
   };
 
   const openEditModal = (user) => {
+    if (!isSuperAdmin) {
+      alert("Only superadmins can edit user roles and permissions.");
+      return;
+    }
+    
     setEditingUser(user._id);
     setUpdatedRole(user.role);
     setUpdatedSuperAdmin(user.isSuperAdmin);
@@ -311,9 +346,9 @@ export default function ManageTicketsPage() {
             onReopen={(task) => setShowCreateModal({ ...task, isEditing: true })}
             onDelete={handleDeleteTicket}
             onReopenTicket={handleReopen}
-            onConfirmTask={handleConfirmTask} // ADD THIS
-            onRejectTask={handleRejectTask} // ADD THIS
-            onAddReply={handleAddReply} // ADD THIS - THIS WAS MISSING!
+            onConfirmTask={handleConfirmTask}
+            onRejectTask={handleRejectTask}
+            onAddReply={handleAddReply}
             isSuperAdmin={isSuperAdmin}
             currentUser={currentUser}
             filter={filter}
@@ -321,6 +356,7 @@ export default function ManageTicketsPage() {
             dateFilter={dateFilter}
             setDateFilter={setDateFilter}
             users={users}
+            onEditUser={openEditModal}
           />
         </div>
       </div>
@@ -338,8 +374,8 @@ export default function ManageTicketsPage() {
         />
       )}
 
-      {/* Edit User Modal */}
-      {editingUser && (
+      {/* Edit User Modal - Only for superadmins */}
+      {editingUser && isSuperAdmin && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
             <h2 className="text-xl font-bold mb-4 text-[#Ff8045]">Edit User</h2>
@@ -354,19 +390,17 @@ export default function ManageTicketsPage() {
                 <option value="ADMIN">ADMIN</option>
               </select>
             </div>
-            {isSuperAdmin && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">SuperAdmin</label>
-                <select
-                  value={updatedSuperAdmin}
-                  onChange={(e) => setUpdatedSuperAdmin(e.target.value === "true")}
-                  className="w-full bg-white	border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
-                >
-                  <option value={false}>No</option>
-                  <option value={true}>Yes</option>
-                </select>
-              </div>
-            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">SuperAdmin</label>
+              <select
+                value={updatedSuperAdmin}
+                onChange={(e) => setUpdatedSuperAdmin(e.target.value === "true")}
+                className="w-full bg-white	border border-purple-300 text-gray-900 rounded-lg px-2 py-1"
+              >
+                <option value={false}>No</option>
+                <option value={true}>Yes</option>
+              </select>
+            </div>
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1">Handles</label>
               <select
