@@ -11,9 +11,7 @@ export default function CreateTicketModal({
   isSuperAdmin,
   currentUser,
   isEditing = false,
-  onAddReply,
 }) {
-  // --- Helper function to format date for datetime-local input ---
   function formatDateForInput(dateString) {
     if (!dateString) {
       const now = new Date();
@@ -26,7 +24,6 @@ export default function CreateTicketModal({
     }
     
     const d = new Date(dateString);
-    
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -36,15 +33,12 @@ export default function CreateTicketModal({
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
-  // --- Helper function to convert datetime-local to ISO string for backend ---
   function convertToUTC(dateTimeLocal) {
     if (!dateTimeLocal) return null;
-    
     const localDate = new Date(dateTimeLocal);
     return localDate.toISOString();
   }
 
-  // --- Form state initialization ---
   const [formData, setFormData] = useState({
     _id: initialData._id || null,
     ticketName: initialData.ticketName || "",
@@ -75,11 +69,6 @@ export default function CreateTicketModal({
     reopenDescription: initialData.reopenDescription || "",
   });
 
-  // --- Reply state ---
-  const [replyMessage, setReplyMessage] = useState("");
-  const [showReplies, setShowReplies] = useState(isEditing);
-
-  // --- Dropdown visibility state ---
   const [showOpportunitySuggestions, setShowOpportunitySuggestions] =
     useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
@@ -95,7 +84,6 @@ export default function CreateTicketModal({
     }] : [])
   );
 
-  // --- Filtered lists ---
   const safeOpportunities = Array.isArray(opportunities)
     ? opportunities
     : [];
@@ -113,7 +101,6 @@ export default function CreateTicketModal({
       )
     : [];
 
-  // --- Generate dates based on schedule ---
   const generateDates = (schedule, fromDateLocal, toDateLocal) => {
     if (!schedule || schedule === "None") return [];
     if (!fromDateLocal || !toDateLocal) return [];
@@ -164,7 +151,6 @@ export default function CreateTicketModal({
     return [...new Set(dates)];
   };
 
-  // --- Re-generate dates when schedule, fromDate, toDate change ---
   useEffect(() => {
     if (formData.schedule !== "SelectedDates" && !isEditing) {
       const newDates = generateDates(
@@ -176,7 +162,6 @@ export default function CreateTicketModal({
     }
   }, [formData.schedule, formData.fromDate, formData.toDate, isEditing]);
 
-  // --- Handle any input change ---
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => {
@@ -208,7 +193,6 @@ export default function CreateTicketModal({
     }
   };
 
-  // --- Pick an opportunity ---
   const handleOpportunitySuggestionClick = (opp) => {
     setFormData((prev) => ({
       ...prev,
@@ -218,7 +202,6 @@ export default function CreateTicketModal({
     setShowOpportunitySuggestions(false);
   };
 
-  // --- Pick a user ---
   const handleUserSuggestionClick = (user) => {
     if (!selectedUsers.some(u => u._id === user._id)) {
       const newSelectedUsers = [...selectedUsers, {
@@ -230,45 +213,22 @@ export default function CreateTicketModal({
       setFormData(prev => ({
         ...prev,
         assignedTo: newSelectedUsers.map(u => u._id),
-        assignedToSearch: newSelectedUsers.map(u => `${u.name} (${u.email})`).join(", ")
+        assignedToSearch: ""
       }));
     }
     setShowUserSuggestions(false);
   };
 
-  // --- Remove a selected user ---
   const removeSelectedUser = (userId) => {
     const newSelectedUsers = selectedUsers.filter(user => user._id !== userId);
     setSelectedUsers(newSelectedUsers);
     setFormData(prev => ({
       ...prev,
       assignedTo: newSelectedUsers.map(u => u._id),
-      assignedToSearch: newSelectedUsers.map(u => `${u.name} (${u.email})`).join(", ")
+      assignedToSearch: ""
     }));
   };
 
-  // --- Handle reply submission ---
-  const handleReplySubmit = async () => {
-    if (!replyMessage.trim()) {
-      alert("Please enter a reply message");
-      return;
-    }
-    
-    if (onAddReply && formData._id) {
-      try {
-        await onAddReply(formData._id, replyMessage);
-        setReplyMessage("");
-        setShowReplies(true);
-      } catch (error) {
-        console.error("Error adding reply:", error);
-        alert("Failed to add reply");
-      }
-    } else {
-      alert("Cannot add reply to unsaved task");
-    }
-  };
-
-  // --- Submit form ---
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -345,7 +305,6 @@ export default function CreateTicketModal({
     onClose();
   };
 
-  // --- Human‐readable schedule summary ---
   const getScheduleSummary = () => {
     if (formData.schedule === "None" || formData.selectedDates.length === 0) {
       return "No dates generated.";
@@ -364,7 +323,6 @@ export default function CreateTicketModal({
     return `From ${start} to ${end} ${pattern}. (${formData.selectedDates.length} occurrence${formData.selectedDates.length > 1 ? 's' : ''})`;
   };
 
-  // Get current local time for display
   const getCurrentLocalTime = () => {
     return new Date().toLocaleTimeString('en-IN', { 
       hour: '2-digit', 
@@ -373,7 +331,6 @@ export default function CreateTicketModal({
     });
   };
 
-  // Format the entered time for display
   const getEnteredTime = (dateTimeLocal) => {
     if (!dateTimeLocal) return '';
     const d = new Date(dateTimeLocal);
@@ -384,42 +341,9 @@ export default function CreateTicketModal({
     });
   };
 
-  // Check if user can reply - FIXED VERSION
-  const canReply = () => {
-    if (!isEditing || !currentUser || !currentUser._id) return false;
-    
-    const currentUserId = currentUser._id.toString();
-    
-    // Check if current user is assigned to the task
-    const isAssigned = initialData.assignedTo?.some(user => {
-      const userId = user._id?.toString();
-      return userId === currentUserId;
-    });
-    
-    // Check if current user is the creator
-    const isCreator = initialData.createdBy?._id?.toString() === currentUserId;
-    
-    // Check if current user is the assigner
-    const isAssigner = initialData.assignedBy?._id?.toString() === currentUserId;
-    
-    console.log("CreateTicketModal canReply check:", {
-      currentUserId,
-      isAssigned,
-      isCreator,
-      isAssigner,
-      assignedUsers: initialData.assignedTo?.map(u => ({id: u._id?.toString(), name: u.name})),
-      canReply: isAssigned || isCreator || isAssigner || isSuperAdmin
-    });
-    
-    return isAssigned || isCreator || isAssigner || isSuperAdmin;
-  };
-
-  const canReplyToTask = canReply();
-
-  // --- Render ---
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold mb-4">
           {isEditing ? "Edit Ticket" : "Create Ticket"}
         </h2>
@@ -491,7 +415,7 @@ export default function CreateTicketModal({
               )}
           </div>
 
-          {/* Assign To (Multiple Users) - Available to all users */}
+          {/* Assign To (Multiple Users) - Now visible to all users */}
           <div className="mb-4 relative">
             <label className="block text-sm font-medium">Assign To *</label>
             <input
@@ -505,7 +429,6 @@ export default function CreateTicketModal({
               }
               placeholder="Type to search users..."
               className="w-full border p-2 rounded h-10"
-              
             />
             {showUserSuggestions && filteredUsers.length > 0 && (
               <div className="absolute z-10 w-full bg-white border rounded mt-1 max-h-40 overflow-y-auto">
@@ -618,7 +541,7 @@ export default function CreateTicketModal({
             </div>
           )}
 
-          {/* Completed status - Remove Pending option */}
+          {/* Completed status */}
           <div className="mb-4">
             <label className="block text-sm font-medium">Completed On</label>
             <select
@@ -629,11 +552,14 @@ export default function CreateTicketModal({
             >
               <option value="Not Done">Not Done</option>
               <option value="Done">Done</option>
+              {formData.completedOn === "Pending Confirmation" && (
+                <option value="Pending Confirmation">Pending Confirmation</option>
+              )}
             </select>
           </div>
 
-          {/* Completion Remarks (shown when marking as Done) */}
-          {formData.completedOn === "Done" && (
+          {/* Completion Remarks (only shown when marking as Done) */}
+          {(formData.completedOn === "Done" || formData.completedOn === "Pending Confirmation") && (
             <div className="mb-4">
               <label className="block text-sm font-medium">Completion Remarks</label>
               <textarea
@@ -730,62 +656,6 @@ export default function CreateTicketModal({
               <div className="border p-2 rounded max-h-20 overflow-y-auto text-sm bg-gray-50">
                 {getScheduleSummary()}
               </div>
-            </div>
-          )}
-
-          {/* Reply Section - Always visible in edit mode */}
-          {isEditing && canReplyToTask && (
-            <div className="mb-6 border-t pt-4">
-              <h3 className="text-sm font-medium mb-3">Reply to Task</h3>
-              <div className="mb-3">
-                <textarea
-                  value={replyMessage}
-                  onChange={(e) => setReplyMessage(e.target.value)}
-                  placeholder="Type your reply here..."
-                  rows="3"
-                  className="w-full border p-2 rounded text-sm"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleReplySubmit}
-                className="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700"
-              >
-                Send Reply
-              </button>
-
-              {/* Show existing replies */}
-              {initialData.replies && initialData.replies.length > 0 && (
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="text-sm font-medium">Previous Replies ({initialData.replies.length})</h4>
-                    <button
-                      type="button"
-                      onClick={() => setShowReplies(!showReplies)}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      {showReplies ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                  {showReplies && (
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {initialData.replies.map((reply, index) => (
-                        <div key={index} className="p-2 bg-gray-50 border rounded">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="font-medium text-xs">{reply.user?.name}</span>
-                              <span className="text-gray-500 text-xs ml-2">
-                                {new Date(reply.createdAt).toLocaleString()}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-1 text-sm">{reply.message}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
 

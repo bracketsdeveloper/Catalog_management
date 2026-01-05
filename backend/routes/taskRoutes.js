@@ -21,7 +21,6 @@ function createLogEntry(req, action, field, oldValue, newValue, description = nu
   };
 }
 
-// Helper to format date for display in emails (IST)
 function formatDateForDisplay(date) {
   if (!date) return 'N/A';
   const d = new Date(date);
@@ -73,27 +72,25 @@ async function sendTaskAssignmentEmail(task, assignedUsers, assignedByUser, isUp
   }
 }
 
-async function sendTaskCompletionEmail(task, completedByUser, isPending = false) {
+async function sendTaskPendingConfirmationEmail(task, completedByUser) {
   try {
     const assignedByUser = await User.findById(task.assignedBy);
     if (!assignedByUser || !assignedByUser.email) return;
 
     const taskDate = formatDateForDisplay(task.toBeClosedBy);
-    const subject = isPending 
-      ? `Task Pending Approval: ${task.ticketName}`
-      : `Task Confirmed: ${task.ticketName}`;
+    const subject = `Task Pending Confirmation: ${task.ticketName}`;
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: ${isPending ? '#F59E0B' : '#10B981'};">${isPending ? 'Task Pending Approval' : 'Task Confirmed'}</h2>
-        <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h2 style="color: #F59E0B;">Task Pending Confirmation</h2>
+        <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0;">${task.ticketName}</h3>
           <p><strong>Task Reference:</strong> ${task.taskRef || 'N/A'}</p>
-          <p><strong>${isPending ? 'Completed By' : 'Confirmed By'}:</strong> ${completedByUser.name} (${completedByUser.email})</p>
-          <p><strong>${isPending ? 'Completion Date' : 'Confirmation Date'}:</strong> ${formatDateForDisplay(new Date())}</p>
+          <p><strong>Marked Complete By:</strong> ${completedByUser.name} (${completedByUser.email})</p>
+          <p><strong>Completion Date:</strong> ${formatDateForDisplay(new Date())}</p>
           <p><strong>Completion Remarks:</strong> ${task.completionRemarks || 'No remarks provided'}</p>
         </div>
-        ${isPending ? `<p>Please log in to the system to review and confirm this task.</p>` : ''}
+        <p>Please log in to the system to confirm or reject the task completion.</p>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
         <p style="color: #6b7280; font-size: 12px;">This is an automated notification from the Task Management System.</p>
       </div>
@@ -103,12 +100,49 @@ async function sendTaskCompletionEmail(task, completedByUser, isPending = false)
       to: assignedByUser.email,
       subject,
       html,
-      text: `${isPending ? 'Task Pending Approval' : 'Task Confirmed'}: ${task.ticketName}\n\n${isPending ? 'Completed By' : 'Confirmed By'}: ${completedByUser.name}\n\nRemarks: ${task.completionRemarks || 'None'}\n\nTask was due on: ${taskDate}`
+      text: `Task Pending Confirmation: ${task.ticketName}\n\nMarked Complete By: ${completedByUser.name}\n\nRemarks: ${task.completionRemarks || 'None'}\n\nPlease log in to confirm.`
     });
 
-    console.log(`Task ${isPending ? 'pending' : 'confirmation'} email sent to: ${assignedByUser.email}`);
+    console.log(`Task pending confirmation email sent to: ${assignedByUser.email}`);
   } catch (error) {
-    console.error("Error sending task email:", error);
+    console.error("Error sending task pending confirmation email:", error);
+  }
+}
+
+async function sendTaskConfirmedEmail(task, confirmedByUser) {
+  try {
+    const assignedUsers = await User.find({ _id: { $in: task.assignedTo } });
+    const userEmails = assignedUsers.map(user => user.email).filter(email => email);
+    
+    if (userEmails.length === 0) return;
+
+    const subject = `Task Confirmed & Closed: ${task.ticketName}`;
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #10B981;">Task Confirmed & Closed</h2>
+        <div style="background-color: #d1fae5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">${task.ticketName}</h3>
+          <p><strong>Task Reference:</strong> ${task.taskRef || 'N/A'}</p>
+          <p><strong>Confirmed By:</strong> ${confirmedByUser.name} (${confirmedByUser.email})</p>
+          <p><strong>Confirmed At:</strong> ${formatDateForDisplay(new Date())}</p>
+        </div>
+        <p>This task has been successfully completed and closed.</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #6b7280; font-size: 12px;">This is an automated notification from the Task Management System.</p>
+      </div>
+    `;
+
+    await sendMail({
+      to: userEmails,
+      subject,
+      html,
+      text: `Task Confirmed & Closed: ${task.ticketName}\n\nConfirmed By: ${confirmedByUser.name}\n\nThis task has been successfully completed.`
+    });
+
+    console.log(`Task confirmed email sent to: ${userEmails.join(', ')}`);
+  } catch (error) {
+    console.error("Error sending task confirmed email:", error);
   }
 }
 
@@ -151,44 +185,72 @@ async function sendTaskReopenEmail(task, reopenedByUser) {
   }
 }
 
-async function sendTaskReplyEmail(task, replyingUser, message, replyToUsers) {
+async function sendReplyNotificationEmail(task, reply, replyByUser) {
   try {
-    const userEmails = replyToUsers.map(user => user.email).filter(email => email);
+    const recipientIds = [];
     
-    if (userEmails.length === 0) return;
+    if (task.createdBy && task.createdBy.toString() !== replyByUser._id.toString()) {
+      recipientIds.push(task.createdBy);
+    }
+    
+    task.assignedTo.forEach(userId => {
+      if (userId.toString() !== replyByUser._id.toString() && !recipientIds.includes(userId.toString())) {
+        recipientIds.push(userId);
+      }
+    });
+
+    if (recipientIds.length === 0) return;
+
+    const recipients = await User.find({ _id: { $in: recipientIds } });
+    const emails = recipients.map(u => u.email).filter(e => e);
+
+    if (emails.length === 0) return;
 
     const subject = `New Reply on Task: ${task.ticketName}`;
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #4F46E5;">New Reply on Task</h2>
-        <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h2 style="color: #3B82F6;">New Reply on Task</h2>
+        <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0;">${task.ticketName}</h3>
           <p><strong>Task Reference:</strong> ${task.taskRef || 'N/A'}</p>
-          <p><strong>Replied By:</strong> ${replyingUser.name} (${replyingUser.email})</p>
-          <p><strong>Reply Time:</strong> ${formatDateForDisplay(new Date())}</p>
-          <div style="background-color: #f0f4ff; padding: 15px; border-left: 4px solid #4F46E5; margin: 15px 0;">
-            <p style="margin: 0; font-style: italic;">"${message}"</p>
+          <p><strong>Reply From:</strong> ${replyByUser.name} (${replyByUser.email})</p>
+          <p><strong>Message:</strong></p>
+          <div style="background-color: white; padding: 15px; border-radius: 4px; border-left: 4px solid #3B82F6;">
+            ${reply.message}
           </div>
         </div>
-        <p>Please log in to the system to view and respond to this reply.</p>
+        <p>Please log in to the system to view and respond.</p>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
         <p style="color: #6b7280; font-size: 12px;">This is an automated notification from the Task Management System.</p>
       </div>
     `;
 
     await sendMail({
-      to: userEmails,
+      to: emails,
       subject,
       html,
-      text: `New Reply on Task: ${task.ticketName}\n\nReplied By: ${replyingUser.name}\n\nMessage: ${message}\n\nPlease log in to view and respond.`
+      text: `New Reply on Task: ${task.ticketName}\n\nFrom: ${replyByUser.name}\n\nMessage: ${reply.message}\n\nPlease log in to respond.`
     });
 
-    console.log(`Task reply email sent to: ${userEmails.join(', ')}`);
+    console.log(`Reply notification email sent to: ${emails.join(', ')}`);
   } catch (error) {
-    console.error("Error sending task reply email:", error);
+    console.error("Error sending reply notification email:", error);
   }
 }
+
+// GET all users for assignment dropdown (accessible to all authenticated users)
+router.get("/tasks/users", authenticate, async (req, res) => {
+  try {
+    const users = await User.find({ isVerified: true })
+      .select("name email _id")
+      .sort({ name: 1 });
+    res.json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Server error fetching users" });
+  }
+});
 
 // GET tasks assigned to current user
 router.get("/tasks/assigned-to-me", authenticate, async (req, res) => {
@@ -201,9 +263,10 @@ router.get("/tasks/assigned-to-me", authenticate, async (req, res) => {
     })
       .populate("assignedBy", "name email")
       .populate("assignedTo", "name email")
-      .populate("opportunityId", "opportunityCode opportunityName")
-      .populate("replies.user", "name email")
+      .populate("createdBy", "name email")
       .populate("confirmedBy", "name email")
+      .populate("replies.createdBy", "name email")
+      .populate("opportunityId", "opportunityCode opportunityName")
       .sort({ toBeClosedBy: 1 })
       .lean();
 
@@ -228,93 +291,6 @@ router.get("/tasks/assigned-to-me", authenticate, async (req, res) => {
       success: false,
       message: "Server error fetching assigned tasks"
     });
-  }
-});
-
-// GET tasks for current user (creator and assigned user)
-router.get("/tasks/my-tasks", authenticate, async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { searchTerm } = req.query;
-    
-    const query = {
-      $or: [
-        { createdBy: userId },
-        { assignedTo: userId },
-        { assignedBy: userId }
-      ],
-      isActive: true
-    };
-    
-    if (searchTerm) {
-      const regex = new RegExp(searchTerm, "i");
-      query.$or = query.$or || [];
-      query.$or.push(
-        { taskRef: regex },
-        { ticketName: regex },
-        { taskDescription: regex },
-        { opportunityCode: regex }
-      );
-    }
-    
-    const tasks = await Task.find(query)
-      .populate("createdBy", "name email")
-      .populate("assignedTo", "name email")
-      .populate("assignedBy", "name email")
-      .populate("opportunityId", "opportunityCode opportunityName")
-      .populate("replies.user", "name email")
-      .populate("confirmedBy", "name email")
-      .sort({ createdAt: -1 });
-
-    res.json(tasks);
-  } catch (error) {
-    console.error("Error fetching user tasks:", error);
-    res.status(500).json({ message: "Server error fetching tasks" });
-  }
-});
-
-// GET all tasks (super admin only)
-router.get("/tasks", authenticate, async (req, res) => {
-  try {
-    const { searchTerm } = req.query;
-    const isSuperAdmin = req.user.isSuperAdmin;
-    
-    // For super admins: see all tasks
-    // For regular users: see only tasks they created or are assigned to
-    const query = isSuperAdmin
-      ? {}
-      : {
-          $or: [
-            { createdBy: req.user._id },
-            { assignedTo: req.user._id },
-            { assignedBy: req.user._id }
-          ],
-        };
-    
-    if (searchTerm) {
-      const regex = new RegExp(searchTerm, "i");
-      query.$or = query.$or || [];
-      query.$or.push(
-        { taskRef: regex },
-        { ticketName: regex },
-        { taskDescription: regex },
-        { opportunityCode: regex }
-      );
-    }
-    
-    const tasks = await Task.find(query)
-      .populate("createdBy", "name email")
-      .populate("assignedTo", "name email")
-      .populate("assignedBy", "name email")
-      .populate("opportunityId", "opportunityCode opportunityName")
-      .populate("replies.user", "name email")
-      .populate("confirmedBy", "name email")
-      .sort({ createdAt: -1 });
-    
-    res.json(tasks);
-  } catch (error) {
-    console.error("Error fetching tasks:", error);
-    res.status(500).json({ message: "Server error fetching tasks" });
   }
 });
 
@@ -413,6 +389,7 @@ router.post("/tasks", authenticate, async (req, res) => {
         toDate: toDateParsed,
         selectedDates: selectedDatesParsed,
         reopened: taskData.reopened || false,
+        replies: [],
         logs: [createLogEntry(req, "create", null, null, null)],
       });
       
@@ -434,152 +411,57 @@ router.post("/tasks", authenticate, async (req, res) => {
   }
 });
 
-// POST add reply to task
-router.post("/tasks/:id/reply", authenticate, async (req, res) => {
+// GET all tasks (with visibility restrictions)
+router.get("/tasks", authenticate, async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: "Task not found" });
-
-    // Check if user is authorized (assigned user, creator, or super admin)
-    const isAuthorized = req.user.isSuperAdmin || 
-      task.createdBy.toString() === req.user._id.toString() ||
-      task.assignedTo.some(userId => userId.toString() === req.user._id.toString()) ||
-      task.assignedBy.toString() === req.user._id.toString();
-
-    if (!isAuthorized) {
-      return res.status(403).json({ message: "Not authorized to reply to this task" });
+    const { searchTerm } = req.query;
+    const isSuperAdmin = req.user.isSuperAdmin;
+    
+    // Only creator and assigned users can see tasks (super admins see all)
+    const query = isSuperAdmin
+      ? {}
+      : {
+          $or: [
+            { createdBy: req.user._id },
+            { assignedTo: req.user._id },
+          ],
+        };
+    
+    if (searchTerm) {
+      const regex = new RegExp(searchTerm, "i");
+      const searchConditions = [
+        { taskRef: regex },
+        { ticketName: regex },
+        { taskDescription: regex },
+        { opportunityCode: regex }
+      ];
+      
+      if (isSuperAdmin) {
+        query.$or = searchConditions;
+      } else {
+        query.$and = [
+          { $or: [{ createdBy: req.user._id }, { assignedTo: req.user._id }] },
+          { $or: searchConditions }
+        ];
+      }
     }
-
-    const { message, attachments } = req.body;
-    if (!message || message.trim() === "") {
-      return res.status(400).json({ message: "Reply message is required" });
-    }
-
-    const reply = {
-      user: req.user._id,
-      message: message.trim(),
-      attachments: attachments || []
-    };
-
-    task.replies.push(reply);
-    task.logs.push(createLogEntry(req, "reply", "replies", null, reply, "Added a reply"));
-    await task.save();
-
-    // Send email notification to other users
-    const replyingUser = await User.findById(req.user._id);
-    const taskUsers = await User.find({
-      $or: [
-        { _id: task.createdBy },
-        { _id: { $in: task.assignedTo } },
-        { _id: task.assignedBy }
-      ],
-      _id: { $ne: req.user._id } // Exclude the user who replied
-    });
-
-    if (replyingUser && taskUsers.length > 0) {
-      await sendTaskReplyEmail(task, replyingUser, message, taskUsers);
-    }
-
-    const populatedTask = await Task.findById(task._id)
-      .populate("replies.user", "name email")
+    
+    const tasks = await Task.find(query)
       .populate("createdBy", "name email")
       .populate("assignedTo", "name email")
-      .populate("assignedBy", "name email");
-
-    res.json({
-      message: "Reply added successfully",
-      reply,
-      task: populatedTask
-    });
+      .populate("assignedBy", "name email")
+      .populate("confirmedBy", "name email")
+      .populate("replies.createdBy", "name email")
+      .populate("opportunityId", "opportunityCode opportunityName")
+      .sort({ createdAt: -1 });
+    res.json(tasks);
   } catch (error) {
-    console.error("Error adding reply:", error);
-    res.status(500).json({ message: "Server error adding reply" });
+    console.error("Error fetching tasks:", error);
+    res.status(500).json({ message: "Server error fetching tasks" });
   }
 });
 
-// PUT confirm task completion
-router.put("/tasks/:id/confirm", authenticate, async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: "Task not found" });
-
-    // Only task creator or super admin can confirm
-    const canConfirm = req.user.isSuperAdmin || 
-      task.createdBy.toString() === req.user._id.toString() ||
-      task.assignedBy.toString() === req.user._id.toString();
-
-    if (!canConfirm) {
-      return res.status(403).json({ message: "Only task creator or assigned by user can confirm completion" });
-    }
-
-    if (task.completedOn !== "Pending") {
-      return res.status(400).json({ message: "Task is not pending confirmation" });
-    }
-
-    const oldStatus = task.completedOn;
-    task.completedOn = "Done";
-    task.confirmedBy = req.user._id;
-    task.confirmedAt = new Date();
-    task.logs.push(createLogEntry(req, "confirm", "completedOn", oldStatus, "Done", "Task confirmed as done"));
-
-    await task.save();
-
-    const confirmedByUser = await User.findById(req.user._id);
-    if (confirmedByUser) {
-      await sendTaskCompletionEmail(task, confirmedByUser, false);
-    }
-
-    res.json({
-      message: "Task confirmed as completed",
-      task
-    });
-  } catch (error) {
-    console.error("Error confirming task:", error);
-    res.status(500).json({ message: "Server error confirming task" });
-  }
-});
-
-// NEW: Mark task as completed (sets to Pending)
-router.put("/tasks/:id/complete", authenticate, async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: "Task not found" });
-
-    // Check if user is assigned to this task
-    const isAssigned = task.assignedTo.some(userId => userId.toString() === req.user._id.toString());
-    const isSuperAdmin = req.user.isSuperAdmin;
-
-    if (!isAssigned && !isSuperAdmin) {
-      return res.status(403).json({ message: "Only assigned users can mark task as completed" });
-    }
-
-    if (task.completedOn !== "Not Done") {
-      return res.status(400).json({ message: "Task is already marked as completed or pending" });
-    }
-
-    const { completionRemarks } = req.body;
-    const oldStatus = task.completedOn;
-    task.completedOn = "Pending";
-    task.completionRemarks = completionRemarks || "Marked as completed by user";
-    task.logs.push(createLogEntry(req, "complete", "completedOn", oldStatus, "Pending", "Marked as completed - pending confirmation"));
-
-    await task.save();
-
-    const completedByUser = await User.findById(req.user._id);
-    if (completedByUser) {
-      await sendTaskCompletionEmail(task, completedByUser, true);
-    }
-
-    res.json({
-      message: "Task marked as completed. Waiting for confirmation.",
-      task
-    });
-  } catch (error) {
-    console.error("Error marking task as completed:", error);
-    res.status(500).json({ message: "Server error marking task as completed" });
-  }
-});
-
+// GET tasks for calendar (with visibility restrictions)
 router.get("/tasks/calendar", authenticate, async (req, res) => {
   try {
     const isSuperAdmin = req.user.isSuperAdmin;
@@ -589,10 +471,8 @@ router.get("/tasks/calendar", authenticate, async (req, res) => {
           $or: [
             { createdBy: req.user._id },
             { assignedTo: req.user._id },
-            { assignedBy: req.user._id }
           ],
         };
-    
     const tasks = await Task.find(query)
       .populate("createdBy", "name email")
       .populate("assignedTo", "name email")
@@ -608,6 +488,7 @@ router.get("/tasks/calendar", authenticate, async (req, res) => {
         const dateOnly = istDate.toISOString().split("T")[0];
         
         const isOverdue = date < new Date() && task.completedOn === "Not Done";
+        const isPending = task.completedOn === "Pending Confirmation";
         
         flatTasks.push({
           task,
@@ -615,8 +496,8 @@ router.get("/tasks/calendar", authenticate, async (req, res) => {
           eventObj: {
             title: `${task.taskRef}: ${task.ticketName}${task.opportunityId ? ` (${task.opportunityId.opportunityName})` : ""}`,
             date: dateOnly,
-            backgroundColor: isOverdue ? "red" : undefined,
-            borderColor: isOverdue ? "red" : undefined,
+            backgroundColor: isPending ? "orange" : (isOverdue ? "red" : undefined),
+            borderColor: isPending ? "orange" : (isOverdue ? "red" : undefined),
             extendedProps: { task },
           },
         });
@@ -630,21 +511,163 @@ router.get("/tasks/calendar", authenticate, async (req, res) => {
   }
 });
 
+// POST add reply to task
+router.post("/tasks/:id/reply", authenticate, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    
+    const userId = req.user._id.toString();
+    const isCreator = task.createdBy?.toString() === userId;
+    const isAssigned = task.assignedTo.some(id => id.toString() === userId);
+    const isSuperAdmin = req.user.isSuperAdmin;
+    
+    if (!isCreator && !isAssigned && !isSuperAdmin) {
+      return res.status(403).json({ message: "Unauthorized to reply to this task" });
+    }
+
+    const { message } = req.body;
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ message: "Reply message is required" });
+    }
+
+    const reply = {
+      message: message.trim(),
+      createdBy: req.user._id,
+      createdAt: new Date(),
+      isRead: false,
+    };
+
+    task.replies.push(reply);
+    task.logs.push(createLogEntry(req, "reply", null, null, message, "Added reply"));
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id)
+      .populate("createdBy", "name email")
+      .populate("assignedTo", "name email")
+      .populate("replies.createdBy", "name email");
+
+    const replyByUser = await User.findById(req.user._id);
+    const addedReply = populatedTask.replies[populatedTask.replies.length - 1];
+    await sendReplyNotificationEmail(populatedTask, addedReply, replyByUser);
+
+    res.json({ 
+      message: "Reply added successfully", 
+      task: populatedTask,
+      reply: addedReply
+    });
+  } catch (error) {
+    console.error("Error adding reply:", error);
+    res.status(500).json({ message: "Server error adding reply" });
+  }
+});
+
+// POST confirm task completion (only creator can confirm)
+router.post("/tasks/:id/confirm", authenticate, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    
+    const userId = req.user._id.toString();
+    const isCreator = task.createdBy?.toString() === userId;
+    const isSuperAdmin = req.user.isSuperAdmin;
+    
+    if (!isCreator && !isSuperAdmin) {
+      return res.status(403).json({ message: "Only the task creator can confirm completion" });
+    }
+
+    if (task.completedOn !== "Pending Confirmation") {
+      return res.status(400).json({ message: "Task is not pending confirmation" });
+    }
+
+    task.completedOn = "Done";
+    task.confirmedBy = req.user._id;
+    task.confirmedAt = new Date();
+    task.logs.push(createLogEntry(req, "confirm", "completedOn", "Pending Confirmation", "Done", "Task confirmed"));
+    
+    await task.save();
+
+    const confirmedByUser = await User.findById(req.user._id);
+    await sendTaskConfirmedEmail(task, confirmedByUser);
+
+    const populatedTask = await Task.findById(task._id)
+      .populate("createdBy", "name email")
+      .populate("assignedTo", "name email")
+      .populate("confirmedBy", "name email")
+      .populate("replies.createdBy", "name email");
+
+    res.json({ message: "Task confirmed and closed", task: populatedTask });
+  } catch (error) {
+    console.error("Error confirming task:", error);
+    res.status(500).json({ message: "Server error confirming task" });
+  }
+});
+
+// POST reject task completion (send back to Not Done)
+router.post("/tasks/:id/reject", authenticate, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    
+    const userId = req.user._id.toString();
+    const isCreator = task.createdBy?.toString() === userId;
+    const isSuperAdmin = req.user.isSuperAdmin;
+    
+    if (!isCreator && !isSuperAdmin) {
+      return res.status(403).json({ message: "Only the task creator can reject completion" });
+    }
+
+    if (task.completedOn !== "Pending Confirmation") {
+      return res.status(400).json({ message: "Task is not pending confirmation" });
+    }
+
+    const { rejectionReason } = req.body;
+
+    task.completedOn = "Not Done";
+    task.logs.push(createLogEntry(req, "reject", "completedOn", "Pending Confirmation", "Not Done", rejectionReason || "Completion rejected"));
+    
+    if (rejectionReason) {
+      task.replies.push({
+        message: `Completion rejected: ${rejectionReason}`,
+        createdBy: req.user._id,
+        createdAt: new Date(),
+        isRead: false,
+      });
+    }
+    
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id)
+      .populate("createdBy", "name email")
+      .populate("assignedTo", "name email")
+      .populate("replies.createdBy", "name email");
+
+    const rejectByUser = await User.findById(req.user._id);
+    if (rejectionReason) {
+      const rejectionReply = populatedTask.replies[populatedTask.replies.length - 1];
+      await sendReplyNotificationEmail(populatedTask, rejectionReply, rejectByUser);
+    }
+
+    res.json({ message: "Task completion rejected", task: populatedTask });
+  } catch (error) {
+    console.error("Error rejecting task:", error);
+    res.status(500).json({ message: "Server error rejecting task" });
+  }
+});
+
+// PUT update task
 router.put("/tasks/:id", authenticate, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: "Task not found" });
     
+    const userId = req.user._id.toString();
     const isSuperAdmin = req.user.isSuperAdmin;
+    const isCreator = task.createdBy?.toString() === userId;
+    const isAssigned = task.assignedTo.some(id => id.toString() === userId);
     
-    // Authorization: super admin, creator, assigned user, or assigned by user
-    const isAuthorized = isSuperAdmin || 
-      task.createdBy.toString() === req.user._id.toString() || 
-      task.assignedTo.includes(req.user._id.toString()) ||
-      task.assignedBy.toString() === req.user._id.toString();
-    
-    if (!isAuthorized) {
-      return res.status(403).json({ message: "Unauthorized to update this task" });
+    if (!isSuperAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     const { 
@@ -739,7 +762,6 @@ router.put("/tasks/:id", authenticate, async (req, res) => {
         const oldVal = task[field];
         let newVal = req.body[field];
         
-        // Handle date fields - frontend sends ISO strings (UTC)
         if (["toBeClosedBy", "fromDate", "toDate"].includes(field)) {
           if (req.body[field]) {
             newVal = new Date(req.body[field]);
@@ -749,17 +771,14 @@ router.put("/tasks/:id", authenticate, async (req, res) => {
           }
         }
         
-        // Handle selected dates array
         if (field === "selectedDates" && req.body[field]) {
           newVal = req.body[field].map((d) => new Date(d));
         }
         
-        // Handle boolean fields
         if (field === "reopened") {
           newVal = Boolean(req.body[field]);
         }
         
-        // Handle assignedTo array
         if (field === "assignedTo") {
           if (Array.isArray(req.body[field])) {
             newVal = req.body[field];
@@ -770,7 +789,14 @@ router.put("/tasks/:id", authenticate, async (req, res) => {
           }
         }
         
-        // Check if value actually changed
+        // Handle completion status - assigned users mark as Pending Confirmation
+        if (field === "completedOn" && newVal === "Done" && oldVal !== "Done") {
+          // Only assigned users trigger pending confirmation flow
+          if (isAssigned && !isCreator && !isSuperAdmin) {
+            newVal = "Pending Confirmation";
+          }
+        }
+        
         if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
           logs.push(createLogEntry(req, "update", field, oldVal, newVal));
           task[field] = newVal;
@@ -778,48 +804,51 @@ router.put("/tasks/:id", authenticate, async (req, res) => {
       }
     });
 
-    // Validate assigned users
+    if (task.assignedBy?.toString() !== req.user._id.toString()) {
+      logs.push(createLogEntry(req, "update", "assignedBy", task.assignedBy, req.user._id));
+      task.assignedBy = req.user._id;
+    }
+
     if (task.assignedTo && task.assignedTo.length > 0) {
-      for (const userId of task.assignedTo) {
-        if (mongoose.Types.ObjectId.isValid(userId)) {
-          const user = await User.findById(userId);
+      for (const usrId of task.assignedTo) {
+        if (mongoose.Types.ObjectId.isValid(usrId)) {
+          const user = await User.findById(usrId);
           if (!user) {
-            return res.status(404).json({ message: `Assigned user ${userId} not found` });
+            return res.status(404).json({ message: `Assigned user ${usrId} not found` });
           }
         }
       }
     }
 
-    // Handle schedule-specific logic
     if (schedule === "None" || schedule === "SelectedDates") {
       task.selectedDates = selectedDates 
         ? [...new Set(selectedDates.map((d) => new Date(d)))] 
         : [];
     }
 
-    // Handle completion with remarks
-    if (completedOn === "Pending" && task.completedOn !== "Pending") {
-      logs.push(createLogEntry(req, "update", "completedOn", task.completedOn, "Pending", completionRemarks));
-      task.completionRemarks = completionRemarks || "";
-      
-      const completedByUser = await User.findById(req.user._id);
-      if (completedByUser) {
-        await sendTaskCompletionEmail(task, completedByUser, true);
-      }
-    } else if (completedOn === "Done" && task.completedOn !== "Done") {
-      logs.push(createLogEntry(req, "update", "completedOn", task.completedOn, "Done", completionRemarks));
-      task.completionRemarks = completionRemarks || "";
-      
-      const completedByUser = await User.findById(req.user._id);
-      if (completedByUser) {
-        await sendTaskCompletionEmail(task, completedByUser, false);
+    // Handle completion with pending confirmation
+    if (completedOn === "Done" && task.completedOn === "Not Done") {
+      if (isAssigned && !isCreator && !isSuperAdmin) {
+        task.completedOn = "Pending Confirmation";
+        task.completionRemarks = completionRemarks || "";
+        logs.push(createLogEntry(req, "update", "completedOn", "Not Done", "Pending Confirmation", completionRemarks));
+        
+        const completedByUser = await User.findById(req.user._id);
+        if (completedByUser) {
+          await sendTaskPendingConfirmationEmail(task, completedByUser);
+        }
+      } else {
+        task.completedOn = "Done";
+        task.completionRemarks = completionRemarks || "";
+        task.confirmedBy = req.user._id;
+        task.confirmedAt = new Date();
       }
     }
 
-    // Handle reopening with description
     if (reopened === true && task.reopened !== true) {
       logs.push(createLogEntry(req, "update", "reopened", task.reopened, true, reopenDescription));
       task.reopenDescription = reopenDescription || "";
+      task.completedOn = "Not Done";
       
       const reopenedByUser = await User.findById(req.user._id);
       if (reopenedByUser) {
@@ -827,14 +856,12 @@ router.put("/tasks/:id", authenticate, async (req, res) => {
       }
     }
 
-    // Save the task if there are changes
     if (logs.length > 0) {
       task.logs.push(...logs);
       await task.save();
       
       console.log(`[UPDATE] Task saved. Due: ${formatDateForDisplay(task.toBeClosedBy)}`);
       
-      // Send email notification if assigned users changed
       const assignedToChanged = JSON.stringify(oldAssignedTo.sort()) !== JSON.stringify(task.assignedTo.sort());
       if (assignedToChanged) {
         const assignedUsers = await User.find({ _id: { $in: task.assignedTo } });
@@ -844,9 +871,16 @@ router.put("/tasks/:id", authenticate, async (req, res) => {
         }
       }
       
+      const populatedTask = await Task.findById(task._id)
+        .populate("createdBy", "name email")
+        .populate("assignedTo", "name email")
+        .populate("assignedBy", "name email")
+        .populate("confirmedBy", "name email")
+        .populate("replies.createdBy", "name email");
+      
       res.json({ 
         message: "Task updated successfully", 
-        task,
+        task: populatedTask,
         changes: logs.map(log => ({ field: log.field, action: log.action }))
       });
     } else {
@@ -866,9 +900,12 @@ router.delete("/tasks/:id", authenticate, async (req, res) => {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: "Task not found" });
     
+    const userId = req.user._id.toString();
     const isSuperAdmin = req.user.isSuperAdmin;
-    if (!isSuperAdmin && task.createdBy.toString() !== req.user._id.toString() && !task.assignedTo.includes(req.user._id.toString())) {
-      return res.status(403).json({ message: "Unauthorized" });
+    const isCreator = task.createdBy?.toString() === userId;
+    
+    if (!isSuperAdmin && !isCreator) {
+      return res.status(403).json({ message: "Only the task creator or super admin can delete tasks" });
     }
 
     const deleteQuery = {

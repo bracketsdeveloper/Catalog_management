@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import ReopenTicketModal from "./ReopenTicketModal";
+import TaskReplyModal from "./TaskReplyModal";
+import TaskDetailModal from "./TaskDetailModal";
 
 function TicketsTable({ 
   tasks, 
@@ -9,24 +11,24 @@ function TicketsTable({
   onReopen, 
   onDelete, 
   onReopenTicket, 
-  onAddReply, 
   onConfirmTask,
-  onMarkAsCompleted,
+  onRejectTask,
+  onAddReply, // This should be defined
   isSuperAdmin, 
+  currentUser,
   filter: propFilter, 
   setFilter: propSetFilter, 
   dateFilter: propDateFilter, 
   setDateFilter: propSetDateFilter, 
-  users = [],
-  currentUser 
+  users = [] 
 }) {
+  // Debug log to check if onAddReply is received
+  console.log('TicketsTable received onAddReply:', typeof onAddReply, onAddReply);
+
   const [localFilter, setLocalFilter] = useState("open");
   const [localDateFilter, setLocalDateFilter] = useState("");
   const [assignedByFilter, setAssignedByFilter] = useState("all");
   const [assignedToFilter, setAssignedToFilter] = useState("all");
-  const [replyMessage, setReplyMessage] = useState("");
-  const [activeReplyTaskId, setActiveReplyTaskId] = useState(null);
-  const [showReplySection, setShowReplySection] = useState({});
 
   const filter = propFilter !== undefined ? propFilter : localFilter;
   const setFilter = propSetFilter || setLocalFilter;
@@ -34,15 +36,21 @@ function TicketsTable({
   const setDateFilter = propSetDateFilter || setLocalDateFilter;
 
   const [showReopenModal, setShowReopenModal] = useState(null);
+  const [showReplyModal, setShowReplyModal] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const currentUserId = currentUser?._id || localStorage.getItem("userId");
 
   const headers = [
     { key: "taskRef", label: "Task #" },
     { key: "ticketName", label: "Ticket Name" },
     { key: "taskDescription", label: "Description" },
     { key: "opportunityCode", label: "OPP #" },
-    { key: "assignedBy", label: "Assigned By" },
+    { key: "createdBy", label: "Created By" },
+    { key: "createdAt", label: "Created On" },
     { key: "assignedTo", label: "Assigned To" },
-    { key: "createdAt", label: "Created Date" },
     { key: "toBeClosedBy", label: "To Be Closed By" },
     { key: "schedule", label: "Schedule" },
     { key: "completedOn", label: "Status" },
@@ -51,15 +59,14 @@ function TicketsTable({
 
   const now = new Date();
 
-  // Calculate counts for each filter category
   const openTicketsCount = tasks.filter((task) => {
     const taskDate = new Date(task.toBeClosedBy);
     return taskDate > now && task.completedOn === "Not Done" && !task.reopened;
   }).length;
 
-  const pendingTicketsCount = tasks.filter((task) => task.completedOn === "Pending").length;
-
   const closedTicketsCount = tasks.filter((task) => task.completedOn === "Done").length;
+
+  const pendingTicketsCount = tasks.filter((task) => task.completedOn === "Pending Confirmation").length;
 
   const reopenedTicketsCount = tasks.filter((task) => task.reopened === true).length;
 
@@ -69,6 +76,16 @@ function TicketsTable({
   }).length;
 
   const allTicketsCount = tasks.length;
+
+  const isCreator = (task) => {
+    return task.createdBy?._id === currentUserId || task.createdBy === currentUserId;
+  };
+
+  const isAssigned = (task) => {
+    return task.assignedTo?.some(user => 
+      user._id === currentUserId || user === currentUserId
+    );
+  };
 
   const getFilteredTasks = () => {
     const today = new Date();
@@ -90,10 +107,10 @@ function TicketsTable({
       switch (filter) {
         case "open":
           return taskDate > now && isNotDone && !task.reopened;
-        case "pending":
-          return task.completedOn === "Pending";
         case "closed":
           return task.completedOn === "Done";
+        case "pending":
+          return task.completedOn === "Pending Confirmation";
         case "reopened":
           return task.reopened === true;
         case "incomplete":
@@ -104,7 +121,7 @@ function TicketsTable({
     });
 
     if (isSuperAdmin && assignedByFilter !== "all") {
-      filteredTasks = filteredTasks.filter((task) => task.assignedBy?._id === assignedByFilter);
+      filteredTasks = filteredTasks.filter((task) => task.createdBy?._id === assignedByFilter);
     }
 
     if (isSuperAdmin && assignedToFilter !== "all") {
@@ -151,116 +168,15 @@ function TicketsTable({
     return `${task.assignedTo[0]?.name} + ${task.assignedTo.length - 1} more`;
   };
 
-  const canReply = (task) => {
-    if (!currentUser || !currentUser._id) {
-      console.log("No current user or user ID");
-      return false;
+  const handleRejectSubmit = () => {
+    if (showRejectModal) {
+      onRejectTask(showRejectModal._id, rejectionReason);
+      setShowRejectModal(null);
+      setRejectionReason("");
     }
-    
-    const currentUserId = currentUser._id.toString();
-    
-    // Debug: Check what's in the task object
-    console.log("Task debug:", {
-      taskId: task._id,
-      taskTicketName: task.ticketName,
-      currentUserId,
-      assignedToRaw: task.assignedTo,
-      assignedToLength: task.assignedTo?.length,
-      assignedToUsers: task.assignedTo?.map(u => ({
-        id: u._id,
-        idString: u._id?.toString(),
-        name: u.name
-      })),
-      createdById: task.createdBy?._id?.toString(),
-      assignedById: task.assignedBy?._id?.toString(),
-      isSuperAdmin
-    });
-    
-    // Check if current user is assigned to the task
-    // Handle both populated user objects and raw user IDs
-    const isAssigned = task.assignedTo?.some(user => {
-      // If user is an object with _id field
-      if (user && user._id) {
-        return user._id.toString() === currentUserId;
-      }
-      // If user is just an ID string
-      else if (typeof user === 'string') {
-        return user === currentUserId;
-      }
-      return false;
-    });
-    
-    // Check if current user is the creator
-    const isCreator = task.createdBy?._id?.toString() === currentUserId || 
-                     task.createdBy?.toString() === currentUserId;
-    
-    // Check if current user is the assigner
-    const isAssigner = task.assignedBy?._id?.toString() === currentUserId || 
-                      task.assignedBy?.toString() === currentUserId;
-    
-    const canReplyResult = isAssigned || isCreator || isAssigner || isSuperAdmin;
-    
-    console.log("canReply result:", {
-      isAssigned,
-      isCreator,
-      isAssigner,
-      canReplyResult
-    });
-    
-    return canReplyResult;
-  };
-
-  const canMarkAsCompleted = (task) => {
-    if (!currentUser || !currentUser._id) return false;
-    
-    const currentUserId = currentUser._id.toString();
-    const isAssigned = task.assignedTo?.some(user => {
-      if (user && user._id) {
-        return user._id.toString() === currentUserId;
-      } else if (typeof user === 'string') {
-        return user === currentUserId;
-      }
-      return false;
-    });
-    
-    return task.completedOn === "Not Done" && (isAssigned || isSuperAdmin);
-  };
-
-  const canConfirm = (task) => {
-    if (!currentUser || !currentUser._id) return false;
-    
-    const currentUserId = currentUser._id.toString();
-    const isCreator = task.createdBy?._id?.toString() === currentUserId || 
-                     task.createdBy?.toString() === currentUserId;
-    const isAssigner = task.assignedBy?._id?.toString() === currentUserId || 
-                      task.assignedBy?.toString() === currentUserId;
-    
-    return task.completedOn === "Pending" && (isCreator || isAssigner || isSuperAdmin);
   };
 
   const filteredTasks = getFilteredTasks();
-
-  const handleReplySubmit = (taskId) => {
-    if (replyMessage.trim() === "") {
-      alert("Please enter a reply message");
-      return;
-    }
-    onAddReply(taskId, replyMessage);
-    setReplyMessage("");
-    setActiveReplyTaskId(null);
-  };
-
-  const toggleReplySection = (taskId) => {
-    setShowReplySection(prev => ({
-      ...prev,
-      [taskId]: !prev[taskId]
-    }));
-    if (!showReplySection[taskId]) {
-      setActiveReplyTaskId(taskId);
-    } else {
-      setActiveReplyTaskId(null);
-    }
-  };
 
   return (
     <div>
@@ -269,19 +185,19 @@ function TicketsTable({
           className={`px-2 py-1 rounded-md text-sm ${filter === "open" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("open")}
         >
-          Open Tickets ({openTicketsCount})
+          Open ({openTicketsCount})
         </button>
         <button
-          className={`px-2 py-1 rounded-md text-sm ${filter === "pending" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
+          className={`px-2 py-1 rounded-md text-sm ${filter === "pending" ? "bg-orange-500 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("pending")}
         >
-          Pending Confirmation ({pendingTicketsCount})
+          Pending ({pendingTicketsCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "closed" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("closed")}
         >
-          Closed Tickets ({closedTicketsCount})
+          Closed ({closedTicketsCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "reopened" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
@@ -293,13 +209,13 @@ function TicketsTable({
           className={`px-2 py-1 rounded-md text-sm ${filter === "incomplete" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("incomplete")}
         >
-          Incomplete Tasks ({incompleteTasksCount})
+          Incomplete ({incompleteTasksCount})
         </button>
         <button
           className={`px-2 py-1 rounded-md text-sm ${filter === "" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
           onClick={() => setFilter("")}
         >
-          All Tickets ({allTicketsCount})
+          All ({allTicketsCount})
         </button>
       </div>
 
@@ -307,7 +223,7 @@ function TicketsTable({
         {isSuperAdmin && (
           <>
             <div className="flex items-center">
-              <label className="mr-1 font-medium text-sm">Assigned By:</label>
+              <label className="mr-1 font-medium text-sm">Created By:</label>
               <select
                 value={assignedByFilter}
                 onChange={(e) => setAssignedByFilter(e.target.value)}
@@ -380,180 +296,137 @@ function TicketsTable({
               const taskDate = new Date(task.toBeClosedBy);
               const isPastDue = taskDate < now;
               const isNotDone = task.completedOn === "Not Done";
+              const isPending = task.completedOn === "Pending Confirmation";
               const showReopenButton = isPastDue && isNotDone && filter !== "reopened";
-              const taskCanReply = canReply(task);
-              const taskCanMarkAsCompleted = canMarkAsCompleted(task);
-              const taskCanConfirm = canConfirm(task);
-
-              // Debug: Check why canReply might be false
-              if (!taskCanReply && task.assignedTo?.length > 0) {
-                console.log("Task SHOULD have reply button but doesn't:", {
-                  taskId: task._id,
-                  taskName: task.ticketName,
-                  currentUserId: currentUser?._id,
-                  assignedTo: task.assignedTo,
-                  canReplyResult: taskCanReply
-                });
-              }
+              const canConfirm = isPending && (isCreator(task) || isSuperAdmin);
+              const hasReplies = task.replies && task.replies.length > 0;
 
               return (
-                <React.Fragment key={task._id}>
-                  <tr
-                    className={task.completedOn === "Done" ? "bg-green-100" : task.completedOn === "Pending" ? "bg-yellow-100" : ""}
-                  >
-                    <td className="border text-center">{task.taskRef || "-"}</td>
-                    <td className="border text-center">{task.ticketName || "-"}</td>
-                    <td className="border text-center">
-                      <div>
-                        <div title={task.taskDescription}>
-                          {task.taskDescription ? 
-                            (task.taskDescription.length > 30 ? 
-                              `${task.taskDescription.substring(0, 30)}...` : 
-                              task.taskDescription) 
-                            : "-"}
-                        </div>
-                        {taskCanReply && (
-                          <button
-                            onClick={() => toggleReplySection(task._id)}
-                            className="mt-1 text-xs text-blue-600 hover:text-blue-800"
-                          >
-                            {showReplySection[task._id] ? "Hide Reply" : "Reply"}
-                          </button>
-                        )}
-                        {/* Debug: Show why canReply is false */}
-                        {!taskCanReply && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            {!currentUser ? "No user" : 
-                             !task.assignedTo?.length ? "No assigned users" : 
-                             "You are not assigned to this task"}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="border text-center">{task.opportunityCode || "-"}</td>
-                    <td className="border text-center">{task.assignedBy?.name || "-"}</td>
-                    <td className="border text-center" title={task.assignedTo?.map(u => u.name).join(", ")}>
-                      {getAssignedUsersDisplay(task)}
-                    </td>
-                    <td className="border text-center">{formatDate(task.createdAt)}</td>
-                    <td className="border text-center">{formatDate(task.toBeClosedBy)}</td>
-                    <td className="border text-center">{getScheduleSummary(task)}</td>
-                    <td className="border text-center">
-                      {task.reopened ? (
-                        <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs">
-                          Re-Opened
-                        </span>
-                      ) : task.completedOn === "Pending" ? (
-                        <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded text-xs">
-                          Pending
-                        </span>
-                      ) : (
-                        task.completedOn || "-"
+                <tr
+                  key={task._id}
+                  className={
+                    task.completedOn === "Done" 
+                      ? "bg-green-100" 
+                      : isPending 
+                      ? "bg-orange-100" 
+                      : ""
+                  }
+                >
+                  <td className="border text-center">
+                    <button
+                      onClick={() => setShowDetailModal(task)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      {task.taskRef || "-"}
+                    </button>
+                  </td>
+                  <td className="border text-center">{task.ticketName || "-"}</td>
+                  <td className="border text-center" title={task.taskDescription}>
+                    {task.taskDescription ? 
+                      (task.taskDescription.length > 30 ? 
+                        `${task.taskDescription.substring(0, 30)}...` : 
+                        task.taskDescription) 
+                      : "-"}
+                  </td>
+                  <td className="border text-center">{task.opportunityCode || "-"}</td>
+                  <td className="border text-center">{task.createdBy?.name || "-"}</td>
+                  <td className="border text-center">{formatDate(task.createdAt)}</td>
+                  <td className="border text-center" title={task.assignedTo?.map(u => u.name).join(", ")}>
+                    {getAssignedUsersDisplay(task)}
+                  </td>
+                  <td className="border text-center">{formatDate(task.toBeClosedBy)}</td>
+                  <td className="border text-center">{getScheduleSummary(task)}</td>
+                  <td className="border text-center">
+                    {task.reopened ? (
+                      <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs">
+                        Re-Opened
+                      </span>
+                    ) : isPending ? (
+                      <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded text-xs">
+                        Pending
+                      </span>
+                    ) : task.completedOn === "Done" ? (
+                      <span className="bg-green-200 text-green-800 px-2 py-1 rounded text-xs">
+                        Done
+                      </span>
+                    ) : (
+                      <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs">
+                        {task.completedOn || "-"}
+                      </span>
+                    )}
+                    {hasReplies && (
+                      <span className="ml-1 bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-xs">
+                        💬{task.replies.length}
+                      </span>
+                    )}
+                  </td>
+                  <td className="border text-center">
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {/* Reply button - for assigned users and creator */}
+                      {(isAssigned(task) || isCreator(task) || isSuperAdmin) && (
+                        <button
+                          onClick={() => setShowReplyModal(task)}
+                          className="bg-blue-500 text-white text-xs px-2 py-1 rounded"
+                          title="Reply"
+                        >
+                          💬
+                        </button>
                       )}
-                    </td>
-                    <td className="border text-center">
-                      <div className="flex flex-col gap-1">
-                        {showReopenButton ? (
+                      
+                      {/* Confirm/Reject buttons - only for creator when pending */}
+                      {canConfirm && (
+                        <>
                           <button
-                            onClick={() => setShowReopenModal(task)}
-                            className="bg-green-600 text-white text-xs px-3 py-0 rounded"
+                            onClick={() => onConfirmTask(task._id)}
+                            className="bg-green-600 text-white text-xs px-2 py-1 rounded"
+                            title="Confirm Completion"
                           >
-                            Re-Open
+                            ✓
                           </button>
-                        ) : (
-                          <>
+                          <button
+                            onClick={() => setShowRejectModal(task)}
+                            className="bg-red-500 text-white text-xs px-2 py-1 rounded"
+                            title="Reject Completion"
+                          >
+                            ✗
+                          </button>
+                        </>
+                      )}
+                      
+                      {/* Reopen button */}
+                      {showReopenButton ? (
+                        <button
+                          onClick={() => setShowReopenModal(task)}
+                          className="bg-green-600 text-white text-xs px-2 py-1 rounded"
+                        >
+                          Re-Open
+                        </button>
+                      ) : (
+                        <>
+                          {/* Edit button - for creator and super admin */}
+                          {(isCreator(task) || isSuperAdmin) && (
                             <button
                               onClick={() => onReopen(task)}
-                              className="bg-blue-600 text-white text-xs px-3 py-0 rounded"
+                              className="bg-blue-600 text-white text-xs px-2 py-1 rounded"
                             >
                               Edit
                             </button>
-                            {taskCanMarkAsCompleted && (
-                              <button
-                                onClick={() => onMarkAsCompleted(task._id)}
-                                className="bg-green-600 text-white text-xs px-3 py-0 rounded"
-                              >
-                                Mark Completed
-                              </button>
-                            )}
-                            {taskCanConfirm && (
-                              <button
-                                onClick={() => onConfirmTask(task._id)}
-                                className="bg-green-700 text-white text-xs px-3 py-0 rounded"
-                              >
-                                Confirm
-                              </button>
-                            )}
-                            {isSuperAdmin && (
-                              <button
-                                onClick={() => onDelete(task._id)}
-                                className="bg-red-600 text-white text-xs px-3 py-0 rounded"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  
-                  {/* Reply Section */}
-                  {showReplySection[task._id] && (
-                    <tr>
-                      <td colSpan={headers.length} className="border p-2 bg-gray-50">
-                        <div className="mb-3">
-                          <h4 className="font-medium text-sm mb-2">Add Reply</h4>
-                          <div className="flex gap-2">
-                            <textarea
-                              value={replyMessage}
-                              onChange={(e) => setReplyMessage(e.target.value)}
-                              placeholder="Type your reply here..."
-                              rows="3"
-                              className="flex-1 border p-2 rounded text-sm"
-                            />
-                            <div className="flex flex-col gap-2">
-                              <button
-                                onClick={() => handleReplySubmit(task._id)}
-                                className="bg-indigo-600 text-white px-4 py-2 rounded text-sm"
-                              >
-                                Send Reply
-                              </button>
-                              <button
-                                onClick={() => toggleReplySection(task._id)}
-                                className="bg-gray-400 text-white px-4 py-2 rounded text-sm"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Previous Replies */}
-                        {task.replies && task.replies.length > 0 && (
-                          <div className="mt-3 pt-3 border-t">
-                            <div className="font-medium text-sm mb-2">Previous Replies ({task.replies.length}):</div>
-                            <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {task.replies.map((reply, index) => (
-                                <div key={index} className="p-2 bg-white border rounded">
-                                  <div className="flex justify-between items-start">
-                                    <div>
-                                      <span className="font-medium">{reply.user?.name}</span>
-                                      <span className="text-gray-500 text-xs ml-2">
-                                        {formatDate(reply.createdAt)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="mt-1 text-sm">{reply.message}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                          )}
+                          
+                          {/* Delete button - only for creator and super admin */}
+                          {(isCreator(task) || isSuperAdmin) && (
+                            <button
+                              onClick={() => onDelete(task._id)}
+                              className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               );
             })
           )}
@@ -564,11 +437,81 @@ function TicketsTable({
         <ReopenTicketModal
           task={showReopenModal}
           onClose={() => setShowReopenModal(null)}
-          onSubmit={(taskId, newClosingDate) => {
-            onReopenTicket(taskId, newClosingDate);
+          onSubmit={(taskId, newClosingDate, reopenDescription) => {
+            onReopenTicket(taskId, newClosingDate, reopenDescription);
             setShowReopenModal(null);
           }}
         />
+      )}
+
+      {showReplyModal && (
+        <TaskReplyModal
+          task={showReplyModal}
+          onClose={() => setShowReplyModal(null)}
+          onSubmit={async (taskId, message) => {
+            try {
+              console.log('Submitting reply for task:', taskId);
+              if (onAddReply && typeof onAddReply === 'function') {
+                await onAddReply(taskId, message);
+                setShowReplyModal(null);
+              } else {
+                console.error('onAddReply is not a function:', onAddReply);
+                alert('Reply functionality is not available. Please check the console for details.');
+              }
+            } catch (error) {
+              console.error('Error submitting reply:', error);
+              alert(`Failed to add reply: ${error.message}`);
+            }
+          }}
+          currentUserId={currentUserId}
+        />
+      )}
+
+      {showDetailModal && (
+        <TaskDetailModal
+          task={showDetailModal}
+          onClose={() => setShowDetailModal(null)}
+          formatDate={formatDate}
+          currentUserId={currentUserId}
+        />
+      )}
+
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-lg font-bold mb-4">Reject Completion</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Task: {showRejectModal.ticketName}
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Reason for Rejection</label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows="3"
+                className="w-full border p-2 rounded"
+                placeholder="Explain why the task completion is being rejected..."
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleRejectSubmit}
+                className="bg-red-600 text-white px-4 py-2 rounded"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => {
+                  setShowRejectModal(null);
+                  setRejectionReason("");
+                }}
+                className="bg-gray-400 text-white px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

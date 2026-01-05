@@ -174,6 +174,58 @@ export default function ManageTicketsPage() {
     }
   };
 
+  // ADD THESE NEW FUNCTIONS FOR TASK CONFIRMATION/REJECTION AND REPLIES:
+
+  // Confirm task completion
+  const handleConfirmTask = async (taskId) => {
+    try {
+      await axios.post(`${BACKEND_URL}/api/admin/tasks/${taskId}/confirm`, {}, {
+        headers: getAuthHeaders(),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error confirming task:", error);
+      alert(`Error: ${error.response?.data?.message || "Failed to confirm task"}`);
+    }
+  };
+
+  // Reject task completion
+  const handleRejectTask = async (taskId, rejectionReason) => {
+    try {
+      await axios.post(`${BACKEND_URL}/api/admin/tasks/${taskId}/reject`, { rejectionReason }, {
+        headers: getAuthHeaders(),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error rejecting task:", error);
+      alert(`Error: ${error.response?.data?.message || "Failed to reject task"}`);
+    }
+  };
+
+  // Add reply to task - THIS IS THE MISSING FUNCTION
+  const handleAddReply = async (taskId, message) => {
+    try {
+      console.log('Adding reply - Task ID:', taskId, 'Message:', message);
+      const response = await axios.post(
+        `${BACKEND_URL}/api/admin/tasks/${taskId}/reply`, 
+        { message }, 
+        { 
+          headers: getAuthHeaders(),
+          timeout: 10000
+        }
+      );
+      console.log('Reply added successfully:', response.data);
+      fetchTasks(); // Refresh tasks to show the new reply
+      return response.data;
+    } catch (error) {
+      console.error("Error adding reply:", error);
+      console.error("Error response:", error.response?.data);
+      const errorMessage = error.response?.data?.message || error.message || "Failed to add reply";
+      alert(`Error: ${errorMessage}`);
+      throw error;
+    }
+  };
+
   // Update user role/handles
   const handleUpdateUser = async (userId) => {
     try {
@@ -259,7 +311,11 @@ export default function ManageTicketsPage() {
             onReopen={(task) => setShowCreateModal({ ...task, isEditing: true })}
             onDelete={handleDeleteTicket}
             onReopenTicket={handleReopen}
+            onConfirmTask={handleConfirmTask} // ADD THIS
+            onRejectTask={handleRejectTask} // ADD THIS
+            onAddReply={handleAddReply} // ADD THIS - THIS WAS MISSING!
             isSuperAdmin={isSuperAdmin}
+            currentUser={currentUser}
             filter={filter}
             setFilter={setFilter}
             dateFilter={dateFilter}

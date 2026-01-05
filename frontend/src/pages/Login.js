@@ -34,14 +34,30 @@ export default function SignIn() {
         autoClose: 3000,
       });
 
-      const { token, role, name, permissions, isSuperAdmin } = response.data;
+      const { token, role, name, permissions, isSuperAdmin, _id } = response.data;
 
+      // Store all user data in localStorage
       localStorage.setItem("token", token);
       localStorage.setItem("role", role || "GENERAL");
       localStorage.setItem("name", name || "");
       localStorage.setItem("permissions", JSON.stringify(permissions || []));
       localStorage.setItem("isSuperAdmin", isSuperAdmin ? "true" : "false");
+      
+      // Store user ID - CRITICAL for reply functionality
+      localStorage.setItem("userId", _id || "");
+      
+      // Store complete user object for easy access
+      const userData = {
+        _id: _id || "",
+        name: name || "",
+        email: email,
+        role: role || "GENERAL",
+        isSuperAdmin: isSuperAdmin || false,
+        permissions: permissions || []
+      };
+      localStorage.setItem("currentUser", JSON.stringify(userData));
 
+      // Navigate based on role
       if (role === "ADMIN") {
         navigate("/admin-dashboard");
       } else if (role === "VIEWER") {
@@ -50,7 +66,10 @@ export default function SignIn() {
         navigate("/admin-dashboard");
       }
 
-      window.location.reload();
+      // Force reload to ensure user data is available
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     } catch (error) {
       toast.error(
         error.response?.data?.error || "An error occurred. Please try again.",
@@ -154,6 +173,5 @@ export default function SignIn() {
     </div>
   </div>
 </section>
-
   );
 }

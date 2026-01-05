@@ -63,11 +63,11 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// LOGIN
+// LOGIN - Updated to include user ID
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+password"); // Include password for comparison
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
@@ -110,8 +110,10 @@ router.post("/login", async (req, res) => {
     const userResponse = {
       message: "Login successful.",
       token,
+      _id: user._id, // CRITICAL: Include user ID
       role: user.role,
       name: user.name,
+      email: user.email, // Also include email
       isSuperAdmin: user.isSuperAdmin || false,
       permissions: user.permissions || [],
     };

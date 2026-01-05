@@ -1,13 +1,6 @@
 const mongoose = require("mongoose");
 const Counter = require("./Counter");
 
-const replySchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  message: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-  attachments: [{ type: String }] // URLs to uploaded files
-});
-
 const logSchema = new mongoose.Schema({
   action: { type: String, required: true },
   field: { type: String },
@@ -17,6 +10,14 @@ const logSchema = new mongoose.Schema({
   performedAt: { type: Date, default: Date.now },
   ipAddress: { type: String },
   description: { type: String },
+});
+
+const replySchema = new mongoose.Schema({
+  message: { type: String, required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  createdAt: { type: Date, default: Date.now },
+  isRead: { type: Boolean, default: false },
+  readAt: { type: Date },
 });
 
 const taskSchema = new mongoose.Schema({
@@ -33,7 +34,7 @@ const taskSchema = new mongoose.Schema({
   toBeClosedBy: { type: Date, required: true },
   completedOn: { 
     type: String, 
-    enum: ["Pending", "Done", "Not Done"], 
+    enum: ["Done", "Not Done", "Pending Confirmation"], 
     default: "Not Done" 
   },
   completionRemarks: { type: String },
