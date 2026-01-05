@@ -11,6 +11,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 function TaskManagementPage() {
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
+  const userId = localStorage.getItem("userId"); // Get userId from localStorage
   const [searchTerm, setSearchTerm] = useState("");
   const [opportunities, setOpportunities] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -37,9 +38,16 @@ function TaskManagementPage() {
   });
 
   useEffect(() => {
+    // Fetch current user with their ID
     axios
       .get(`${BACKEND_URL}/api/admin/users`, { headers: getAuthHeaders() })
-      .then((res) => setCurrentUser(res.data))
+      .then((res) => {
+        setCurrentUser(res.data);
+        // Store userId in localStorage if not already there
+        if (res.data._id && !localStorage.getItem("userId")) {
+          localStorage.setItem("userId", res.data._id);
+        }
+      })
       .catch((err) => console.error("Error fetching current user:", err));
   }, []);
 
@@ -47,7 +55,10 @@ function TaskManagementPage() {
     const endpoint = isSuperAdmin ? `${BACKEND_URL}/api/admin/users?all=true` : `${BACKEND_URL}/api/admin/users`;
     axios
       .get(endpoint, { headers: getAuthHeaders() })
-      .then((res) => setUsers(isSuperAdmin ? res.data : [res.data]))
+      .then((res) => {
+        const usersData = isSuperAdmin ? res.data : [res.data];
+        setUsers(usersData);
+      })
       .catch((err) => console.error("Error fetching users:", err));
   }, [isSuperAdmin]);
 
@@ -73,10 +84,15 @@ function TaskManagementPage() {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get(`${BACKEND_URL}/api/admin/tasks`, {
+      const endpoint = isSuperAdmin 
+        ? `${BACKEND_URL}/api/admin/tasks` 
+        : `${BACKEND_URL}/api/admin/tasks/my-tasks`;
+      
+      const res = await axios.get(endpoint, {
         headers: getAuthHeaders(),
         params: { searchTerm },
       });
+      console.log("Fetched tasks:", res.data); // Debug log
       setTasks(res.data || []);
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -104,7 +120,7 @@ function TaskManagementPage() {
     const sorted = [...tasks].sort((a, b) => {
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
-      if (["toBeClosedBy", "assignedOn"].includes(sortConfig.key)) {
+      if (["toBeClosedBy", "assignedOn", "createdAt"].includes(sortConfig.key)) {
         aVal = new Date(aVal);
         bVal = new Date(bVal);
       }
@@ -185,12 +201,50 @@ function TaskManagementPage() {
     }
   };
 
+  const handleAddReply = async (taskId, message) => {
+    try {
+      await axios.post(`${BACKEND_URL}/api/admin/tasks/${taskId}/reply`, {
+        message
+      }, {
+        headers: getAuthHeaders(),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error adding reply:", error);
+      alert(`Error: ${error.response?.data?.message || "Failed to add reply"}`);
+    }
+  };
+
+  const handleConfirmTask = async (taskId) => {
+    try {
+      await axios.put(`${BACKEND_URL}/api/admin/tasks/${taskId}/confirm`, {}, {
+        headers: getAuthHeaders(),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error confirming task:", error);
+      alert(`Error: ${error.response?.data?.message || "Failed to confirm task"}`);
+    }
+  };
+
+  const handleMarkAsCompleted = async (taskId) => {
+    try {
+      await axios.put(`${BACKEND_URL}/api/admin/tasks/${taskId}/complete`, {
+        completionRemarks: "Marked as completed by user"
+      }, {
+        headers: getAuthHeaders(),
+      });
+      fetchTasks();
+    } catch (error) {
+      console.error("Error marking task as completed:", error);
+      alert(`Error: ${error.response?.data?.message || "Failed to mark task as completed"}`);
+    }
+  };
+
   const formatDate = (date) => {
     if (!date) return "-";
     return new Date(date).toLocaleString("en-GB");
   };
-
-  console.log("TaskManagementPage props for TicketsTable:", { filter, setFilter, dateFilter, setDateFilter });
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 px-6 py-8 sm:px-10 md:px-16 lg:px-20">
@@ -233,12 +287,16 @@ function TaskManagementPage() {
                 onReopen={(task) => setShowCreateModal({ ...task, isEditing: true })}
                 onDelete={handleDeleteTicket}
                 onReopenTicket={handleReopen}
+                onAddReply={handleAddReply}
+                onConfirmTask={handleConfirmTask}
+                onMarkAsCompleted={handleMarkAsCompleted}
                 isSuperAdmin={isSuperAdmin}
                 filter={filter}
                 setFilter={setFilter}
                 dateFilter={dateFilter}
                 setDateFilter={setDateFilter}
                 users={users}
+                currentUser={currentUser}
               />
             </div>
           </div>
@@ -248,6 +306,7 @@ function TaskManagementPage() {
         <CreateTicketModal
           onClose={() => setShowCreateModal(null)}
           onSubmit={handleCreateTicket}
+          onAddReply={handleAddReply}
           opportunities={opportunities}
           users={users}
           initialData={showCreateModal}

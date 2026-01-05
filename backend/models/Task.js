@@ -1,6 +1,13 @@
 const mongoose = require("mongoose");
 const Counter = require("./Counter");
 
+const replySchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  message: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  attachments: [{ type: String }] // URLs to uploaded files
+});
+
 const logSchema = new mongoose.Schema({
   action: { type: String, required: true },
   field: { type: String },
@@ -26,10 +33,12 @@ const taskSchema = new mongoose.Schema({
   toBeClosedBy: { type: Date, required: true },
   completedOn: { 
     type: String, 
-    enum: ["Done", "Not Done"], 
+    enum: ["Pending", "Done", "Not Done"], 
     default: "Not Done" 
   },
   completionRemarks: { type: String },
+  confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  confirmedAt: { type: Date },
   schedule: {
     type: String,
     enum: ["None", "Daily", "Weekly", "Monthly", "AlternateDays", "SelectedDates"],
@@ -41,6 +50,7 @@ const taskSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   reopened: { type: Boolean, default: false },
   reopenDescription: { type: String },
+  replies: [replySchema],
   logs: [logSchema],
   notificationStatus: [
     {
