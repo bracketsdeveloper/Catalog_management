@@ -642,6 +642,7 @@ export default function CreateManualCatalog() {
       {
         ...item,
         productprice: breakdown.finalPrice,
+        productCost: breakdown.finalPrice, // FIX: Set productCost too
         brandingTypes: [],
         baseCost: item.productCost || 0,
         suggestedBreakdown: breakdown,
@@ -663,7 +664,7 @@ export default function CreateManualCatalog() {
     const newItems = variations.map((v) => ({
       productId: variationModalProduct._id,
       productName: variationModalProduct.productName || variationModalProduct.name,
-      productCost: breakdown.finalPrice,
+      productCost: breakdown.finalPrice, // FIX: Set productCost
       productGST: variationModalProduct.productGST || 0,
       color: v.color?.trim() || "",
       size: v.size?.trim() || "",
@@ -713,8 +714,26 @@ export default function CreateManualCatalog() {
       arr[editIndex] = { 
         ...arr[editIndex], 
         ...upd,
-        productCost: breakdown.finalPrice,
+        productCost: breakdown.finalPrice, // FIX: Update productCost
         suggestedBreakdown: breakdown
+      };
+      return arr;
+    });
+  };
+
+  // Add this function to manually update product cost
+  const handleManualPriceUpdate = (index, price) => {
+    setSelectedProducts((prev) => {
+      const arr = [...prev];
+      const newPrice = parseFloat(price) || 0;
+      arr[index] = {
+        ...arr[index],
+        productCost: newPrice,
+        productprice: newPrice,
+        suggestedBreakdown: {
+          ...(arr[index].suggestedBreakdown || {}),
+          finalPrice: newPrice
+        }
       };
       return arr;
     });
@@ -736,7 +755,8 @@ export default function CreateManualCatalog() {
       fieldsToDisplay,
       items: selectedProducts.map((p, i) => {
         const qty = p.quantity || 1;
-        const base = p.suggestedBreakdown?.finalPrice || p.productCost || 0;
+        // FIX: Use productCost OR suggestedBreakdown.finalPrice, but don't default to 0
+        const base = p.productCost || (p.suggestedBreakdown?.finalPrice || 0);
         const rate = parseFloat(base.toFixed(2));
         const amount = rate * qty;
         const gst = p.productGST ?? selectedGst;
@@ -1552,8 +1572,22 @@ export default function CreateManualCatalog() {
                                 <div className="font-semibold">{row.productName}</div>
                                 {row.color && <div className="text-xs">Color: {row.color}</div>}
                                 {row.size && <div className="text-xs">Size: {row.size}</div>}
+                                
+                                {/* ADD PRICE INPUT FIELD */}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs">Price:</span>
+                                  <input
+                                    type="number"
+                                    value={row.productCost || 0}
+                                    onChange={(e) => handleManualPriceUpdate(idx, e.target.value)}
+                                    className="text-xs w-24 border rounded px-1 py-0.5"
+                                    min="0"
+                                    step="0.01"
+                                  />
+                                  <span className="text-xs">₹</span>
+                                </div>
+                                
                                 <div className="text-xs">Base Cost: ₹{Number(row.baseCost || 0).toFixed(2)}</div>
-                                <div className="text-xs">Product Cost: ₹{Number(row.suggestedBreakdown?.finalPrice || row.productCost || 0).toFixed(2)}</div>
                                 <div className="text-xs">Qty: {row.quantity}</div>
                                 <div className="text-xs">GST: {row.productGST}%</div>
                                 <div className="text-xs">Margin: {selectedMargin}%</div>

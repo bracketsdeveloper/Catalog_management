@@ -470,33 +470,38 @@ export const excelUtils = {
     return workbook;
   },
 
-  // Export salary records to Excel
+  // Export salary records to Excel (Enhanced for new requirements)
   exportSalaryToExcel(records, month, year) {
     const headers = [
       "S.No",
       "Employee ID",
       "Employee Name",
+      "Probation",
       "Days in Month",
       "Working Days",
-      "Days Attended",
+      "Days Present",
       "Total Leaves",
-      "Paid Leaves",
-      "Pay Loss Days",
+      "Sick Leaves Used",
+      "Earned Leaves Used",
+      "Excess Leaves",
       "Days to Pay",
       "Expected Hours",
       "Hours Worked",
       "Hours Shortfall",
+      "99-Hour Deduction",
+      "Emergency WFH Days",
+      "Casual WFH Days",
+      "WFH Deduction",
+      "Missed Punches",
+      "Missed Punch Penalty",
+      "Weekend Deduction",
       "Salary Offered",
       "Per Day Salary",
       "Gross Salary",
-      "Hourly Deduction",
       "PF Deduction",
-      "PT Deduction",
-      "Other Deductions",
+      "ESI Deduction",
+      "Professional Tax",
       "Total Deductions",
-      "Incentive",
-      "Bonus",
-      "Total Additions",
       "Net Payable",
       "Status"
     ];
@@ -505,34 +510,39 @@ export const excelUtils = {
       "S.No": i + 1,
       "Employee ID": r.employeeId,
       "Employee Name": r.employeeName,
+      "Probation": r.isProbationary ? "Yes" : "No",
       "Days in Month": r.daysInMonth,
       "Working Days": r.totalWorkingDays,
-      "Days Attended": r.daysAttended,
+      "Days Present": r.daysPresent,
       "Total Leaves": r.totalLeavesTaken,
-      "Paid Leaves": r.paidLeavesUsed,
-      "Pay Loss Days": r.payLossDays,
+      "Sick Leaves Used": r.sickLeavesUsed || 0,
+      "Earned Leaves Used": r.earnedLeavesUsed || 0,
+      "Excess Leaves": r.excessLeaves || 0,
       "Days to Pay": r.daysToBePaidFor,
       "Expected Hours": r.totalExpectedHours,
-      "Hours Worked": r.totalHoursWorked?.toFixed(2) || 0,
-      "Hours Shortfall": r.hoursShortfall?.toFixed(2) || 0,
+      "Hours Worked": r.totalHoursWorked?.toFixed(2) || "0.00",
+      "Hours Shortfall": r.hoursShortfall?.toFixed(2) || "0.00",
+      "99-Hour Deduction": r.deductions?.hourlyShortfallDeduction || 0,
+      "Emergency WFH Days": r.emergencyWFHDays || 0,
+      "Casual WFH Days": r.casualWFHDays || 0,
+      "WFH Deduction": r.deductions?.totalWFHDeduction || 0,
+      "Missed Punches": r.missedPunchCount || 0,
+      "Missed Punch Penalty": r.deductions?.missedPunchPenalty || 0,
+      "Weekend Deduction": r.deductions?.weekendExcessLeaveDeduction || 0,
       "Salary Offered": r.salaryOffered,
-      "Per Day Salary": r.perDaySalary?.toFixed(2) || 0,
+      "Per Day Salary": r.perDaySalary?.toFixed(2) || "0.00",
       "Gross Salary": r.grossSalary,
-      "Hourly Deduction": r.deductions?.hourlyDeduction || 0,
       "PF Deduction": r.deductions?.pfDeduction || 0,
-      "PT Deduction": r.deductions?.professionalTax || 0,
-      "Other Deductions": r.deductions?.otherDeductions || 0,
+      "ESI Deduction": r.deductions?.esiDeduction || 0,
+      "Professional Tax": r.deductions?.professionalTax || 0,
       "Total Deductions": r.totalDeductions,
-      "Incentive": r.additions?.incentive || 0,
-      "Bonus": r.additions?.bonus || 0,
-      "Total Additions": r.totalAdditions,
       "Net Payable": r.netPayable,
       "Status": r.status
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData, { header: headers });
     
-    const colWidths = headers.map(h => ({ wch: Math.max(h.length, 12) }));
+    const colWidths = headers.map(h => ({ wch: Math.max(h.length, 10) }));
     worksheet['!cols'] = colWidths;
 
     const workbook = XLSX.utils.book_new();
@@ -542,20 +552,30 @@ export const excelUtils = {
     const totalGross = records.reduce((sum, r) => sum + r.grossSalary, 0);
     const totalDeductions = records.reduce((sum, r) => sum + r.totalDeductions, 0);
     const totalNet = records.reduce((sum, r) => sum + r.netPayable, 0);
+    const total99HourDeductions = records.reduce((sum, r) => sum + (r.deductions?.hourlyShortfallDeduction || 0), 0);
+    const totalWFHDeductions = records.reduce((sum, r) => sum + (r.deductions?.totalWFHDeduction || 0), 0);
+    const totalPenalties = records.reduce((sum, r) => sum + (r.deductions?.missedPunchPenalty || 0), 0);
 
     const summaryStats = [
-      ["SALARY REPORT"],
+      ["SALARY REPORT - ACE PRINT PACK / ACE GIFTING SOLUTIONS"],
       [`Month: ${dateUtils.getMonthName(month)} ${year}`],
       [`Generated: ${new Date().toLocaleDateString()}`],
       [""],
-      ["Summary", "Amount"],
+      ["Overall Summary", "Value"],
       ["Total Employees", records.length],
+      ["Probation Employees", records.filter(r => r.isProbationary).length],
+      ["Regular Employees", records.filter(r => !r.isProbationary).length],
       ["Total Gross Salary", dateUtils.formatCurrency(totalGross)],
+      ["Total 99-Hour Deductions", dateUtils.formatCurrency(total99HourDeductions)],
+      ["Total WFH Deductions", dateUtils.formatCurrency(totalWFHDeductions)],
+      ["Total Penalties", dateUtils.formatCurrency(totalPenalties)],
       ["Total Deductions", dateUtils.formatCurrency(totalDeductions)],
       ["Total Net Payable", dateUtils.formatCurrency(totalNet)],
       [""],
       ["Deductions Breakdown", "Amount"],
-      ["Hourly Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.hourlyDeduction || 0), 0))],
+      ["99-Hour Rule Deductions", dateUtils.formatCurrency(total99HourDeductions)],
+      ["WFH Deductions", dateUtils.formatCurrency(totalWFHDeductions)],
+      ["Missed Punch Penalties", dateUtils.formatCurrency(totalPenalties)],
       ["PF Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.pfDeduction || 0), 0))],
       ["PT Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.professionalTax || 0), 0))],
       ["ESI Deductions", dateUtils.formatCurrency(records.reduce((sum, r) => sum + (r.deductions?.esiDeduction || 0), 0))],
@@ -573,42 +593,68 @@ export const excelUtils = {
     return workbook;
   },
 
-  // Generate payslip data for Excel
+  // Generate payslip data for Excel (Enhanced)
   generatePayslipExcel(record) {
     const payslipData = [
-      ["PAYSLIP"],
+      ["PAYSLIP - ACE PRINT PACK / ACE GIFTING SOLUTIONS"],
       [`Month: ${dateUtils.getMonthName(record.month)} ${record.year}`],
       [""],
       ["Employee Details", ""],
       ["Employee ID", record.employeeId],
       ["Employee Name", record.employeeName],
+      ["Status", record.isProbationary ? "Probationary" : "Regular"],
       [""],
       ["Attendance Summary", ""],
       ["Days in Month", record.daysInMonth],
       ["Working Days", record.totalWorkingDays],
-      ["Days Attended", record.daysAttended],
-      ["Leaves Taken", record.totalLeavesTaken],
-      ["Paid Leaves", record.paidLeavesUsed],
-      ["Pay Loss Days", record.payLossDays],
+      ["Days Present", record.daysPresent],
+      ["Total Leaves", record.totalLeavesTaken],
+      ["Sick Leaves Used", record.sickLeavesUsed || 0],
+      ["Earned Leaves Used", record.earnedLeavesUsed || 0],
+      ["Excess Leaves", record.excessLeaves || 0],
       ["Days Paid For", record.daysToBePaidFor],
       [""],
       ["Hours Summary", ""],
       ["Expected Hours", record.totalExpectedHours],
-      ["Hours Worked", record.totalHoursWorked?.toFixed(2) || 0],
-      ["Hours Shortfall", record.hoursShortfall?.toFixed(2) || 0],
-      ["Overtime Hours", record.overtimeHours?.toFixed(2) || 0],
+      ["Hours Worked", record.totalHoursWorked?.toFixed(2) || "0.00"],
+      ["Hours Shortfall", record.hoursShortfall?.toFixed(2) || "0.00"],
+      ["Overtime Hours", record.overtimeHours?.toFixed(2) || "0.00"],
+      [""],
+      ["99-Hour Rule Details", ""],
+      ...(record.biWeeklyCalculations || []).map((period, i) => [
+        `Period ${i + 1} (${dateUtils.formatIndianDate(period.startDate)} - ${dateUtils.formatIndianDate(period.endDate)})`,
+        `Expected: ${period.expectedHours}h, Worked: ${period.actualHours}h, Shortfall: ${period.shortfallHours}h, Deduction: ${dateUtils.formatCurrency(period.deduction)}`
+      ]),
+      [""],
+      ["WFH Details", ""],
+      ["Emergency WFH Days", record.emergencyWFHDays || 0],
+      ["Casual WFH Days", record.casualWFHDays || 0],
+      ["Total WFH Deduction", dateUtils.formatCurrency(record.deductions?.totalWFHDeduction || 0)],
+      [""],
+      ["Penalties", ""],
+      ["Missed Punches", record.missedPunchCount || 0],
+      ["Missed Punch Penalty", dateUtils.formatCurrency(record.deductions?.missedPunchPenalty || 0)],
+      [""],
+      ["Weekend Deductions (for excess leaves)", ""],
+      ["Excess Leaves", record.excessLeaves || 0],
+      ["Weekend Deduction", dateUtils.formatCurrency(record.deductions?.weekendExcessLeaveDeduction || 0)],
       [""],
       ["Earnings", "Amount (₹)"],
       ["Salary Offered", record.salaryOffered],
-      ["Per Day Salary", record.perDaySalary?.toFixed(2) || 0],
+      ["Per Day Salary", record.perDaySalary?.toFixed(2) || "0.00"],
       ["Gross Salary", record.grossSalary],
       ["Incentive", record.additions?.incentive || 0],
       ["Bonus", record.additions?.bonus || 0],
+      ["Attendance Bonus", record.additions?.attendanceBonus || 0],
+      ["Performance Bonus", record.additions?.performanceBonus || 0],
       ["Other Additions", record.additions?.otherAdditions || 0],
-      ["Total Earnings", record.grossSalary + record.totalAdditions],
+      ["Total Earnings", record.grossSalary + (record.totalAdditions || 0)],
       [""],
       ["Deductions", "Amount (₹)"],
-      ["Hourly Shortfall", record.deductions?.hourlyDeduction || 0],
+      ["99-Hour Shortfall Deduction", record.deductions?.hourlyShortfallDeduction || 0],
+      ["Weekend Excess Leave Deduction", record.deductions?.weekendExcessLeaveDeduction || 0],
+      ["WFH Deduction", record.deductions?.totalWFHDeduction || 0],
+      ["Missed Punch Penalty", record.deductions?.missedPunchPenalty || 0],
       ["PF", record.deductions?.pfDeduction || 0],
       ["ESI", record.deductions?.esiDeduction || 0],
       ["Professional Tax", record.deductions?.professionalTax || 0],
@@ -618,13 +664,16 @@ export const excelUtils = {
       ["Other Deductions", record.deductions?.otherDeductions || 0],
       ["Total Deductions", record.totalDeductions],
       [""],
-      ["NET PAYABLE", record.netPayable],
+      ["NET PAYABLE", dateUtils.formatCurrency(record.netPayable)],
+      ["", ""],
+      ["", `Rs. ${record.netPayable?.toLocaleString('en-IN') || 0}`],
       [""],
-      [`Generated on: ${new Date().toLocaleDateString()}`]
+      [`Generated on: ${new Date().toLocaleDateString()}`],
+      ["", "Authorized Signatory"]
     ];
 
     const worksheet = XLSX.utils.aoa_to_sheet(payslipData);
-    worksheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
+    worksheet['!cols'] = [{ wch: 35 }, { wch: 25 }];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Payslip");
@@ -758,54 +807,89 @@ export const HRMS = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SALARY CONFIGURATION
+  // SALARY CONFIGURATION (UPDATED FOR NEW REQUIREMENTS)
   // ─────────────────────────────────────────────────────────────────────────
   getSalaryConfig(employeeId) {
-    return api.get(`/api/hrms/salary/config/${employeeId}`);
+    return api.get(`/api/salary/config/${employeeId}`);
   },
   saveSalaryConfig(config) {
-    return api.post("/api/hrms/salary/config", config);
+    return api.post("/api/salary/config", config);
   },
   getAllSalaryConfigs() {
-    return api.get("/api/hrms/salary/configs");
+    return api.get("/api/salary/configs");
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SALARY CALCULATION
+  // COMPANY CONFIGURATION (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  getCompanyConfig() {
+    return api.get("/api/configuration/company");
+  },
+  updateCompanyConfig(config) {
+    return api.put("/api/configuration/company", config);
+  },
+  applyCompanyConfig(data) {
+    return api.post("/api/salary/apply-company-config", data);
+  },
+  getConfigTemplates() {
+    return api.get("/api/configuration/templates");
+  },
+  applyConfigTemplate(data) {
+    return api.post("/api/configuration/apply-template", data);
+  },
+  exportConfigurations() {
+    return api.get("/api/configuration/export", { responseType: "blob" });
+  },
+  importConfigurations(data) {
+    return api.post("/api/configuration/import", data);
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALARY CONFIGURATION TEMPLATES (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  getSalaryConfigTemplates() {
+    return api.get("/api/salary/config-templates");
+  },
+  applySalaryTemplate(data) {
+    return api.post("/api/salary/apply-template", data);
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALARY CALCULATION (ENHANCED FOR NEW REQUIREMENTS)
   // ─────────────────────────────────────────────────────────────────────────
   calculateEmployeeSalary(employeeId, data) {
-    return api.post(`/api/hrms/salary/calculate/${employeeId}`, data);
+    return api.post(`/api/salary/calculate/${employeeId}`, data);
   },
   calculateAllSalaries(data) {
-    return api.post("/api/hrms/salary/calculate-all", data);
+    return api.post("/api/salary/calculate-all", data);
   },
   previewSalary(employeeId, data) {
-    return api.post(`/api/hrms/salary/preview/${employeeId}`, data);
+    return api.post(`/api/salary/preview/${employeeId}`, data);
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SALARY RECORDS
+  // SALARY RECORDS (ENHANCED FOR NEW REQUIREMENTS)
   // ─────────────────────────────────────────────────────────────────────────
   getSalaryRecords(params = {}) {
-    return api.get("/api/hrms/salary/records", { params });
+    return api.get("/api/salary/records", { params });
   },
   getSalaryRecord(employeeId, month, year) {
-    return api.get(`/api/hrms/salary/record/${employeeId}/${month}/${year}`);
+    return api.get(`/api/salary/record/${employeeId}/${month}/${year}`);
   },
   updateSalaryRecord(id, data) {
-    return api.put(`/api/hrms/salary/record/${id}`, data);
+    return api.put(`/api/salary/record/${id}`, data);
   },
   addSalaryAdjustment(id, adjustment) {
-    return api.post(`/api/hrms/salary/record/${id}/adjustment`, adjustment);
+    return api.post(`/api/salary/record/${id}/adjustment`, adjustment);
   },
   approveSalaryRecord(id) {
-    return api.post(`/api/hrms/salary/record/${id}/approve`);
+    return api.post(`/api/salary/record/${id}/approve`);
   },
   markSalaryPaid(id, data = {}) {
-    return api.post(`/api/hrms/salary/record/${id}/mark-paid`, data);
+    return api.post(`/api/salary/record/${id}/mark-paid`, data);
   },
   exportSalaryRecords(params = {}) {
-    return api.get("/api/hrms/salary/export", {
+    return api.get("/api/salary/export", {
       params,
       responseType: "blob",
     });
@@ -896,6 +980,292 @@ export const HRMS = {
     const workbook = excelUtils.generatePayslipExcel(record);
     const defaultFilename = `Payslip_${record.employeeName}_${dateUtils.getMonthName(record.month)}_${record.year}.xlsx`;
     XLSX.writeFile(workbook, filename || defaultFilename);
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // NEW: CONFIGURATION UTILITY METHODS
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Generate default company configuration
+   */
+  getDefaultCompanyConfig() {
+    return {
+      companyName: "Ace Print Pack / Ace Gifting Solutions",
+      attendanceSettings: {
+        dailyWorkHours: 9,
+        standardStartTime: "10:00",
+        standardEndTime: "19:00",
+        officeHoursStart: "09:00",
+        officeHoursEnd: "20:00"
+      },
+      biWeeklyRule: {
+        targetHours: 99,
+        gracePeriodHours: 2,
+        deductionPerHour: 500
+      },
+      saturdaysPattern: "1st_3rd",
+      leavePolicy: {
+        sickLeave: {
+          perMonth: 1,
+          nonCumulative: true,
+          cannotBeBundled: true
+        },
+        earnedLeave: {
+          per20WorkingDays: 1.25,
+          maxCarryForward: 30,
+          encashAtYearEnd: true,
+          requires7DaysNotice: true,
+          cannotBeBundled: true
+        },
+        specialLeaves: {
+          deathInFamily: 10,
+          selfMarriage: 2
+        },
+        holidays: {
+          compulsoryPerYear: 10,
+          restrictedPerYear: 2,
+          canConvertToEL: true
+        },
+        weekendDeductionTiers: [
+          { minExcessDays: 0, maxExcessDays: 2, sundaysDeducted: 0, description: "No weekend deduction" },
+          { minExcessDays: 3, maxExcessDays: 4, sundaysDeducted: 1, description: "1 Sunday deduction" },
+          { minExcessDays: 5, maxExcessDays: 6, sundaysDeducted: 2, description: "2 Sundays deduction" },
+          { minExcessDays: 7, maxExcessDays: 999, sundaysDeducted: 4, description: "All Sundays (LOP for weekends)" }
+        ]
+      },
+      wfhPolicy: {
+        emergencyWFH: {
+          salaryPercentage: 75,
+          deductionPercentage: 25
+        },
+        casualWFH: {
+          salaryPercentage: 50,
+          deductionPercentage: 50
+        },
+        requiresPermission: true
+      },
+      disciplinePolicy: {
+        missedPunchPenalty: 250,
+        ncncPenalty: {
+          maxInstancesPerQuarter: 2,
+          action: "termination"
+        },
+        overtimePolicy: {
+          noMonetaryCompensation: true,
+          forAppraisalOnly: true
+        }
+      },
+      eligibilityPolicy: {
+        probationPeriodDays: 30,
+        benefitsStartAfterProbation: true,
+        firstMonthPayBasis: "per_day_present"
+      },
+      incentives: {
+        attendanceBonus: {
+          amount: 1000,
+          consecutiveMonths: 4,
+          requires100Percent: true
+        },
+        departmentWeightage: [
+          { department: "Sales", revenueWeightage: 80, attendanceWeightage: 20 },
+          { department: "Operations", revenueWeightage: 30, attendanceWeightage: 70 },
+          { department: "Marketing", revenueWeightage: 60, attendanceWeightage: 40 },
+          { department: "Finance", revenueWeightage: 40, attendanceWeightage: 60 },
+          { department: "HR", revenueWeightage: 30, attendanceWeightage: 70 },
+          { department: "IT", revenueWeightage: 40, attendanceWeightage: 60 }
+        ]
+      },
+      defaultSalaryBreakdown: {
+        basicPercentage: 45,
+        hraPercentage: 22.5,
+        conveyancePercentage: 12.5,
+        medicalPercentage: 0,
+        specialPercentage: 15,
+        otherPercentage: 5
+      },
+      statutoryDefaults: {
+        pfPercentage: 12,
+        esiPercentage: 0.75,
+        esiSalaryThreshold: 21000,
+        professionalTax: 200
+      },
+      financialYear: {
+        startMonth: 4,
+        startDay: 1,
+        endMonth: 3,
+        endDay: 31
+      },
+      version: "2026.1",
+      policyDocumentPath: ""
+    };
+  },
+
+  /**
+   * Calculate 99-hour rule deduction
+   */
+  calculate99HourDeduction(shortfallHours, gracePeriodHours = 2, deductionRate = 500) {
+    if (shortfallHours <= gracePeriodHours) return 0;
+    return (shortfallHours - gracePeriodHours) * deductionRate;
+  },
+
+  /**
+   * Calculate WFH deduction
+   */
+  calculateWFHDeduction(emergencyWFHDays, casualWFHDays, dailyRate, emergencyDeductionRate = 0.25, casualDeductionRate = 0.50) {
+    const emergencyDeduction = emergencyWFHDays * dailyRate * emergencyDeductionRate;
+    const casualDeduction = casualWFHDays * dailyRate * casualDeductionRate;
+    return emergencyDeduction + casualDeduction;
+  },
+
+  /**
+   * Calculate weekend deduction based on excess leaves
+   */
+  calculateWeekendDeduction(excessDays, weekendTiers, dailyRate, sundaysInMonth) {
+    if (!weekendTiers || weekendTiers.length === 0) return 0;
+    
+    for (const tier of weekendTiers) {
+      if (excessDays >= tier.minExcessDays && excessDays <= tier.maxExcessDays) {
+        const sundaysToDeduct = Math.min(tier.sundaysDeducted, sundaysInMonth);
+        return sundaysToDeduct * dailyRate;
+      }
+    }
+    return 0;
+  },
+
+  /**
+   * Check if employee is in probation
+   */
+  isInProbation(joiningDate, probationPeriodDays = 30) {
+    if (!joiningDate) return true;
+    
+    const probationEnd = new Date(joiningDate);
+    probationEnd.setDate(probationEnd.getDate() + probationPeriodDays);
+    
+    return new Date() < probationEnd;
+  },
+
+  /**
+   * Format salary breakdown for display
+   */
+  formatSalaryBreakdown(breakdown, grossSalary) {
+    if (!breakdown) return null;
+    
+    const formatted = {};
+    const percentages = {
+      basic: breakdown.basicPercentage || 0,
+      hra: breakdown.hraPercentage || 0,
+      conveyance: breakdown.conveyancePercentage || 0,
+      medical: breakdown.medicalPercentage || 0,
+      special: breakdown.specialPercentage || 0,
+      other: breakdown.otherPercentage || 0
+    };
+
+    Object.keys(percentages).forEach(key => {
+      formatted[key] = {
+        percentage: percentages[key],
+        amount: Math.round(grossSalary * (percentages[key] / 100))
+      };
+    });
+
+    return formatted;
+  },
+
+  /**
+   * Generate configuration export file
+   */
+  exportConfigurationToExcel(configData, filename = "Company_Configuration.xlsx") {
+    const headers = [
+      "Setting Category",
+      "Setting Name",
+      "Value",
+      "Description"
+    ];
+
+    const excelData = [
+      // Attendance Settings
+      ["Attendance", "Daily Work Hours", configData.attendanceSettings?.dailyWorkHours, "Standard work hours per day"],
+      ["Attendance", "Standard Start Time", configData.attendanceSettings?.standardStartTime, "Office start time"],
+      ["Attendance", "Standard End Time", configData.attendanceSettings?.standardEndTime, "Office end time"],
+      
+      // 99-Hour Rule
+      ["99-Hour Rule", "Target Hours", configData.biWeeklyRule?.targetHours, "Target hours per 2 weeks"],
+      ["99-Hour Rule", "Grace Period Hours", configData.biWeeklyRule?.gracePeriodHours, "No deduction grace period"],
+      ["99-Hour Rule", "Deduction per Hour", configData.biWeeklyRule?.deductionPerHour, "Deduction rate per hour"],
+      
+      // Saturdays
+      ["Weekends", "Saturdays Off Pattern", configData.saturdaysPattern, "Which Saturdays are off"],
+      
+      // Leave Policy
+      ["Leave Policy", "Sick Leave per Month", configData.leavePolicy?.sickLeave?.perMonth, "Monthly sick leave entitlement"],
+      ["Leave Policy", "Earned Leave per 20 Days", configData.leavePolicy?.earnedLeave?.per20WorkingDays, "EL accrual rate"],
+      ["Leave Policy", "Max Carry Forward EL", configData.leavePolicy?.earnedLeave?.maxCarryForward, "Max EL carry forward"],
+      
+      // WFH Policy
+      ["WFH Policy", "Emergency WFH Salary %", configData.wfhPolicy?.emergencyWFH?.salaryPercentage, "Salary % for emergency WFH"],
+      ["WFH Policy", "Casual WFH Salary %", configData.wfhPolicy?.casualWFH?.salaryPercentage, "Salary % for casual WFH"],
+      
+      // Penalties
+      ["Discipline", "Missed Punch Penalty", configData.disciplinePolicy?.missedPunchPenalty, "Penalty per missed punch"],
+      
+      // Probation
+      ["Eligibility", "Probation Period Days", configData.eligibilityPolicy?.probationPeriodDays, "Probation period duration"],
+      
+      // Incentives
+      ["Incentives", "Attendance Bonus Amount", configData.incentives?.attendanceBonus?.amount, "Attendance bonus amount"],
+      ["Incentives", "Attendance Bonus Months", configData.incentives?.attendanceBonus?.consecutiveMonths, "Consecutive months for bonus"],
+      
+      // Statutory
+      ["Statutory", "PF Percentage", configData.statutoryDefaults?.pfPercentage, "PF contribution percentage"],
+      ["Statutory", "ESI Percentage", configData.statutoryDefaults?.esiPercentage, "ESI contribution percentage"],
+      ["Statutory", "Professional Tax", configData.statutoryDefaults?.professionalTax, "Monthly professional tax"],
+      
+      // Financial Year
+      ["Financial Year", "Start Month", configData.financialYear?.startMonth, "Financial year start month"],
+      ["Financial Year", "End Month", configData.financialYear?.endMonth, "Financial year end month"]
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
+    
+    const colWidths = [
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 40 }
+    ];
+    worksheet['!cols'] = colWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Configuration");
+
+    // Add weekend tiers sheet if exists
+    if (configData.leavePolicy?.weekendDeductionTiers) {
+      const tierHeaders = ["Min Excess Days", "Max Excess Days", "Sundays Deducted", "Description"];
+      const tierData = configData.leavePolicy.weekendDeductionTiers.map(tier => [
+        tier.minExcessDays,
+        tier.maxExcessDays,
+        tier.sundaysDeducted,
+        tier.description
+      ]);
+      
+      const tierSheet = XLSX.utils.aoa_to_sheet([tierHeaders, ...tierData]);
+      XLSX.utils.book_append_sheet(workbook, tierSheet, "Weekend Tiers");
+    }
+
+    // Add department weightage sheet if exists
+    if (configData.incentives?.departmentWeightage) {
+      const weightageHeaders = ["Department", "Revenue Weightage %", "Attendance Weightage %"];
+      const weightageData = configData.incentives.departmentWeightage.map(w => [
+        w.department,
+        w.revenueWeightage,
+        w.attendanceWeightage
+      ]);
+      
+      const weightageSheet = XLSX.utils.aoa_to_sheet([weightageHeaders, ...weightageData]);
+      XLSX.utils.book_append_sheet(workbook, weightageSheet, "Department Weightage");
+    }
+
+    XLSX.writeFile(workbook, filename);
   }
 };
 

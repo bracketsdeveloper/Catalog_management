@@ -1,8 +1,7 @@
 const mongoose = require("mongoose");
 
 /**
- * SalaryConfig - Employee-specific salary configuration
- * Stores base salary, deduction rules, and work schedule settings
+ * SalaryConfig - Employee-specific salary configuration with new requirements
  */
 const salaryConfigSchema = new mongoose.Schema({
   employeeId: { 
@@ -13,7 +12,7 @@ const salaryConfigSchema = new mongoose.Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────
-  // SALARY DETAILS
+  // BASIC SALARY DETAILS
   // ─────────────────────────────────────────────────────────────────────────
   salaryOffered: { 
     type: Number, 
@@ -21,7 +20,6 @@ const salaryConfigSchema = new mongoose.Schema({
     min: 0 
   },
   
-  // Components breakdown (optional, for detailed payslip)
   salaryComponents: {
     basic: { type: Number, default: 0 },
     hra: { type: Number, default: 0 },
@@ -32,52 +30,153 @@ const salaryConfigSchema = new mongoose.Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────
-  // WORK SCHEDULE SETTINGS
+  // NEW: 99-HOUR RULE CONFIGURATION
   // ─────────────────────────────────────────────────────────────────────────
   dailyWorkHours: { 
     type: Number, 
-    default: 9,  // 10 AM to 7 PM = 9 hours
-    min: 1,
-    max: 24
+    default: 9  // 10 AM to 7 PM = 9 hours
   },
   
-  // Which Saturdays are off (1st, 2nd, 3rd, 4th, 5th)
-  saturdaysOff: {
-    type: [Number],
-    default: [1, 3],  // 1st and 3rd Saturday off
-    validate: {
-      validator: function(arr) {
-        return arr.every(n => n >= 1 && n <= 5);
-      },
-      message: 'Saturday numbers must be between 1 and 5'
-    }
+  biWeeklyTargetHours: {
+    type: Number,
+    default: 99  // 11 working days × 9 hours
   },
   
-  // Sunday always off
-  sundayOff: { 
-    type: Boolean, 
-    default: true 
+  gracePeriodHours: {
+    type: Number,
+    default: 2  // No deduction for first 2 hours shortfall
   },
   
-  // ─────────────────────────────────────────────────────────────────────────
-  // DEDUCTION RULES
-  // ─────────────────────────────────────────────────────────────────────────
   hourlyDeductionRate: { 
     type: Number, 
-    default: 500,  // Rs 500 per hour missed
-    min: 0
+    default: 500
   },
   
-  // Bi-weekly calculation period (every 2 weeks)
-  deductionPeriodDays: {
-    type: Number,
-    default: 14  // 2 weeks
+  // ─────────────────────────────────────────────────────────────────────────
+  // SATURDAYS OFF CONFIGURATION
+  // ─────────────────────────────────────────────────────────────────────────
+  saturdaysOffPattern: {
+    type: String,
+    enum: ['1st_3rd', '2nd_4th', 'all', 'none'],
+    default: '1st_3rd'
   },
   
-  // Minimum days worked to get Sunday paid
-  minDaysForSundayPay: {
+  // ─────────────────────────────────────────────────────────────────────────
+  // LEAVE ENTITLEMENTS (NEW REQUIREMENTS)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Sick Leave
+  sickLeavePerMonth: {
     type: Number,
-    default: 3
+    default: 1
+  },
+  sickLeaveNonCumulative: {
+    type: Boolean,
+    default: true
+  },
+  
+  // Earned Leave
+  earnedLeavePer20Days: {
+    type: Number,
+    default: 1.25  // 1.25 days per 20 working days
+  },
+  maxCarryForwardEL: {
+    type: Number,
+    default: 30
+  },
+  elEncashmentAtYearEnd: {
+    type: Boolean,
+    default: true
+  },
+  
+  // Special Leaves
+  deathInFamilyLeave: {
+    type: Number,
+    default: 10
+  },
+  selfMarriageLeave: {
+    type: Number,
+    default: 2
+  },
+  
+  // Holidays
+  compulsoryHolidaysPerYear: {
+    type: Number,
+    default: 10
+  },
+  restrictedHolidaysPerYear: {
+    type: Number,
+    default: 2
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // WEEKEND DEDUCTION TIERS (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  weekendDeductionTiers: [
+    new mongoose.Schema({
+      minExcessDays: { type: Number, default: 0 },
+      maxExcessDays: { type: Number, default: 0 },
+      sundaysDeducted: { type: Number, default: 0 },
+      description: { type: String, default: "" }
+    }, { _id: false })
+  ],
+  
+  // Default tiers (stored as a separate field, not in schema)
+  defaultWeekendTiers: {
+    type: mongoose.Schema.Types.Mixed,
+    default: [
+      { minExcessDays: 0, maxExcessDays: 2, sundaysDeducted: 0, description: "No weekend deduction" },
+      { minExcessDays: 3, maxExcessDays: 4, sundaysDeducted: 1, description: "1 Sunday deduction" },
+      { minExcessDays: 5, maxExcessDays: 6, sundaysDeducted: 2, description: "2 Sundays deduction" },
+      { minExcessDays: 7, maxExcessDays: 999, sundaysDeducted: 4, description: "All Sundays (LOP for weekends)" }
+    ]
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // WFH DEDUCTION RATES (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  emergencyWFHDeduction: {
+    type: Number,
+    default: 0.25  // 75% salary = deduct 25%
+  },
+  casualWFHDeduction: {
+    type: Number,
+    default: 0.50  // 50% salary = deduct 50%
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PENALTIES (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  missedPunchPenalty: {
+    type: Number,
+    default: 250
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROBATION PERIOD (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  probationPeriodDays: {
+    type: Number,
+    default: 30
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // ATTENDANCE BONUS (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  attendanceBonusAmount: {
+    type: Number,
+    default: 1000
+  },
+  attendanceBonusMonths: {
+    type: Number,
+    default: 4
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // DEPARTMENT WEIGHTAGE (NEW)
+  // ─────────────────────────────────────────────────────────────────────────
+  departmentWeightage: {
+    revenueWeightage: { type: Number, default: 80 }, // For sales
+    attendanceWeightage: { type: Number, default: 20 }
   },
   
   // ─────────────────────────────────────────────────────────────────────────
@@ -89,13 +188,11 @@ const salaryConfigSchema = new mongoose.Schema({
   },
   pfPercentage: { 
     type: Number, 
-    default: 12,  // 12% of basic
-    min: 0,
-    max: 100
+    default: 12
   },
   pfFixedAmount: {
     type: Number,
-    default: 0  // If fixed amount instead of percentage
+    default: 0
   },
   
   esiEnabled: { 
@@ -104,9 +201,11 @@ const salaryConfigSchema = new mongoose.Schema({
   },
   esiPercentage: { 
     type: Number, 
-    default: 0.75,
-    min: 0,
-    max: 100
+    default: 0.75
+  },
+  esiSalaryThreshold: {
+    type: Number,
+    default: 21000
   },
   
   professionalTaxEnabled: {
@@ -115,7 +214,7 @@ const salaryConfigSchema = new mongoose.Schema({
   },
   professionalTaxAmount: {
     type: Number,
-    default: 200  // Fixed PT amount
+    default: 200
   },
   
   tdsEnabled: {
@@ -124,41 +223,33 @@ const salaryConfigSchema = new mongoose.Schema({
   },
   tdsPercentage: {
     type: Number,
-    default: 0,
-    min: 0,
-    max: 100
+    default: 0
   },
   
   // ─────────────────────────────────────────────────────────────────────────
-  // LEAVE SETTINGS
-  // ─────────────────────────────────────────────────────────────────────────
-  paidLeavesPerMonth: {
-    type: Number,
-    default: 1.5,  // Earned leaves per month
-    min: 0
-  },
-  
-  maxCarryForwardLeaves: {
-    type: Number,
-    default: 30
-  },
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // BANK DETAILS (for payment processing)
+  // BANK DETAILS
   // ─────────────────────────────────────────────────────────────────────────
   bankName: { type: String, trim: true },
   bankAccountNumber: { type: String, trim: true },
   ifscCode: { type: String, trim: true },
   panNumber: { type: String, trim: true },
-  uanNumber: { type: String, trim: true },  // PF UAN
+  uanNumber: { type: String, trim: true },
   
   // ─────────────────────────────────────────────────────────────────────────
-  // STATUS
+  // STATUS & AUDIT
   // ─────────────────────────────────────────────────────────────────────────
   isActive: { 
     type: Boolean, 
     default: true 
   },
+  isProbation: { 
+    type: Boolean, 
+    default: true 
+  },
+  
+  // Inheritance flags
+  useGlobalSettings: { type: Boolean, default: true },
+  useDepartmentSettings: { type: Boolean, default: false },
   
   effectiveFrom: {
     type: Date,
@@ -180,8 +271,21 @@ const salaryConfigSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Index for efficient queries
+// Indexes
 salaryConfigSchema.index({ isActive: 1 });
 salaryConfigSchema.index({ effectiveFrom: 1 });
+
+// Pre-save to set default weekend tiers if not provided
+salaryConfigSchema.pre('save', function(next) {
+  if (!this.weekendDeductionTiers || this.weekendDeductionTiers.length === 0) {
+    this.weekendDeductionTiers = this.defaultWeekendTiers || [
+      { minExcessDays: 0, maxExcessDays: 2, sundaysDeducted: 0, description: "No weekend deduction" },
+      { minExcessDays: 3, maxExcessDays: 4, sundaysDeducted: 1, description: "1 Sunday deduction" },
+      { minExcessDays: 5, maxExcessDays: 6, sundaysDeducted: 2, description: "2 Sundays deduction" },
+      { minExcessDays: 7, maxExcessDays: 999, sundaysDeducted: 4, description: "All Sundays (LOP for weekends)" }
+    ];
+  }
+  next();
+});
 
 module.exports = mongoose.model("SalaryConfig", salaryConfigSchema);

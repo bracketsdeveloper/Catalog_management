@@ -90,6 +90,7 @@ import AttendanceSummaryPage from "../pages/AttendanceSummaryPage";
 import AttendanceUploadModal from "../components/attendance/AttendanceUploadModal";
 import BankStatementUpload from "../pages/BankStatementUpload";
 import SuspenseAccountManager from "../pages/SuspenseAccountManager";
+import ConfigurationPage from "../pages/ConfigurationPage";
 
 
 const router = createBrowserRouter([
@@ -468,6 +469,10 @@ const router = createBrowserRouter([
                     {
                         path:"salary",
                         element:<SalaryPage/>
+                    },
+                    {
+                        path:"hrms/configuration",
+                        element:<ConfigurationPage/>
                     }
                 ]
             }

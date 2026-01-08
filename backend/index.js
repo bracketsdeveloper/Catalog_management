@@ -64,6 +64,7 @@ const emailVerificationRoutes = require('./routes/emailVerification');
 const subAdminRoutes = require('./routes/subAdminRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
 const advancedSearchRoutes = require('./routes/advancedSearchRoutes.js');
+const configurationRoutes = require('./routes/configuration.js');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', emailVerificationRoutes);
@@ -182,6 +183,8 @@ app.use("/api/suspense-accounts", suspenseAccountRoutes);
 
 // const salaryRoutes = require("./routes/salaryRoutes.js")
 app.use('/api/hrms/salary', require("./routes/salary.js"));
+
+app.use('/api/configuration', configurationRoutes); 
 
 
 
