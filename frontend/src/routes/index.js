@@ -355,7 +355,7 @@ const router = createBrowserRouter([
                     },
                     {
                         path:"home",
-                        element:<Homef/>
+                        element:<Home/>
                     },
                     {
                         path: "manage-segments",
