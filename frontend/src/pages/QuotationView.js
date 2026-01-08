@@ -401,7 +401,7 @@ export default function QuotationView() {
       ...rowToDuplicate,
       slNo: nextSl,
     });
-    setOpRows((prev) => [...prev, newRow]);
+    setOpRows((prev) => [...prev, ...newRow]);
   };
   
   const updateOpRow = (idx, field, value) => {
@@ -627,7 +627,7 @@ export default function QuotationView() {
     setOpRows(prefilled);
   }, [editableQuotation, opRows.length, catalogData]);
 
-  // FIX: Update quotation PUT endpoint call
+  // FIX: Create new quotation instead of updating existing one
   async function handleSaveQuotation() {
     if (!editableQuotation) return;
 
@@ -651,7 +651,7 @@ export default function QuotationView() {
         priceRange,
       } = editableQuotation;
 
-      // FIX: Use existing quotation ID for update instead of creating new
+      // FIX: Use quotation terms or default
       const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
       // FIX: Preserve original rates exactly as they are
@@ -685,7 +685,7 @@ export default function QuotationView() {
         };
       });
 
-      // FIX: Use PUT to update existing quotation instead of POST to create new
+      // FIX: Create NEW quotation instead of updating existing one
       const body = {
         opportunityNumber,
         catalogName,
@@ -727,9 +727,9 @@ export default function QuotationView() {
         })),
       };
 
-      // FIX: Use PUT endpoint to update existing quotation
-      const updateRes = await fetch(`${BACKEND_URL}/api/admin/quotations/${id}`, {
-        method: "PUT",
+      // FIX: Use POST to create NEW quotation instead of PUT to update
+      const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -737,23 +737,23 @@ export default function QuotationView() {
         body: JSON.stringify(body),
       });
 
-      if (!updateRes.ok) {
-        const errorData = await updateRes.json();
-        throw new Error(errorData.message || "Failed to update quotation");
+      if (!createRes.ok) {
+        const errorData = await createRes.json();
+        throw new Error(errorData.message || "Failed to create new quotation");
       }
 
-      const data = await updateRes.json();
+      const data = await createRes.json();
       if (!data || !data.quotation) {
         throw new Error("Invalid response from server: Missing quotation data");
       }
 
-      // Refresh quotation data
-      await fetchQuotation();
-      alert("Quotation updated successfully!");
+      // Redirect to the new quotation
+      alert(`New quotation created: #${data.quotation.quotationNumber}`);
+      navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
       
     } catch (error) {
-      console.error("Update error:", error);
-      alert(`Failed to update quotation: ${error.message}`);
+      console.error("Create new quotation error:", error);
+      alert(`Failed to create new quotation: ${error.message}`);
     }
   }
 
@@ -1370,7 +1370,7 @@ export default function QuotationView() {
           onClick={handleSaveQuotation}
           className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-[10px]"
         >
-          Save
+          Save as NEW
         </button>
         <button
           onClick={() =>
