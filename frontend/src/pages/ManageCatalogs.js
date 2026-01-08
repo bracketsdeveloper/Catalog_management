@@ -94,7 +94,7 @@ export default function CreateManualCatalog() {
   const [cartOpen, setCartOpen] = useState(false);
   const [quotationId, setQuotationId] = useState(null);
   const [quotationNumber, setQuotationNumber] = useState(null);
-  const [isDraftQuotation, setIsDraftQuotation] = useState(false); // NEW: Track if current quotation is draft
+  const [isDraftQuotation, setIsDraftQuotation] = useState(false);
 
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
@@ -127,7 +127,8 @@ export default function CreateManualCatalog() {
     variationHinges: {},
   });
 
-  // Combine all selected filters for display as tags
+  const [calculatingPrices, setCalculatingPrices] = useState(false);
+
   const allSelectedFilters = [
     ...selectedCategories.map((item) => ({
       type: "category",
@@ -152,7 +153,6 @@ export default function CreateManualCatalog() {
     })),
   ];
 
-  // Remove a specific filter and reapply
   const removeFilter = (filterType, value) => {
     switch (filterType) {
       case "category":
@@ -178,7 +178,7 @@ export default function CreateManualCatalog() {
   const openDetails = async (prodId) => {
     setDetailsProdId(prodId);
     setDetailsModalOpen(true);
-    setDetailsProduct(null); // reset before fetching
+    setDetailsProduct(null);
     try {
       const token = localStorage.getItem("token");
       const { data } = await axios.get(`${BACKEND_URL}/api/admin/products/${prodId}`, {
@@ -194,7 +194,6 @@ export default function CreateManualCatalog() {
     setDetailsProdId(null);
   };
 
-  // ─── Helpers & Network ────────────────────────────────────────────────────
   const buildParams = () => {
     const p = new URLSearchParams();
     if (searchTerm) p.append("search", searchTerm.toLowerCase().split(" ").filter(Boolean).join(","));
@@ -214,14 +213,12 @@ export default function CreateManualCatalog() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Set the options
       setFullCategories(data.categories.map((x) => x.name));
       setFullSubCategories(data.subCategories.map((x) => x.name));
       setFullBrands(data.brands.map((x) => x.name));
       setFullPriceRanges(data.priceRanges.map((x) => x.name));
       setFullVariationHinges(data.variationHinges.map((x) => x.name));
 
-      // Set the counts
       setFilterCounts({
         categories: obj(data.categories),
         subCategories: obj(data.subCategories),
@@ -230,7 +227,6 @@ export default function CreateManualCatalog() {
         variationHinges: obj(data.variationHinges),
       });
 
-      // Build parent-child relationships
       if (data.relationships) {
         setParentChildMap(data.relationships);
       }
@@ -265,7 +261,79 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // ─── Initial Data ─────────────────────────────────────────────────────────
+  const calculateSuggestedPrice = async (product, brandingTypes = [], segment, pincode) => {
+    try {
+      const token = localStorage.getItem("token");
+      const payload = {
+        baseCost: product.productCost || 0,
+        margin: selectedMargin,
+        gst: selectedGst,
+        brandingTypes: brandingTypes,
+        segment: segment,
+        pincode: pincode,
+        category: product.category || "",
+        subCategory: product.subCategory || ""
+      };
+      
+      const response = await axios.post(`${BACKEND_URL}/api/calculate-price`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      return response.data.suggestedBreakdown || {
+        baseCost: product.productCost || 0,
+        marginPct: 0,
+        marginAmount: 0,
+        logisticsCost: 0,
+        brandingCost: 0,
+        finalPrice: 0,
+      };
+    } catch (error) {
+      console.error("Error calculating suggested price:", error);
+      return {
+        baseCost: product.productCost || 0,
+        marginPct: 0,
+        marginAmount: 0,
+        logisticsCost: 0,
+        brandingCost: 0,
+        finalPrice: 0,
+      };
+    }
+  };
+
+  const calculateAllSuggestedPrices = async () => {
+    if (selectedProducts.length === 0) return;
+    
+    setCalculatingPrices(true);
+    try {
+      const updatedProducts = await Promise.all(
+        selectedProducts.map(async (product) => {
+          if (product.suggestedBreakdown?.finalPrice > 0) {
+            return product;
+          }
+          
+          const breakdown = await calculateSuggestedPrice(
+            product,
+            product.brandingTypes || [],
+            selectedCompanyData?.segment,
+            selectedCompanyData?.pincode
+          );
+          
+          return {
+            ...product,
+            suggestedBreakdown: breakdown,
+            productCost: breakdown.finalPrice || product.productCost
+          };
+        })
+      );
+      
+      setSelectedProducts(updatedProducts);
+    } catch (error) {
+      console.error("Error calculating prices:", error);
+    } finally {
+      setCalculatingPrices(false);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     axios
@@ -289,7 +357,6 @@ export default function CreateManualCatalog() {
     fetchProducts(1);
   }, []);
 
-  // ─── Fetch Catalog or Quotation for Editing ───────────────────────────────
   useEffect(() => {
     if (!id || (!isCatalogEditMode && !isQuotationEditMode)) return;
 
@@ -362,14 +429,13 @@ export default function CreateManualCatalog() {
             : []
         );
 
-        // Check for associated quotation
         const { data: quotationData } = await axios.get(`${BACKEND_URL}/api/admin/quotations?catalog=${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (Array.isArray(quotationData) && quotationData.length > 0) {
           setQuotationId(quotationData[0]._id);
           setQuotationNumber(quotationData[0].quotationNumber || null);
-          setIsDraftQuotation(quotationData[0].isDraft || false); // NEW: Track draft status
+          setIsDraftQuotation(quotationData[0].isDraft || false);
         }
       } catch (err) {
         console.error("Error fetching catalog:", err);
@@ -383,7 +449,7 @@ export default function CreateManualCatalog() {
         });
         setQuotationId(data._id);
         setQuotationNumber(data.quotationNumber || null);
-        setIsDraftQuotation(data.isDraft || false); // NEW: Track draft status
+        setIsDraftQuotation(data.isDraft || false);
         setOpportunityNumber(data.opportunityNumber || "");
         setCatalogName(data.catalogName || "");
         setCustomerName(data.customerName || "");
@@ -457,7 +523,6 @@ export default function CreateManualCatalog() {
     setLoading(false);
   }, [id, isCatalogEditMode, isQuotationEditMode]);
 
-  // ─── Auto‐populate Company and Customer Details on Opportunity change ──────
   useEffect(() => {
     if (!opportunityNumber) {
       setCustomerCompany("");
@@ -481,7 +546,6 @@ export default function CreateManualCatalog() {
         setSalutation("Mr.");
         setCustomerName("");
       }
-      // Fetch company details
       axios
         .get(`${BACKEND_URL}/api/admin/companies`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -521,12 +585,19 @@ export default function CreateManualCatalog() {
     }
   }, [opportunityNumber, opportunityCodes]);
 
-  // ─── Re‐fetch on searchTerm or filter change ──────────────────────────────
   useEffect(() => {
     fetchProducts(1);
   }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges, selectedVariationHinges]);
 
-  // ─── Action Handlers ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedProducts.length > 0) {
+      const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
+      if (needsCalculation) {
+        calculateAllSuggestedPrices();
+      }
+    }
+  }, [selectedProducts.length]);
+
   const toggleFilter = (val, arr, setArr) =>
     arr.includes(val) ? setArr(arr.filter((v) => v !== val)) : setArr([...arr, val]);
 
@@ -553,32 +624,46 @@ export default function CreateManualCatalog() {
     return selectedProducts.some((p) => p.productId === pid && (p.color || "") === c && (p.size || "") === s);
   };
 
-  const handleAddSingle = (item) => {
+  const handleAddSingle = async (item) => {
     if (isDuplicate(item.productId, item.color, item.size, item.productName)) {
       alert("This item with the same color & size is already added!");
       return;
     }
-    const cost = item.productCost || 0;
+    
+    const breakdown = await calculateSuggestedPrice(
+      item,
+      [],
+      selectedCompanyData?.segment,
+      selectedCompanyData?.pincode
+    );
+    
     setSelectedProducts((prev) => [
       ...prev,
       {
         ...item,
-        productprice: cost,
+        productprice: breakdown.finalPrice,
         brandingTypes: [],
-        baseCost: cost,
-        suggestedBreakdown: { baseCost: 0, marginPct: 0, marginAmount: 0, logisticsCost: 0, brandingCost: 0, finalPrice: 0 },
+        baseCost: item.productCost || 0,
+        suggestedBreakdown: breakdown,
         imageIndex: 0,
       },
     ]);
   };
 
-  const handleAddVariations = (variations) => {
+  const handleAddVariations = async (variations) => {
     if (!variationModalProduct) return;
-    const cost = variationModalProduct.productCost || 0;
+    
+    const breakdown = await calculateSuggestedPrice(
+      variationModalProduct,
+      [],
+      selectedCompanyData?.segment,
+      selectedCompanyData?.pincode
+    );
+    
     const newItems = variations.map((v) => ({
       productId: variationModalProduct._id,
       productName: variationModalProduct.productName || variationModalProduct.name,
-      productCost: cost,
+      productCost: breakdown.finalPrice,
       productGST: variationModalProduct.productGST || 0,
       color: v.color?.trim() || "",
       size: v.size?.trim() || "",
@@ -588,10 +673,11 @@ export default function CreateManualCatalog() {
       ProductDescription: variationModalProduct.productDetails || "",
       ProductBrand: variationModalProduct.brandName || "",
       brandingTypes: [],
-      baseCost: cost,
-      suggestedBreakdown: { baseCost: 0, marginPct: 0, marginAmount: 0, logisticsCost: 0, brandingCost: 0, finalPrice: 0 },
+      baseCost: variationModalProduct.productCost || 0,
+      suggestedBreakdown: breakdown,
       imageIndex: 0,
     }));
+    
     const filtered = newItems.filter((i) => !isDuplicate(i.productId, i.color, i.size, i.productName));
     if (filtered.length < newItems.length) alert("Some variations were duplicates and were not added.");
     setSelectedProducts((prev) => [...prev, ...filtered]);
@@ -603,7 +689,14 @@ export default function CreateManualCatalog() {
     setEditModalOpen(true);
   };
 
-  const handleUpdateItem = (upd) => {
+  const handleUpdateItem = async (upd) => {
+    const breakdown = await calculateSuggestedPrice(
+      upd,
+      upd.brandingTypes || [],
+      selectedCompanyData?.segment,
+      selectedCompanyData?.pincode
+    );
+    
     setSelectedProducts((prev) => {
       const arr = [...prev];
       const dup = arr.some(
@@ -617,15 +710,19 @@ export default function CreateManualCatalog() {
         alert("This update creates a duplicate. Not updating.");
         return arr;
       }
-      arr[editIndex] = { ...arr[editIndex], ...upd };
+      arr[editIndex] = { 
+        ...arr[editIndex], 
+        ...upd,
+        productCost: breakdown.finalPrice,
+        suggestedBreakdown: breakdown
+      };
       return arr;
     });
   };
 
-  // ─── Build Quotation Payload ──────────────────────────────────────────────
   function buildQuotationPayload() {
     return {
-      _id: isQuotationEditMode ? quotationId : undefined, // Include _id for updates
+      _id: isQuotationEditMode ? quotationId : undefined,
       opportunityNumber,
       catalogId: isCatalogEditMode ? id : undefined,
       catalogName,
@@ -639,7 +736,7 @@ export default function CreateManualCatalog() {
       fieldsToDisplay,
       items: selectedProducts.map((p, i) => {
         const qty = p.quantity || 1;
-        const base = p.productCost || 0;
+        const base = p.suggestedBreakdown?.finalPrice || p.productCost || 0;
         const rate = parseFloat(base.toFixed(2));
         const amount = rate * qty;
         const gst = p.productGST ?? selectedGst;
@@ -674,10 +771,20 @@ export default function CreateManualCatalog() {
     };
   }
 
-  // ─── Save (Create or Update) Quotation ────────────────────────────────────
   const handleSaveQuotation = async () => {
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
+    }
+
+    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
+    if (needsCalculation) {
+      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
+      if (!confirmSave) return;
+    }
+
+    if (calculatingPrices) {
+      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
+      if (!confirmSave) return;
     }
 
     const payload = buildQuotationPayload();
@@ -689,7 +796,7 @@ export default function CreateManualCatalog() {
       });
       setQuotationId(response.data.quotation._id);
       setQuotationNumber(response.data.quotation.quotationNumber || null);
-      setIsDraftQuotation(false); // Regular quotations are not drafts
+      setIsDraftQuotation(false);
       alert("New quotation created!");
     } catch (error) {
       console.error("Error saving quotation:", error);
@@ -697,15 +804,25 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // ─── NEW: Save Draft Quotation (marks with a DRAFT remark) ────────────────
   const handleCreateDraftQuotation = async () => {
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
     }
 
+    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
+    if (needsCalculation) {
+      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
+      if (!confirmSave) return;
+    }
+
+    if (calculatingPrices) {
+      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
+      if (!confirmSave) return;
+    }
+
     const payload = {
       ...buildQuotationPayload(),
-      isDraft: true, // NEW: Use the proper isDraft field
+      isDraft: true,
     };
 
     try {
@@ -715,7 +832,7 @@ export default function CreateManualCatalog() {
       });
       setQuotationId(response.data.quotation._id);
       setQuotationNumber(response.data.quotation.quotationNumber || null);
-      setIsDraftQuotation(true); // NEW: Track draft status
+      setIsDraftQuotation(true);
       alert(`Draft quotation created! #${response.data.quotation.quotationNumber}`);
     } catch (error) {
       console.error("Error creating draft quotation:", error);
@@ -723,7 +840,6 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // ─── NEW: Update Draft Quotation ──────────────────────────────────────────
   const handleUpdateDraftQuotation = async () => {
     if (!quotationId || !isDraftQuotation) {
       alert("No draft quotation found to update");
@@ -734,9 +850,20 @@ export default function CreateManualCatalog() {
       return alert("Enter Catalog Name & add ≥1 product");
     }
 
+    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
+    if (needsCalculation) {
+      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
+      if (!confirmSave) return;
+    }
+
+    if (calculatingPrices) {
+      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
+      if (!confirmSave) return;
+    }
+
     const payload = {
       ...buildQuotationPayload(),
-      isDraft: true, // Keep it as draft
+      isDraft: true,
     };
 
     try {
@@ -751,7 +878,6 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // ─── NEW: Publish Draft Quotation ─────────────────────────────────────────
   const handlePublishDraftQuotation = async () => {
     if (!quotationId || !isDraftQuotation) {
       alert("No draft quotation found to publish");
@@ -771,11 +897,21 @@ export default function CreateManualCatalog() {
     }
   };
 
-  // ─── Save (Create or Update) Catalog ──────────────────────────────────────
   const handleSaveCatalog = async () => {
     if (!opportunityNumber || !catalogName || !selectedProducts.length) {
       alert("Please fill required fields and add at least one product");
       return;
+    }
+
+    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
+    if (needsCalculation) {
+      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
+      if (!confirmSave) return;
+    }
+
+    if (calculatingPrices) {
+      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
+      if (!confirmSave) return;
     }
 
     const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
@@ -799,7 +935,7 @@ export default function CreateManualCatalog() {
         color: p.color,
         size: p.size,
         quantity: p.quantity,
-        productCost: p.productCost,
+        productCost: p.suggestedBreakdown?.finalPrice || p.productCost,
         productGST: p.productGST,
         material: p.material,
         weight: p.weight,
@@ -932,7 +1068,6 @@ export default function CreateManualCatalog() {
     setVariationModalProduct(null);
   };
 
-  // Add cleanup effect
   useEffect(() => {
     return () => {
       setProducts([]);
@@ -953,10 +1088,8 @@ export default function CreateManualCatalog() {
     };
   }, []);
 
-  // ─── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div className="relative bg-white text-gray-800 min-h-screen p-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-purple-700">
           {isCatalogEditMode ? "Edit Catalog" : isQuotationEditMode ? "Edit Quotation" : "Create Catalog (Manual)"}
@@ -965,19 +1098,20 @@ export default function CreateManualCatalog() {
           <button
             onClick={handleSaveCatalog}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
+            disabled={calculatingPrices}
           >
-            {isCatalogEditMode && id ? "Update Catalog" : "Create Catalog"}
+            {calculatingPrices ? "Calculating Prices..." : (isCatalogEditMode && id ? "Update Catalog" : "Create Catalog")}
           </button>
 
-          {/* NEW: Draft Quotation Buttons */}
           {isDraftQuotation ? (
             <>
               <button
                 onClick={handleUpdateDraftQuotation}
                 className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
                 title="Update existing draft quotation"
+                disabled={calculatingPrices}
               >
-                Update Draft Quotation
+                {calculatingPrices ? "Calculating..." : "Update Draft Quotation"}
               </button>
               <button
                 onClick={handlePublishDraftQuotation}
@@ -992,31 +1126,36 @@ export default function CreateManualCatalog() {
               onClick={handleCreateDraftQuotation}
               className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
               title="Creates a quotation marked as draft"
+              disabled={calculatingPrices}
             >
-              Create Draft Quotation
+              {calculatingPrices ? "Calculating..." : "Create Draft Quotation"}
             </button>
           )}
 
           <button
             onClick={handleSaveQuotation}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
+            disabled={calculatingPrices}
           >
-            {isQuotationEditMode && quotationId ? "Create New Quotation" : "Create Quotation"}
+            {calculatingPrices ? "Calculating Prices..." : (isQuotationEditMode && quotationId ? "Create New Quotation" : "Create Quotation")}
           </button>
 
-          {/* Draft Status Indicator */}
           {isDraftQuotation && (
             <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
               Draft Mode
             </div>
           )}
+          
+          {calculatingPrices && (
+            <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium flex items-center">
+              <div className="w-4 h-4 border-2 border-blue-800 border-t-transparent rounded-full animate-spin mr-2"></div>
+              Calculating Prices...
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Rest of your JSX remains the same... */}
-      {/* Form Fields */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        {/* Opportunity Number */}
         <div className="relative">
           <label className="block mb-1 font-medium text-purple-700">
             Opportunity Number *
@@ -1053,7 +1192,6 @@ export default function CreateManualCatalog() {
           )}
         </div>
 
-        {/* Catalog Name */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Catalog Name *
@@ -1067,7 +1205,6 @@ export default function CreateManualCatalog() {
           />
         </div>
 
-        {/* Customer Company */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">
             Customer Company *
@@ -1081,7 +1218,6 @@ export default function CreateManualCatalog() {
           />
         </div>
 
-        {/* Customer Name + Salutation */}
         <div className="relative">
           <label className="block mb-1 font-medium text-purple-700">
             Customer Name *
@@ -1125,7 +1261,6 @@ export default function CreateManualCatalog() {
           )}
         </div>
 
-        {/* Customer Email */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">Customer Email</label>
           <input
@@ -1137,7 +1272,6 @@ export default function CreateManualCatalog() {
           />
         </div>
 
-        {/* Customer Address */}
         <div>
           <label className="block mb-1 font-medium text-purple-700">Customer Address</label>
           <input
@@ -1149,7 +1283,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Fields to Display */}
       <div className="mb-6">
         <label className="block mb-2 font-medium text-purple-700">Fields to Display</label>
         <div className="flex flex-wrap gap-3">
@@ -1179,7 +1312,6 @@ export default function CreateManualCatalog() {
         </div>
       </div>
 
-      {/* Search & Image Search */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center space-x-2 w-full md:w-1/2">
           <input
@@ -1229,7 +1361,6 @@ export default function CreateManualCatalog() {
         </div>
       )}
 
-      {/* Filter Buttons */}
       <div className="flex flex-wrap gap-2 mb-6">
         <FilterDropdown
           label="categories"
@@ -1325,7 +1456,6 @@ export default function CreateManualCatalog() {
         )}
       </div>
 
-      {/* Product Grid & Pagination */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {[...Array(8)].map((_, index) => (
@@ -1372,7 +1502,6 @@ export default function CreateManualCatalog() {
         </>
       )}
 
-      {/* Floating Cart Icon */}
       <div
         className="fixed bottom-4 right-4 bg-purple-600 text-white rounded-full p-3 cursor-pointer shadow-lg"
         style={{ width: 60, height: 60 }}
@@ -1386,7 +1515,6 @@ export default function CreateManualCatalog() {
         )}
       </div>
 
-      {/* Cart Drawer */}
       {cartOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-end z-50">
           <div className="bg-white w-full sm:w-96 p-4 overflow-auto relative">
@@ -1424,10 +1552,14 @@ export default function CreateManualCatalog() {
                                 <div className="font-semibold">{row.productName}</div>
                                 {row.color && <div className="text-xs">Color: {row.color}</div>}
                                 {row.size && <div className="text-xs">Size: {row.size}</div>}
-                                <div className="text-xs">Base Cost: ₹{Number(row.baseCost || row.productCost || 0).toFixed(2)}</div>
-                                <div className="text-xs">Product Cost: ₹{Number(row.productCost || 0).toFixed(2)}</div>
+                                <div className="text-xs">Base Cost: ₹{Number(row.baseCost || 0).toFixed(2)}</div>
+                                <div className="text-xs">Product Cost: ₹{Number(row.suggestedBreakdown?.finalPrice || row.productCost || 0).toFixed(2)}</div>
                                 <div className="text-xs">Qty: {row.quantity}</div>
                                 <div className="text-xs">GST: {row.productGST}%</div>
+                                <div className="text-xs">Margin: {selectedMargin}%</div>
+                                {row.suggestedBreakdown?.marginAmount > 0 && (
+                                  <div className="text-xs text-green-600">Margin Amt: ₹{row.suggestedBreakdown.marginAmount.toFixed(2)}</div>
+                                )}
                                 {Array.isArray(row.brandingTypes) && row.brandingTypes.length > 0 && (
                                   <div className="text-xs">
                                     Branding:&nbsp;
@@ -1468,7 +1600,6 @@ export default function CreateManualCatalog() {
         </div>
       )}
 
-      {/* Variation Modal */}
       {variationModalOpen && variationModalProduct && (
         <VariationModal
           product={variationModalProduct}
@@ -1481,7 +1612,6 @@ export default function CreateManualCatalog() {
         />
       )}
 
-      {/* Edit Modal */}
       {editModalOpen && editIndex !== null && (
         <VariationEditModal
           item={selectedProducts[editIndex]}
@@ -1497,10 +1627,8 @@ export default function CreateManualCatalog() {
         />
       )}
 
-      {/* Company Creation Modal */}
       {showCompanyModal && <CompanyModal onClose={handleCloseCompanyModal} />}
 
-      {/* Product Details Drawer/Modal */}
       {detailsModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 z-50">
           <div className="bg-white w-full max-w-5xl h-[100vh] overflow-auto rounded-lg shadow-lg relative">

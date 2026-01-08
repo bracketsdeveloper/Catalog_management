@@ -115,7 +115,7 @@ const WHITEBOOKS_CREDENTIALS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Create Quotation (supports isDraft + operationsBreakdown auto-population)
+/** Create Quotation (supports isDraft + preserves suggestedBreakdown) */
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -162,6 +162,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     const quotationTerms =
       Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
+    // Preserve suggestedBreakdown from items if provided
     const builtItems = items.map((it, idx) => {
       const qty = parseInt(it.quantity, 10) || 1;
       const rate = parseFloat(it.rate) || 0;
@@ -189,7 +190,7 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
         material: it.material || "",
         weight: it.weight || "",
         brandingTypes: Array.isArray(it.brandingTypes) ? it.brandingTypes : [],
-        suggestedBreakdown: it.suggestedBreakdown || {},
+        suggestedBreakdown: it.suggestedBreakdown || {}, // Preserve from frontend
         imageIndex: parseInt(it.imageIndex, 10) || 0,
       };
     });
@@ -217,7 +218,6 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
     // AUTO-GENERATE operationsBreakdown from items' suggestedBreakdown if not provided
     let builtOperationsBreakdown;
     if (Array.isArray(operationsBreakdown) && operationsBreakdown.length > 0) {
-      // Use provided operationsBreakdown (manual override)
       builtOperationsBreakdown = operationsBreakdown.map((row, idx) => {
         const slNo = row.slNo || idx + 1;
         const product = row.product || "";
@@ -255,7 +255,6 @@ router.post("/quotations", authenticate, authorizeAdmin, async (req, res) => {
         };
       });
     } else {
-      // AUTO-GENERATE from builtItems
       builtOperationsBreakdown = buildOperationsBreakdownFromItems(builtItems);
     }
 
@@ -573,7 +572,7 @@ router.get("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-/** Duplicate by editing PUT (kept for backward-compat) */
+/** Update Quotation (Preserve terms, amounts, suggested prices from source) */
 // ─────────────────────────────────────────────────────────────────────────────
 router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
@@ -598,44 +597,72 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
       displayHSNCodes,
       operations,
       operationsBreakdown,
+      isDraft,
     } = req.body;
+
+    // Preserve terms, amounts, and suggested prices from existing quotation
+    const preservedTerms = existing.terms || [];
+    const preservedItems = existing.items.map(item => ({
+      slNo: item.slNo,
+      productId: item.productId,
+      product: item.product,
+      hsnCode: item.hsnCode,
+      quantity: item.quantity,
+      rate: item.rate,
+      productprice: item.productprice,
+      amount: item.amount,
+      productGST: item.productGST,
+      total: item.total,
+      baseCost: item.baseCost,
+      material: item.material,
+      weight: item.weight,
+      brandingTypes: item.brandingTypes,
+      suggestedBreakdown: item.suggestedBreakdown, // Preserve existing breakdown
+      imageIndex: item.imageIndex,
+    }));
 
     const effMargin = margin ?? existing.margin ?? 0;
     const effGst = gst ?? existing.gst ?? 0;
 
-    const builtItems =
-      Array.isArray(items) && items.length
-        ? items.map((it, idx) => {
-            const qty = parseInt(it.quantity, 10) || 1;
-            const rate = parseFloat(it.rate) || 0;
-            const price = parseFloat(it.productprice) || rate;
-            const marginFactor = 1 + (parseFloat(effMargin) || 0) / 100;
-            const effRate = rate * marginFactor;
-            const amount = parseFloat((effRate * qty).toFixed(2));
-            const gstRate =
-              it.productGST != null ? parseFloat(it.productGST) : parseFloat(effGst);
-            const total = parseFloat((amount * (1 + gstRate / 100)).toFixed(2));
+    // Only update items if new items are provided
+    const builtItems = Array.isArray(items) && items.length > 0
+      ? items.map((it, idx) => {
+          // Preserve existing suggested breakdown if available
+          const existingItem = existing.items.find(ei => 
+            ei.productId?.toString() === it.productId?.toString() && 
+            ei.product === it.product
+          );
+          
+          const qty = parseInt(it.quantity, 10) || 1;
+          const rate = parseFloat(it.rate) || 0;
+          const price = parseFloat(it.productprice) || rate;
+          const marginFactor = 1 + (parseFloat(effMargin) || 0) / 100;
+          const effRate = rate * marginFactor;
+          const amount = parseFloat((effRate * qty).toFixed(2));
+          const gstRate =
+            it.productGST != null ? parseFloat(it.productGST) : parseFloat(effGst);
+          const total = parseFloat((amount * (1 + gstRate / 100)).toFixed(2));
 
-            return {
-              slNo: it.slNo || idx + 1,
-              productId: it.productId || null,
-              product: it.productName || it.product || "",
-              hsnCode: it.hsnCode || "",
-              quantity: qty,
-              rate,
-              productprice: price,
-              amount,
-              productGST: gstRate,
-              total,
-              baseCost: parseFloat(it.baseCost) || 0,
-              material: it.material || "",
-              weight: it.weight || "",
-              brandingTypes: Array.isArray(it.brandingTypes) ? it.brandingTypes : [],
-              suggestedBreakdown: it.suggestedBreakdown || {},
-              imageIndex: parseInt(it.imageIndex, 10) || 0,
-            };
-          })
-        : existing.items;
+          return {
+            slNo: it.slNo || idx + 1,
+            productId: it.productId || null,
+            product: it.productName || it.product || "",
+            hsnCode: it.hsnCode || "",
+            quantity: qty,
+            rate,
+            productprice: price,
+            amount,
+            productGST: gstRate,
+            total,
+            baseCost: parseFloat(it.baseCost) || 0,
+            material: it.material || "",
+            weight: it.weight || "",
+            brandingTypes: Array.isArray(it.brandingTypes) ? it.brandingTypes : [],
+            suggestedBreakdown: existingItem?.suggestedBreakdown || it.suggestedBreakdown || {},
+            imageIndex: parseInt(it.imageIndex, 10) || 0,
+          };
+        })
+      : preservedItems; // Use preserved items if no new items
 
     const builtOperations = Array.isArray(operations)
       ? operations.map((op) => {
@@ -657,8 +684,8 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
         })
       : existing.operations;
 
-    // AUTO-GENERATE operationsBreakdown from items' suggestedBreakdown if not provided
-    let builtOperationsBreakdown;
+    // Preserve existing operations breakdown
+    let builtOperationsBreakdown = existing.operationsBreakdown;
     if (Array.isArray(operationsBreakdown) && operationsBreakdown.length > 0) {
       builtOperationsBreakdown = operationsBreakdown.map((row, idx) => {
         const slNo = row.slNo || idx + 1;
@@ -696,49 +723,50 @@ router.put("/quotations/:id", authenticate, authorizeAdmin, async (req, res) => 
           remarks: row.remarks || "",
         };
       });
-    } else {
-      builtOperationsBreakdown = buildOperationsBreakdownFromItems(builtItems);
     }
 
     const totalAmount = builtItems.reduce((sum, x) => sum + (x.amount || 0), 0);
     const grandTotal = builtItems.reduce((sum, x) => sum + (x.total || 0), 0);
 
-    const newQuotation = new Quotation({
-      opportunityNumber: opportunityNumber ?? existing.opportunityNumber,
-      catalogName: catalogName ?? existing.catalogName,
-      fieldsToDisplay: fieldsToDisplay ?? existing.fieldsToDisplay,
-      priceRange: priceRange ?? existing.priceRange,
-      salutation: salutation ?? existing.salutation,
-      customerName: customerName ?? existing.customerName,
-      customerEmail: customerEmail ?? existing.customerEmail,
-      customerCompany: customerCompany ?? existing.customerCompany,
-      customerAddress: customerAddress ?? existing.customerAddress,
-      margin: effMargin,
-      gst: effGst,
-      items: builtItems,
-      totalAmount,
-      grandTotal,
-      displayTotals: displayTotals ?? existing.displayTotals,
-      displayHSNCodes: displayHSNCodes ?? existing.displayHSNCodes,
-      terms: Array.isArray(terms) && terms.length > 0 ? terms : existing.terms,
-      operations: builtOperations,
-      operationsBreakdown: builtOperationsBreakdown,
-      createdBy: req.user.email,
-      sourceQuotationId: existing._id,
-    });
+    // Update the existing quotation (not creating new)
+    const updatedQuotation = await Quotation.findByIdAndUpdate(
+      req.params.id,
+      {
+        opportunityNumber: opportunityNumber ?? existing.opportunityNumber,
+        catalogName: catalogName ?? existing.catalogName,
+        fieldsToDisplay: fieldsToDisplay ?? existing.fieldsToDisplay,
+        priceRange: priceRange ?? existing.priceRange,
+        salutation: salutation ?? existing.salutation,
+        customerName: customerName ?? existing.customerName,
+        customerEmail: customerEmail ?? existing.customerEmail,
+        customerCompany: customerCompany ?? existing.customerCompany,
+        customerAddress: customerAddress ?? existing.customerAddress,
+        margin: effMargin,
+        gst: effGst,
+        items: builtItems,
+        totalAmount,
+        grandTotal,
+        displayTotals: displayTotals ?? existing.displayTotals,
+        displayHSNCodes: displayHSNCodes ?? existing.displayHSNCodes,
+        terms: Array.isArray(terms) && terms.length > 0 ? terms : preservedTerms, // Use preserved terms
+        operations: builtOperations,
+        operationsBreakdown: builtOperationsBreakdown,
+        isDraft: typeof isDraft === 'boolean' ? isDraft : existing.isDraft,
+        createdBy: req.user.email,
+      },
+      { new: true }
+    ).populate("items.productId", "images name productCost category subCategory hsnCode");
 
-    const saved = await newQuotation.save();
-
-    await createLog("duplicate_update", existing, saved, req.user, req.ip);
+    await createLog("update", existing, updatedQuotation, req.user, req.ip);
 
     return res
-      .status(201)
-      .json({ message: "Quotation duplicated with edits", quotation: saved.toObject() });
+      .status(200)
+      .json({ message: "Quotation updated", quotation: updatedQuotation.toObject() });
   } catch (err) {
-    console.error("Error duplicating quotation on update:", err);
+    console.error("Error updating quotation:", err);
     return res
       .status(400)
-      .json({ message: err.message || "Server error duplicating quotation" });
+      .json({ message: err.message || "Server error updating quotation" });
   }
 });
 
