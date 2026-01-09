@@ -563,45 +563,54 @@ export default function QuotationView() {
 
   const syncOpsToQuotation = useCallback(() => {
     if (!editableQuotation || opRows.length === 0) return;
-
-    const updatedItems = opRows.map((opRow, idx) => {
+  
+    // Use the MAXIMUM length between opRows and existing items
+    const maxLength = Math.max(opRows.length, editableQuotation.items.length);
+    
+    const updatedItems = Array.from({ length: maxLength }).map((_, idx) => {
       const existingItem = editableQuotation.items[idx] || {};
-
+      const opRow = opRows[idx] || {};
+      
+      // If there's no opRow for this index, preserve the existing item
+      if (!opRow.product && !opRow.quantity && !opRow.rate) {
+        return existingItem;
+      }
+      
       const existingQty = num(existingItem.quantity) || 0;
       const existingRate = num(existingItem.rate) || 0;
       const existingGst =
         existingItem.productGST != null ? num(existingItem.productGST) : 0;
-
+  
       const opQty = num(opRow.quantity);
       const opRate = num(opRow.rate);
       const opGst = parseGstPercent(opRow.gst);
-
+  
       const quantity = opQty > 0 ? opQty : existingQty || 1;
-      const rate = opRate > 0 ? opRate : existingRate; // FIX: Preserve original rate if not changed
+      const rate = opRate > 0 ? opRate : existingRate; // Preserve original rate if not changed
       const productGST = opGst > 0 ? opGst : existingGst;
-
+  
       const amount = quantity * rate;
       const total = amount * (1 + productGST / 100);
-
+  
       return {
         ...existingItem,
         slNo: opRow.slNo ?? existingItem.slNo ?? idx + 1,
         product: opRow.product || existingItem.product,
         quantity,
         rate,
-        productprice: rate, // FIX: Keep productprice same as rate
+        productprice: rate, // Keep productprice same as rate
         productGST,
         amount,
         total,
         hsnCode: existingItem.hsnCode || "",
-        imageIndex: existingItem.imageIndex || 0, // FIX: Preserve image index
+        imageIndex: existingItem.imageIndex || 0, // Preserve image index
         material: existingItem.material || "",
         weight: existingItem.weight || "",
         brandingTypes: existingItem.brandingTypes || [],
         suggestedBreakdown: existingItem.suggestedBreakdown || {},
       };
     });
-
+  
     setEditableQuotation((prev) => ({
       ...prev,
       items: updatedItems,
