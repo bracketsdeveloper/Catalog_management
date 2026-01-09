@@ -213,7 +213,18 @@ export default function QuotationView() {
     const markUp = num(sb.marginAmount) || 0;
     const successFee = num(sb.successFee) || 0;
     const gstStr = item.productGST != null ? String(item.productGST) : "";
-
+  
+    // Calculate rate if not provided
+    let rate = 0;
+    if (sb.finalPrice) {
+      rate = num(sb.finalPrice);
+    } else if (item.rate) {
+      rate = num(item.rate);
+    } else {
+      // Calculate from components if available
+      rate = baseCost + brandingCost + logisticCost + markUp + successFee;
+    }
+  
     return {
       slNo: idx + 1,
       catalogPrice,
@@ -224,12 +235,12 @@ export default function QuotationView() {
       logisticCost,
       markUp,
       successFee,
-      rate: 0,
+      rate,
       gst: gstStr,
       totalWithGst: 0,
       vendor: "",
       remarks: "",
-      _source: catalog ? "catalog" : "suggestedBreakdown",
+      _source: catalog ? "catalog" : (sb.baseCost ? "suggestedBreakdown" : "manual"),
     };
   }
 
@@ -618,23 +629,23 @@ export default function QuotationView() {
   }, [opRows, editableQuotation]);
 
   useEffect(() => {
-    if (opRows.length > 0 && editableQuotation) {
-      syncOpsToQuotation();
-    }
-  }, [opRows]);
-
-  useEffect(() => {
     if (!editableQuotation) return;
-    if (opRows.length > 0) return;
+    
     const items = editableQuotation.items || [];
     if (items.length === 0) return;
-
-    const prefilled = items.map((item, idx) => 
-      buildOpRowFromItem(item, idx, catalogData)
-    ).map(r => recalcRow(r));
+  
+    // Check if opRows already contains all items
+    // If not, rebuild it
+    const shouldRebuild = items.length !== opRows.length;
     
-    setOpRows(prefilled);
-  }, [editableQuotation, opRows.length, catalogData]);
+    if (shouldRebuild) {
+      const prefilled = items.map((item, idx) => 
+        buildOpRowFromItem(item, idx, catalogData)
+      ).map(r => recalcRow(r));
+      
+      setOpRows(prefilled);
+    }
+  }, [editableQuotation, catalogData]); // Keep watching for catalogData changes
 
   // FIX: Create new quotation instead of updating existing one
   async function handleSaveQuotation() {
