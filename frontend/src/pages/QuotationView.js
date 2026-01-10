@@ -649,133 +649,145 @@ export default function QuotationView() {
 
   // FIX: Create new quotation instead of updating existing one
   async function handleSaveQuotation() {
-    if (!editableQuotation) return;
+  if (!editableQuotation) return;
 
-    try {
-      const updatedMargin = parseFloat(editableQuotation.margin) || 0;
-      const {
-        opportunityNumber,
-        catalogName,
-        salutation,
-        customerName,
-        customerEmail,
-        customerCompany,
-        customerAddress,
-        gst,
-        items,
-        terms,
-        fieldsToDisplay,
-        displayTotals,
-        displayHSNCodes,
-        operations,
-        priceRange,
-      } = editableQuotation;
+  try {
+    const updatedMargin = parseFloat(editableQuotation.margin) || 0;
+    const {
+      opportunityNumber,
+      catalogName,
+      salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      gst,
+      items,
+      terms,
+      fieldsToDisplay,
+      displayTotals,
+      displayHSNCodes,
+      operations,
+      priceRange,
+    } = editableQuotation;
 
-      // FIX: Use quotation terms or default
-      const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
+    // FIX: Use quotation terms or default
+    const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
-      // FIX: Preserve original rates exactly as they are
-      const updatedItems = items.map((item) => {
-        const baseRate = parseFloat(item.rate) || 0; // Original rate
-        const quantity = parseFloat(item.quantity) || 1;
-        const marginFactor = 1 + updatedMargin / 100;
-        const effRate = baseRate * marginFactor;
-        const amount = effRate * quantity;
-        const gstRate =
-          item.productGST != null
-            ? parseFloat(item.productGST)
-            : gst
-            ? parseFloat(gst)
-            : 0;
-        const gstAmount =
-          gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
-        const total = parseFloat((amount + gstAmount).toFixed(2));
-
-        return {
-          ...item,
-          rate: baseRate, // Keep original rate
-          productprice: baseRate, // Keep productprice same as rate
-          amount,
-          total,
-          productGST: gstRate,
-          quantity,
-          productId: item.productId?._id || item.productId || null,
-          hsnCode: item.hsnCode || item.productId?.hsnCode || "",
-          imageIndex: item.imageIndex || 0, // FIX: Preserve image index
-        };
-      });
-
-      // FIX: Create NEW quotation instead of updating existing one
-      const body = {
-        opportunityNumber,
-        catalogName,
-        salutation,
-        customerName,
-        customerEmail,
-        customerCompany,
-        customerAddress,
-        margin: updatedMargin,
-        gst,
-        items: updatedItems,
-        terms: quotationTerms,
-        fieldsToDisplay,
-        displayTotals,
-        displayHSNCodes,
-        operations,
-        priceRange,
-        operationsBreakdown: opRows.map((r) => ({
-          slNo: r.slNo,
-          catalogPrice: num(r.catalogPrice),
-          product: r.product,
-          quantity: num(r.quantity),
-          baseCost: num(r.baseCost),
-          brandingCost: num(r.brandingCost),
-          logisticCost: num(r.logisticCost),
-          markUp: num(r.markUp),
-          successFee: num(r.successFee),
-          rate: num(r.rate),
-          gst: r.gst,
-          totalWithGst: num(r.totalWithGst),
-          vendor: r.vendor,
-          remarks: r.remarks,
-          ourCost: num(r.baseCost),
-          deliveryCost: num(r.logisticCost),
-          markUpCost: num(r.markUp),
-          sfCost: num(r.successFee),
-          amount: num(r.amount),
-          total: num(r.totalAmount),
-        })),
+    // FIX: Preserve original rates exactly as they are
+    const updatedItems = items.map((item) => {
+      const baseRate = parseFloat(item.rate) || 0;
+      const quantity = parseFloat(item.quantity) || 1;
+      const marginFactor = 1 + updatedMargin / 100;
+      const effRate = baseRate * marginFactor;
+      const amount = effRate * quantity;
+      const gstRate =
+        item.productGST != null
+          ? parseFloat(item.productGST)
+          : gst
+          ? parseFloat(gst)
+          : 0;
+      const gstAmount = gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
+      const total = parseFloat((amount + gstAmount).toFixed(2));
+    
+      return {
+        slNo: item.slNo || 0,
+        productId: item.productId?._id || item.productId || null,
+        product: item.product || "",
+        hsnCode: item.hsnCode || item.productId?.hsnCode || "",
+        quantity,
+        rate: baseRate,
+        productprice: baseRate,
+        amount,
+        productGST: gstRate,
+        total,
+        baseCost: item.baseCost || 0,
+        material: item.material || "",
+        weight: item.weight || "",
+        brandingTypes: Array.isArray(item.brandingTypes) ? item.brandingTypes : [],
+        suggestedBreakdown: item.suggestedBreakdown || {},
+        imageIndex: item.imageIndex || 0,
       };
+    });
 
-      // FIX: Use POST to create NEW quotation instead of PUT to update
-      const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
+    // FIX: Create NEW quotation instead of updating existing one
+    const body = {
+      opportunityNumber,
+      catalogName,
+      salutation,
+      customerName,
+      customerEmail,
+      customerCompany,
+      customerAddress,
+      margin: updatedMargin,
+      gst,
+      items: updatedItems,
+      terms: quotationTerms,
+      fieldsToDisplay,
+      displayTotals,
+      displayHSNCodes,
+      operations,
+      priceRange,
+      operationsBreakdown: opRows.map((r) => ({
+        slNo: r.slNo,
+        catalogPrice: num(r.catalogPrice),
+        product: r.product,
+        quantity: num(r.quantity),
+        baseCost: num(r.baseCost),
+        brandingCost: num(r.brandingCost),
+        logisticCost: num(r.logisticCost),
+        markUp: num(r.markUp),
+        successFee: num(r.successFee),
+        rate: num(r.rate),
+        gst: r.gst,
+        totalWithGst: num(r.totalWithGst),
+        vendor: r.vendor,
+        remarks: r.remarks,
+        ourCost: num(r.baseCost),
+        deliveryCost: num(r.logisticCost),
+        markUpCost: num(r.markUp),
+        sfCost: num(r.successFee),
+        amount: num(r.amount),
+        total: num(r.totalAmount),
+      })),
+    };
 
-      if (!createRes.ok) {
-        const errorData = await createRes.json();
-        throw new Error(errorData.message || "Failed to create new quotation");
-      }
+    console.log("Creating new quotation with body:", JSON.stringify(body, null, 2)); // Debug log
 
-      const data = await createRes.json();
-      if (!data || !data.quotation) {
-        throw new Error("Invalid response from server: Missing quotation data");
-      }
+    // FIX: Use POST to create NEW quotation instead of PUT to update
+    const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
 
-      // Redirect to the new quotation
-      alert(`New quotation created: #${data.quotation.quotationNumber}`);
-      navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
-      
-    } catch (error) {
-      console.error("Create new quotation error:", error);
-      alert(`Failed to create new quotation: ${error.message}`);
+    console.log("Response status:", createRes.status); // Debug log
+
+    if (!createRes.ok) {
+      const errorData = await createRes.json();
+      console.error("Error response:", errorData); // Debug log
+      throw new Error(errorData.message || "Failed to create new quotation");
     }
+
+    const data = await createRes.json();
+    console.log("Success response:", data); // Debug log
+    
+    if (!data || !data.quotation) {
+      throw new Error("Invalid response from server: Missing quotation data");
+    }
+
+    // Redirect to the new quotation
+    alert(`New quotation created: #${data.quotation.quotationNumber}`);
+    navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
+    
+  } catch (error) {
+    console.error("Create new quotation error:", error);
+    alert(`Failed to create new quotation: ${error.message}`);
   }
+}
 
   async function handleSaveOperationsBreakdownOnly() {
     try {
