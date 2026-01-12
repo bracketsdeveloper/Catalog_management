@@ -229,6 +229,129 @@ router.put("/users/:id/role", authenticate, authorizeAdmin, async (req, res) => 
 // VENDOR ENDPOINT FOR SUGGESTIONS
 // ------------------------------
 
+// Add these routes to your user management backend
+
+// Update user name
+router.put("/users/:id/name", authenticate, authorizeAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+
+  if (!name || name.trim() === "") {
+    return res.status(400).json({ message: "Name is required" });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      id,
+      { name: name.trim() },
+      { new: true, runValidators: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Create log entry
+    await createLog(
+      "update_name",
+      "name",
+      req.user ? req.user.name : "System",
+      name.trim(),
+      req.user ? req.user._id : null,
+      req.ip
+    );
+
+    res.status(200).json({ 
+      message: "Name updated successfully", 
+      user: { 
+        _id: user._id, 
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isSuperAdmin: user.isSuperAdmin,
+        roles: user.roles 
+      }
+    });
+  } catch (err) {
+    console.error("Error updating user name:", err);
+    res.status(500).json({ message: "Server error while updating name" });
+  }
+});
+
+// Update multi roles
+router.put("/users/:id/roles", authenticate, authorizeAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { roles } = req.body;
+
+  if (!Array.isArray(roles)) {
+    return res.status(400).json({ message: "Roles must be an array" });
+  }
+
+  try {
+    // Validate roles against canonical options
+    const validRoles = roles.filter(role => 
+      ROLE_OPTIONS_ASC.includes(role.toUpperCase())
+    ).map(role => role.toUpperCase());
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { roles: validRoles },
+      { new: true, runValidators: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ 
+      message: "Roles updated successfully", 
+      user: { 
+        _id: user._id, 
+        name: user.name,
+        roles: user.roles 
+      }
+    });
+  } catch (err) {
+    console.error("Error updating user roles:", err);
+    res.status(500).json({ message: "Server error while updating roles" });
+  }
+});
+
+// Update super admin status
+router.put("/users/:id/superadmin", authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { isSuperAdmin } = req.body;
+
+  // Only allow superadmins to change this
+  if (!req.user.isSuperAdmin) {
+    return res.status(403).json({ message: "Only superadmins can change superadmin status" });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      id,
+      { isSuperAdmin: Boolean(isSuperAdmin) },
+      { new: true, runValidators: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ 
+      message: "SuperAdmin status updated successfully", 
+      user: { 
+        _id: user._id, 
+        name: user.name,
+        isSuperAdmin: user.isSuperAdmin 
+      }
+    });
+  } catch (err) {
+    console.error("Error updating superadmin status:", err);
+    res.status(500).json({ message: "Server error while updating superadmin status" });
+  }
+});
+
 router.get("/vendors/suggestions", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { query = "" } = req.query;

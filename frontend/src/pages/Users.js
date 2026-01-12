@@ -23,24 +23,22 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
 
-  // account status (legacy single "role")
+  // Editing states
+  const [updatedName, setUpdatedName] = useState("");
   const [updatedAccountStatus, setUpdatedAccountStatus] = useState("GENERAL");
-
-  // multi roles
   const [updatedRoles, setUpdatedRoles] = useState([]);
-
   const [updatedSuperAdmin, setUpdatedSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // filters + sorting
-  const [statusFilter, setStatusFilter] = useState("ALL"); // "ALL" | "GENERAL" | "ADMIN" | "VIEWER"
-  const [nameSort, setNameSort] = useState("asc"); // "asc" | "desc"
-  const [roleSortDir, setRoleSortDir] = useState("asc"); // "asc" | "desc"
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [nameSort, setNameSort] = useState("asc");
+  const [roleSortDir, setRoleSortDir] = useState("asc");
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
 
   // for per row actions dropdown
-  const [openMenuFor, setOpenMenuFor] = useState(null); // userId or null
+  const [openMenuFor, setOpenMenuFor] = useState(null);
 
   /* compute role options based on sort dir */
   const roleOptions = useMemo(() => {
@@ -77,6 +75,7 @@ export default function UserManagement() {
 
   function openEditModal(user) {
     setEditingUser(user._id);
+    setUpdatedName(user.name || "");
     setUpdatedAccountStatus(user.role || "GENERAL");
     setUpdatedSuperAdmin(!!user.isSuperAdmin);
     setUpdatedRoles(Array.isArray(user.roles) ? user.roles : []);
@@ -85,6 +84,7 @@ export default function UserManagement() {
 
   function closeEditModal() {
     setEditingUser(null);
+    setUpdatedName("");
     setUpdatedAccountStatus("GENERAL");
     setUpdatedSuperAdmin(false);
     setUpdatedRoles([]);
@@ -93,6 +93,15 @@ export default function UserManagement() {
   async function handleUpdateUser(userId) {
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+
+      // Update user name first (new endpoint needed)
+      if (updatedName.trim()) {
+        await axios.put(
+          `${BACKEND_URL}/api/admin/users/${userId}/name`,
+          { name: updatedName.trim() },
+          { headers }
+        );
+      }
 
       // Update legacy account status
       await axios.put(
@@ -123,6 +132,7 @@ export default function UserManagement() {
           u._id === userId
             ? {
                 ...u,
+                name: updatedName.trim() || u.name,
                 role: updatedAccountStatus,
                 isSuperAdmin: isSuperAdmin ? updatedSuperAdmin : u.isSuperAdmin,
                 roles: [...updatedRoles].sort((a, b) => a.localeCompare(b)),
@@ -325,6 +335,20 @@ export default function UserManagement() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
             <h2 className="text-xl font-bold mb-4 text-[#Ff8045]">Edit User</h2>
+
+            {/* Name field */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={updatedName}
+                onChange={(e) => setUpdatedName(e.target.value)}
+                className="w-full bg-white border border-purple-300 text-gray-900 rounded-lg px-3 py-2"
+                placeholder="Enter user name"
+              />
+            </div>
 
             {/* Account Status */}
             <div className="mb-4">
