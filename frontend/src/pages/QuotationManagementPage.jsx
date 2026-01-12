@@ -399,9 +399,8 @@ export default function QuotationManagementPage() {
           "Remarks": q.remarks || "",
           "Approve Status": q.approveStatus ? "Approved" : "Not Approved",
           "Latest Action": latestAction.action
-            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${
-                latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown date"
-              }`
+            ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown date"
+            }`
             : "No action recorded",
         };
       });
@@ -426,10 +425,15 @@ export default function QuotationManagementPage() {
   async function handleDuplicateQuotation(q) {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.put(
-        `${BACKEND_URL}/api/admin/quotations/${q._id}`,
+
+      // Use the dedicated duplicate endpoint
+      const res = await axios.post(
+        `${BACKEND_URL}/api/admin/quotations/${q._id}/duplicate`,
         {},
-        { headers: { Authorization: `Bearer ${token}` }, timeout: 30000 }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 30000
+        }
       );
 
       const newQ = res.data?.quotation;
@@ -810,9 +814,8 @@ export default function QuotationManagementPage() {
                       <td className="p-2">{q.createdAt ? format(new Date(q.createdAt), "dd/MM/yyyy") : "—"}</td>
                       <td className="p-2">
                         {latestAction.action
-                          ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${
-                              latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown"
-                            }`
+                          ? `${latestAction.action} by ${latestAction.performedBy?.email || "N/A"} at ${latestAction.performedAt ? format(new Date(latestAction.performedAt), "dd/MM/yyyy HH:mm") : "Unknown"
+                          }`
                           : "No action recorded"}
                       </td>
                       <td className="p-2">
