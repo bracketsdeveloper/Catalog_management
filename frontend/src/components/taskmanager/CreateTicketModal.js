@@ -50,14 +50,20 @@ export default function CreateTicketModal({
       (initialData.opportunityId
         ? `${initialData.opportunityId.opportunityCode} - ${initialData.opportunityId.opportunityName}`
         : ""),
+    // FIXED: Check if assignedTo exists and is an array before mapping
     assignedTo:
-      initialData.assignedTo?.map(user => user._id) ||
+      (initialData.assignedTo && Array.isArray(initialData.assignedTo)
+        ? initialData.assignedTo.map(user => user._id)
+        : []) ||
       (currentUser?._id ? [currentUser._id] : []),
-    assignedToSearch: initialData.assignedTo
-      ? initialData.assignedTo.map(user => `${user.name} (${user.email})`).join(", ")
-      : currentUser
-      ? `${currentUser.name} (${currentUser.email})`
-      : "",
+    // FIXED: Check if assignedTo exists and is an array before mapping
+    assignedToSearch: 
+      (initialData.assignedTo && Array.isArray(initialData.assignedTo)
+        ? initialData.assignedTo.map(user => `${user.name || ""} (${user.email || ""})`).join(", ")
+        : "") ||
+      (currentUser
+        ? `${currentUser.name || ""} (${currentUser.email || ""})`
+        : ""),
     schedule: initialData.schedule || "None",
     fromDate: formatDateForInput(initialData.fromDate),
     toDate: formatDateForInput(initialData.toDate),
@@ -73,14 +79,17 @@ export default function CreateTicketModal({
     useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState(
-    initialData.assignedTo?.map(user => ({
-      _id: user._id,
-      name: user.name,
-      email: user.email
-    })) || (currentUser ? [{
+    (initialData.assignedTo && Array.isArray(initialData.assignedTo)
+      ? initialData.assignedTo.map(user => ({
+          _id: user._id,
+          name: user.name || "",
+          email: user.email || ""
+        }))
+      : []) || 
+    (currentUser ? [{
       _id: currentUser._id,
-      name: currentUser.name,
-      email: currentUser.email
+      name: currentUser.name || "",
+      email: currentUser.email || ""
     }] : [])
   );
 
@@ -206,8 +215,8 @@ export default function CreateTicketModal({
     if (!selectedUsers.some(u => u._id === user._id)) {
       const newSelectedUsers = [...selectedUsers, {
         _id: user._id,
-        name: user.name,
-        email: user.email
+        name: user.name || "",
+        email: user.email || ""
       }];
       setSelectedUsers(newSelectedUsers);
       setFormData(prev => ({
@@ -680,3 +689,4 @@ export default function CreateTicketModal({
     </div>
   );
 }
+

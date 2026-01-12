@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -75,6 +75,7 @@ export default function QuotationView() {
   const [catalogData, setCatalogData] = useState(null);
   const [hasCatalog, setHasCatalog] = useState(false);
   const [loadingOps, setLoadingOps] = useState(false);
+  const isInitialLoad = useRef(true);
 
   const fieldNameMapping = {
     txn: "Transaction",
@@ -384,6 +385,11 @@ export default function QuotationView() {
       setEditableQuotation({ ...data, items: sanitizedItems });
       setOpRows(initialOps);
       setError(null);
+      
+      // Mark initial load as complete after a short delay to allow state to settle
+      setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 100);
       
       // NEW: Auto-populate if no operations breakdown exists
       if (!data.operationsBreakdown || data.operationsBreakdown.length === 0) {
@@ -702,6 +708,55 @@ export default function QuotationView() {
       setOpRows(prefilled);
     }
   }, [editableQuotation, catalogData]);
+
+  // Live sync: Map operations breakdown rate and GST% to quotation items
+  useEffect(() => {
+    // Skip sync during initial load
+    if (isInitialLoad.current) return;
+    if (!editableQuotation || !opRows.length) return;
+    
+    setEditableQuotation((prev) => {
+      if (!prev || !prev.items) return prev;
+      
+      const updatedItems = prev.items.map((item, idx) => {
+        const opRow = opRows[idx];
+        
+        // If no corresponding opRow, keep item unchanged
+        if (!opRow) {
+          return item;
+        }
+        
+        // Get rate and GST from operations breakdown
+        const opRate = num(opRow.rate);
+        const opGst = parseGstPercent(opRow.gst);
+        
+        // Always sync rate and GST from operations breakdown (even if 0)
+        // This ensures live updates as user edits operations table
+        const newRate = opRate >= 0 ? opRate : num(item.rate);
+        const newGst = opGst >= 0 ? opGst : (item.productGST != null ? num(item.productGST) : 0);
+        
+        // Recalculate amount and total
+        const quantity = num(item.quantity) || 1;
+        const amount = quantity * newRate;
+        const total = amount * (1 + newGst / 100);
+        
+        return {
+          ...item,
+          rate: newRate,
+          productprice: newRate,
+          productGST: newGst,
+          amount,
+          total,
+        };
+      });
+      
+      return {
+        ...prev,
+        items: updatedItems,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opRows]);
 
   // FIX: Create new quotation instead of updating existing one
   async function handleSaveQuotation() {

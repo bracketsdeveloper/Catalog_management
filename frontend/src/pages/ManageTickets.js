@@ -90,7 +90,14 @@ export default function ManageTicketsPage() {
         headers: getAuthHeaders(),
         params: { searchTerm },
       });
-      setTasks(res.data || []);
+      
+      // Ensure assignedTo is always an array
+      const tasksWithAssignedTo = (res.data || []).map(task => ({
+        ...task,
+        assignedTo: task.assignedTo || []
+      }));
+      
+      setTasks(tasksWithAssignedTo);
     } catch (error) {
       console.error("Error fetching tasks:", error);
       setTasks([]);
@@ -367,7 +374,11 @@ export default function ManageTicketsPage() {
           onClose={() => setShowCreateModal(null)}
           onSubmit={handleCreateTicket}
           users={users}
-          initialData={showCreateModal}
+          // Ensure assignedTo is an array when creating new ticket
+          initialData={{
+            ...showCreateModal,
+            assignedTo: showCreateModal.assignedTo || []
+          }}
           isSuperAdmin={isSuperAdmin}
           currentUser={currentUser}
           isEditing={showCreateModal.isEditing || false}
