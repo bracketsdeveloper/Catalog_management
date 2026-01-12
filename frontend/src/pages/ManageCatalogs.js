@@ -1,7 +1,7 @@
 // CreateManualCatalog.jsx
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import CompanyModal from "../components/CompanyModal";
@@ -127,7 +127,6 @@ export default function CreateManualCatalog() {
     variationHinges: {},
   });
 
-  const [calculatingPrices, setCalculatingPrices] = useState(false);
 
   const allSelectedFilters = [
     ...selectedCategories.map((item) => ({
@@ -261,78 +260,6 @@ export default function CreateManualCatalog() {
     }
   };
 
-  const calculateSuggestedPrice = async (product, brandingTypes = [], segment, pincode) => {
-    try {
-      const token = localStorage.getItem("token");
-      const payload = {
-        baseCost: product.productCost || 0,
-        margin: selectedMargin,
-        gst: selectedGst,
-        brandingTypes: brandingTypes,
-        segment: segment,
-        pincode: pincode,
-        category: product.category || "",
-        subCategory: product.subCategory || ""
-      };
-      
-      const response = await axios.post(`${BACKEND_URL}/api/calculate-price`, payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      return response.data.suggestedBreakdown || {
-        baseCost: product.productCost || 0,
-        marginPct: 0,
-        marginAmount: 0,
-        logisticsCost: 0,
-        brandingCost: 0,
-        finalPrice: 0,
-      };
-    } catch (error) {
-      console.error("Error calculating suggested price:", error);
-      return {
-        baseCost: product.productCost || 0,
-        marginPct: 0,
-        marginAmount: 0,
-        logisticsCost: 0,
-        brandingCost: 0,
-        finalPrice: 0,
-      };
-    }
-  };
-
-  const calculateAllSuggestedPrices = async () => {
-    if (selectedProducts.length === 0) return;
-    
-    setCalculatingPrices(true);
-    try {
-      const updatedProducts = await Promise.all(
-        selectedProducts.map(async (product) => {
-          if (product.suggestedBreakdown?.finalPrice > 0) {
-            return product;
-          }
-          
-          const breakdown = await calculateSuggestedPrice(
-            product,
-            product.brandingTypes || [],
-            selectedCompanyData?.segment,
-            selectedCompanyData?.pincode
-          );
-          
-          return {
-            ...product,
-            suggestedBreakdown: breakdown,
-            productCost: breakdown.finalPrice || product.productCost
-          };
-        })
-      );
-      
-      setSelectedProducts(updatedProducts);
-    } catch (error) {
-      console.error("Error calculating prices:", error);
-    } finally {
-      setCalculatingPrices(false);
-    }
-  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -589,14 +516,11 @@ export default function CreateManualCatalog() {
     fetchProducts(1);
   }, [searchTerm, selectedCategories, selectedSubCategories, selectedBrands, selectedPriceRanges, selectedVariationHinges]);
 
-  useEffect(() => {
-    if (selectedProducts.length > 0) {
-      const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
-      if (needsCalculation) {
-        calculateAllSuggestedPrices();
-      }
-    }
-  }, [selectedProducts.length]);
+  // Store the last company data to detect changes
+  const lastCompanyDataRef = useRef({ segment: null, pincode: null });
+  const lastProductCountRef = useRef(0);
+  const hasInitializedRef = useRef(false);
+  
 
   const toggleFilter = (val, arr, setArr) =>
     arr.includes(val) ? setArr(arr.filter((v) => v !== val)) : setArr([...arr, val]);
@@ -630,22 +554,15 @@ export default function CreateManualCatalog() {
       return;
     }
     
-    const breakdown = await calculateSuggestedPrice(
-      item,
-      [],
-      selectedCompanyData?.segment,
-      selectedCompanyData?.pincode
-    );
-    
     setSelectedProducts((prev) => [
       ...prev,
       {
         ...item,
-        productprice: breakdown.finalPrice,
-        productCost: breakdown.finalPrice, // FIX: Set productCost too
+        productprice: item.productCost || 0,
+        productCost: item.productCost || 0,
         brandingTypes: [],
         baseCost: item.productCost || 0,
-        suggestedBreakdown: breakdown,
+        suggestedBreakdown: {}, // Will be calculated in edit modal
         imageIndex: 0,
       },
     ]);
@@ -654,17 +571,10 @@ export default function CreateManualCatalog() {
   const handleAddVariations = async (variations) => {
     if (!variationModalProduct) return;
     
-    const breakdown = await calculateSuggestedPrice(
-      variationModalProduct,
-      [],
-      selectedCompanyData?.segment,
-      selectedCompanyData?.pincode
-    );
-    
     const newItems = variations.map((v) => ({
       productId: variationModalProduct._id,
       productName: variationModalProduct.productName || variationModalProduct.name,
-      productCost: breakdown.finalPrice, // FIX: Set productCost
+      productCost: variationModalProduct.productCost || 0,
       productGST: variationModalProduct.productGST || 0,
       color: v.color?.trim() || "",
       size: v.size?.trim() || "",
@@ -675,7 +585,7 @@ export default function CreateManualCatalog() {
       ProductBrand: variationModalProduct.brandName || "",
       brandingTypes: [],
       baseCost: variationModalProduct.productCost || 0,
-      suggestedBreakdown: breakdown,
+      suggestedBreakdown: {}, // Will be calculated in edit modal
       imageIndex: 0,
     }));
     
@@ -691,13 +601,6 @@ export default function CreateManualCatalog() {
   };
 
   const handleUpdateItem = async (upd) => {
-    const breakdown = await calculateSuggestedPrice(
-      upd,
-      upd.brandingTypes || [],
-      selectedCompanyData?.segment,
-      selectedCompanyData?.pincode
-    );
-    
     setSelectedProducts((prev) => {
       const arr = [...prev];
       const dup = arr.some(
@@ -711,17 +614,16 @@ export default function CreateManualCatalog() {
         alert("This update creates a duplicate. Not updating.");
         return arr;
       }
+      // Use the cost and breakdown from the edit modal
       arr[editIndex] = { 
         ...arr[editIndex], 
         ...upd,
-        productCost: breakdown.finalPrice, // FIX: Update productCost
-        suggestedBreakdown: breakdown
+        productprice: upd.productCost || arr[editIndex].productCost
       };
       return arr;
     });
   };
 
-  // Add this function to manually update product cost
   const handleManualPriceUpdate = (index, price) => {
     setSelectedProducts((prev) => {
       const arr = [...prev];
@@ -755,8 +657,10 @@ export default function CreateManualCatalog() {
       fieldsToDisplay,
       items: selectedProducts.map((p, i) => {
         const qty = p.quantity || 1;
-        // FIX: Use productCost OR suggestedBreakdown.finalPrice, but don't default to 0
-        const base = p.productCost || (p.suggestedBreakdown?.finalPrice || 0);
+        // Use productCost if explicitly set (even if 0), otherwise fall back to suggested breakdown
+        const base = (p.productCost != null && p.productCost !== undefined) 
+          ? p.productCost 
+          : (p.suggestedBreakdown?.finalPrice || 0);
         const rate = parseFloat(base.toFixed(2));
         const amount = rate * qty;
         const gst = p.productGST ?? selectedGst;
@@ -796,17 +700,6 @@ export default function CreateManualCatalog() {
       return alert("Enter Catalog Name & add ≥1 product");
     }
 
-    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
-    if (needsCalculation) {
-      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
-      if (!confirmSave) return;
-    }
-
-    if (calculatingPrices) {
-      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
-      if (!confirmSave) return;
-    }
-
     const payload = buildQuotationPayload();
 
     try {
@@ -827,17 +720,6 @@ export default function CreateManualCatalog() {
   const handleCreateDraftQuotation = async () => {
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
-    }
-
-    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
-    if (needsCalculation) {
-      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
-      if (!confirmSave) return;
-    }
-
-    if (calculatingPrices) {
-      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
-      if (!confirmSave) return;
     }
 
     const payload = {
@@ -868,17 +750,6 @@ export default function CreateManualCatalog() {
 
     if (!catalogName || !selectedProducts.length) {
       return alert("Enter Catalog Name & add ≥1 product");
-    }
-
-    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
-    if (needsCalculation) {
-      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
-      if (!confirmSave) return;
-    }
-
-    if (calculatingPrices) {
-      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
-      if (!confirmSave) return;
     }
 
     const payload = {
@@ -923,17 +794,6 @@ export default function CreateManualCatalog() {
       return;
     }
 
-    const needsCalculation = selectedProducts.some(p => !p.suggestedBreakdown?.finalPrice || p.suggestedBreakdown.finalPrice === 0);
-    if (needsCalculation) {
-      const confirmSave = window.confirm("Suggested prices are still being calculated. Do you want to proceed anyway? Prices may be inaccurate.");
-      if (!confirmSave) return;
-    }
-
-    if (calculatingPrices) {
-      const confirmSave = window.confirm("Prices are still calculating. Do you want to wait or proceed with incomplete calculations?");
-      if (!confirmSave) return;
-    }
-
     const sanitizedCustomerName = customerName.trim() === salutation ? "" : customerName.trim();
 
     const payload = {
@@ -955,13 +815,15 @@ export default function CreateManualCatalog() {
         color: p.color,
         size: p.size,
         quantity: p.quantity,
-        productCost: p.suggestedBreakdown?.finalPrice || p.productCost,
+        productCost: (p.productCost != null && p.productCost !== undefined) 
+          ? p.productCost 
+          : (p.suggestedBreakdown?.finalPrice || 0),
         productGST: p.productGST,
         material: p.material,
         weight: p.weight,
         brandingTypes: p.brandingTypes,
         baseCost: p.baseCost,
-        suggestedBreakdown: p.suggestedBreakdown,
+        suggestedBreakdown: p.suggestedBreakdown || {},
         imageIndex: p.imageIndex,
       })),
       fieldsToDisplay,
@@ -1118,9 +980,8 @@ export default function CreateManualCatalog() {
           <button
             onClick={handleSaveCatalog}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
-            disabled={calculatingPrices}
           >
-            {calculatingPrices ? "Calculating Prices..." : (isCatalogEditMode && id ? "Update Catalog" : "Create Catalog")}
+            {isCatalogEditMode && id ? "Update Catalog" : "Create Catalog"}
           </button>
 
           {isDraftQuotation ? (
@@ -1129,9 +990,8 @@ export default function CreateManualCatalog() {
                 onClick={handleUpdateDraftQuotation}
                 className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
                 title="Update existing draft quotation"
-                disabled={calculatingPrices}
               >
-                {calculatingPrices ? "Calculating..." : "Update Draft Quotation"}
+                Update Draft Quotation
               </button>
               <button
                 onClick={handlePublishDraftQuotation}
@@ -1146,30 +1006,21 @@ export default function CreateManualCatalog() {
               onClick={handleCreateDraftQuotation}
               className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
               title="Creates a quotation marked as draft"
-              disabled={calculatingPrices}
             >
-              {calculatingPrices ? "Calculating..." : "Create Draft Quotation"}
+              Create Draft Quotation
             </button>
           )}
 
           <button
             onClick={handleSaveQuotation}
             className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white px-4 py-2 rounded"
-            disabled={calculatingPrices}
           >
-            {calculatingPrices ? "Calculating Prices..." : (isQuotationEditMode && quotationId ? "Create New Quotation" : "Create Quotation")}
+            {isQuotationEditMode && quotationId ? "Create New Quotation" : "Create Quotation"}
           </button>
 
           {isDraftQuotation && (
             <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
               Draft Mode
-            </div>
-          )}
-          
-          {calculatingPrices && (
-            <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium flex items-center">
-              <div className="w-4 h-4 border-2 border-blue-800 border-t-transparent rounded-full animate-spin mr-2"></div>
-              Calculating Prices...
             </div>
           )}
         </div>
@@ -1573,7 +1424,7 @@ export default function CreateManualCatalog() {
                                 {row.color && <div className="text-xs">Color: {row.color}</div>}
                                 {row.size && <div className="text-xs">Size: {row.size}</div>}
                                 
-                                {/* ADD PRICE INPUT FIELD */}
+                                {/* PRICE INPUT FIELD */}
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-xs">Price:</span>
                                   <input

@@ -71,10 +71,15 @@ export default function VariationEditModal({
 
   function handleSave() {
     try {
+      // Ensure we properly parse the cost - handle empty strings and invalid values
+      const costValue = editableCost === "" || editableCost == null 
+        ? 0 
+        : (isNaN(parseFloat(editableCost)) ? 0 : parseFloat(editableCost));
+      
       const payload = {
         productName:        name,
-        productCost:        parseFloat(editableCost) || 0,
-        productprice:       parseFloat(editableCost) || 0,
+        productCost:        costValue,
+        productprice:       costValue,
         productGST:         parseFloat(productGST) || 0,
         color:              color || "",
         size:               size || "",

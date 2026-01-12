@@ -74,6 +74,7 @@ export default function QuotationView() {
   const [opRows, setOpRows] = useState([]);
   const [catalogData, setCatalogData] = useState(null);
   const [hasCatalog, setHasCatalog] = useState(false);
+  const [loadingOps, setLoadingOps] = useState(false);
 
   const fieldNameMapping = {
     txn: "Transaction",
@@ -199,32 +200,41 @@ export default function QuotationView() {
     
     let catalogPrice = 0;
     
+    // Try to get price from catalog first
     if (catalog && item.product) {
       catalogPrice = getCatalogPriceForProduct(item.product, catalog);
     }
     
-    if (catalogPrice === 0) {
-      catalogPrice = num(sb.finalPrice) || num(item.rate) || 0;
+    // If no catalog price, try suggested breakdown
+    if (catalogPrice === 0 && sb.finalPrice) {
+      catalogPrice = num(sb.finalPrice);
     }
     
+    // If still no price, use item rate
+    if (catalogPrice === 0) {
+      catalogPrice = num(item.rate) || 0;
+    }
+    
+    // Get breakdown values from suggestedBreakdown
     const baseCost = num(sb.baseCost) || 0;
     const brandingCost = num(sb.brandingCost) || 0;
     const logisticCost = num(sb.logisticsCost) || 0;
     const markUp = num(sb.marginAmount) || 0;
     const successFee = num(sb.successFee) || 0;
     const gstStr = item.productGST != null ? String(item.productGST) : "";
-  
-    // Calculate rate if not provided
+
+    // Calculate rate from breakdown components
     let rate = 0;
     if (sb.finalPrice) {
       rate = num(sb.finalPrice);
-    } else if (item.rate) {
-      rate = num(item.rate);
     } else {
       // Calculate from components if available
       rate = baseCost + brandingCost + logisticCost + markUp + successFee;
+      if (rate === 0) {
+        rate = num(item.rate) || 0;
+      }
     }
-  
+
     return {
       slNo: idx + 1,
       catalogPrice,
@@ -244,6 +254,30 @@ export default function QuotationView() {
     };
   }
 
+  // NEW: Function to automatically populate operations from suggestedBreakdown
+  const autoPopulateOperations = useCallback(async () => {
+    if (!editableQuotation || loadingOps) return;
+    
+    setLoadingOps(true);
+    try {
+      let catalog = null;
+      if (hasCatalog && editableQuotation?.catalogName) {
+        catalog = await fetchCatalogByName(editableQuotation.catalogName);
+      }
+      
+      const newOpRows = (editableQuotation.items || []).map((item, idx) => 
+        buildOpRowFromItem(item, idx, catalog)
+      ).map(r => recalcRow(r));
+      
+      setOpRows(newOpRows);
+      console.log("Auto-populated operations from suggested breakdown:", newOpRows);
+    } catch (error) {
+      console.error("Error auto-populating operations:", error);
+    } finally {
+      setLoadingOps(false);
+    }
+  }, [editableQuotation, hasCatalog, loadingOps]);
+
   async function fetchQuotation() {
     try {
       setLoading(true);
@@ -253,36 +287,37 @@ export default function QuotationView() {
       if (!res.ok) throw new Error("Failed to fetch quotation");
       const data = await res.json();
 
-      // FIX: Preserve original rates exactly as they are in database
+      // Sanitize items
       const sanitizedItems = (data.items || []).map((item, idx) => ({
         ...item,
         quantity: parseFloat(item.quantity) || 1,
         slNo: item.slNo || idx + 1,
         productGST: item.productGST != null ? parseFloat(item.productGST) : 0,
-        rate: parseFloat(item.rate) || 0, // Keep original rate
-        productprice: parseFloat(item.productprice) || 0, // Keep original productprice
+        rate: parseFloat(item.rate) || 0,
+        productprice: parseFloat(item.productprice) || 0,
         product: item.product || "Unknown Product",
         hsnCode: item.hsnCode || item.productId?.hsnCode || "",
-        suggestedBreakdown: item.suggestedBreakdown || {}, // Preserve breakdown
-        imageIndex: item.imageIndex || 0, // Preserve image index
-        // FIX: Add these fields to ensure they're not lost
+        suggestedBreakdown: item.suggestedBreakdown || {},
+        imageIndex: item.imageIndex || 0,
         material: item.material || "",
         weight: item.weight || "",
         brandingTypes: item.brandingTypes || [],
       }));
 
-      // Check if quotation has a catalog and fetch it
-      let catalog = null;
+      // Check if quotation has a catalog
       const quotationHasCatalog = !!(data.catalogName && data.catalogName.trim());
       setHasCatalog(quotationHasCatalog);
       
+      let catalog = null;
       if (quotationHasCatalog) {
         catalog = await fetchCatalogByName(data.catalogName);
       }
 
+      // Initialize operations breakdown
       let initialOps = [];
       
       if (data.operationsBreakdown && data.operationsBreakdown.length > 0) {
+        // Use existing operations breakdown if available
         initialOps = data.operationsBreakdown.map((r, idx) => {
           const linkedItem = sanitizedItems[idx] || {};
           
@@ -337,6 +372,7 @@ export default function QuotationView() {
           };
         });
       } else {
+        // NEW: If no operations breakdown exists, auto-populate from suggestedBreakdown
         initialOps = sanitizedItems.map((item, idx) => 
           buildOpRowFromItem(item, idx, catalog)
         );
@@ -348,6 +384,11 @@ export default function QuotationView() {
       setEditableQuotation({ ...data, items: sanitizedItems });
       setOpRows(initialOps);
       setError(null);
+      
+      // NEW: Auto-populate if no operations breakdown exists
+      if (!data.operationsBreakdown || data.operationsBreakdown.length === 0) {
+        setTimeout(() => autoPopulateOperations(), 500);
+      }
     } catch (err) {
       console.error("Error fetching quotation:", err);
       setError("Failed to load quotation");
@@ -364,6 +405,7 @@ export default function QuotationView() {
     const successFee = num(row.successFee);
     const quantity = num(row.quantity);
     
+    // Calculate rate from components
     const rate = baseCost + brandingCost + logisticCost + markUp + successFee;
     
     const gstPct = parseGstPercent(row.gst);
@@ -412,7 +454,7 @@ export default function QuotationView() {
       ...rowToDuplicate,
       slNo: nextSl,
     });
-    setOpRows((prev) => [...prev, ...newRow]);
+    setOpRows((prev) => [...prev, newRow]);
   };
   
   const updateOpRow = (idx, field, value) => {
@@ -458,10 +500,9 @@ export default function QuotationView() {
       }
     }
     
+    // Try to find matching item from quotation
     const linkedItem = editableQuotation?.items?.find(
-      (item, itemIdx) => 
-        idx === itemIdx || 
-        (item.product?.toLowerCase() === row.product?.toLowerCase())
+      (item) => item.product?.toLowerCase() === row.product?.toLowerCase()
     );
     
     if (linkedItem?.suggestedBreakdown?.finalPrice) {
@@ -523,53 +564,68 @@ export default function QuotationView() {
     alert(`Fetched prices for ${opRows.length} rows`);
   };
 
+  // UPDATED: Better populate from suggested breakdown
   const populateFromSuggestedBreakdown = () => {
     if (!editableQuotation?.items) {
       alert("No quotation items to populate from");
       return;
     }
     
-    setOpRows((prev) => 
-      prev.map((row, idx) => {
-        const linkedItem = editableQuotation.items[idx];
-        if (!linkedItem?.suggestedBreakdown) {
-          const matchedItem = editableQuotation.items.find(
-            item => item.product?.toLowerCase() === row.product?.toLowerCase()
-          );
-          
-          if (matchedItem?.suggestedBreakdown) {
-            const sb = matchedItem.suggestedBreakdown;
-            return recalcRow({
-              ...row,
-              catalogPrice: num(sb.finalPrice) || num(matchedItem.rate) || row.catalogPrice,
-              baseCost: num(sb.baseCost) || row.baseCost,
-              brandingCost: num(sb.brandingCost) || row.brandingCost,
-              logisticCost: num(sb.logisticsCost) || row.logisticCost,
-              markUp: num(sb.marginAmount) || row.markUp,
-              quantity: num(matchedItem.quantity) || row.quantity,
-              product: matchedItem.product || row.product,
-              gst: matchedItem.productGST != null ? String(matchedItem.productGST) : row.gst,
-            });
-          }
-          return row;
+    let catalog = catalogData;
+    if (hasCatalog && !catalog && editableQuotation?.catalogName) {
+      // Try to fetch catalog if not already loaded
+      fetchCatalogByName(editableQuotation.catalogName).then(cat => {
+        if (cat) {
+          setCatalogData(cat);
+          catalog = cat;
         }
-        
-        const sb = linkedItem.suggestedBreakdown;
-        return recalcRow({
-          ...row,
-          catalogPrice: num(sb.finalPrice) || num(linkedItem.rate) || row.catalogPrice,
-          baseCost: num(sb.baseCost) || row.baseCost,
-          brandingCost: num(sb.brandingCost) || row.brandingCost,
-          logisticCost: num(sb.logisticsCost) || row.logisticCost,
-          markUp: num(sb.marginAmount) || row.markUp,
-          quantity: num(linkedItem.quantity) || row.quantity,
-          product: linkedItem.product || row.product,
-          gst: linkedItem.productGST != null ? String(linkedItem.productGST) : row.gst,
-        });
-      })
-    );
+        populateOps();
+      });
+      return;
+    }
     
-    alert("Populated fields from suggested breakdown");
+    populateOps();
+    
+    function populateOps() {
+      setOpRows((prev) => 
+        prev.map((row, idx) => {
+          const linkedItem = editableQuotation.items[idx] || 
+                           editableQuotation.items.find(
+                             item => item.product?.toLowerCase() === row.product?.toLowerCase()
+                           );
+          
+          if (!linkedItem) return row;
+          
+          const sb = linkedItem.suggestedBreakdown || {};
+          
+          let catalogPrice = 0;
+          if (catalog) {
+            catalogPrice = getCatalogPriceForProduct(linkedItem.product, catalog);
+          }
+          if (catalogPrice === 0 && sb.finalPrice) {
+            catalogPrice = num(sb.finalPrice);
+          }
+          if (catalogPrice === 0) {
+            catalogPrice = num(linkedItem.rate) || row.catalogPrice;
+          }
+          
+          return recalcRow({
+            ...row,
+            catalogPrice,
+            baseCost: num(sb.baseCost) || row.baseCost,
+            brandingCost: num(sb.brandingCost) || row.brandingCost,
+            logisticCost: num(sb.logisticsCost) || row.logisticCost,
+            markUp: num(sb.marginAmount) || row.markUp,
+            successFee: num(sb.successFee) || row.successFee,
+            quantity: num(linkedItem.quantity) || row.quantity,
+            product: linkedItem.product || row.product,
+            gst: linkedItem.productGST != null ? String(linkedItem.productGST) : row.gst,
+          });
+        })
+      );
+      
+      alert("Populated fields from suggested breakdown");
+    }
   };
 
   const syncOpsToQuotation = useCallback(() => {
@@ -597,7 +653,7 @@ export default function QuotationView() {
       const opGst = parseGstPercent(opRow.gst);
   
       const quantity = opQty > 0 ? opQty : existingQty || 1;
-      const rate = opRate > 0 ? opRate : existingRate; // Preserve original rate if not changed
+      const rate = opRate > 0 ? opRate : existingRate;
       const productGST = opGst > 0 ? opGst : existingGst;
   
       const amount = quantity * rate;
@@ -609,12 +665,12 @@ export default function QuotationView() {
         product: opRow.product || existingItem.product,
         quantity,
         rate,
-        productprice: rate, // Keep productprice same as rate
+        productprice: rate,
         productGST,
         amount,
         total,
         hsnCode: existingItem.hsnCode || "",
-        imageIndex: existingItem.imageIndex || 0, // Preserve image index
+        imageIndex: existingItem.imageIndex || 0,
         material: existingItem.material || "",
         weight: existingItem.weight || "",
         brandingTypes: existingItem.brandingTypes || [],
@@ -645,149 +701,149 @@ export default function QuotationView() {
       
       setOpRows(prefilled);
     }
-  }, [editableQuotation, catalogData]); // Keep watching for catalogData changes
+  }, [editableQuotation, catalogData]);
 
   // FIX: Create new quotation instead of updating existing one
   async function handleSaveQuotation() {
-  if (!editableQuotation) return;
+    if (!editableQuotation) return;
 
-  try {
-    const updatedMargin = parseFloat(editableQuotation.margin) || 0;
-    const {
-      opportunityNumber,
-      catalogName,
-      salutation,
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      gst,
-      items,
-      terms,
-      fieldsToDisplay,
-      displayTotals,
-      displayHSNCodes,
-      operations,
-      priceRange,
-    } = editableQuotation;
+    try {
+      const updatedMargin = parseFloat(editableQuotation.margin) || 0;
+      const {
+        opportunityNumber,
+        catalogName,
+        salutation,
+        customerName,
+        customerEmail,
+        customerCompany,
+        customerAddress,
+        gst,
+        items,
+        terms,
+        fieldsToDisplay,
+        displayTotals,
+        displayHSNCodes,
+        operations,
+        priceRange,
+      } = editableQuotation;
 
-    // FIX: Use quotation terms or default
-    const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
+      // Use quotation terms or default
+      const quotationTerms = Array.isArray(terms) && terms.length > 0 ? terms : defaultTerms;
 
-    // FIX: Preserve original rates exactly as they are
-    const updatedItems = items.map((item) => {
-      const baseRate = parseFloat(item.rate) || 0;
-      const quantity = parseFloat(item.quantity) || 1;
-      const marginFactor = 1 + updatedMargin / 100;
-      const effRate = baseRate * marginFactor;
-      const amount = effRate * quantity;
-      const gstRate =
-        item.productGST != null
-          ? parseFloat(item.productGST)
-          : gst
-          ? parseFloat(gst)
-          : 0;
-      const gstAmount = gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
-      const total = parseFloat((amount + gstAmount).toFixed(2));
-    
-      return {
-        slNo: item.slNo || 0,
-        productId: item.productId?._id || item.productId || null,
-        product: item.product || "",
-        hsnCode: item.hsnCode || item.productId?.hsnCode || "",
-        quantity,
-        rate: baseRate,
-        productprice: baseRate,
-        amount,
-        productGST: gstRate,
-        total,
-        baseCost: item.baseCost || 0,
-        material: item.material || "",
-        weight: item.weight || "",
-        brandingTypes: Array.isArray(item.brandingTypes) ? item.brandingTypes : [],
-        suggestedBreakdown: item.suggestedBreakdown || {},
-        imageIndex: item.imageIndex || 0,
+      // Preserve original rates exactly as they are
+      const updatedItems = items.map((item) => {
+        const baseRate = parseFloat(item.rate) || 0;
+        const quantity = parseFloat(item.quantity) || 1;
+        const marginFactor = 1 + updatedMargin / 100;
+        const effRate = baseRate * marginFactor;
+        const amount = effRate * quantity;
+        const gstRate =
+          item.productGST != null
+            ? parseFloat(item.productGST)
+            : gst
+            ? parseFloat(gst)
+            : 0;
+        const gstAmount = gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
+        const total = parseFloat((amount + gstAmount).toFixed(2));
+      
+        return {
+          slNo: item.slNo || 0,
+          productId: item.productId?._id || item.productId || null,
+          product: item.product || "",
+          hsnCode: item.hsnCode || item.productId?.hsnCode || "",
+          quantity,
+          rate: baseRate,
+          productprice: baseRate,
+          amount,
+          productGST: gstRate,
+          total,
+          baseCost: item.baseCost || 0,
+          material: item.material || "",
+          weight: item.weight || "",
+          brandingTypes: Array.isArray(item.brandingTypes) ? item.brandingTypes : [],
+          suggestedBreakdown: item.suggestedBreakdown || {},
+          imageIndex: item.imageIndex || 0,
+        };
+      });
+
+      // FIX: Create NEW quotation instead of updating existing one
+      const body = {
+        opportunityNumber,
+        catalogName,
+        salutation,
+        customerName,
+        customerEmail,
+        customerCompany,
+        customerAddress,
+        margin: updatedMargin,
+        gst,
+        items: updatedItems,
+        terms: quotationTerms,
+        fieldsToDisplay,
+        displayTotals,
+        displayHSNCodes,
+        operations,
+        priceRange,
+        operationsBreakdown: opRows.map((r) => ({
+          slNo: r.slNo,
+          catalogPrice: num(r.catalogPrice),
+          product: r.product,
+          quantity: num(r.quantity),
+          baseCost: num(r.baseCost),
+          brandingCost: num(r.brandingCost),
+          logisticCost: num(r.logisticCost),
+          markUp: num(r.markUp),
+          successFee: num(r.successFee),
+          rate: num(r.rate),
+          gst: r.gst,
+          totalWithGst: num(r.totalWithGst),
+          vendor: r.vendor,
+          remarks: r.remarks,
+          ourCost: num(r.baseCost),
+          deliveryCost: num(r.logisticCost),
+          markUpCost: num(r.markUp),
+          sfCost: num(r.successFee),
+          amount: num(r.amount),
+          total: num(r.totalAmount),
+        })),
       };
-    });
 
-    // FIX: Create NEW quotation instead of updating existing one
-    const body = {
-      opportunityNumber,
-      catalogName,
-      salutation,
-      customerName,
-      customerEmail,
-      customerCompany,
-      customerAddress,
-      margin: updatedMargin,
-      gst,
-      items: updatedItems,
-      terms: quotationTerms,
-      fieldsToDisplay,
-      displayTotals,
-      displayHSNCodes,
-      operations,
-      priceRange,
-      operationsBreakdown: opRows.map((r) => ({
-        slNo: r.slNo,
-        catalogPrice: num(r.catalogPrice),
-        product: r.product,
-        quantity: num(r.quantity),
-        baseCost: num(r.baseCost),
-        brandingCost: num(r.brandingCost),
-        logisticCost: num(r.logisticCost),
-        markUp: num(r.markUp),
-        successFee: num(r.successFee),
-        rate: num(r.rate),
-        gst: r.gst,
-        totalWithGst: num(r.totalWithGst),
-        vendor: r.vendor,
-        remarks: r.remarks,
-        ourCost: num(r.baseCost),
-        deliveryCost: num(r.logisticCost),
-        markUpCost: num(r.markUp),
-        sfCost: num(r.successFee),
-        amount: num(r.amount),
-        total: num(r.totalAmount),
-      })),
-    };
+      console.log("Creating new quotation with body:", JSON.stringify(body, null, 2));
 
-    console.log("Creating new quotation with body:", JSON.stringify(body, null, 2)); // Debug log
+      // FIX: Use POST to create NEW quotation instead of PUT to update
+      const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    // FIX: Use POST to create NEW quotation instead of PUT to update
-    const createRes = await fetch(`${BACKEND_URL}/api/admin/quotations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    });
+      console.log("Response status:", createRes.status);
 
-    console.log("Response status:", createRes.status); // Debug log
+      if (!createRes.ok) {
+        const errorData = await createRes.json();
+        console.error("Error response:", errorData);
+        throw new Error(errorData.message || "Failed to create new quotation");
+      }
 
-    if (!createRes.ok) {
-      const errorData = await createRes.json();
-      console.error("Error response:", errorData); // Debug log
-      throw new Error(errorData.message || "Failed to create new quotation");
+      const data = await createRes.json();
+      console.log("Success response:", data);
+      
+      if (!data || !data.quotation) {
+        throw new Error("Invalid response from server: Missing quotation data");
+      }
+
+      // Redirect to the new quotation
+      alert(`New quotation created: #${data.quotation.quotationNumber}`);
+      navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
+      
+    } catch (error) {
+      console.error("Create new quotation error:", error);
+      alert(`Failed to create new quotation: ${error.message}`);
     }
-
-    const data = await createRes.json();
-    console.log("Success response:", data); // Debug log
-    
-    if (!data || !data.quotation) {
-      throw new Error("Invalid response from server: Missing quotation data");
-    }
-
-    // Redirect to the new quotation
-    alert(`New quotation created: #${data.quotation.quotationNumber}`);
-    navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
-    
-  } catch (error) {
-    console.error("Create new quotation error:", error);
-    alert(`Failed to create new quotation: ${error.message}`);
   }
-}
 
   async function handleSaveOperationsBreakdownOnly() {
     try {
@@ -1437,6 +1493,11 @@ export default function QuotationView() {
             }`}>
               {hasCatalog ? '📁 From Catalog' : '📝 From SuggestedBreakdown'}
             </span>
+            {loadingOps && (
+              <span className="ml-2 text-[9px] text-blue-600">
+                Loading operations...
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             {!hasCatalog && (
@@ -1444,6 +1505,7 @@ export default function QuotationView() {
                 onClick={populateFromSuggestedBreakdown}
                 className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-[10px]"
                 title="Populate all fields from item's suggestedBreakdown"
+                disabled={loadingOps}
               >
                 ↻ Reload Breakdown
               </button>
@@ -1480,6 +1542,7 @@ export default function QuotationView() {
                       onClick={fetchAllCatalogPrices}
                       className="text-[8px] bg-blue-500 text-white px-1 rounded hover:bg-blue-600"
                       title="Fetch price from: Catalog → Suggested Breakdown → Item Rate"
+                      disabled={loadingOps}
                     >
                       ↓
                     </button>
@@ -1547,11 +1610,13 @@ export default function QuotationView() {
                         value={r.catalogPrice}
                         onChange={(e) => updateOpRow(idx, "catalogPrice", e.target.value)}
                         className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                        disabled={loadingOps}
                       />
                       <button
                         onClick={() => fetchCatalogPriceForRow(idx)}
                         className="text-[8px] text-blue-600 hover:text-blue-800 px-0.5"
                         title="Fetch from: Catalog → Suggested Breakdown → Item Rate"
+                        disabled={loadingOps}
                       >
                         ↓
                       </button>
@@ -1570,6 +1635,7 @@ export default function QuotationView() {
                         overflow: 'hidden',
                         resize: 'vertical',
                       }}
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1580,6 +1646,7 @@ export default function QuotationView() {
                       onChange={(e) => updateOpRow(idx, "quantity", e.target.value)}
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-center text-[10px]"
                       min="0"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1589,6 +1656,7 @@ export default function QuotationView() {
                       value={r.baseCost}
                       onChange={(e) => updateOpRow(idx, "baseCost", e.target.value)}
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1598,6 +1666,7 @@ export default function QuotationView() {
                       value={r.brandingCost}
                       onChange={(e) => updateOpRow(idx, "brandingCost", e.target.value)}
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1607,6 +1676,7 @@ export default function QuotationView() {
                       value={r.logisticCost}
                       onChange={(e) => updateOpRow(idx, "logisticCost", e.target.value)}
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1616,6 +1686,7 @@ export default function QuotationView() {
                       value={r.markUp}
                       onChange={(e) => updateOpRow(idx, "markUp", e.target.value)}
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1625,6 +1696,7 @@ export default function QuotationView() {
                       value={r.successFee}
                       onChange={(e) => updateOpRow(idx, "successFee", e.target.value)}
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-right text-[10px]"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1638,6 +1710,7 @@ export default function QuotationView() {
                       onChange={(e) => updateOpRow(idx, "gst", e.target.value)}
                       placeholder="%"
                       className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-400 rounded text-center text-[10px]"
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1657,6 +1730,7 @@ export default function QuotationView() {
                         overflow: 'hidden',
                         resize: 'vertical',
                       }}
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1672,6 +1746,7 @@ export default function QuotationView() {
                         overflow: 'hidden',
                         resize: 'vertical',
                       }}
+                      disabled={loadingOps}
                     />
                   </td>
 
@@ -1680,6 +1755,7 @@ export default function QuotationView() {
                       onClick={() => duplicateOpRow(idx)}
                       className="text-blue-600 text-[9px] hover:underline mr-1"
                       title="Duplicate row for same product"
+                      disabled={loadingOps}
                     >
                       +
                     </button>
@@ -1687,6 +1763,7 @@ export default function QuotationView() {
                       onClick={() => removeOpRow(idx)}
                       className="text-red-600 text-[9px] hover:underline"
                       title="Remove row"
+                      disabled={loadingOps}
                     >
                       ×
                     </button>
@@ -1734,6 +1811,7 @@ export default function QuotationView() {
                     <button
                       onClick={addOpRow}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 rounded text-[9px]"
+                      disabled={loadingOps}
                     >
                       +Row
                     </button>
@@ -1744,13 +1822,26 @@ export default function QuotationView() {
               {opRows.length === 0 && (
                 <tr>
                   <td colSpan={15} className="border px-2 py-2 text-center text-gray-500 wrap-text">
-                    No operations data.{" "}
-                    <button
-                      onClick={addOpRow}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Add first row
-                    </button>
+                    {loadingOps ? (
+                      "Loading operations data..."
+                    ) : (
+                      <>
+                        No operations data.{" "}
+                        <button
+                          onClick={addOpRow}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Add first row
+                        </button>
+                        {" or "}
+                        <button
+                          onClick={populateFromSuggestedBreakdown}
+                          className="text-yellow-600 hover:underline"
+                        >
+                          Populate from Suggested Breakdown
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               )}
@@ -2084,7 +2175,6 @@ export default function QuotationView() {
         </div>
       )}
 
-      {/* FIX: Ensure imageIndex is preserved in table */}
       <div className="mb-3">
         <h3 className="text-[11px] font-semibold mb-1">Quotation Items (synced from Ops)</h3>
         <div className="max-h-[40vh] overflow-auto border rounded">
@@ -2122,7 +2212,6 @@ export default function QuotationView() {
                     : 0;
                 const total = amount + (gstRate > 0 ? amount * (gstRate / 100) : 0);
                 
-                // FIX: Get correct image using imageIndex
                 const imageUrl = item.productId?.images?.[item.imageIndex || 0] || "";
 
                 return (
