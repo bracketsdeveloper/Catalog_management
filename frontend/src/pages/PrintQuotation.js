@@ -11,10 +11,18 @@ export default function PrintQuotation() {
   const [quotation, setQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   useEffect(() => {
     fetchQuotation();
   }, [id]);
+
+  useEffect(() => {
+    if (quotation && quotation.items) {
+      preloadAllImages();
+    }
+  }, [quotation]);
 
   async function fetchQuotation() {
     try {
@@ -83,94 +91,131 @@ export default function PrintQuotation() {
     await Promise.all(promises);
   };
 
+  const preloadAllImages = async () => {
+    if (!quotation || !quotation.items) {
+      setImagesLoaded(true);
+      return;
+    }
+    setImagesLoaded(false);
+    try {
+      await preloadImages(quotation.items);
+      // Also preload signature image
+      const signatureImg = new Image();
+      signatureImg.src = "/signature.png";
+      signatureImg.crossOrigin = "anonymous";
+      await new Promise((resolve) => {
+        signatureImg.onload = () => resolve();
+        signatureImg.onerror = () => resolve();
+      });
+      // Small delay to ensure everything is rendered
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setImagesLoaded(true);
+    } catch (err) {
+      console.error("Error preloading images:", err);
+      setImagesLoaded(true); // Allow export even if some images fail
+    }
+  };
+
   const handleExportPDF = async () => {
-    await preloadImages(quotation.items);
-    const element = document.getElementById("printable");
-    const clonedElement = element.cloneNode(true);
-    clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
+    if (!imagesLoaded || loading || exportLoading) return;
+    
+    setExportLoading(true);
+    try {
+      // Ensure all images are loaded before export
+      await preloadImages(quotation.items);
+      
+      const element = document.getElementById("printable");
+      const clonedElement = element.cloneNode(true);
+      clonedElement.querySelectorAll(".no-print").forEach((el) => el.remove());
 
-    clonedElement.querySelectorAll(".product-image").forEach((img) => {
-      const naturalWidth = img.naturalWidth || 150;
-      const naturalHeight = img.naturalHeight || 100;
-      const aspectRatio = naturalWidth / naturalHeight;
+      clonedElement.querySelectorAll(".product-image").forEach((img) => {
+        const naturalWidth = img.naturalWidth || 150;
+        const naturalHeight = img.naturalHeight || 100;
+        const aspectRatio = naturalWidth / naturalHeight;
 
-      const maxWidth = 150;
-      const maxHeight = 100;
+        const maxWidth = 150;
+        const maxHeight = 100;
 
-      let width = naturalWidth;
-      let height = naturalHeight;
+        let width = naturalWidth;
+        let height = naturalHeight;
 
-      if (width > maxWidth) {
-        width = maxWidth;
-        height = width / aspectRatio;
-      }
-      if (height > maxHeight) {
-        height = maxHeight;
-        width = height * aspectRatio;
-      }
-
-      img.style.width = `${width}px`;
-      img.style.height = `${height}px`;
-    });
-
-    const opt = {
-      margin: [30, 5, 45, 5],
-      filename: `Quotation-${quotation?.quotationNumber || ""} (${
-        quotation?.customerCompany || ""
-      }).pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: {
-        scale: 3,
-        useCORS: true,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 794,
-        allowTaint: false,
-      },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: {
-        mode: ["css"],
-        avoid: [".terms-section", ".footer-block"],
-        before: ".page-break-before",
-        after:
-          quotation?.items?.length > 5
-            ? [
-                ".page-break-after",
-                ".table-container tr:nth-child(5)",
-                ".table-container tr:nth-child(12)",
-                ".table-container tr:nth-child(19)",
-                ".table-container tr:nth-child(26)",
-              ]
-            : [".page-break-after"],
-      },
-    };
-
-    html2pdf()
-      .set(opt)
-      .from(clonedElement)
-      .toPdf()
-      .get("pdf")
-      .then((pdf) => {
-        const totalPages = pdf.internal.getNumberOfPages();
-        const backgroundImage = "/templates/quotetemplate.png";
-
-        for (let i = 1; i <= totalPages; i++) {
-          pdf.setPage(i);
-          pdf.addImage(
-            backgroundImage,
-            "JPEG",
-            0,
-            0,
-            210,
-            297,
-            undefined,
-            undefined,
-            0,
-            0.2
-          );
+        if (width > maxWidth) {
+          width = maxWidth;
+          height = width / aspectRatio;
         }
-      })
-      .save();
+        if (height > maxHeight) {
+          height = maxHeight;
+          width = height * aspectRatio;
+        }
+
+        img.style.width = `${width}px`;
+        img.style.height = `${height}px`;
+      });
+
+      const opt = {
+        margin: [30, 5, 45, 5],
+        filename: `Quotation-${quotation?.quotationNumber || ""} (${
+          quotation?.customerCompany || ""
+        }).pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 3,
+          useCORS: true,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 794,
+          allowTaint: false,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: {
+          mode: ["css"],
+          avoid: [".terms-section", ".footer-block"],
+          before: ".page-break-before",
+          after:
+            quotation?.items?.length > 5
+              ? [
+                  ".page-break-after",
+                  ".table-container tr:nth-child(5)",
+                  ".table-container tr:nth-child(12)",
+                  ".table-container tr:nth-child(19)",
+                  ".table-container tr:nth-child(26)",
+                ]
+              : [".page-break-after"],
+        },
+      };
+
+      await html2pdf()
+        .set(opt)
+        .from(clonedElement)
+        .toPdf()
+        .get("pdf")
+        .then((pdf) => {
+          const totalPages = pdf.internal.getNumberOfPages();
+          const backgroundImage = "/templates/quotetemplate.png";
+
+          for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.addImage(
+              backgroundImage,
+              "JPEG",
+              0,
+              0,
+              210,
+              297,
+              undefined,
+              undefined,
+              0,
+              0.2
+            );
+          }
+        })
+        .save();
+    } catch (err) {
+      console.error("Error exporting PDF:", err);
+      alert("Failed to export PDF. Please try again.");
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   if (loading) return <div className="p-6 text-gray-400">Loading quotation...</div>;
@@ -376,11 +421,22 @@ export default function PrintQuotation() {
       </style>
 
       <div className="flex justify-end mb-4 no-print">
+        {!imagesLoaded && (
+          <div className="mr-4 flex items-center text-gray-600">
+            <span className="mr-2">Please wait, loading images...</span>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          </div>
+        )}
         <button
           onClick={handleExportPDF}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          disabled={loading || !imagesLoaded || exportLoading}
+          className={`px-4 py-2 rounded ${
+            loading || !imagesLoaded || exportLoading
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+          } text-white`}
         >
-          Export to PDF
+          {exportLoading ? "Please wait, exporting PDF..." : "Export to PDF"}
         </button>
       </div>
 
