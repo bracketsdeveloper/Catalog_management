@@ -403,15 +403,14 @@ function TicketsTable({
                         </button>
                       ) : (
                         <>
-                          {/* Edit button - for creator and super admin */}
-                          {(isCreator(task)) && (
+                           (
                             <button
                               onClick={() => onReopen(task)}
                               className="bg-blue-600 text-white text-xs px-2 py-1 rounded"
                             >
                               Edit
                             </button>
-                          )}
+                          )
                           
                           {/* Delete button - only for creator and super admin */}
                           {(isCreator(task) || isSuperAdmin) && (
