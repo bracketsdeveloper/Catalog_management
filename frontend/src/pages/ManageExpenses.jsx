@@ -15,6 +15,8 @@ export default function ManageExpenses() {
   const [openPurchases, setOpenPurchases] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [modalLoading, setModalLoading] = useState(false);
   const isSuperAdmin = localStorage.getItem("isSuperAdmin") === "true";
   const hasExportPermission = localStorage.getItem("permissions")?.includes("expenses-export");
 
@@ -35,6 +37,7 @@ export default function ManageExpenses() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const [expensesRes, openPurchasesRes] = await Promise.all([
           axios.get(`${BACKEND_URL}/api/admin/expenses`, {
             headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
@@ -48,11 +51,34 @@ export default function ManageExpenses() {
         setOpenPurchases(openPurchasesRes.data);
       } catch (error) {
         console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
       }
     };
     
     fetchData();
   }, []);
+
+  const handleRefreshData = async () => {
+    try {
+      setModalLoading(true);
+      const [expensesRes, openPurchasesRes] = await Promise.all([
+        axios.get(`${BACKEND_URL}/api/admin/expenses`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+        }),
+        axios.get(`${BACKEND_URL}/api/admin/openpurchases`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+        })
+      ]);
+      
+      setExpenses(expensesRes.data);
+      setOpenPurchases(openPurchasesRes.data);
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   // Helper function to calculate totals from OpenPurchase for a specific jobSheetNumber
   const calculateOpenPurchaseTotals = (jobSheetNumber) => {
@@ -283,8 +309,18 @@ export default function ManageExpenses() {
     XLSX.writeFile(wb, "Expenses.xlsx");
   };
 
+  const handleEditExpense = (expense) => {
+    setEditingExpense(expense);
+  };
+
+  const handleCloseModal = () => {
+    setNewModalOpen(false);
+    setEditingExpense(null);
+    handleRefreshData();
+  };
+
   return (
-    <div className="p-6 bg-white min-h-screen">
+    <div className="p-6 bg-white min-h-screen relative">
       <div className="flex justify-between items-center mb-4">
         <div className="flex space-x-2">
           <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
@@ -317,24 +353,26 @@ export default function ManageExpenses() {
         <FilterPanel filters={filters} setFilters={setFilters} />
       )}
 
-      {(newModalOpen || editingExpense) && (
-        <AddExpenseModal
-          expense={editingExpense}
-          onClose={() => {
-            setNewModalOpen(false);
-            setEditingExpense(null);
-            // Refresh data
-            axios
-              .get(`${BACKEND_URL}/api/admin/expenses`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-              })
-              .then(r => setExpenses(r.data))
-              .catch(console.error);
-          }}
-        />
+      {/* Loading state */}
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <span className="ml-3">Loading expenses...</span>
+        </div>
+      ) : (
+        <ExpenseTable data={displayed} onEdit={handleEditExpense} />
       )}
 
-      <ExpenseTable data={displayed} onEdit={e => setEditingExpense(e)} />
+      {/* Modal with proper z-index */}
+      {(newModalOpen || editingExpense) && (
+        <div className="fixed inset-0 z-50">
+          <AddExpenseModal
+            expense={editingExpense}
+            onClose={handleCloseModal}
+            isLoading={modalLoading}
+          />
+        </div>
+      )}
     </div>
   );
 }
