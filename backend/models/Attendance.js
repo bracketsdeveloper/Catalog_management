@@ -64,6 +64,12 @@ const attendanceSchema = new mongoose.Schema({
   isWeekend: { type: Boolean, default: false },
   isHoliday: { type: Boolean, default: false },
   
+  // Late/Early tracking
+  isLateArrival: { type: Boolean, default: false },
+  isEarlyDeparture: { type: Boolean, default: false },
+  lateByMinutes: { type: Number, default: 0 },
+  earlyByMinutes: { type: Number, default: 0 },
+  
   // Correction tracking
   correctedBy: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -94,6 +100,12 @@ const attendanceSchema = new mongoose.Schema({
   isManualEntry: { type: Boolean, default: false },
   hasIncompleteData: { type: Boolean, default: false },
   dataQualityIssues: [{ type: String }],
+  
+  // Leave/Holiday tracking
+  leaveType: { type: String },
+  leaveId: { type: mongoose.Schema.Types.ObjectId, ref: "Leave" },
+  holidayName: { type: String },
+  holidayType: { type: String, enum: ['PUBLIC', 'RESTRICTED'] }
   
 }, { 
   timestamps: true,
@@ -127,6 +139,10 @@ attendanceSchema.virtual('isPresent').get(function() {
 
 attendanceSchema.virtual('isAbsent').get(function() {
   return this.status && this.status.toLowerCase().includes('absent');
+});
+
+attendanceSchema.virtual('totalHours').get(function() {
+  return (this.hoursWorked || 0) + (this.hoursOT || 0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -321,9 +337,9 @@ attendanceSchema.statics.validateAttendanceData = function(data) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Calculate work duration from in/out times
+ * Calculate work duration from in/out times - FIXED VERSION
  */
-attendanceSchema.methods.calculateWorkDuration = function() {
+attendanceSchema.methods.calculateWorkHours = function() {
   if (!this.inTime || !this.outTime) return 0;
   
   const inMinutes = this.constructor.timeToMinutes(this.inTime);
@@ -342,7 +358,7 @@ attendanceSchema.methods.calculateWorkDuration = function() {
 };
 
 /**
- * Recalculate all derived fields
+ * Recalculate all derived fields - FIXED VERSION
  */
 attendanceSchema.methods.recalculate = function() {
   // Calculate day name and weekend status
@@ -351,19 +367,60 @@ attendanceSchema.methods.recalculate = function() {
   this.dayName = days[date.getUTCDay()];
   this.isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
   
-  // Parse and set hours worked
-  if (this.workDuration) {
+  // Calculate hours from inTime/outTime first - FIXED
+  if (this.inTime && this.outTime) {
+    // Calculate work hours
+    const workHours = this.calculateWorkHours();
+    this.hoursWorked = Math.max(0, parseFloat(workHours.toFixed(2)));
+    
+    // Format work duration as HH:MM
+    const workHoursFloor = Math.floor(this.hoursWorked);
+    const workMinutesRemainder = Math.round((this.hoursWorked - workHoursFloor) * 60);
+    this.workDuration = `${workHoursFloor.toString().padStart(2, '0')}:${workMinutesRemainder.toString().padStart(2, '0')}`;
+    
+    // Parse overtime if exists
+    if (this.overTime) {
+      this.hoursOT = this.constructor.parseDuration(this.overTime);
+    } else {
+      this.hoursOT = 0; // Default to 0 if no overtime
+    }
+    
+    // Calculate total hours
+    const totalHours = this.hoursWorked + this.hoursOT;
+    const totalHoursFloor = Math.floor(totalHours);
+    const totalMinutesRemainder = Math.round((totalHours - totalHoursFloor) * 60);
+    this.totalDuration = `${totalHoursFloor.toString().padStart(2, '0')}:${totalMinutesRemainder.toString().padStart(2, '0')}`;
+    
+  } 
+  // Fallback to parsing from workDuration/totalDuration
+  else if (this.workDuration) {
     this.hoursWorked = this.constructor.parseDuration(this.workDuration);
+    
+    // Format work duration
+    const workHours = this.hoursWorked;
+    const workHoursFloor = Math.floor(workHours);
+    const workMinutesRemainder = Math.round((workHours - workHoursFloor) * 60);
+    this.workDuration = `${workHoursFloor.toString().padStart(2, '0')}:${workMinutesRemainder.toString().padStart(2, '0')}`;
+    
+    // Parse overtime
+    if (this.overTime) {
+      this.hoursOT = this.constructor.parseDuration(this.overTime);
+    }
+    
+    // Calculate total duration
+    const totalHours = this.hoursWorked + (this.hoursOT || 0);
+    const totalHoursFloor = Math.floor(totalHours);
+    const totalMinutesRemainder = Math.round((totalHours - totalHoursFloor) * 60);
+    this.totalDuration = `${totalHoursFloor.toString().padStart(2, '0')}:${totalMinutesRemainder.toString().padStart(2, '0')}`;
+    
   } else if (this.totalDuration) {
     this.hoursWorked = this.constructor.parseDuration(this.totalDuration);
-  } else if (this.inTime && this.outTime) {
-    this.hoursWorked = this.calculateWorkDuration();
-    this.workDuration = this.constructor.minutesToTime(this.hoursWorked * 60);
-  }
-  
-  // Parse overtime
-  if (this.overTime) {
-    this.hoursOT = this.constructor.parseDuration(this.overTime);
+    
+    // Format total duration
+    const totalHours = this.hoursWorked;
+    const totalHoursFloor = Math.floor(totalHours);
+    const totalMinutesRemainder = Math.round((totalHours - totalHoursFloor) * 60);
+    this.totalDuration = `${totalHoursFloor.toString().padStart(2, '0')}:${totalMinutesRemainder.toString().padStart(2, '0')}`;
   }
   
   // Validate and flag data quality issues

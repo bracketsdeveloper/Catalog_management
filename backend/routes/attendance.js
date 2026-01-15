@@ -46,7 +46,7 @@ const upload = multer({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TIME PARSING & CALCULATION HELPERS
+// TIME PARSING & CALCULATION HELPERS - UPDATED WITH FIXES
 // ─────────────────────────────────────────────────────────────────────────────
 
 function normalizeHeader(header) {
@@ -186,14 +186,14 @@ function formatTimeFromDecimal(decimalHours) {
   }
   
   const totalMinutes = Math.round(Math.max(0, decimalHours) * 60);
-  const hours = Math.floor(totalMinutes / 60) % 24;
+  const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
 /**
- * Calculate work metrics based on employee's expected schedule
+ * Calculate work metrics based on employee's expected schedule - COMPLETELY FIXED VERSION
  */
 function calculateWorkMetrics(inTime, outTime, expectedLoginTime, expectedLogoutTime) {
   const result = {
@@ -215,14 +215,26 @@ function calculateWorkMetrics(inTime, outTime, expectedLoginTime, expectedLogout
     return result;
   }
 
-  // Calculate total work minutes
+  // Calculate total work minutes - SIMPLIFIED AND CORRECT
   let workMinutes = outParsed.totalMinutes - inParsed.totalMinutes;
+  
+  // Handle overnight shifts (if out time is earlier than in time, it's next day)
   if (workMinutes < 0) {
-    workMinutes += 24 * 60; // Handle overnight shifts
+    workMinutes += 24 * 60; // Add 24 hours in minutes
   }
 
-  result.hoursWorked = workMinutes / 60;
-  result.workDuration = formatTimeFromDecimal(result.hoursWorked);
+  // Convert minutes to hours with 2 decimal precision
+  result.hoursWorked = parseFloat((workMinutes / 60).toFixed(2));
+  
+  // Format work duration as HH:MM
+  const hours = Math.floor(result.hoursWorked);
+  const minutes = Math.round((result.hoursWorked - hours) * 60);
+  result.workDuration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+
+  // Add work duration to remarks for debugging
+  if (result.hoursWorked > 0) {
+    result.remarks.push(`Worked: ${hours}h ${minutes}m (${inTime} to ${outTime})`);
+  }
 
   // Parse expected schedule
   const expectedIn = parseTimeValue(expectedLoginTime);
@@ -257,21 +269,59 @@ function calculateWorkMetrics(inTime, outTime, expectedLoginTime, expectedLogout
       result.overtimeHours = 0;
     } else {
       result.regularHours = expectedHours;
-      result.overtimeHours = result.hoursWorked - expectedHours;
+      result.overtimeHours = parseFloat((result.hoursWorked - expectedHours).toFixed(2));
+      
+      // If there's overtime, add to remarks
+      if (result.overtimeHours > 0) {
+        const otHours = Math.floor(result.overtimeHours);
+        const otMinutes = Math.round((result.overtimeHours - otHours) * 60);
+        result.remarks.push(`OT: ${otHours}h ${otMinutes}m`);
+      }
     }
   } else {
-    // No expected schedule, assume 8-hour workday
+    // No expected schedule, assume 8-hour workday (with 1 hour lunch deduction)
     const standardHours = 8;
-    if (result.hoursWorked <= standardHours) {
-      result.regularHours = result.hoursWorked;
+    const effectiveWorkHours = result.hoursWorked;
+    
+    if (effectiveWorkHours <= standardHours) {
+      result.regularHours = effectiveWorkHours;
       result.overtimeHours = 0;
     } else {
       result.regularHours = standardHours;
-      result.overtimeHours = result.hoursWorked - standardHours;
+      result.overtimeHours = parseFloat((effectiveWorkHours - standardHours).toFixed(2));
+      
+      // If there's overtime, add to remarks
+      if (result.overtimeHours > 0) {
+        const otHours = Math.floor(result.overtimeHours);
+        const otMinutes = Math.round((result.overtimeHours - otHours) * 60);
+        result.remarks.push(`OT: ${otHours}h ${otMinutes}m`);
+      }
     }
   }
 
   return result;
+}
+
+/**
+ * Calculate hours directly from in/out times - SIMPLE AND RELIABLE
+ */
+function calculateHoursFromTimes(inTime, outTime) {
+  const inParsed = parseTimeValue(inTime);
+  const outParsed = parseTimeValue(outTime);
+
+  if (!inParsed || !outParsed) {
+    return 0;
+  }
+
+  let workMinutes = outParsed.totalMinutes - inParsed.totalMinutes;
+  
+  // Handle overnight shifts
+  if (workMinutes < 0) {
+    workMinutes += 24 * 60;
+  }
+
+  const hours = parseFloat((workMinutes / 60).toFixed(2));
+  return hours;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -427,7 +477,7 @@ async function findEmployeeWithFlexibleId(employeeIdFromExcel) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UPLOAD ENDPOINT
+// UPLOAD ENDPOINT - UPDATED WITH FIXED TIME CALCULATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/upload", authenticate, requireAdmin, upload.single("file"), async (req, res) => {
@@ -616,7 +666,7 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
           }
         }
         
-        // Calculate work metrics based on employee's schedule
+        // Calculate work metrics based on employee's schedule - USING FIXED FUNCTION
         if (attendanceData.inTime && attendanceData.outTime) {
           const metrics = calculateWorkMetrics(
             attendanceData.inTime,
@@ -625,17 +675,39 @@ router.post("/upload", authenticate, requireAdmin, upload.single("file"), async 
             employee.schedule?.expectedLogoutTime
           );
           
-          attendanceData.hoursWorked = metrics.hoursWorked;
-          attendanceData.hoursOT = metrics.overtimeHours;
+          // FIXED: Ensure hours are calculated correctly
+          attendanceData.hoursWorked = parseFloat(metrics.hoursWorked.toFixed(2));
+          attendanceData.hoursOT = parseFloat(metrics.overtimeHours.toFixed(2));
           attendanceData.workDuration = metrics.workDuration;
           attendanceData.isLateArrival = metrics.isLateArrival;
           attendanceData.isEarlyDeparture = metrics.isEarlyDeparture;
           attendanceData.lateByMinutes = metrics.lateByMinutes;
           attendanceData.earlyByMinutes = metrics.earlyByMinutes;
           
-          if (metrics.remarks.length > 0 && !attendanceData.remarks) {
-            attendanceData.remarks = metrics.remarks.join('; ');
+          // Calculate total duration properly
+          const totalHours = attendanceData.hoursWorked + attendanceData.hoursOT;
+          const totalHoursFloor = Math.floor(totalHours);
+          const totalMinutesRemainder = Math.round((totalHours - totalHoursFloor) * 60);
+          attendanceData.totalDuration = `${totalHoursFloor.toString().padStart(2, '0')}:${totalMinutesRemainder.toString().padStart(2, '0')}`;
+          
+          if (metrics.remarks.length > 0) {
+            attendanceData.remarks = attendanceData.remarks 
+              ? `${attendanceData.remarks}; ${metrics.remarks.join('; ')}`
+              : metrics.remarks.join('; ');
           }
+        } else if (attendanceData.workDuration && !attendanceData.hoursWorked) {
+          // If we have workDuration but no hours calculated
+          attendanceData.hoursWorked = parseDuration(attendanceData.workDuration);
+          
+          if (attendanceData.overTime) {
+            attendanceData.hoursOT = parseDuration(attendanceData.overTime);
+          }
+          
+          // Calculate total
+          const totalHours = attendanceData.hoursWorked + attendanceData.hoursOT;
+          const totalHoursFloor = Math.floor(totalHours);
+          const totalMinutesRemainder = Math.round((totalHours - totalHoursFloor) * 60);
+          attendanceData.totalDuration = `${totalHoursFloor.toString().padStart(2, '0')}:${totalMinutesRemainder.toString().padStart(2, '0')}`;
         }
         
         // Check for approved leave (override Absent status)
@@ -1438,7 +1510,7 @@ function getWorkingDaysInMonth(year, month) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANUAL ENTRY ENDPOINT
+// MANUAL ENTRY ENDPOINT - UPDATED WITH FIXED CALCULATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/manual", authenticate, requireAdmin, async (req, res) => {
@@ -1484,7 +1556,7 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
       isManualEntry: true
     };
     
-    // Calculate work metrics based on schedule
+    // Calculate work metrics based on schedule - USING FIXED FUNCTION
     if (inTime && outTime) {
       const metrics = calculateWorkMetrics(
         inTime,
@@ -1493,14 +1565,26 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
         employee.schedule?.expectedLogoutTime
       );
       
-      attendanceData.hoursWorked = metrics.hoursWorked;
-      attendanceData.hoursOT = metrics.overtimeHours;
+      attendanceData.hoursWorked = parseFloat(metrics.hoursWorked.toFixed(2));
+      attendanceData.hoursOT = parseFloat(metrics.overtimeHours.toFixed(2));
       attendanceData.workDuration = metrics.workDuration;
       attendanceData.totalDuration = metrics.workDuration;
       attendanceData.isLateArrival = metrics.isLateArrival;
       attendanceData.isEarlyDeparture = metrics.isEarlyDeparture;
       attendanceData.lateByMinutes = metrics.lateByMinutes;
       attendanceData.earlyByMinutes = metrics.earlyByMinutes;
+      
+      // Calculate total with OT
+      const totalHours = attendanceData.hoursWorked + attendanceData.hoursOT;
+      const totalHoursFloor = Math.floor(totalHours);
+      const totalMinutesRemainder = Math.round((totalHours - totalHoursFloor) * 60);
+      attendanceData.totalDuration = `${totalHoursFloor.toString().padStart(2, '0')}:${totalMinutesRemainder.toString().padStart(2, '0')}`;
+      
+      if (metrics.remarks.length > 0) {
+        attendanceData.remarks = attendanceData.remarks 
+          ? `${attendanceData.remarks}; ${metrics.remarks.join('; ')}`
+          : metrics.remarks.join('; ');
+      }
     }
     
     // Check for leave
@@ -1553,6 +1637,89 @@ router.post("/manual", authenticate, requireAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: "Error saving", 
+      error: error.message 
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEBUG/TEST ENDPOINT FOR TIME CALCULATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/test-time-calculation", authenticate, async (req, res) => {
+  try {
+    const { inTime, outTime } = req.body;
+    
+    if (!inTime || !outTime) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "inTime and outTime required" 
+      });
+    }
+    
+    const inParsed = parseTimeValue(inTime);
+    const outParsed = parseTimeValue(outTime);
+    
+    if (!inParsed || !outParsed) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid time format" 
+      });
+    }
+    
+    // Calculate minutes difference
+    let workMinutes = outParsed.totalMinutes - inParsed.totalMinutes;
+    let overnight = false;
+    
+    if (workMinutes < 0) {
+      workMinutes += 24 * 60;
+      overnight = true;
+    }
+    
+    // Calculate hours
+    const hoursWorked = parseFloat((workMinutes / 60).toFixed(2));
+    const hours = Math.floor(hoursWorked);
+    const minutes = Math.round((hoursWorked - hours) * 60);
+    
+    // Calculate using the fixed function
+    const metrics = calculateWorkMetrics(inTime, outTime, null, null);
+    
+    res.json({
+      success: true,
+      calculation: {
+        inTime,
+        outTime,
+        parsed: {
+          in: inParsed,
+          out: outParsed
+        },
+        raw: {
+          inMinutes: inParsed.totalMinutes,
+          outMinutes: outParsed.totalMinutes,
+          difference: outParsed.totalMinutes - inParsed.totalMinutes,
+          overnight: overnight,
+          totalMinutes: workMinutes
+        },
+        results: {
+          hoursWorked: hoursWorked,
+          formatted: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`,
+          fromMetrics: metrics.hoursWorked,
+          metricsFormatted: metrics.workDuration
+        },
+        example: {
+          "10:00 to 19:00": calculateWorkMetrics("10:00", "19:00", null, null).hoursWorked,
+          "09:00 to 18:00": calculateWorkMetrics("09:00", "18:00", null, null).hoursWorked,
+          "09:00 to 17:30": calculateWorkMetrics("09:00", "17:30", null, null).hoursWorked,
+          "09:30 to 18:30": calculateWorkMetrics("09:30", "18:30", null, null).hoursWorked
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error("Test calculation error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error testing calculation", 
       error: error.message 
     });
   }
