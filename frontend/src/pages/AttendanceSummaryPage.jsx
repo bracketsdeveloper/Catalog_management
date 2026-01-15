@@ -40,16 +40,29 @@ const AttendanceSummaryPage = () => {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [holidays, setHolidays] = useState([]);
 
   useEffect(() => {
     fetchFilters();
-  }, []);
+    fetchHolidays();
+  }, [month, year]);
 
   useEffect(() => {
     fetchSummary();
-  }, [month, year, department, role]);
+  }, [month, year, department, role, holidays]);
 
-  // Helper function to calculate working days up to today
+  // Fetch holidays for the selected month/year
+  const fetchHolidays = async () => {
+    try {
+      const response = await HRMS.getHolidays({ month, year });
+      setHolidays(response.data || []);
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
+      setHolidays([]);
+    }
+  };
+
+  // Helper function to calculate working days up to today (excluding weekends and non-restricted holidays)
   const calculateWorkingDaysTillToday = (month, year) => {
     const today = new Date();
     const currentMonth = month - 1; // JavaScript months are 0-indexed
@@ -63,15 +76,81 @@ const AttendanceSummaryPage = () => {
     let workingDays = 0;
     const todayDate = today.getDate();
     
+    // Get holidays for this month (excluding restricted holidays)
+    const monthHolidays = holidays.filter(holiday => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate.getMonth() === currentMonth && 
+             holidayDate.getFullYear() === currentYear &&
+             holiday.type !== 'RESTRICTED'; // Restricted holidays are still working days
+    });
+    
+    // Create a Set of holiday dates for quick lookup
+    const holidayDates = new Set(
+      monthHolidays.map(holiday => {
+        const date = new Date(holiday.date);
+        return date.getDate(); // Get day of month
+      })
+    );
+    
     // Count working days from 1st to today
     for (let day = 1; day <= todayDate; day++) {
       const currentDate = new Date(currentYear, currentMonth, day);
       const dayOfWeek = currentDate.getDay();
       
       // Skip weekends (0 = Sunday, 6 = Saturday)
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        workingDays++;
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        continue;
       }
+      
+      // Skip non-restricted holidays
+      if (holidayDates.has(day)) {
+        continue;
+      }
+      
+      workingDays++;
+    }
+    
+    return workingDays;
+  };
+
+  // Helper function to get total working days in month (excluding weekends and non-restricted holidays)
+  const getTotalWorkingDaysInMonth = (month, year) => {
+    const daysInMonth = new Date(year, month, 0).getDate(); // Get last day of month
+    let workingDays = 0;
+    const currentMonth = month - 1;
+    
+    // Get holidays for this month (excluding restricted holidays)
+    const monthHolidays = holidays.filter(holiday => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate.getMonth() === currentMonth && 
+             holidayDate.getFullYear() === year &&
+             holiday.type !== 'RESTRICTED';
+    });
+    
+    // Create a Set of holiday dates for quick lookup
+    const holidayDates = new Set(
+      monthHolidays.map(holiday => {
+        const date = new Date(holiday.date);
+        return date.getDate();
+      })
+    );
+    
+    // Count all working days in the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const currentDate = new Date(year, currentMonth, day);
+      const dayOfWeek = currentDate.getDay();
+      
+      // Skip weekends
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        continue;
+      }
+      
+      // Skip non-restricted holidays
+      if (holidayDates.has(day)) {
+        continue;
+      }
+      
+      workingDays++;
     }
     
     return workingDays;
@@ -113,23 +192,39 @@ const AttendanceSummaryPage = () => {
       const currentMonth = today.getMonth() + 1;
       const currentYear = today.getFullYear();
       
-      // Calculate working days till today for current month
+      // Calculate working days for the entire month (considering holidays)
+      const totalWorkingDaysInMonth = getTotalWorkingDaysInMonth(month, year);
+      
+      // Calculate working days till today for current month (considering holidays)
       const workingDaysTillToday = calculateWorkingDaysTillToday(month, year);
       
       // Process the data to calculate correct attendance rates
       const processedData = rawData.map(employee => {
         const summary = { ...employee.summary };
         
-        // If we're viewing the current month and have calculated working days till today
+        // Update the working days count to exclude holidays
+        summary.workingDays = totalWorkingDaysInMonth;
+        
+        // Calculate attendance rate
+        let attendanceRate;
+        
         if (month === currentMonth && year === currentYear && workingDaysTillToday) {
-          // Calculate attendance rate based on working days up to today
-          summary.attendanceRate = workingDaysTillToday > 0 
+          // For current month: use working days up to today
+          attendanceRate = workingDaysTillToday > 0 
             ? parseFloat(((summary.presentDays / workingDaysTillToday) * 100).toFixed(2))
             : 0;
           
           // Add workingDaysTillToday to summary for display
           summary.workingDaysTillToday = workingDaysTillToday;
+          summary.totalWorkingDays = totalWorkingDaysInMonth; // Store total for reference
+        } else {
+          // For past months: use total working days in month
+          attendanceRate = summary.workingDays > 0 
+            ? parseFloat(((summary.presentDays / summary.workingDays) * 100).toFixed(2))
+            : 0;
         }
+        
+        summary.attendanceRate = attendanceRate;
         
         return {
           ...employee,
@@ -211,6 +306,16 @@ const AttendanceSummaryPage = () => {
     fetchSummary(); // Refresh the summary data
   };
 
+  // Function to get holiday count for the selected month
+  const getHolidayCount = () => {
+    return holidays.filter(holiday => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate.getMonth() + 1 === month && 
+             holidayDate.getFullYear() === year &&
+             holiday.type !== 'RESTRICTED'; // Count only non-restricted holidays
+    }).length;
+  };
+
   const sortedData = getSortedData();
 
   const monthNames = [
@@ -220,6 +325,7 @@ const AttendanceSummaryPage = () => {
 
   const today = new Date();
   const isCurrentMonth = month === today.getMonth() + 1 && year === today.getFullYear();
+  const holidayCount = getHolidayCount();
 
   return (
     <div className="p-4 md:p-6">
@@ -227,7 +333,7 @@ const AttendanceSummaryPage = () => {
         title="Attendance Summary"
         subtitle={`${monthNames[month - 1]} ${year} - ${summaryData.length} employees${
           isCurrentMonth ? ' (Till Today)' : ''
-        }`}
+        }${holidayCount > 0 ? ` • ${holidayCount} holiday${holidayCount > 1 ? 's' : ''}` : ''}`}
         actions={
           <div className="flex gap-2">
             <button
@@ -314,6 +420,42 @@ const AttendanceSummaryPage = () => {
           </select>
         </div>
       </FiltersBar>
+
+      {/* Holiday Information Banner */}
+      {holidayCount > 0 && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            <span className="text-sm text-blue-700">
+              {holidayCount} public holiday{holidayCount > 1 ? 's' : ''} in {monthNames[month - 1]} {year} 
+              {holidays.some(h => h.type === 'RESTRICTED') && ' (excluding restricted holidays)'}
+            </span>
+          </div>
+          {holidays.filter(h => h.type !== 'RESTRICTED').length > 0 && (
+            <div className="mt-2 text-xs text-blue-600 flex flex-wrap gap-2">
+              {holidays
+                .filter(h => h.type !== 'RESTRICTED')
+                .slice(0, 3)
+                .map((holiday, index) => {
+                  const date = new Date(holiday.date);
+                  const day = date.getDate();
+                  return (
+                    <span key={index} className="px-2 py-1 bg-blue-100 rounded">
+                      {day} {monthNames[date.getMonth()]}: {holiday.name}
+                    </span>
+                  );
+                })}
+              {holidays.filter(h => h.type !== 'RESTRICTED').length > 3 && (
+                <span className="px-2 py-1 bg-blue-100 rounded">
+                  +{holidays.filter(h => h.type !== 'RESTRICTED').length - 3} more
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mb-4">
         <input
@@ -413,7 +555,12 @@ const AttendanceSummaryPage = () => {
                         {isCurrentMonth && employee.summary.workingDaysTillToday ? (
                           <>/{employee.summary.workingDaysTillToday} working days till today</>
                         ) : (
-                          <>/{employee.summary.workingDays} working days this month</>
+                          <>/{employee.summary.workingDays} working days (excl. holidays)</>
+                        )}
+                        {employee.summary.totalWorkingDays && employee.summary.workingDaysTillToday && (
+                          <div className="text-gray-400 text-xs mt-0.5">
+                            Total working days this month: {employee.summary.totalWorkingDays}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -460,16 +607,23 @@ const AttendanceSummaryPage = () => {
           </div>
 
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
               <div className="text-sm text-gray-700">
                 Showing {sortedData.length} of {summaryData.length} employees
               </div>
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">Overall Attendance:</span>{' '}
-                {summaryData.length > 0 ? 
-                  (summaryData.reduce((sum, emp) => sum + emp.summary.attendanceRate, 0) / summaryData.length).toFixed(2) 
-                  : 0}%
-                {isCurrentMonth && ' (Till Today)'}
+              <div className="flex flex-wrap gap-4">
+                <div className="text-sm text-gray-700">
+                  <span className="font-medium">Overall Attendance:</span>{' '}
+                  {summaryData.length > 0 ? 
+                    (summaryData.reduce((sum, emp) => sum + emp.summary.attendanceRate, 0) / summaryData.length).toFixed(2) 
+                    : 0}%
+                  {isCurrentMonth && ' (Till Today)'}
+                </div>
+                {holidayCount > 0 && (
+                  <div className="text-sm text-blue-700">
+                    <span className="font-medium">Holidays:</span> {holidayCount} day{holidayCount > 1 ? 's' : ''}
+                  </div>
+                )}
               </div>
             </div>
           </div>
