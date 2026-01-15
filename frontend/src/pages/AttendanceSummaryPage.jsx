@@ -43,8 +43,39 @@ const AttendanceSummaryPage = () => {
 
   useEffect(() => {
     fetchFilters();
+  }, []);
+
+  useEffect(() => {
     fetchSummary();
   }, [month, year, department, role]);
+
+  // Helper function to calculate working days up to today
+  const calculateWorkingDaysTillToday = (month, year) => {
+    const today = new Date();
+    const currentMonth = month - 1; // JavaScript months are 0-indexed
+    const currentYear = year;
+    
+    // If we're not in the current month/year, return null (use full month)
+    if (today.getMonth() + 1 !== month || today.getFullYear() !== year) {
+      return null;
+    }
+    
+    let workingDays = 0;
+    const todayDate = today.getDate();
+    
+    // Count working days from 1st to today
+    for (let day = 1; day <= todayDate; day++) {
+      const currentDate = new Date(currentYear, currentMonth, day);
+      const dayOfWeek = currentDate.getDay();
+      
+      // Skip weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        workingDays++;
+      }
+    }
+    
+    return workingDays;
+  };
 
   const fetchFilters = async () => {
     try {
@@ -75,7 +106,38 @@ const AttendanceSummaryPage = () => {
       if (role) params.role = role;
       
       const response = await HRMS.getAttendanceSummaryAll(params);
-      setSummaryData(response.data.results || []);
+      const rawData = response.data.results || [];
+      
+      // Get today's date for calculating working days till today
+      const today = new Date();
+      const currentMonth = today.getMonth() + 1;
+      const currentYear = today.getFullYear();
+      
+      // Calculate working days till today for current month
+      const workingDaysTillToday = calculateWorkingDaysTillToday(month, year);
+      
+      // Process the data to calculate correct attendance rates
+      const processedData = rawData.map(employee => {
+        const summary = { ...employee.summary };
+        
+        // If we're viewing the current month and have calculated working days till today
+        if (month === currentMonth && year === currentYear && workingDaysTillToday) {
+          // Calculate attendance rate based on working days up to today
+          summary.attendanceRate = workingDaysTillToday > 0 
+            ? parseFloat(((summary.presentDays / workingDaysTillToday) * 100).toFixed(2))
+            : 0;
+          
+          // Add workingDaysTillToday to summary for display
+          summary.workingDaysTillToday = workingDaysTillToday;
+        }
+        
+        return {
+          ...employee,
+          summary
+        };
+      });
+      
+      setSummaryData(processedData);
     } catch (error) {
       console.error('Error fetching summary:', error);
       toast.error('Failed to load attendance summary');
@@ -156,11 +218,16 @@ const AttendanceSummaryPage = () => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const today = new Date();
+  const isCurrentMonth = month === today.getMonth() + 1 && year === today.getFullYear();
+
   return (
     <div className="p-4 md:p-6">
       <PageHeader
         title="Attendance Summary"
-        subtitle={`${monthNames[month - 1]} ${year} - ${summaryData.length} employees`}
+        subtitle={`${monthNames[month - 1]} ${year} - ${summaryData.length} employees${
+          isCurrentMonth ? ' (Till Today)' : ''
+        }`}
         actions={
           <div className="flex gap-2">
             <button
@@ -342,7 +409,12 @@ const AttendanceSummaryPage = () => {
                         {employee.summary.presentDays}
                       </div>
                       <div className="text-xs text-gray-500">
-                        / {employee.summary.workingDays} working days
+                        {/* Show working days based on current month vs today */}
+                        {isCurrentMonth && employee.summary.workingDaysTillToday ? (
+                          <>/{employee.summary.workingDaysTillToday} working days till today</>
+                        ) : (
+                          <>/{employee.summary.workingDays} working days this month</>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -397,6 +469,7 @@ const AttendanceSummaryPage = () => {
                 {summaryData.length > 0 ? 
                   (summaryData.reduce((sum, emp) => sum + emp.summary.attendanceRate, 0) / summaryData.length).toFixed(2) 
                   : 0}%
+                {isCurrentMonth && ' (Till Today)'}
               </div>
             </div>
           </div>
