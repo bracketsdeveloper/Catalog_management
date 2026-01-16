@@ -236,7 +236,7 @@ export default function ManageInvoiceFollowUp() {
               : "bg-blue-100 text-blue-600 hover:bg-blue-200"
           }`}
         >
-          Open Followup (new)
+          Dispatch Pending
         </button>
         <button
           onClick={() => setView("old")}
@@ -246,7 +246,7 @@ export default function ManageInvoiceFollowUp() {
               : "bg-blue-100 text-blue-600 hover:bg-blue-200"
           }`}
         >
-          Open Followup (old)
+          Invoice/PO Pending
         </button>
         <button
           onClick={() => setView("closed")}

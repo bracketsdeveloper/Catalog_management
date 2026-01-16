@@ -149,6 +149,22 @@ export default function SingleProductModal({
           </button>
           <form onSubmit={handleSingleProductSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              {/* Product ID - Auto-generated, non-editable */}
+              {editProductId && newProductData.productId && (
+                <div>
+                  <label className="block font-medium mb-1">Product ID</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-100 cursor-not-allowed"
+                    value={newProductData.productId}
+                    readOnly
+                    disabled
+                    title="Auto-generated Product ID"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Auto-generated ID (read-only)</p>
+                </div>
+              )}
+
               {/* Product Tag */}
               <div>
                 <label className="block font-medium mb-1">Product Tag</label>
@@ -263,22 +279,6 @@ export default function SingleProductModal({
                 )}
               </div>
               
-              {/* Variation Hinge */}
-              <div>
-                <label className="block font-medium mb-1">Variation Hinge</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.variationHinge}
-                  onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      variationHinge: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              
               {/* Name */}
               <div>
                 <label className="block font-medium mb-1">Name</label>
@@ -377,6 +377,7 @@ export default function SingleProductModal({
                       MRP_Currency: e.target.value,
                     }))
                   }
+                  placeholder="INR"
                 />
               </div>
               
@@ -396,22 +397,6 @@ export default function SingleProductModal({
                 />
               </div>
               
-              {/* MRP Unit */}
-              <div>
-                <label className="block font-medium mb-1">MRP Unit</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.MRP_Unit}
-                  onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      MRP_Unit: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              
               {/* Delivery Time */}
               <div>
                 <label className="block font-medium mb-1">Delivery Time</label>
@@ -425,22 +410,7 @@ export default function SingleProductModal({
                       deliveryTime: e.target.value,
                     }))
                   }
-                />
-              </div>
-              
-              {/* Size */}
-              <div>
-                <label className="block font-medium mb-1">Size</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.size}
-                  onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      size: e.target.value,
-                    }))
-                  }
+                  placeholder="e.g., 3-5 days"
                 />
               </div>
               
@@ -460,22 +430,6 @@ export default function SingleProductModal({
                 />
               </div>
               
-              {/* Material */}
-              <div>
-                <label className="block font-medium mb-1">Material</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.material}
-                  onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      material: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              
               {/* Price Range */}
               <div>
                 <label className="block font-medium mb-1">Price Range</label>
@@ -489,6 +443,7 @@ export default function SingleProductModal({
                       priceRange: e.target.value,
                     }))
                   }
+                  placeholder="e.g., 500-1000"
                 />
               </div>
               
@@ -505,6 +460,7 @@ export default function SingleProductModal({
                       weight: e.target.value,
                     }))
                   }
+                  placeholder="e.g., 2kg"
                 />
               </div>
               
@@ -537,6 +493,7 @@ export default function SingleProductModal({
                       productCost_Currency: e.target.value,
                     }))
                   }
+                  placeholder="INR"
                 />
               </div>
               
@@ -556,22 +513,6 @@ export default function SingleProductModal({
                 />
               </div>
               
-              {/* Product Cost Unit */}
-              <div>
-                <label className="block font-medium mb-1">Product Cost Unit</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-400"
-                  value={newProductData.productCost_Unit}
-                  onChange={(e) =>
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      productCost_Unit: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              
               {/* Product GST (%) */}
               <div>
                 <label className="block font-medium mb-1">Product GST (%)</label>
@@ -585,6 +526,7 @@ export default function SingleProductModal({
                       productGST: e.target.value,
                     }))
                   }
+                  placeholder="18"
                 />
               </div>
 

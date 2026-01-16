@@ -28,8 +28,8 @@ const adminPages = [
     defaultPath: "/admin-dashboard/manage-tasks",
     icon: <PencilIcon className="w-8 h-8 shrink-0" />,
     subItems: [
-      { name: "Manage Tasks", path: "/admin-dashboard/manage-tasks", permission: "manage-task" },
-      { name: "Manage Tickets", path: "/admin-dashboard/manage-tickets" },
+      { name: "Dashboard", path: "/admin-dashboard/manage-tasks", permission: "manage-task" },
+      { name: "Manage Tasks", path: "/admin-dashboard/manage-tickets" },
       { name:"Manuals",path:"/admin-dashboard/file-management"  }
     ],
   },

@@ -18,8 +18,45 @@ function fmtISO(d) {
     return "";
   }
 }
+
+function formatToDMY(date) {
+  if (!date) return "";
+  try {
+    const d = new Date(date);
+    if (Number.isNaN(+d)) return "";
+    
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    
+    return `${day}-${month}-${year}`;
+  } catch {
+    return "";
+  }
+}
+
 function clampStr(v) {
   return (v || "").toString().trim();
+}
+
+// Convert D-M-Y to Y-M-D for date input compatibility
+function dmyToYmd(dmy) {
+  if (!dmy) return "";
+  const [day, month, year] = dmy.split('-');
+  if (day && month && year) {
+    return `${year}-${month}-${day}`;
+  }
+  return dmy;
+}
+
+// Convert Y-M-D to D-M-Y for display
+function ymdToDmy(ymd) {
+  if (!ymd) return "";
+  const [year, month, day] = ymd.split('-');
+  if (year && month && day) {
+    return `${day}-${month}-${year}`;
+  }
+  return ymd;
 }
 
 export default function EmployeesPage() {
@@ -65,13 +102,17 @@ export default function EmployeesPage() {
     if (dojFrom) {
       out = out.filter((e) => {
         const d = e?.personal?.dateOfJoining;
-        return d && fmtISO(d) >= dojFrom;
+        if (!d) return false;
+        const dmyDate = formatToDMY(d);
+        return dmyDate >= dojFrom;
       });
     }
     if (dojTo) {
       out = out.filter((e) => {
         const d = e?.personal?.dateOfJoining;
-        return d && fmtISO(d) <= dojTo;
+        if (!d) return false;
+        const dmyDate = formatToDMY(d);
+        return dmyDate <= dojTo;
       });
     }
     if (hasBiometric === "yes") {
@@ -317,8 +358,11 @@ export default function EmployeesPage() {
           <input
             type="date"
             className="border rounded px-2 py-1 text-sm"
-            value={dojFrom}
-            onChange={(e) => setDojFrom(e.target.value)}
+            value={dmyToYmd(dojFrom)}
+            onChange={(e) => {
+              const ymdDate = e.target.value;
+              setDojFrom(ymdToDmy(ymdDate));
+            }}
           />
         </div>
         <div>
@@ -326,8 +370,11 @@ export default function EmployeesPage() {
           <input
             type="date"
             className="border rounded px-2 py-1 text-sm"
-            value={dojTo}
-            onChange={(e) => setDojTo(e.target.value)}
+            value={dmyToYmd(dojTo)}
+            onChange={(e) => {
+              const ymdDate = e.target.value;
+              setDojTo(ymdToDmy(ymdDate));
+            }}
           />
         </div>
 
@@ -382,7 +429,7 @@ export default function EmployeesPage() {
                 <td className="border px-2 py-1">{e.org?.role || "-"}</td>
                 <td className="border px-2 py-1">{e.org?.department || "-"} </td>
                 <td className="border px-2 py-1">
-                  {e.personal?.dateOfJoining?.slice?.(0, 10) || ""}
+                  {formatToDMY(e.personal?.dateOfJoining)}
                 </td>
                 <td className="border px-2 py-1">{e.biometricId || "-"}</td>
                 <td className="border px-2 py-1">

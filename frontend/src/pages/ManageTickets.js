@@ -331,7 +331,7 @@ export default function ManageTicketsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 px-6 py-8 sm:px-10 md:px-16 lg:px-20">
-      <h1 className="text-3xl font-semibold mb-6 text-indigo-700">Manage Tickets</h1>
+      <h1 className="text-3xl font-semibold mb-6 text-indigo-700">Manage Tasks</h1>
       <div className="flex flex-col gap-6">
         {/* Tickets Section */}
         <div className="bg-white rounded-lg shadow-md p-4">

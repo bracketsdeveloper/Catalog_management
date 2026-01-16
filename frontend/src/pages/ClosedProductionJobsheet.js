@@ -14,6 +14,7 @@ const dateKeys = [
   "jobSheetCreatedDate",
   "deliveryDateTime",
   "expectedReceiveDate",
+  "expectedPostBranding",
   "schedulePickUp",
 ];
 const toDate = (d) => (d ? new Date(d) : new Date(0));
@@ -90,13 +91,51 @@ export default function ClosedProductionJobsheet() {
     [rows, search]
   );
 
+  // FIXED: Header filters with proper date handling
   const headered = useMemo(
     () =>
       global.filter((r) =>
         Object.entries(headerFilters).every(([k, v]) => {
           if (!v) return true;
+          
+          // Special handling for status
+          if (k === "status") {
+            return (r[k] || "").toLowerCase() === v.toLowerCase();
+          }
+          
           let val = r[k] ?? "";
-          if (dateKeys.includes(k) && val) val = new Date(val).toLocaleDateString();
+          
+          // Handle date fields with native date inputs
+          if (dateKeys.includes(k) && val && v) {
+            try {
+              const rowDate = new Date(val);
+              const filterDate = new Date(v);
+              
+              if (isNaN(rowDate.getTime()) || isNaN(filterDate.getTime())) {
+                // If date parsing fails, fall back to string search
+                return String(val).toLowerCase().includes(v.toLowerCase());
+              }
+              
+              // For date type (without time) - compare dates only
+              if (k !== "schedulePickUp") {
+                const rowDateStr = rowDate.toISOString().split('T')[0];
+                const filterDateStr = filterDate.toISOString().split('T')[0];
+                return rowDateStr === filterDateStr;
+              }
+              // For datetime type - compare full date-time
+              return rowDate.toISOString().slice(0, 16) === filterDate.toISOString().slice(0, 16);
+            } catch {
+              // Fallback to string search if date parsing fails
+              return String(val).toLowerCase().includes(v.toLowerCase());
+            }
+          }
+          
+          // Handle number fields
+          if (["qtyRequired", "qtyOrdered"].includes(k)) {
+            return String(val).includes(v);
+          }
+          
+          // Handle text fields (case-insensitive partial match)
           return String(val).toLowerCase().includes(v.toLowerCase());
         })
       ),

@@ -51,14 +51,11 @@ export default function ManageProductionInvoice() {
   useEffect(() => {
     try {
       setPerms(JSON.parse(localStorage.getItem("permissions") || "[]"));
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     } catch {/* ignore */}
   }, []);
   const canEdit = perms.includes("write-production");
   const canExport = isSuperAdmin || perms.includes("export-production");
-
-  useEffect(() => {
-    setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
-  }, []);
 
   /* --------------- fetch --------------- */
   const fetchInvoices = async () => {
@@ -85,14 +82,39 @@ export default function ManageProductionInvoice() {
     [rows, search]
   );
 
+  // FIXED: Header filters with proper date handling
   const head = useMemo(
     () =>
       global.filter((r) =>
         Object.entries(headerF).every(([k, v]) => {
           if (!v) return true;
+          
           let val = r[k] ?? "";
-          if (k === "orderConfirmationDate" && val)
-            val = new Date(val).toLocaleDateString();
+          
+          // Handle date field specifically
+          if (k === "orderConfirmationDate" && val && v) {
+            try {
+              const rowDate = new Date(val);
+              const filterDate = new Date(v);
+              
+              if (isNaN(rowDate.getTime()) || isNaN(filterDate.getTime())) {
+                return String(val).toLowerCase().includes(v.toLowerCase());
+              }
+              
+              const rowDateStr = rowDate.toISOString().split('T')[0];
+              const filterDateStr = filterDate.toISOString().split('T')[0];
+              return rowDateStr === filterDateStr;
+            } catch {
+              return String(val).toLowerCase().includes(v.toLowerCase());
+            }
+          }
+          
+          // Handle payment status and vendor invoice received as exact matches
+          if (k === "paymentStatus" || k === "vendorInvoiceReceived") {
+            return (val || "").toLowerCase() === v.toLowerCase();
+          }
+          
+          // Handle other text fields (case-insensitive partial match)
           return String(val).toLowerCase().includes(v.toLowerCase());
         })
       ),
@@ -277,17 +299,17 @@ export default function ManageProductionInvoice() {
             </div>
             <div className="col-span-full md:col-span-1">
               <label className="font-semibold block mb-1">
-                Status
+                Payment Status
               </label>
               <select
                 className="w-full border p-1 rounded"
-                value={headerF.status || ""}
-                onChange={(e) => setHeaderF((p) => ({ ...p, status: e.target.value }))}
+                value={headerF.paymentStatus || ""}
+                onChange={(e) => setHeaderF((p) => ({ ...p, paymentStatus: e.target.value }))}
               >
                 <option value="">All</option>
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="Not Paid">Not Paid</option>
+                <option value="Partially Paid">Partially Paid</option>
+                <option value="Fully Paid">Fully Paid</option>
               </select>
             </div>
           </div>
@@ -300,10 +322,13 @@ export default function ManageProductionInvoice() {
               Apply
             </button>
             <button
-              onClick={() => setAdv(initAdv)}
+              onClick={() => {
+                setAdv(initAdv);
+                setHeaderF({});
+              }}
               className="bg-gray-400 text-white px-3 py-1 rounded"
             >
-              Clear
+              Clear All
             </button>
           </div>
         </div>
@@ -331,7 +356,7 @@ export default function ManageProductionInvoice() {
           invoice={modal}
           onClose={() => {
             setModal(null);
-            fetchInvoices();          // <-- reload with the DEFINITE fetcher
+            fetchInvoices();
           }}
         />
       )}
