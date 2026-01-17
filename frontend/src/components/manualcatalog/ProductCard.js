@@ -1,4 +1,4 @@
-// src/components/ProductCard.jsx
+// src/components/manualcatalog/ProductCard.jsx
 import React, { useState, useEffect } from "react";
 
 export default function ProductCard({
@@ -6,7 +6,7 @@ export default function ProductCard({
   onAddSelected,
   openVariationSelector,
   onViewDetails,
-  isLoading = false, // New prop to control loading state
+  isLoading = false,
 }) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
 
@@ -15,6 +15,7 @@ export default function ProductCard({
       const img = new Image();
       img.src = product.images[0];
       img.onload = () => setIsImageLoaded(true);
+      img.onerror = () => setIsImageLoaded(false);
     }
   }, [product?.images]);
 
@@ -23,6 +24,7 @@ export default function ProductCard({
     : typeof product?.color === "string"
     ? product.color.split(",").map(c => c.trim()).filter(Boolean)
     : [];
+  
   const sizeOptions = Array.isArray(product?.size)
     ? product.size
     : typeof product?.size === "string"
@@ -33,14 +35,15 @@ export default function ProductCard({
 
   const handleSingleSelect = () => {
     const cost = product?.productCost || 0;
-    onAddSelected({
+    const itemData = {
+      _id: product?._id,
       productId: product?._id,
       productName: product?.productName || product?.name || "Unknown Product",
       productCost: cost,
       productprice: cost,
       productGST: product?.productGST || 0,
-      color: colorOptions[0]?.trim() || "N/A",
-      size: sizeOptions[0]?.trim() || "N/A",
+      color: colorOptions[0]?.trim() || "",
+      size: sizeOptions[0]?.trim() || "",
       quantity: 1,
       material: product?.material || "",
       weight: product?.weight || "",
@@ -49,14 +52,18 @@ export default function ProductCard({
       brandingTypes: [],
       baseCost: cost,
       suggestedBreakdown: {
-        baseCost: 0,
+        baseCost: cost,
         marginPct: 0,
         marginAmount: 0,
         logisticsCost: 0,
         brandingCost: 0,
         finalPrice: 0
-      }
-    });
+      },
+      imageIndex: 0
+    };
+    
+    // Call the handler which should automatically open the edit modal
+    onAddSelected(itemData);
   };
 
   if (isLoading) {
@@ -104,11 +111,13 @@ export default function ProductCard({
             src={product.images[0]}
             alt={product.productName || product.name}
             className="object-contain h-full w-full"
+            onError={() => setIsImageLoaded(false)}
           />
         ) : (
           <span className="text-gray-400 text-sm">No Image Available</span>
         )}
       </div>
+      
       <h2 className="font-medium text-lg mb-1 text-red-900">
         {product?.productId || "Unknown Brand"}
       </h2>
@@ -125,6 +134,22 @@ export default function ProductCard({
         {product?.category || "No Category"}
         {product?.subCategory ? ` / ${product.subCategory}` : ""}
       </p>
+
+      {/* Variation indicators */}
+      {(colorOptions.length > 0 || sizeOptions.length > 0) && (
+        <div className="mb-3 text-xs text-gray-600">
+          {colorOptions.length > 0 && (
+            <div className="mb-1">
+              <span className="font-medium">Colors:</span> {colorOptions.join(", ")}
+            </div>
+          )}
+          {sizeOptions.length > 0 && (
+            <div>
+              <span className="font-medium">Sizes:</span> {sizeOptions.join(", ")}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-auto flex flex-col gap-2">
         {hasVariations ? (

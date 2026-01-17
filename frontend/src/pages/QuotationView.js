@@ -14,20 +14,20 @@ const formatIndianNumber = (num) => {
   const number = parseFloat(num);
   const isNegative = number < 0;
   const absoluteNum = Math.abs(number);
-  
+
   const parts = absoluteNum.toFixed(2).split(".");
   let integerPart = parts[0];
   const decimalPart = parts[1];
-  
+
   let lastThree = integerPart.substring(integerPart.length - 3);
   const otherNumbers = integerPart.substring(0, integerPart.length - 3);
-  
+
   if (otherNumbers !== "") {
     lastThree = "," + lastThree;
   }
-  
+
   const formatted = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + lastThree;
-  
+
   return (isNegative ? "-" : "") + formatted + "." + decimalPart;
 };
 
@@ -37,18 +37,18 @@ const formatIndianInteger = (num) => {
   const number = Math.round(parseFloat(num));
   const isNegative = number < 0;
   const absoluteNum = Math.abs(number);
-  
+
   let integerPart = absoluteNum.toString();
-  
+
   let lastThree = integerPart.substring(integerPart.length - 3);
   const otherNumbers = integerPart.substring(0, integerPart.length - 3);
-  
+
   if (otherNumbers !== "") {
     lastThree = "," + lastThree;
   }
-  
+
   const formatted = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + lastThree;
-  
+
   return (isNegative ? "-" : "") + formatted;
 };
 
@@ -173,7 +173,7 @@ export default function QuotationView() {
   function getCatalogPriceForProduct(productName, catalog) {
     if (!catalog || !catalog.products || !productName) return 0;
     const matchedProduct = catalog.products.find(
-      (p) => 
+      (p) =>
         p.productName?.toLowerCase() === productName?.toLowerCase() ||
         p.productId?.name?.toLowerCase() === productName?.toLowerCase()
     );
@@ -187,7 +187,7 @@ export default function QuotationView() {
     const n = parseFloat(v);
     return isNaN(n) ? 0 : n;
   };
-  
+
   const parseGstPercent = (raw) => {
     if (!raw) return 0;
     const s = String(raw).trim();
@@ -198,24 +198,24 @@ export default function QuotationView() {
   function buildOpRowFromItem(item, idx, catalog = null) {
     const sb = item.suggestedBreakdown || {};
     const quantity = num(item.quantity) || 0;
-    
+
     let catalogPrice = 0;
-    
+
     // Try to get price from catalog first
     if (catalog && item.product) {
       catalogPrice = getCatalogPriceForProduct(item.product, catalog);
     }
-    
+
     // If no catalog price, try suggested breakdown
     if (catalogPrice === 0 && sb.finalPrice) {
       catalogPrice = num(sb.finalPrice);
     }
-    
+
     // If still no price, use item rate
     if (catalogPrice === 0) {
       catalogPrice = num(item.rate) || 0;
     }
-    
+
     // Get breakdown values from suggestedBreakdown
     const baseCost = num(sb.baseCost) || 0;
     const brandingCost = num(sb.brandingCost) || 0;
@@ -258,18 +258,18 @@ export default function QuotationView() {
   // NEW: Function to automatically populate operations from suggestedBreakdown
   const autoPopulateOperations = useCallback(async () => {
     if (!editableQuotation || loadingOps) return;
-    
+
     setLoadingOps(true);
     try {
       let catalog = null;
       if (hasCatalog && editableQuotation?.catalogName) {
         catalog = await fetchCatalogByName(editableQuotation.catalogName);
       }
-      
-      const newOpRows = (editableQuotation.items || []).map((item, idx) => 
+
+      const newOpRows = (editableQuotation.items || []).map((item, idx) =>
         buildOpRowFromItem(item, idx, catalog)
       ).map(r => recalcRow(r));
-      
+
       setOpRows(newOpRows);
       console.log("Auto-populated operations from suggested breakdown:", newOpRows);
     } catch (error) {
@@ -308,7 +308,7 @@ export default function QuotationView() {
       // Check if quotation has a catalog
       const quotationHasCatalog = !!(data.catalogName && data.catalogName.trim());
       setHasCatalog(quotationHasCatalog);
-      
+
       let catalog = null;
       if (quotationHasCatalog) {
         catalog = await fetchCatalogByName(data.catalogName);
@@ -316,36 +316,36 @@ export default function QuotationView() {
 
       // Initialize operations breakdown
       let initialOps = [];
-      
+
       if (data.operationsBreakdown && data.operationsBreakdown.length > 0) {
         // Use existing operations breakdown if available
         initialOps = data.operationsBreakdown.map((r, idx) => {
           const linkedItem = sanitizedItems[idx] || {};
-          
+
           let catalogPrice = Number(r.catalogPrice) || 0;
-          
+
           if (catalogPrice === 0 && catalog && r.product) {
             catalogPrice = getCatalogPriceForProduct(r.product, catalog);
           }
-          
+
           if (catalogPrice === 0 && linkedItem.suggestedBreakdown) {
             catalogPrice = num(linkedItem.suggestedBreakdown.finalPrice) || num(linkedItem.rate) || 0;
           }
-          
+
           const quantity = Number(r.quantity) || num(linkedItem.quantity) || 0;
           const baseCost = Number(r.baseCost) || Number(r.ourCost) || 0;
           const brandingCost = Number(r.brandingCost) || 0;
           const logisticCost = Number(r.logisticCost) || Number(r.deliveryCost) || 0;
           const markUp = Number(r.markUp) || Number(r.markUpCost) || 0;
           const successFee = Number(r.successFee) || Number(r.sfCost) || 0;
-          
+
           const gstStr =
             r.gst ||
             (linkedItem.productGST != null
               ? String(linkedItem.productGST)
               : data.gst != null
-              ? String(data.gst)
-              : "");
+                ? String(data.gst)
+                : "");
 
           let rate = Number(r.rate) || 0;
           if (!rate) {
@@ -353,7 +353,7 @@ export default function QuotationView() {
           }
 
           let totalWithGst = Number(r.totalWithGst) || Number(r.total) || 0;
-          
+
           return {
             slNo: r.slNo || idx + 1,
             catalogPrice,
@@ -374,7 +374,7 @@ export default function QuotationView() {
         });
       } else {
         // NEW: If no operations breakdown exists, auto-populate from suggestedBreakdown
-        initialOps = sanitizedItems.map((item, idx) => 
+        initialOps = sanitizedItems.map((item, idx) =>
           buildOpRowFromItem(item, idx, catalog)
         );
       }
@@ -385,12 +385,12 @@ export default function QuotationView() {
       setEditableQuotation({ ...data, items: sanitizedItems });
       setOpRows(initialOps);
       setError(null);
-      
+
       // Mark initial load as complete after a short delay to allow state to settle
       setTimeout(() => {
         isInitialLoad.current = false;
       }, 100);
-      
+
       // NEW: Auto-populate if no operations breakdown exists
       if (!data.operationsBreakdown || data.operationsBreakdown.length === 0) {
         setTimeout(() => autoPopulateOperations(), 500);
@@ -410,25 +410,25 @@ export default function QuotationView() {
     const markUp = num(row.markUp);
     const successFee = num(row.successFee);
     const quantity = num(row.quantity);
-    
+
     // Calculate rate from components
     const rate = baseCost + brandingCost + logisticCost + markUp + successFee;
-    
+
     const gstPct = parseGstPercent(row.gst);
     const totalWithGst = rate * (1 + gstPct / 100);
-    
+
     const amount = quantity * rate;
     const totalAmount = quantity * totalWithGst;
-    
-    return { 
-      ...row, 
-      rate, 
+
+    return {
+      ...row,
+      rate,
       totalWithGst,
       amount,
       totalAmount
     };
   };
-  
+
   const addOpRow = () => {
     const nextSl = (opRows[opRows.length - 1]?.slNo || 0) + 1;
     setOpRows((prev) => [
@@ -452,7 +452,7 @@ export default function QuotationView() {
       }),
     ]);
   };
-  
+
   const duplicateOpRow = (idx) => {
     const rowToDuplicate = opRows[idx];
     const nextSl = (opRows[opRows.length - 1]?.slNo || 0) + 1;
@@ -462,7 +462,7 @@ export default function QuotationView() {
     });
     setOpRows((prev) => [...prev, newRow]);
   };
-  
+
   const updateOpRow = (idx, field, value) => {
     setOpRows((prev) => {
       const copy = [...prev];
@@ -476,7 +476,7 @@ export default function QuotationView() {
       return copy;
     });
   };
-  
+
   const removeOpRow = (idx) => {
     setOpRows((prev) =>
       prev.filter((_, i) => i !== idx).map((r, i2) => ({ ...r, slNo: i2 + 1 }))
@@ -489,13 +489,13 @@ export default function QuotationView() {
       alert("No product name to fetch catalog price for");
       return;
     }
-    
+
     if (hasCatalog) {
       let catalog = catalogData;
       if (!catalog && editableQuotation?.catalogName) {
         catalog = await fetchCatalogByName(editableQuotation.catalogName);
       }
-      
+
       if (catalog) {
         const price = getCatalogPriceForProduct(row.product, catalog);
         if (price > 0) {
@@ -505,26 +505,26 @@ export default function QuotationView() {
         }
       }
     }
-    
+
     // Try to find matching item from quotation
     const linkedItem = editableQuotation?.items?.find(
       (item) => item.product?.toLowerCase() === row.product?.toLowerCase()
     );
-    
+
     if (linkedItem?.suggestedBreakdown?.finalPrice) {
       const price = num(linkedItem.suggestedBreakdown.finalPrice);
       updateOpRow(idx, "catalogPrice", price);
       alert(`Using suggested breakdown price: ${price}`);
       return;
     }
-    
+
     if (linkedItem?.rate) {
       const price = num(linkedItem.rate);
       updateOpRow(idx, "catalogPrice", price);
       alert(`Using item rate: ${price}`);
       return;
     }
-    
+
     alert(`No price found for "${row.product}". Check: Catalog (if available), Suggested Breakdown, or Item Rate`);
   };
 
@@ -533,40 +533,40 @@ export default function QuotationView() {
     if (hasCatalog && !catalog && editableQuotation?.catalogName) {
       catalog = await fetchCatalogByName(editableQuotation.catalogName);
     }
-    
-    setOpRows((prev) => 
+
+    setOpRows((prev) =>
       prev.map((row, idx) => {
         let catalogPrice = 0;
-        
+
         if (catalog) {
           catalogPrice = getCatalogPriceForProduct(row.product, catalog);
         }
-        
+
         if (catalogPrice === 0) {
-          const linkedItem = editableQuotation?.items?.[idx] || 
-                           editableQuotation?.items?.find(
-                             item => item.product?.toLowerCase() === row.product?.toLowerCase()
-                           );
-          
+          const linkedItem = editableQuotation?.items?.[idx] ||
+            editableQuotation?.items?.find(
+              item => item.product?.toLowerCase() === row.product?.toLowerCase()
+            );
+
           if (linkedItem?.suggestedBreakdown?.finalPrice) {
             catalogPrice = num(linkedItem.suggestedBreakdown.finalPrice);
           }
         }
-        
+
         if (catalogPrice === 0) {
           const linkedItem = editableQuotation?.items?.[idx];
           if (linkedItem?.rate) {
             catalogPrice = num(linkedItem.rate);
           }
         }
-        
+
         if (catalogPrice > 0) {
           return recalcRow({ ...row, catalogPrice });
         }
         return row;
       })
     );
-    
+
     alert(`Fetched prices for ${opRows.length} rows`);
   };
 
@@ -576,7 +576,7 @@ export default function QuotationView() {
       alert("No quotation items to populate from");
       return;
     }
-    
+
     let catalog = catalogData;
     if (hasCatalog && !catalog && editableQuotation?.catalogName) {
       // Try to fetch catalog if not already loaded
@@ -589,21 +589,21 @@ export default function QuotationView() {
       });
       return;
     }
-    
+
     populateOps();
-    
+
     function populateOps() {
-      setOpRows((prev) => 
+      setOpRows((prev) =>
         prev.map((row, idx) => {
-          const linkedItem = editableQuotation.items[idx] || 
-                           editableQuotation.items.find(
-                             item => item.product?.toLowerCase() === row.product?.toLowerCase()
-                           );
-          
+          const linkedItem = editableQuotation.items[idx] ||
+            editableQuotation.items.find(
+              item => item.product?.toLowerCase() === row.product?.toLowerCase()
+            );
+
           if (!linkedItem) return row;
-          
+
           const sb = linkedItem.suggestedBreakdown || {};
-          
+
           let catalogPrice = 0;
           if (catalog) {
             catalogPrice = getCatalogPriceForProduct(linkedItem.product, catalog);
@@ -614,7 +614,7 @@ export default function QuotationView() {
           if (catalogPrice === 0) {
             catalogPrice = num(linkedItem.rate) || row.catalogPrice;
           }
-          
+
           return recalcRow({
             ...row,
             catalogPrice,
@@ -629,61 +629,60 @@ export default function QuotationView() {
           });
         })
       );
-      
+
       alert("Populated fields from suggested breakdown");
     }
   };
 
   const syncOpsToQuotation = useCallback(() => {
     if (!editableQuotation || opRows.length === 0) return;
-  
-    // Use the MAXIMUM length between opRows and existing items
-    const maxLength = Math.max(opRows.length, editableQuotation.items.length);
-    
-    const updatedItems = Array.from({ length: maxLength }).map((_, idx) => {
-      const existingItem = editableQuotation.items[idx] || {};
-      const opRow = opRows[idx] || {};
-      
-      // If there's no opRow for this index, preserve the existing item
-      if (!opRow.product && !opRow.quantity && !opRow.rate) {
-        return existingItem;
+
+    // Map opRows to items by product name or index
+    const updatedItems = editableQuotation.items.map((item, idx) => {
+      // Try to find matching opRow by product name first
+      let opRow = opRows.find(op =>
+        op.product?.toLowerCase() === item.product?.toLowerCase()
+      );
+
+      // If no match by name, try by index
+      if (!opRow && idx < opRows.length) {
+        opRow = opRows[idx];
       }
-      
-      const existingQty = num(existingItem.quantity) || 0;
-      const existingRate = num(existingItem.rate) || 0;
-      const existingGst =
-        existingItem.productGST != null ? num(existingItem.productGST) : 0;
-  
+
+      // If still no opRow, keep existing item unchanged
+      if (!opRow) {
+        return item;
+      }
+
+      // Calculate new values
+      const existingQty = num(item.quantity) || 0;
+      const existingRate = num(item.rate) || 0;
+      const existingGst = item.productGST != null ? num(item.productGST) : 0;
+
       const opQty = num(opRow.quantity);
       const opRate = num(opRow.rate);
       const opGst = parseGstPercent(opRow.gst);
-  
+
       const quantity = opQty > 0 ? opQty : existingQty || 1;
       const rate = opRate > 0 ? opRate : existingRate;
       const productGST = opGst > 0 ? opGst : existingGst;
-  
+
       const amount = quantity * rate;
       const total = amount * (1 + productGST / 100);
-  
+
       return {
-        ...existingItem,
-        slNo: opRow.slNo ?? existingItem.slNo ?? idx + 1,
-        product: opRow.product || existingItem.product,
+        ...item,
+        slNo: item.slNo || idx + 1,
+        product: item.product || opRow.product || "",
         quantity,
         rate,
         productprice: rate,
         productGST,
         amount,
         total,
-        hsnCode: existingItem.hsnCode || "",
-        imageIndex: existingItem.imageIndex || 0,
-        material: existingItem.material || "",
-        weight: existingItem.weight || "",
-        brandingTypes: existingItem.brandingTypes || [],
-        suggestedBreakdown: existingItem.suggestedBreakdown || {},
       };
     });
-  
+
     setEditableQuotation((prev) => ({
       ...prev,
       items: updatedItems,
@@ -692,54 +691,96 @@ export default function QuotationView() {
 
   useEffect(() => {
     if (!editableQuotation) return;
-    
+
     const items = editableQuotation.items || [];
     if (items.length === 0) return;
-  
+
     // Check if opRows already contains all items
     // If not, rebuild it
     const shouldRebuild = items.length !== opRows.length;
-    
+
     if (shouldRebuild) {
-      const prefilled = items.map((item, idx) => 
+      const prefilled = items.map((item, idx) =>
         buildOpRowFromItem(item, idx, catalogData)
       ).map(r => recalcRow(r));
-      
+
       setOpRows(prefilled);
     }
   }, [editableQuotation, catalogData]);
 
   // Live sync: Map operations breakdown rate and GST% to quotation items
   useEffect(() => {
-    // Skip sync during initial load
+    // Skip sync during initial load or when removing items
     if (isInitialLoad.current) return;
     if (!editableQuotation || !opRows.length) return;
-    
+
+    console.log("Live sync triggered - Quotation items:", editableQuotation.items.length, "Op rows:", opRows.length);
+
     setEditableQuotation((prev) => {
       if (!prev || !prev.items) return prev;
-      
+
+      // Create maps for better matching
+      const opRowByProduct = {};
+      const opRowByIndex = {};
+
+      opRows.forEach((opRow, idx) => {
+        if (opRow.product) {
+          opRowByProduct[opRow.product.toLowerCase()] = opRow;
+        }
+        opRowByIndex[idx] = opRow;
+      });
+
       const updatedItems = prev.items.map((item, idx) => {
-        const opRow = opRows[idx];
-        
-        // If no corresponding opRow, keep item unchanged
-        if (!opRow) {
+        // Skip if item has no product name
+        if (!item.product) {
+          console.log(`Item at index ${idx} has no product name, skipping sync`);
           return item;
         }
-        
+
+        // Try to find matching opRow by product name first (exact match)
+        let opRow = opRowByProduct[item.product.toLowerCase()];
+
+        // If no exact match, try partial match
+        if (!opRow) {
+          const matchingKey = Object.keys(opRowByProduct).find(key =>
+            item.product.toLowerCase().includes(key) || key.includes(item.product.toLowerCase())
+          );
+          if (matchingKey) {
+            opRow = opRowByProduct[matchingKey];
+          }
+        }
+
+        // If still no match and index is within bounds, use by index
+        if (!opRow && idx < opRows.length) {
+          opRow = opRowByIndex[idx];
+        }
+
+        // If no corresponding opRow, keep item unchanged
+        if (!opRow) {
+          console.log(`No opRow found for item "${item.product}" at index ${idx}, keeping unchanged`);
+          return item;
+        }
+
         // Get rate and GST from operations breakdown
         const opRate = num(opRow.rate);
         const opGst = parseGstPercent(opRow.gst);
-        
-        // Always sync rate and GST from operations breakdown (even if 0)
-        // This ensures live updates as user edits operations table
-        const newRate = opRate >= 0 ? opRate : num(item.rate);
-        const newGst = opGst >= 0 ? opGst : (item.productGST != null ? num(item.productGST) : 0);
-        
+
+        // Keep original values if opRow values are 0 (not set)
+        const newRate = opRate > 0 ? opRate : num(item.rate);
+        const newGst = opGst > 0 ? opGst : (item.productGST != null ? num(item.productGST) : 0);
+
+        // Only update if values are different to prevent unnecessary re-renders
+        if (newRate === num(item.rate) && newGst === (item.productGST != null ? num(item.productGST) : 0)) {
+          return item;
+        }
+
+        console.log(`Updating item "${item.product}" - Rate: ${item.rate} -> ${newRate}, GST: ${item.productGST} -> ${newGst}`);
+
         // Recalculate amount and total
         const quantity = num(item.quantity) || 1;
         const amount = quantity * newRate;
         const total = amount * (1 + newGst / 100);
-        
+
         return {
           ...item,
           rate: newRate,
@@ -749,7 +790,7 @@ export default function QuotationView() {
           total,
         };
       });
-      
+
       return {
         ...prev,
         items: updatedItems,
@@ -796,11 +837,11 @@ export default function QuotationView() {
           item.productGST != null
             ? parseFloat(item.productGST)
             : gst
-            ? parseFloat(gst)
-            : 0;
+              ? parseFloat(gst)
+              : 0;
         const gstAmount = gstRate > 0 ? parseFloat((amount * (gstRate / 100)).toFixed(2)) : 0;
         const total = parseFloat((amount + gstAmount).toFixed(2));
-      
+
         return {
           slNo: item.slNo || 0,
           productId: item.productId?._id || item.productId || null,
@@ -885,7 +926,7 @@ export default function QuotationView() {
 
       const data = await createRes.json();
       console.log("Success response:", data);
-      
+
       if (!data || !data.quotation) {
         throw new Error("Invalid response from server: Missing quotation data");
       }
@@ -893,7 +934,7 @@ export default function QuotationView() {
       // Redirect to the new quotation
       alert(`New quotation created: #${data.quotation.quotationNumber}`);
       navigate(`/admin-dashboard/quotations/${data.quotation._id}`);
-      
+
     } catch (error) {
       console.error("Create new quotation error:", error);
       alert(`Failed to create new quotation: ${error.message}`);
@@ -963,7 +1004,7 @@ export default function QuotationView() {
       console.error("Save operations breakdown error:", err);
       alert(
         "Failed to save operations breakdown: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -999,7 +1040,7 @@ export default function QuotationView() {
     } catch (err) {
       setErrorMessage(
         "Failed to fetch customer details: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -1059,7 +1100,7 @@ export default function QuotationView() {
     } catch (err) {
       setErrorMessage(
         "Failed to save reference JSON: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -1088,8 +1129,7 @@ export default function QuotationView() {
           Object.keys(parsedJson[key]).forEach((subKey) => {
             const fieldLabel =
               fieldNameMapping[`${key}.${subKey}`] ||
-              `${fieldNameMapping[key] || key}.${
-                fieldNameMapping[subKey] || subKey
+              `${fieldNameMapping[key] || key}.${fieldNameMapping[subKey] || subKey
               }`;
             fields.push(
               <div key={`${key}.${subKey}`} className="mb-4">
@@ -1102,14 +1142,13 @@ export default function QuotationView() {
                   onChange={(e) =>
                     handleFormFieldChange(subKey, e.target.value, key)
                   }
-                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    key === "RefDtls" &&
-                    subKey === "InvRm" &&
-                    (parsedJson[key][subKey]?.length < 3 ||
-                      parsedJson[key][subKey]?.length > 100)
+                  className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${key === "RefDtls" &&
+                      subKey === "InvRm" &&
+                      (parsedJson[key][subKey]?.length < 3 ||
+                        parsedJson[key][subKey]?.length > 100)
                       ? "border-red-500"
                       : "border-gray-300"
-                  }`}
+                    }`}
                 />
                 {key === "RefDtls" &&
                   subKey === "InvRm" &&
@@ -1179,8 +1218,8 @@ export default function QuotationView() {
                 item.productGST != null
                   ? parseFloat(item.productGST)
                   : editableQuotation.gst
-                  ? parseFloat(editableQuotation.gst)
-                  : 0;
+                    ? parseFloat(editableQuotation.gst)
+                    : 0;
               const total = amount + (gstRate > 0 ? amount * (gstRate / 100) : 0);
 
               return (
@@ -1245,7 +1284,7 @@ export default function QuotationView() {
         try {
           const list = JSON.parse(detail);
           detail = list.map((e) => e.ErrorMessage).join("\n");
-        } catch {}
+        } catch { }
       }
       setErrorMessage("Failed to generate IRN: " + detail);
     }
@@ -1264,7 +1303,7 @@ export default function QuotationView() {
     } catch (err) {
       setErrorMessage(
         "Failed to cancel e-invoice: " +
-          (err.response?.data?.message || err.message)
+        (err.response?.data?.message || err.message)
       );
     }
   }
@@ -1286,8 +1325,7 @@ export default function QuotationView() {
         displayHSNCodes: newDisplayHSNCodes,
       }));
       alert(
-        `HSN Codes display ${
-          newDisplayHSNCodes ? "enabled" : "disabled"
+        `HSN Codes display ${newDisplayHSNCodes ? "enabled" : "disabled"
         } in database`
       );
     } catch (error) {
@@ -1311,7 +1349,7 @@ export default function QuotationView() {
       console.error("Error creating invoice:", error);
       alert(
         "Failed to create invoice: " +
-          (error.response?.data?.message || error.message)
+        (error.response?.data?.message || error.message)
       );
     }
   }
@@ -1346,12 +1384,75 @@ export default function QuotationView() {
   }
 
   function removeItem(index) {
-    setEditableQuotation((prev) => ({
-      ...prev,
-      items: prev.items
-        .filter((_, i) => i !== index)
-        .map((item, idx) => ({ ...item, slNo: idx + 1 })),
-    }));
+    console.log("Removing item at index:", index);
+    console.log("Current quotation ID:", id);
+    console.log("Item to remove:", editableQuotation.items[index]);
+
+    if (!editableQuotation || !editableQuotation.items || index >= editableQuotation.items.length) {
+      console.error("Invalid index or quotation data");
+      alert("Cannot remove item: Invalid index");
+      return;
+    }
+
+    try {
+      const itemToRemove = editableQuotation.items[index];
+
+      // Temporarily disable live sync
+      isInitialLoad.current = true;
+
+      // Update editableQuotation first
+      setEditableQuotation((prev) => {
+        if (!prev || !prev.items) return prev;
+
+        const newItems = prev.items.filter((_, i) => i !== index)
+          .map((item, idx) => ({ ...item, slNo: idx + 1 }));
+
+        console.log("New items after removal:", newItems);
+        return { ...prev, items: newItems };
+      });
+
+      // Then update opRows if needed - find by product name, not index
+      setOpRows((prev) => {
+        // Try to find matching opRow by product name first
+        const opRowIndex = prev.findIndex(op =>
+          op.product?.toLowerCase() === itemToRemove.product?.toLowerCase()
+        );
+
+        console.log("Found opRow at index:", opRowIndex);
+
+        if (opRowIndex !== -1) {
+          const newOpRows = prev
+            .filter((_, i) => i !== opRowIndex)
+            .map((r, i) => ({ ...r, slNo: i + 1 }));
+          console.log("New opRows after removal:", newOpRows);
+          return newOpRows;
+        }
+
+        // If no match by name, remove by index only if it's the last row
+        if (index === prev.length - 1) {
+          const newOpRows = prev
+            .filter((_, i) => i !== index)
+            .map((r, i) => ({ ...r, slNo: i + 1 }));
+          console.log("New opRows after removal by index (last row):", newOpRows);
+          return newOpRows;
+        }
+
+        console.log("No opRow removed - keeping all opRows");
+        return prev;
+      });
+
+      console.log("Item removed successfully");
+
+      // Re-enable live sync after a short delay
+      setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 100);
+
+    } catch (error) {
+      console.error("Error removing item:", error);
+      alert(`Error removing item: ${error.message}`);
+      isInitialLoad.current = false;
+    }
   }
 
   function handleAddEmail() {
@@ -1541,11 +1642,10 @@ export default function QuotationView() {
         <div className="bg-gray-100 px-2 py-1.5 border-b flex items-center justify-between">
           <div className="font-semibold text-xs text-gray-800">
             Operations Cost — Quotation #{editableQuotation.quotationNumber || "N/A"}
-            <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] ${
-              hasCatalog 
-                ? 'bg-green-100 text-green-700' 
+            <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] ${hasCatalog
+                ? 'bg-green-100 text-green-700'
                 : 'bg-yellow-100 text-yellow-700'
-            }`}>
+              }`}>
               {hasCatalog ? '📁 From Catalog' : '📝 From SuggestedBreakdown'}
             </span>
             {loadingOps && (
@@ -1576,11 +1676,11 @@ export default function QuotationView() {
 
         {!hasCatalog && (
           <div className="bg-yellow-50 px-2 py-1 border-b text-[9px] text-yellow-800">
-            <strong>Field Mapping:</strong> 
-            Catalog Price ← finalPrice | 
-            Base Cost ← baseCost | 
-            Branding ← brandingCost | 
-            Logistic ← logisticsCost | 
+            <strong>Field Mapping:</strong>
+            Catalog Price ← finalPrice |
+            Base Cost ← baseCost |
+            Branding ← brandingCost |
+            Logistic ← logisticsCost |
             Mark Up ← marginAmount
           </div>
         )}
@@ -1589,8 +1689,8 @@ export default function QuotationView() {
           <table className="w-full text-[10px] border-collapse">
             <thead className="sticky top-0 bg-gray-200 z-10">
               <tr>
-                <th className="border px-1 py-1 text-center bg-gray-300" style={{width: "25px"}}>Sl</th>
-                <th className="border px-1 py-1 text-right bg-yellow-100" style={{width: "70px"}}>
+                <th className="border px-1 py-1 text-center bg-gray-300" style={{ width: "25px" }}>Sl</th>
+                <th className="border px-1 py-1 text-right bg-yellow-100" style={{ width: "70px" }}>
                   <div className="flex items-center justify-between">
                     <span>{hasCatalog ? 'Catalog' : 'Ref'}</span>
                     <button
@@ -1604,52 +1704,52 @@ export default function QuotationView() {
                   </div>
                   <div className="text-[8px] text-gray-500">Price</div>
                 </th>
-                <th className="border px-1 py-1 text-left bg-blue-50 wrap-text" style={{minWidth: "140px", width: "18%"}}>
+                <th className="border px-1 py-1 text-left bg-blue-50 wrap-text" style={{ minWidth: "140px", width: "18%" }}>
                   <div>Product</div>
                   <div className="text-[8px] text-gray-500">
                     {hasCatalog ? 'From catalog' : 'From quotation'}
                   </div>
                 </th>
-                <th className="border px-1 py-1 text-center bg-blue-50" style={{width: "45px"}}>
+                <th className="border px-1 py-1 text-center bg-blue-50" style={{ width: "45px" }}>
                   <div>Qty</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-green-50" style={{width: "55px"}}>
+                <th className="border px-1 py-1 text-right bg-green-50" style={{ width: "55px" }}>
                   <div>Base</div>
                   <div className="text-[8px] text-gray-500">Cost</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-green-50" style={{width: "50px"}}>
+                <th className="border px-1 py-1 text-right bg-green-50" style={{ width: "50px" }}>
                   <div>Branding</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-green-50" style={{width: "50px"}}>
+                <th className="border px-1 py-1 text-right bg-green-50" style={{ width: "50px" }}>
                   <div>Logistic</div>
                   <div className="text-[8px] text-gray-500">Cost</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-orange-50" style={{width: "50px"}}>
+                <th className="border px-1 py-1 text-right bg-orange-50" style={{ width: "50px" }}>
                   <div>Mark Up</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-orange-50" style={{width: "55px"}}>
+                <th className="border px-1 py-1 text-right bg-orange-50" style={{ width: "55px" }}>
                   <div>Success</div>
                   <div className="text-[8px] text-gray-500">Fee</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-purple-100" style={{width: "65px"}}>
+                <th className="border px-1 py-1 text-right bg-purple-100" style={{ width: "65px" }}>
                   <div>Rate</div>
                   <div className="text-[8px] text-gray-500">(Total)</div>
                 </th>
-                <th className="border px-1 py-1 text-center bg-gray-100" style={{width: "35px"}}>
+                <th className="border px-1 py-1 text-center bg-gray-100" style={{ width: "35px" }}>
                   <div>GST</div>
                   <div className="text-[8px] text-gray-500">%</div>
                 </th>
-                <th className="border px-1 py-1 text-right bg-purple-100" style={{width: "70px"}}>
+                <th className="border px-1 py-1 text-right bg-purple-100" style={{ width: "70px" }}>
                   <div>Total/pc</div>
                   <div className="text-[8px] text-gray-500">With GST</div>
                 </th>
-                <th className="border px-1 py-1 text-left bg-gray-100" style={{width: "65px"}}>
+                <th className="border px-1 py-1 text-left bg-gray-100" style={{ width: "65px" }}>
                   <div>Vendor</div>
                 </th>
-                <th className="border px-1 py-1 text-left bg-gray-100" style={{width: "70px"}}>
+                <th className="border px-1 py-1 text-left bg-gray-100" style={{ width: "70px" }}>
                   <div>Remarks</div>
                 </th>
-                <th className="border px-1 py-1 text-center bg-gray-300" style={{width: "45px"}}>Action</th>
+                <th className="border px-1 py-1 text-center bg-gray-300" style={{ width: "45px" }}>Action</th>
               </tr>
             </thead>
 
@@ -2236,22 +2336,22 @@ export default function QuotationView() {
           <table className="w-full border-collapse text-[10px]">
             <thead className="sticky top-0 bg-gray-100 z-10">
               <tr className="border-b">
-                <th className="p-1 text-left" style={{width: "30px"}}>Sl</th>
-                <th className="p-1 text-left" style={{width: "50px"}}>Img</th>
-                <th className="p-1 text-left wrap-text" style={{minWidth: "150px", width: "30%"}}>Product</th>
+                <th className="p-1 text-left" style={{ width: "30px" }}>Sl</th>
+                <th className="p-1 text-left" style={{ width: "50px" }}>Img</th>
+                <th className="p-1 text-left wrap-text" style={{ minWidth: "150px", width: "30%" }}>Product</th>
                 {editableQuotation.displayHSNCodes && (
-                  <th className="p-1 text-left" style={{width: "50px"}}>HSN</th>
+                  <th className="p-1 text-left" style={{ width: "50px" }}>HSN</th>
                 )}
-                <th className="p-1 text-center" style={{width: "50px"}}>Qty</th>
-                <th className="p-1 text-right" style={{width: "70px"}}>Rate</th>
+                <th className="p-1 text-center" style={{ width: "50px" }}>Qty</th>
+                <th className="p-1 text-right" style={{ width: "70px" }}>Rate</th>
                 {editableQuotation.displayTotals && (
                   <>
-                    <th className="p-1 text-right" style={{width: "75px"}}>Amount</th>
-                    <th className="p-1 text-center" style={{width: "40px"}}>GST%</th>
-                    <th className="p-1 text-right" style={{width: "80px"}}>Total</th>
+                    <th className="p-1 text-right" style={{ width: "75px" }}>Amount</th>
+                    <th className="p-1 text-center" style={{ width: "40px" }}>GST%</th>
+                    <th className="p-1 text-right" style={{ width: "80px" }}>Total</th>
                   </>
                 )}
-                <th className="p-1 text-center" style={{width: "50px"}}>Act</th>
+                <th className="p-1 text-center" style={{ width: "50px" }}>Act</th>
               </tr>
             </thead>
             <tbody>
@@ -2263,10 +2363,10 @@ export default function QuotationView() {
                   item.productGST != null
                     ? parseFloat(item.productGST)
                     : editableQuotation.gst
-                    ? parseFloat(editableQuotation.gst)
-                    : 0;
+                      ? parseFloat(editableQuotation.gst)
+                      : 0;
                 const total = amount + (gstRate > 0 ? amount * (gstRate / 100) : 0);
-                
+
                 const imageUrl = item.productId?.images?.[item.imageIndex || 0] || "";
 
                 return (
@@ -2377,8 +2477,8 @@ export default function QuotationView() {
                   item.productGST != null
                     ? parseFloat(item.productGST)
                     : editableQuotation.gst
-                    ? parseFloat(editableQuotation.gst)
-                    : 0;
+                      ? parseFloat(editableQuotation.gst)
+                      : 0;
                 return sum + (amount + (gstRate > 0 ? amount * (gstRate / 100) : 0));
               }, 0)
             )}

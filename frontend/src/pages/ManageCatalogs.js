@@ -554,27 +554,36 @@ export default function CreateManualCatalog() {
       return;
     }
     
-    setSelectedProducts((prev) => [
-      ...prev,
-      {
-        ...item,
-        productprice: item.productCost || 0,
-        productCost: item.productCost || 0,
-        brandingTypes: [],
-        baseCost: item.productCost || 0,
-        suggestedBreakdown: {}, // Will be calculated in edit modal
-        imageIndex: 0,
-      },
-    ]);
+    const newItem = {
+      ...item,
+      productprice: item.productCost || 0,
+      productCost: item.productCost || 0,
+      brandingTypes: [],
+      baseCost: item.productCost || 0,
+      suggestedBreakdown: {}, // Will be calculated in edit modal
+      imageIndex: 0,
+    };
+    
+    // Add to selected products
+    setSelectedProducts((prev) => [...prev, newItem]);
+    
+    // Immediately open edit modal for the newly added item
+    setTimeout(() => {
+      const newIndex = selectedProducts.length; // This will be the index of the newly added item
+      setEditIndex(newIndex);
+      setEditModalOpen(true);
+    }, 100);
   };
 
   const handleAddVariations = async (variations) => {
     if (!variationModalProduct) return;
     
     const newItems = variations.map((v) => ({
+      _id: `${variationModalProduct._id}-${Date.now()}-${Math.random()}`,
       productId: variationModalProduct._id,
       productName: variationModalProduct.productName || variationModalProduct.name,
-      productCost: variationModalProduct.productCost || 0,
+      productCost: v.suggestedBreakdown?.finalPrice || variationModalProduct.productCost || 0,
+      productprice: v.suggestedBreakdown?.finalPrice || variationModalProduct.productCost || 0,
       productGST: variationModalProduct.productGST || 0,
       color: v.color?.trim() || "",
       size: v.size?.trim() || "",
@@ -585,13 +594,45 @@ export default function CreateManualCatalog() {
       ProductBrand: variationModalProduct.brandName || "",
       brandingTypes: [],
       baseCost: variationModalProduct.productCost || 0,
-      suggestedBreakdown: {}, // Will be calculated in edit modal
+      suggestedBreakdown: v.suggestedBreakdown || {
+        baseCost: variationModalProduct.productCost || 0,
+        marginPct: 0,
+        marginAmount: 0,
+        logisticsCost: 0,
+        brandingCost: 0,
+        finalPrice: v.suggestedBreakdown?.finalPrice || variationModalProduct.productCost || 0,
+      },
       imageIndex: 0,
     }));
     
-    const filtered = newItems.filter((i) => !isDuplicate(i.productId, i.color, i.size, i.productName));
-    if (filtered.length < newItems.length) alert("Some variations were duplicates and were not added.");
+    // Filter out duplicates
+    const filtered = newItems.filter((newItem) => 
+      !selectedProducts.some((existingItem) => 
+        existingItem.productId === newItem.productId && 
+        existingItem.color === newItem.color && 
+        existingItem.size === newItem.size
+      )
+    );
+    
+    if (filtered.length < newItems.length) {
+      alert(`${newItems.length - filtered.length} variations were duplicates and were not added.`);
+    }
+    
     setSelectedProducts((prev) => [...prev, ...filtered]);
+    
+    // Open edit modal for each newly added variation
+    if (filtered.length > 0) {
+      setTimeout(() => {
+        const startIndex = selectedProducts.length;
+        filtered.forEach((item, index) => {
+          setTimeout(() => {
+            setEditIndex(startIndex + index);
+            setEditModalOpen(true);
+          }, index * 100); // Stagger the modal openings
+        });
+      }, 100);
+    }
+    
     closeVariationModal();
   };
 
