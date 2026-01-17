@@ -388,12 +388,22 @@ router.get(
   async (req, res) => {
     try {
       const c = await Company.findById(req.params.id)
-        .populate("logs.performedBy", "name email")
+        .populate("logs.performedBy", "name email") // Already present
         .populate("createdBy", "name email")
         .populate("updatedBy", "name email")
         .populate("deletedBy", "name email")
         .populate("crmIncharge", "name email");
       if (!c) return res.status(404).json({ message: "Not found" });
+
+      // Transform logs to include performedBy details more clearly
+      const transformedLogs = c.logs.map(log => ({
+        ...log.toObject(),
+        performedBy: log.performedBy ? {
+          _id: log.performedBy._id,
+          name: log.performedBy.name,
+          email: log.performedBy.email
+        } : null
+      }));
 
       res.json({
         company: {
@@ -411,7 +421,7 @@ router.get(
           deletedBy: c.deletedBy,
           crmIncharge: c.crmIncharge,
         },
-        logs: c.logs,
+        logs: transformedLogs,
       });
     } catch (e) {
       console.error(e);
@@ -427,10 +437,24 @@ router.get(
   authorizeAdmin,
   async (_req, res) => {
     try {
-      const companies = await Company.find().select("companyName logs").lean();
+      const companies = await Company.find()
+        .populate("logs.performedBy", "name email") // NEW: Populate performedBy
+        .select("companyName logs")
+        .lean();
+      
+      // Flatten logs and include company name and performedBy details
       const logs = companies.flatMap((c) =>
-        (c.logs || []).map((l) => ({ ...l, companyName: c.companyName }))
+        (c.logs || []).map((l) => ({
+          ...l,
+          companyName: c.companyName,
+          performedBy: l.performedBy ? {
+            _id: l.performedBy._id,
+            name: l.performedBy.name,
+            email: l.performedBy.email
+          } : null
+        }))
       );
+      
       logs.sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt));
       res.json({ logs });
     } catch (e) {

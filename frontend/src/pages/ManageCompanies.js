@@ -183,24 +183,53 @@ export default function ManageCompanies() {
             onMouseLeave={() => setShowLogsDropdown(false)}
           >
             <button className="bg-cyan-600 text-white px-4 py-2 rounded">Logs</button>
-            {showLogsDropdown && (
-              <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border rounded shadow z-50 p-2">
-                {logsLoading ? (
-                  <div className="text-center py-4">Loading…</div>
-                ) : commonLogs.length ? (
-                  commonLogs.map((l, i) => (
-                    <div key={i} className="border-b py-1 text-sm">
-                      <span className={`inline-block w-2 h-2 rounded-full mr-2 ${getDotColor(l.action)}`} />
-                      <b className="capitalize">{l.action}</b> on {l.field || "record"}{" "}
-                      <span className="text-xs text-gray-500">({new Date(l.performedAt).toLocaleString()})</span>
-                      <div className="text-xs text-gray-600">Company: {l.companyName}</div>
-                    </div>
-                  ))
+{showLogsDropdown && (
+  <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-y-auto bg-white border rounded shadow z-50 p-2">
+    {logsLoading ? (
+      <div className="text-center py-4">Loading…</div>
+    ) : commonLogs.length ? (
+      commonLogs.map((l, i) => (
+        <div key={i} className="border-b py-2 text-xs">
+          <div className="flex items-start mb-1">
+            <span className={`inline-block w-2 h-2 rounded-full mr-2 mt-1 ${getDotColor(l.action)}`} />
+            <div className="flex-1">
+              <div>
+                <b className="capitalize">{l.action}</b> 
+                {l.field && ` on ${l.field}`}
+              </div>
+              <div className="text-gray-600 text-xs">
+                {l.performedBy ? (
+                  <span>By: <b>{l.performedBy.name}</b> ({l.performedBy.email})</span>
                 ) : (
-                  <div className="text-center py-4">No logs</div>
+                  <span>By: Unknown user</span>
                 )}
               </div>
-            )}
+            </div>
+            <div className="text-xs text-gray-500">
+              {new Date(l.performedAt).toLocaleString()}
+            </div>
+          </div>
+          
+          {/* Show field changes if available */}
+          {l.oldValue !== null && l.newValue !== null && (
+            <div className="ml-4 mb-1 text-xs">
+              <div className="text-gray-500">Changed from:</div>
+              <div className="text-red-600">{JSON.stringify(l.oldValue)}</div>
+              <div className="text-gray-500">To:</div>
+              <div className="text-green-600">{JSON.stringify(l.newValue)}</div>
+            </div>
+          )}
+          
+          <div className="text-xs text-gray-500 mt-1">
+            Company: <b>{l.companyName}</b>
+          </div>
+        </div>
+      ))
+    ) : (
+      <div className="text-center py-4">No logs</div>
+    )}
+  </div>
+)}
           </div>
           {(isSuperAdmin || canExportCRM) && (
             <button onClick={exportCompaniesToExcel} className="bg-green-600 text-white px-4 py-2 rounded">
