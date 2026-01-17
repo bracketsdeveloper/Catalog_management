@@ -322,11 +322,6 @@ const AttendanceSummaryPage = () => {
           ? a.name.localeCompare(b.name)
           : b.name.localeCompare(a.name);
       }
-      if (sortConfig.key === 'attendanceRate') {
-        return sortConfig.direction === 'asc' 
-          ? a.summary.attendanceRate - b.summary.attendanceRate
-          : b.summary.attendanceRate - a.summary.attendanceRate;
-      }
       if (sortConfig.key === 'totalHours') {
         return sortConfig.direction === 'asc' 
           ? a.summary.totalHours - b.summary.totalHours
@@ -334,18 +329,6 @@ const AttendanceSummaryPage = () => {
       }
       return 0;
     });
-  };
-
-  const getStatusColor = (rate) => {
-    if (rate >= 90) return 'bg-green-100 text-green-800';
-    if (rate >= 75) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
-
-  const getAttendanceRateColor = (rate) => {
-    if (rate >= 90) return 'text-green-600';
-    if (rate >= 75) return 'text-yellow-600';
-    return 'text-red-600';
   };
 
   const formatDate = (dateString) => {
@@ -588,25 +571,19 @@ const AttendanceSummaryPage = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Present Days
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Hours
-                  </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSort('attendanceRate')}
+                    onClick={() => handleSort('totalHours')}
                   >
                     <div className="flex items-center gap-1">
-                      Attendance Rate
-                      {sortConfig.key === 'attendanceRate' && (
+                      Total Hours
+                      {sortConfig.key === 'totalHours' && (
                         <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </div>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     OT Hours
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -653,25 +630,8 @@ const AttendanceSummaryPage = () => {
                         {employee.summary.formattedExpectedHours}h expected
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className={`text-sm font-medium ${getAttendanceRateColor(employee.summary.attendanceRate)}`}>
-                        {employee.summary.attendanceRate}%
-                        {employee.summary.isTillToday && (
-                          <span className="text-xs text-gray-500 ml-1">(till today)</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {employee.summary.presentDays} / {employee.summary.workingDaysForCalculation} days
-                      </div>
-                    </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {employee.summary.formattedTotalOT}h
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(employee.summary.attendanceRate)}`}>
-                        {employee.summary.attendanceRate >= 90 ? 'Excellent' :
-                         employee.summary.attendanceRate >= 75 ? 'Good' : 'Needs Attention'}
-                      </span>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium">
                       <button
