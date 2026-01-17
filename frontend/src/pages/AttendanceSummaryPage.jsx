@@ -25,6 +25,34 @@ const FiltersBar = ({ children }) => (
   </div>
 );
 
+// Helper function to convert decimal hours to hh:mm format
+const formatHoursToHHMM = (decimalHours) => {
+  if (!decimalHours && decimalHours !== 0) return '00:00';
+  
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  
+  // Ensure two-digit format
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  
+  return `${formattedHours}:${formattedMinutes}`;
+};
+
+// Helper function to convert hh:mm to decimal hours (for calculations)
+const formatHHMMToDecimal = (timeString) => {
+  if (!timeString) return 0;
+  
+  const [hours, minutes] = timeString.split(':').map(Number);
+  return hours + (minutes / 60);
+};
+
+// Helper function to format time display
+const formatTimeDisplay = (hours) => {
+  const formatted = formatHoursToHHMM(hours);
+  return `${formatted}h`;
+};
+
 const AttendanceSummaryPage = () => {
   const navigate = useNavigate();
   const [summaryData, setSummaryData] = useState([]);
@@ -156,57 +184,6 @@ const AttendanceSummaryPage = () => {
     return workingDays;
   };
 
-  // Helper function to calculate working days up to a specific date (for past dates)
-  const calculateWorkingDaysTillDate = (month, year, targetDate) => {
-    const target = new Date(targetDate);
-    const currentMonth = month - 1;
-    const currentYear = year;
-    
-    // If the date is not in the selected month/year
-    if (target.getMonth() + 1 !== month || target.getFullYear() !== year) {
-      return 0;
-    }
-    
-    let workingDays = 0;
-    const targetDay = target.getDate();
-    
-    // Get holidays for this month (excluding restricted holidays)
-    const monthHolidays = holidays.filter(holiday => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate.getMonth() === currentMonth && 
-             holidayDate.getFullYear() === currentYear &&
-             holiday.type !== 'RESTRICTED';
-    });
-    
-    // Create a Set of holiday dates for quick lookup
-    const holidayDates = new Set(
-      monthHolidays.map(holiday => {
-        const date = new Date(holiday.date);
-        return date.getDate();
-      })
-    );
-    
-    // Count working days from 1st to target date
-    for (let day = 1; day <= targetDay; day++) {
-      const currentDate = new Date(currentYear, currentMonth, day);
-      const dayOfWeek = currentDate.getDay();
-      
-      // Skip weekends
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        continue;
-      }
-      
-      // Skip non-restricted holidays
-      if (holidayDates.has(day)) {
-        continue;
-      }
-      
-      workingDays++;
-    }
-    
-    return workingDays;
-  };
-
   const fetchFilters = async () => {
     try {
       const response = await HRMS.listEmployees({ limit: 1000 });
@@ -293,6 +270,11 @@ const AttendanceSummaryPage = () => {
         } else {
           workingDaysLabel = 'Future month - no working days yet';
         }
+        
+        // Format times to hh:mm
+        summary.formattedTotalHours = formatHoursToHHMM(summary.totalHours);
+        summary.formattedTotalOT = formatHoursToHHMM(summary.totalOT);
+        summary.formattedExpectedHours = formatHoursToHHMM(summary.expectedHours);
         
         summary.attendanceRate = attendanceRate;
         summary.workingDaysLabel = workingDaysLabel;
@@ -665,10 +647,10 @@ const AttendanceSummaryPage = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
-                        {employee.summary.totalHours.toFixed(1)}h
+                        {employee.summary.formattedTotalHours}h
                       </div>
                       <div className="text-xs text-gray-500">
-                        {employee.summary.expectedHours}h expected
+                        {employee.summary.formattedExpectedHours}h expected
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -683,7 +665,7 @@ const AttendanceSummaryPage = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.totalOT.toFixed(1)}h
+                      {employee.summary.formattedTotalOT}h
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(employee.summary.attendanceRate)}`}>

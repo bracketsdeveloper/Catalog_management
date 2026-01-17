@@ -2,6 +2,47 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { HRMS } from '../../api/hrmsClient';
 
+// Helper function to convert decimal hours to hh:mm format
+const formatHoursToHHMM = (decimalHours) => {
+  if (!decimalHours && decimalHours !== 0) return '00:00';
+  
+  const hours = Math.floor(Math.abs(decimalHours));
+  const minutes = Math.round((Math.abs(decimalHours) - hours) * 60);
+  
+  // Ensure two-digit format
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  
+  return `${formattedHours}:${formattedMinutes}`;
+};
+
+// Helper function to format time display
+const formatTimeDisplay = (hours) => {
+  const formatted = formatHoursToHHMM(hours);
+  return `${formatted}h`;
+};
+
+// Helper function to format work hours display
+const formatWorkHoursDisplay = (workHours, otHours = 0) => {
+  if (!workHours && workHours !== 0) return '';
+  
+  const formattedWorkHours = formatHoursToHHMM(workHours);
+  const formattedOTHours = otHours > 0 ? formatHoursToHHMM(otHours) : null;
+  
+  if (formattedOTHours) {
+    return (
+      <>
+        {formattedWorkHours}h
+        <span className="text-green-600 ml-1">
+          +{formattedOTHours}h OT
+        </span>
+      </>
+    );
+  }
+  
+  return `${formattedWorkHours}h`;
+};
+
 const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, onDataUpdate }) => {
   const [calendarData, setCalendarData] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -49,8 +90,34 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
         year: currentYear
       });
       
-      setCalendarData(response.data.calendarData || []);
-      setSummary(response.data.summary || null);
+      // Format times in calendar data
+      const formattedCalendarData = (response.data.calendarData || []).map(day => {
+        if (day.attendance) {
+          return {
+            ...day,
+            attendance: {
+              ...day.attendance,
+              // Format display times
+              formattedWorkHours: formatHoursToHHMM(day.attendance.workHours || 0),
+              formattedOTHours: formatHoursToHHMM(day.attendance.otHours || 0),
+              // Ensure inTime and outTime are in HH:mm format
+              inTime: day.attendance.inTime || '',
+              outTime: day.attendance.outTime || ''
+            }
+          };
+        }
+        return day;
+      });
+      
+      // Format summary times
+      const formattedSummary = response.data.summary ? {
+        ...response.data.summary,
+        formattedTotalHours: formatHoursToHHMM(response.data.summary.totalHours || 0),
+        formattedTotalOT: formatHoursToHHMM(response.data.summary.totalOT || 0)
+      } : null;
+      
+      setCalendarData(formattedCalendarData);
+      setSummary(formattedSummary);
       setEmployeeInfo(response.data.employee || null);
     } catch (error) {
       console.error('Error fetching calendar:', error);
@@ -281,15 +348,13 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
   };
 
   const renderHoursInfo = (day) => {
-    if (!day.attendance?.workHours) return null;
+    if (!day.attendance?.formattedWorkHours && !day.attendance?.formattedOTHours) return null;
     
     return (
       <div className="text-xs text-gray-500 mt-0.5">
-        {day.attendance.workHours.toFixed(1)}h
-        {day.attendance.otHours > 0 && (
-          <span className="text-green-600 ml-1">
-            +{day.attendance.otHours.toFixed(1)}h OT
-          </span>
+        {formatWorkHoursDisplay(
+          day.attendance.workHours || 0,
+          day.attendance.otHours || 0
         )}
       </div>
     );
@@ -441,11 +506,15 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                 <div className="text-xs text-gray-500">Holidays</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-semibold text-gray-700">{summary.totalHours?.toFixed(1) || 0}h</div>
+                <div className="text-lg font-semibold text-gray-700">
+                  {summary.formattedTotalHours}h
+                </div>
                 <div className="text-xs text-gray-500">Total Hours</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-semibold text-green-600">{summary.totalOT?.toFixed(1) || 0}h</div>
+                <div className="text-lg font-semibold text-green-600">
+                  {summary.formattedTotalOT}h
+                </div>
                 <div className="text-xs text-gray-500">OT Hours</div>
               </div>
               <div className="text-center">

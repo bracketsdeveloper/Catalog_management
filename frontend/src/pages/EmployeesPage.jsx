@@ -145,9 +145,21 @@ export default function EmployeesPage() {
       "role",
       "department",
       "laptopSerial",
+      "mousepad(true/false)",
+      "mouse(true/false)",
       "mobileImei",
       "mobileNumber",
+      "mobileCharger(true/false)",
+      "neckband(true/false)",
+      "bottle(true/false)",
+      "diary(true/false)",
+      "pen(true/false)",
+      "laptopBag(true/false)",
+      "rainCoverIssued(true/false)",
       "idCardsIssued(true/false)",
+      "additionalProducts(semicolon-separated)",
+      "expectedLoginTime(e.g., 09:00 AM)",
+      "expectedLogoutTime(e.g., 06:00 PM)",
       "bankName",
       "bankAccountNumber",
       "currentCTC",
@@ -157,7 +169,7 @@ export default function EmployeesPage() {
       "biometricId",
       "mappedUser(ObjectId)"
     ];
-
+  
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     XLSX.utils.book_append_sheet(wb, ws, "EmployeesTemplate");
@@ -175,16 +187,20 @@ export default function EmployeesPage() {
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
+  
       if (!json.length) {
         toast.warn("No rows found in uploaded file.");
         return;
       }
-
+  
       const toDate = (v) => (v ? new Date(v) : undefined);
       const toBool = (v) => String(v).toLowerCase() === "true";
       const toNum = (v) => (v === "" || v === null ? undefined : Number(v));
-
+      const parseAdditionalProducts = (v) => {
+        if (!v) return [];
+        return String(v).split(';').map(s => s.trim()).filter(Boolean);
+      };
+  
       const payloads = json.map((r, idx) => {
         const employeeId = String(r["employeeId"] || "").trim();
         const name = String(r["name"] || "").trim();
@@ -192,7 +208,7 @@ export default function EmployeesPage() {
           throw new Error(`Row ${idx + 2}: 'employeeId' and 'name' are required.`);
         }
         const mappedUser = r["mappedUser(ObjectId)"] ? String(r["mappedUser(ObjectId)"]).trim() : undefined;
-
+  
         return {
           personal: {
             employeeId,
@@ -212,9 +228,23 @@ export default function EmployeesPage() {
           },
           assets: {
             laptopSerial: r["laptopSerial"] || "",
+            mousepad: toBool(r["mousepad(true/false)"]),
+            mouse: toBool(r["mouse(true/false)"]),
             mobileImei: r["mobileImei"] || "",
             mobileNumber: r["mobileNumber"] || "",
-            idCardsIssued: toBool(r["idCardsIssued(true/false)"])
+            mobileCharger: toBool(r["mobileCharger(true/false)"]),
+            neckband: toBool(r["neckband(true/false)"]),
+            bottle: toBool(r["bottle(true/false)"]),
+            diary: toBool(r["diary(true/false)"]),
+            pen: toBool(r["pen(true/false)"]),
+            laptopBag: toBool(r["laptopBag(true/false)"]),
+            rainCoverIssued: toBool(r["rainCoverIssued(true/false)"]),
+            idCardsIssued: toBool(r["idCardsIssued(true/false)"]),
+            additionalProducts: parseAdditionalProducts(r["additionalProducts(semicolon-separated)"])
+          },
+          schedule: {
+            expectedLoginTime: r["expectedLoginTime(e.g., 09:00 AM)"] || "",
+            expectedLogoutTime: r["expectedLogoutTime(e.g., 06:00 PM)"] || ""
           },
           financial: {
             bankName: r["bankName"] || "",
@@ -228,15 +258,15 @@ export default function EmployeesPage() {
           mappedUser
         };
       });
-
+  
       toast.info(`Uploading ${payloads.length} employees...`);
       const results = await Promise.allSettled(payloads.map((p) => HRMS.upsertEmployee(p)));
       const ok = results.filter((r) => r.status === "fulfilled").length;
       const fail = results.length - ok;
-
+  
       if (ok) toast.success(`Uploaded ${ok} employee(s) successfully.`);
       if (fail) toast.error(`${fail} row(s) failed. Check data and retry.`);
-
+  
       refresh();
     } catch (err) {
       console.error(err);

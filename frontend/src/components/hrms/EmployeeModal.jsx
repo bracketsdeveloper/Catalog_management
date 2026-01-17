@@ -4,7 +4,6 @@ import { toast } from "react-toastify";
 
 // Time picker component for 12-hour format
 function TimePicker12Hr({ value, onChange, label }) {
-  // Parse existing value like "09:30 AM" into parts
   const parseTime = (timeStr) => {
     if (!timeStr) return { hour: "09", minute: "00", period: "AM" };
     const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -91,7 +90,23 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     laptopSerial: initial?.assets?.laptopSerial || "",
     mobileImei: initial?.assets?.mobileImei || "",
     mobileNumber: initial?.assets?.mobileNumber || "",
+    
+    // Asset checkboxes
+    mousepad: Boolean(initial?.assets?.mousepad) || false,
+    mouse: Boolean(initial?.assets?.mouse) || false,
+    mobileCharger: Boolean(initial?.assets?.mobileCharger) || false,
+    neckband: Boolean(initial?.assets?.neckband) || false,
+    bottle: Boolean(initial?.assets?.bottle) || false,
+    diary: Boolean(initial?.assets?.diary) || false,
+    pen: Boolean(initial?.assets?.pen) || false,
+    laptopBag: Boolean(initial?.assets?.laptopBag) || false,
+    rainCoverIssued: Boolean(initial?.assets?.rainCoverIssued) || false,
     idCardsIssued: Boolean(initial?.assets?.idCardsIssued) || false,
+    
+    // Additional products array
+    additionalProducts: Array.isArray(initial?.assets?.additionalProducts) 
+      ? initial.assets.additionalProducts 
+      : [],
   }));
 
   const [financial, setFinancial] = useState(() => ({
@@ -103,16 +118,21 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     nextAppraisalOn: initial?.financial?.nextAppraisalOn ? initial.financial.nextAppraisalOn.slice(0, 10) : "",
   }));
 
-  // NEW: Schedule state for expected login/logout times
   const [schedule, setSchedule] = useState(() => ({
     expectedLoginTime: initial?.schedule?.expectedLoginTime || "",
     expectedLogoutTime: initial?.schedule?.expectedLogoutTime || "",
   }));
 
-  // biometric + mapping
   const [biometricId, setBiometricId] = useState(initial?.biometricId || "");
+  
+  // Additional products state
+  const [newAdditionalProduct, setNewAdditionalProduct] = useState("");
+  const [additionalProducts, setAdditionalProducts] = useState(
+    Array.isArray(initial?.assets?.additionalProducts) 
+      ? initial.assets.additionalProducts 
+      : []
+  );
 
-  // stable selected user state (decoupled from userOptions)
   const [mappedUserId, setMappedUserId] = useState(initial?.mappedUser?._id || "");
   const [mappedUserLabel, setMappedUserLabel] = useState(
     initial?.mappedUser
@@ -120,14 +140,12 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
       : ""
   );
 
-  // typeahead states
   const [userQuery, setUserQuery] = useState("");
   const [userOptions, setUserOptions] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showUserList, setShowUserList] = useState(false);
   const dropdownRef = useRef(null);
 
-  // click-outside to close dropdown
   useEffect(() => {
     function onDocClick(e) {
       if (!dropdownRef.current) return;
@@ -137,10 +155,9 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  // debounced search, skip if a user is already selected
   useEffect(() => {
     const q = userQuery.trim();
-    if (mappedUserId) return; // don't search while selected
+    if (mappedUserId) return;
     if (!q) {
       setUserOptions([]);
       setShowUserList(false);
@@ -176,6 +193,22 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     setShowUserList(false);
   };
 
+  // Add additional product
+  const addAdditionalProduct = () => {
+    if (!newAdditionalProduct.trim()) return;
+    const updatedProducts = [...additionalProducts, newAdditionalProduct.trim()];
+    setAdditionalProducts(updatedProducts);
+    setAssets(prev => ({ ...prev, additionalProducts: updatedProducts }));
+    setNewAdditionalProduct("");
+  };
+
+  // Remove additional product
+  const removeAdditionalProduct = (index) => {
+    const updatedProducts = additionalProducts.filter((_, i) => i !== index);
+    setAdditionalProducts(updatedProducts);
+    setAssets(prev => ({ ...prev, additionalProducts: updatedProducts }));
+  };
+
   const save = async () => {
     try {
       const payload = {
@@ -188,6 +221,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
         assets: {
           ...assets,
           idCardsIssued: Boolean(assets.idCardsIssued),
+          additionalProducts: additionalProducts,
         },
         financial: {
           ...financial,
@@ -196,7 +230,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
           lastRevisedSalaryAt: financial.lastRevisedSalaryAt ? new Date(financial.lastRevisedSalaryAt) : undefined,
           nextAppraisalOn: financial.nextAppraisalOn ? new Date(financial.nextAppraisalOn) : undefined,
         },
-        schedule, // NEW: Include schedule in payload
+        schedule,
         biometricId: biometricId || "",
         mappedUser: mappedUserId || undefined,
       };
@@ -214,115 +248,144 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     }
   };
 
+  // Asset checkbox configuration
+  const assetCheckboxes = [
+    { key: 'mousepad', label: 'Mousepad', icon: '🖱️' },
+    { key: 'mouse', label: 'Mouse', icon: '🐭' },
+    { key: 'mobileCharger', label: 'Mobile Charger', icon: '🔌' },
+    { key: 'neckband', label: 'Neckband', icon: '🎧' },
+    { key: 'bottle', label: 'Bottle', icon: '💧' },
+    { key: 'diary', label: 'Diary', icon: '📔' },
+    { key: 'pen', label: 'Pen', icon: '🖊️' },
+    { key: 'laptopBag', label: 'Laptop Bag', icon: '💼' },
+    { key: 'rainCoverIssued', label: 'Rain Cover', icon: '☔' },
+    { key: 'idCardsIssued', label: 'ID Cards', icon: '🪪' },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">{isEdit ? "Edit Employee" : "Create Employee"}</h2>
           <button onClick={onClose} className="text-2xl leading-none">×</button>
         </div>
 
-        {/* Personal */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs">Employee ID</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.employeeId}
-              onChange={(e) => setPersonal((p) => ({ ...p, employeeId: e.target.value }))}
-              disabled={isEdit}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Name</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.name}
-              onChange={(e) => setPersonal((p) => ({ ...p, name: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">DOB</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1"
-              value={personal.dob}
-              onChange={(e) => setPersonal((p) => ({ ...p, dob: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Date of Joining</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1"
-              value={personal.dateOfJoining}
-              onChange={(e) => setPersonal((p) => ({ ...p, dateOfJoining: e.target.value }))}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs">Address</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.address}
-              onChange={(e) => setPersonal((p) => ({ ...p, address: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Phone</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.phone}
-              onChange={(e) => setPersonal((p) => ({ ...p, phone: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Emergency Phone</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.emergencyPhone}
-              onChange={(e) => setPersonal((p) => ({ ...p, emergencyPhone: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Aadhar</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.aadhar}
-              onChange={(e) => setPersonal((p) => ({ ...p, aadhar: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Blood Group</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={personal.bloodGroup}
-              onChange={(e) => setPersonal((p) => ({ ...p, bloodGroup: e.target.value }))}
-            />
-          </div>
-        </div>
-
-        {/* Org */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs">Role</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={org.role}
-              onChange={(e) => setOrg((o) => ({ ...o, role: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Department</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={org.department}
-              onChange={(e) => setOrg((o) => ({ ...o, department: e.target.value }))}
-            />
+        {/* Personal Information */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700 border-b pb-2">Personal Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs">Employee ID *</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.employeeId}
+                onChange={(e) => setPersonal((p) => ({ ...p, employeeId: e.target.value }))}
+                disabled={isEdit}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Name *</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.name}
+                onChange={(e) => setPersonal((p) => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">DOB</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1"
+                value={personal.dob}
+                onChange={(e) => setPersonal((p) => ({ ...p, dob: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Date of Joining</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1"
+                value={personal.dateOfJoining}
+                onChange={(e) => setPersonal((p) => ({ ...p, dateOfJoining: e.target.value }))}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs">Address</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.address}
+                onChange={(e) => setPersonal((p) => ({ ...p, address: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Phone</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.phone}
+                onChange={(e) => setPersonal((p) => ({ ...p, phone: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Emergency Phone</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.emergencyPhone}
+                onChange={(e) => setPersonal((p) => ({ ...p, emergencyPhone: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Aadhar</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.aadhar}
+                onChange={(e) => setPersonal((p) => ({ ...p, aadhar: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Blood Group</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={personal.bloodGroup}
+                onChange={(e) => setPersonal((p) => ({ ...p, bloodGroup: e.target.value }))}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs">Medical Issues</label>
+              <textarea
+                className="w-full border rounded px-2 py-1"
+                value={personal.medicalIssues}
+                onChange={(e) => setPersonal((p) => ({ ...p, medicalIssues: e.target.value }))}
+                rows="2"
+              />
+            </div>
           </div>
         </div>
 
-        {/* NEW: Schedule - Expected Login/Logout Times */}
-        <div className="mt-4 p-4 border rounded bg-gray-50">
+        {/* Organization Information */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700 border-b pb-2">Organization Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs">Role</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={org.role}
+                onChange={(e) => setOrg((o) => ({ ...o, role: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Department</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={org.department}
+                onChange={(e) => setOrg((o) => ({ ...o, department: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Work Schedule */}
+        <div className="mb-6 p-4 border rounded bg-gray-50">
           <h3 className="text-sm font-semibold mb-3 text-gray-700">Work Schedule</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <TimePicker12Hr
@@ -343,186 +406,267 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
           )}
         </div>
 
-        {/* Assets */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs">Laptop Serial</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={assets.laptopSerial}
-              onChange={(e) => setAssets((a) => ({ ...a, laptopSerial: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Mobile IMEI</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={assets.mobileImei}
-              onChange={(e) => setAssets((a) => ({ ...a, mobileImei: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Mobile Number</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={assets.mobileNumber}
-              onChange={(e) => setAssets((a) => ({ ...a, mobileNumber: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-center gap-2 mt-6">
-            <input
-              id="ids"
-              type="checkbox"
-              checked={assets.idCardsIssued}
-              onChange={(e) => setAssets((a) => ({ ...a, idCardsIssued: e.target.checked }))}
-            />
-            <label htmlFor="ids" className="text-sm">ID Cards Issued</label>
-          </div>
-        </div>
-
-        {/* Financial */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs">Bank Name</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={financial.bankName}
-              onChange={(e) => setFinancial((f) => ({ ...f, bankName: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Bank Account #</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={financial.bankAccountNumber}
-              onChange={(e) => setFinancial((f) => ({ ...f, bankAccountNumber: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Current CTC</label>
-            <input
-              type="number"
-              className="w-full border rounded px-2 py-1"
-              value={financial.currentCTC}
-              onChange={(e) => setFinancial((f) => ({ ...f, currentCTC: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Current Take Home</label>
-            <input
-              type="number"
-              className="w-full border rounded px-2 py-1"
-              value={financial.currentTakeHome}
-              onChange={(e) => setFinancial((f) => ({ ...f, currentTakeHome: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Last Revised</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1"
-              value={financial.lastRevisedSalaryAt}
-              onChange={(e) => setFinancial((f) => ({ ...f, lastRevisedSalaryAt: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs">Next Appraisal</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1"
-              value={financial.nextAppraisalOn}
-              onChange={(e) => setFinancial((f) => ({ ...f, nextAppraisalOn: e.target.value }))}
-            />
-          </div>
-        </div>
-
-        {/* Biometric + User Mapping */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs">Biometric ID (eSSL)</label>
-            <input
-              className="w-full border rounded px-2 py-1"
-              value={biometricId}
-              onChange={(e) => setBiometricId(e.target.value)}
-              placeholder="e.g., 10027"
-            />
-          </div>
-
-          <div ref={dropdownRef}>
-            <label className="text-xs">Map to App User</label>
-            <div className="relative">
+        {/* Asset Assignment */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700 border-b pb-2">Asset Assignment</h3>
+          
+          {/* Serial Numbers */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+              <label className="text-xs">Laptop Serial</label>
               <input
-                className="w-full border rounded px-2 py-1 pr-16"
-                value={mappedUserId ? mappedUserLabel : userQuery}
-                placeholder="Type name, email, or phone"
-                onChange={(e) => {
-                  // typing starts a new search and clears selection
-                  if (mappedUserId) {
-                    setMappedUserId("");
-                    setMappedUserLabel("");
-                  }
-                  setUserQuery(e.target.value);
-                }}
-                onFocus={() => {
-                  if (!mappedUserId && userOptions.length > 0) setShowUserList(true);
-                }}
+                className="w-full border rounded px-2 py-1"
+                value={assets.laptopSerial}
+                onChange={(e) => setAssets((a) => ({ ...a, laptopSerial: e.target.value }))}
+                placeholder="e.g., ABC123XYZ"
               />
-              {mappedUserId ? (
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600 px-2 py-0.5 border rounded"
-                  onClick={clearMappedUser}
-                  title="Clear selection"
-                >
-                  Clear
-                </button>
-              ) : (
-                loadingUsers && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                    searching…
-                  </div>
-                )
-              )}
+            </div>
+            <div>
+              <label className="text-xs">Mobile IMEI</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={assets.mobileImei}
+                onChange={(e) => setAssets((a) => ({ ...a, mobileImei: e.target.value }))}
+                placeholder="15-digit IMEI"
+              />
+            </div>
+            <div>
+              <label className="text-xs">Mobile Number</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={assets.mobileNumber}
+                onChange={(e) => setAssets((a) => ({ ...a, mobileNumber: e.target.value }))}
+                placeholder="Company mobile number"
+              />
+            </div>
+          </div>
 
-              {showUserList && !mappedUserId && userOptions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
-                  {userOptions.map((u) => {
-                    const label = `${u.name}${u.email ? " — " + u.email : u.phone ? " — " + u.phone : ""}`;
-                    return (
-                      <button
-                        key={u._id}
-                        type="button"
-                        className="w-full text-left px-2 py-1 hover:bg-gray-50"
-                        onClick={() => {
-                          setMappedUserId(u._id);
-                          setMappedUserLabel(label);
-                          setUserQuery("");
-                          setUserOptions([]);
-                          setShowUserList(false);
-                        }}
-                      >
-                        <div className="text-sm">{u.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {u.email || "-"} | {u.phone || "-"} {u.role ? `| ${u.role}` : ""}
-                        </div>
-                      </button>
-                    );
-                  })}
+          {/* Asset Checkboxes */}
+          <div className="mb-6">
+            <h4 className="text-xs font-semibold mb-3 text-gray-600">Equipment Issued</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {assetCheckboxes.map((item) => (
+                <div 
+                  key={item.key} 
+                  className={`p-3 border rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${
+                    assets[item.key] 
+                      ? 'bg-green-50 border-green-300 ring-1 ring-green-200' 
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                  }`}
+                  onClick={() => setAssets(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                >
+                  <div className="text-2xl mb-2">{item.icon}</div>
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-gray-900">{item.label}</div>
+                    <div className={`text-xs font-medium mt-1 ${assets[item.key] ? 'text-green-600' : 'text-gray-500'}`}>
+                      {assets[item.key] ? '✓ Issued' : '× Not Issued'}
+                    </div>
+                  </div>
                 </div>
-              )}
+              ))}
+            </div>
+          </div>
+
+          {/* Additional Products */}
+          <div className="mb-4">
+            <h4 className="text-xs font-semibold mb-2 text-gray-600">Additional Products</h4>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                className="flex-1 border rounded px-2 py-1 text-sm"
+                value={newAdditionalProduct}
+                onChange={(e) => setNewAdditionalProduct(e.target.value)}
+                placeholder="e.g., Monitor, Keyboard, Headset, etc."
+                onKeyPress={(e) => e.key === 'Enter' && addAdditionalProduct()}
+              />
+              <button
+                type="button"
+                onClick={addAdditionalProduct}
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+              >
+                Add
+              </button>
+            </div>
+            
+            {additionalProducts.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {additionalProducts.map((product, index) => (
+                  <div 
+                    key={index} 
+                    className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full flex items-center gap-2"
+                  >
+                    {product}
+                    <button
+                      type="button"
+                      onClick={() => removeAdditionalProduct(index)}
+                      className="text-blue-600 hover:text-blue-800 text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Financial Information */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700 border-b pb-2">Financial Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs">Bank Name</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={financial.bankName}
+                onChange={(e) => setFinancial((f) => ({ ...f, bankName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Bank Account #</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={financial.bankAccountNumber}
+                onChange={(e) => setFinancial((f) => ({ ...f, bankAccountNumber: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Current CTC (₹)</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={financial.currentCTC}
+                onChange={(e) => setFinancial((f) => ({ ...f, currentCTC: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Current Take Home (₹)</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={financial.currentTakeHome}
+                onChange={(e) => setFinancial((f) => ({ ...f, currentTakeHome: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Last Revised Salary Date</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1"
+                value={financial.lastRevisedSalaryAt}
+                onChange={(e) => setFinancial((f) => ({ ...f, lastRevisedSalaryAt: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs">Next Appraisal Date</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1"
+                value={financial.nextAppraisalOn}
+                onChange={(e) => setFinancial((f) => ({ ...f, nextAppraisalOn: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* System & Integration */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold mb-3 text-gray-700 border-b pb-2">System & Integration</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs">Biometric ID (eSSL)</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={biometricId}
+                onChange={(e) => setBiometricId(e.target.value)}
+                placeholder="e.g., 10027"
+              />
+            </div>
+
+            <div ref={dropdownRef}>
+              <label className="text-xs">Map to App User</label>
+              <div className="relative">
+                <input
+                  className="w-full border rounded px-2 py-1 pr-16"
+                  value={mappedUserId ? mappedUserLabel : userQuery}
+                  placeholder="Type name, email, or phone"
+                  onChange={(e) => {
+                    if (mappedUserId) {
+                      setMappedUserId("");
+                      setMappedUserLabel("");
+                    }
+                    setUserQuery(e.target.value);
+                  }}
+                  onFocus={() => {
+                    if (!mappedUserId && userOptions.length > 0) setShowUserList(true);
+                  }}
+                />
+                {mappedUserId ? (
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600 px-2 py-0.5 border rounded"
+                    onClick={clearMappedUser}
+                    title="Clear selection"
+                  >
+                    Clear
+                  </button>
+                ) : (
+                  loadingUsers && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                      searching…
+                    </div>
+                  )
+                )}
+
+                {showUserList && !mappedUserId && userOptions.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
+                    {userOptions.map((u) => {
+                      const label = `${u.name}${u.email ? " — " + u.email : u.phone ? " — " + u.phone : ""}`;
+                      return (
+                        <button
+                          key={u._id}
+                          type="button"
+                          className="w-full text-left px-2 py-1 hover:bg-gray-50"
+                          onClick={() => {
+                            setMappedUserId(u._id);
+                            setMappedUserLabel(label);
+                            setUserQuery("");
+                            setUserOptions([]);
+                            setShowUserList(false);
+                          }}
+                        >
+                          <div className="text-sm">{u.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {u.email || "-"} | {u.phone || "-"} {u.role ? `| ${u.role}` : ""}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex justify-end gap-2">
-          <button onClick={onClose} className="border px-4 py-2 rounded">Cancel</button>
+        <div className="mt-6 flex justify-end gap-2 border-t pt-4">
+          <button 
+            onClick={onClose} 
+            className="border px-4 py-2 rounded hover:bg-gray-50"
+          >
+            Cancel
+          </button>
           <button
             onClick={save}
             disabled={disabled}
-            className={`px-4 py-2 text-white rounded ${disabled ? "bg-blue-400" : "bg-blue-600"}`}
+            className={`px-4 py-2 text-white rounded ${
+              disabled 
+                ? "bg-blue-400 cursor-not-allowed" 
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            {isEdit ? "Save Changes" : "Create"}
+            {isEdit ? "Save Changes" : "Create Employee"}
           </button>
         </div>
       </div>
