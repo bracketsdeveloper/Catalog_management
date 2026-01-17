@@ -27,13 +27,13 @@ const HRMS = {
   cancelLeave: (id) => axios.patch(`${API}/api/hrms/self/leaves/${id}/cancel`, {}, authHeaders()),
 
   // Attendance APIs
-  getMyAttendance: (params = {}) => 
+  getMyAttendance: (params = {}) =>
     axios.get(`${API}/api/attendance/employee`, { ...authHeaders(), params }),
-    
+
   getMyAttendanceSummary: (params = {}) =>
     axios.get(`${API}/api/attendance/summary/all`, { ...authHeaders(), params }),
-    
-  getHolidays: (params = {}) => 
+
+  getHolidays: (params = {}) =>
     axios.get(`${API}/api/hrms/holidays`, { ...authHeaders(), params }),
 };
 
@@ -58,14 +58,14 @@ function formatIndianDate(date) {
 // Helper function to convert decimal hours to hh:mm format
 const formatHoursToHHMM = (decimalHours) => {
   if (!decimalHours && decimalHours !== 0) return '00:00';
-  
+
   const hours = Math.floor(decimalHours);
   const minutes = Math.round((decimalHours - hours) * 60);
-  
+
   // Ensure two-digit format
   const formattedHours = hours.toString().padStart(2, '0');
   const formattedMinutes = minutes.toString().padStart(2, '0');
-  
+
   return `${formattedHours}:${formattedMinutes}`;
 };
 
@@ -272,10 +272,10 @@ export default function MyProfilePage() {
       const today = new Date();
       const month = today.getMonth() + 1;
       const year = today.getFullYear();
-      
+
       const response = await HRMS.getHolidays({ month, year });
       setHolidays(response.data || []);
-      
+
       // Calculate working days
       calculateWorkingDays(month, year, response.data || []);
     } catch (error) {
@@ -289,20 +289,20 @@ export default function MyProfilePage() {
     const today = new Date();
     const currentMonth = month - 1;
     const daysInMonth = new Date(year, month, 0).getDate();
-    
+
     let totalWorkingDays = 0;
     let tillTodayWorkingDays = 0;
     const todayDate = today.getDate();
     const isCurrentMonth = today.getMonth() + 1 === month && today.getFullYear() === year;
-    
+
     // Get holidays for this month (excluding restricted holidays)
     const monthHolidays = holidayData.filter(holiday => {
       const holidayDate = new Date(holiday.date);
-      return holidayDate.getMonth() === currentMonth && 
-             holidayDate.getFullYear() === year &&
-             holiday.type !== 'RESTRICTED'; // Restricted holidays are still working days
+      return holidayDate.getMonth() === currentMonth &&
+        holidayDate.getFullYear() === year &&
+        holiday.type !== 'RESTRICTED'; // Restricted holidays are still working days
     });
-    
+
     // Create a Set of holiday dates for quick lookup
     const holidayDates = new Set(
       monthHolidays.map(holiday => {
@@ -310,33 +310,33 @@ export default function MyProfilePage() {
         return date.getDate();
       })
     );
-    
+
     // Count all working days in the month
     for (let day = 1; day <= daysInMonth; day++) {
       const currentDate = new Date(year, currentMonth, day);
       const dayOfWeek = currentDate.getDay();
-      
+
       // Skip weekends (0 = Sunday, 6 = Saturday)
       if (dayOfWeek === 0 || dayOfWeek === 6) {
         continue;
       }
-      
+
       // Skip non-restricted holidays
       if (holidayDates.has(day)) {
         continue;
       }
-      
+
       totalWorkingDays++;
-      
+
       // Count working days till today for current month
       if (isCurrentMonth && day <= todayDate) {
         tillTodayWorkingDays++;
       }
     }
-    
+
     setCurrentMonthWorkingDays(totalWorkingDays);
     setTillTodayWorkingDays(tillTodayWorkingDays);
-    
+
     return { totalWorkingDays, tillTodayWorkingDays, isCurrentMonth };
   };
 
@@ -345,12 +345,12 @@ export default function MyProfilePage() {
       console.log('No employee ID available');
       return;
     }
-    
+
     setAttendanceLoading(true);
     try {
       console.log('Fetching attendance for employee:', employee.personal.employeeId);
       console.log('Date range:', attendanceRange);
-      
+
       // Try the main attendance API endpoint
       let attendanceResponse;
       try {
@@ -362,7 +362,7 @@ export default function MyProfilePage() {
         console.log('Attendance API response:', attendanceResponse.data);
       } catch (apiError) {
         console.error('Main API failed:', apiError);
-        
+
         // Try alternative endpoint format
         try {
           attendanceResponse = await axios.get(
@@ -381,10 +381,10 @@ export default function MyProfilePage() {
           throw new Error('Could not fetch attendance data');
         }
       }
-      
+
       // Extract attendance data from response (handle different response formats)
       let attendanceRecords = [];
-      
+
       if (attendanceResponse.data?.attendance) {
         attendanceRecords = attendanceResponse.data.attendance;
       } else if (attendanceResponse.data?.records) {
@@ -396,34 +396,34 @@ export default function MyProfilePage() {
       } else if (attendanceResponse.data?.results) {
         attendanceRecords = attendanceResponse.data.results;
       }
-      
+
       console.log(`Found ${attendanceRecords.length} attendance records`);
-      
+
       // Process attendance data
       const processedData = attendanceRecords.map(record => {
         const formattedRecord = { ...record };
-        
+
         // Format times
         formattedRecord.inTime = formatTimeDisplay(record.inTime);
         formattedRecord.outTime = formatTimeDisplay(record.outTime);
         formattedRecord.hoursWorked = formatTimeDisplay(record.hoursWorked || record.totalHours);
-        
+
         // Add day name
         formattedRecord.dayName = getDayName(record.date);
-        
+
         // Ensure status is properly formatted
         if (!formattedRecord.status && record.present) {
           formattedRecord.status = 'Present';
         }
-        
+
         return formattedRecord;
       });
-      
+
       // Sort by date descending (most recent first)
       processedData.sort((a, b) => new Date(b.date) - new Date(a.date));
-      
+
       setAttendanceData(processedData);
-      
+
       // Calculate summary from the processed data
       if (processedData.length > 0) {
         const summary = calculateAttendanceSummary(processedData);
@@ -431,7 +431,7 @@ export default function MyProfilePage() {
       } else {
         setAttendanceSummary(null);
       }
-      
+
     } catch (error) {
       console.error('Error fetching attendance:', error);
       console.error('Error details:', error.response?.data || error.message);
@@ -448,68 +448,84 @@ export default function MyProfilePage() {
     const today = new Date();
     const currentMonth = today.getMonth() + 1;
     const currentYear = today.getFullYear();
-    
+
     // Filter records for current month
     const currentMonthRecords = attendanceRecords.filter(record => {
       try {
         const recordDate = new Date(record.date);
-        return recordDate.getMonth() + 1 === currentMonth && 
-               recordDate.getFullYear() === currentYear;
+        return recordDate.getMonth() + 1 === currentMonth &&
+          recordDate.getFullYear() === currentYear;
       } catch {
         return false;
       }
     });
-    
+
     console.log('Current month records:', currentMonthRecords.length);
-    
+
     // Calculate present days (including half present)
     const presentDays = currentMonthRecords.filter(record => {
       const status = record.status?.toLowerCase() || '';
       return status.includes('present') || status.includes('½present');
     }).length;
-    
+
     // Calculate half present days
     const halfPresentDays = currentMonthRecords.filter(record => {
       const status = record.status?.toLowerCase() || '';
       return status.includes('½present');
     }).length;
-    
+
     // Calculate leaves
     const leaveDays = currentMonthRecords.filter(record => {
       const status = record.status?.toLowerCase() || '';
       return status.includes('leave');
     }).length;
-    
+
     // Calculate total hours and OT hours
     let totalHours = 0;
     let totalOT = 0;
-    
+    let totalLateMinutes = 0;
+    let totalEarlyDepartureMinutes = 0;
+
     currentMonthRecords.forEach(record => {
       if (record.hoursWorked) {
         const hoursDecimal = formatHHMMToDecimal(record.hoursWorked);
         if (!isNaN(hoursDecimal)) {
           totalHours += hoursDecimal;
-          
-          // Assuming standard work day is 8 hours, anything above is OT
-          if (hoursDecimal > 8) {
-            const otHours = hoursDecimal - 8;
+
+          // Get employee's expected work hours from schedule (or use default 8 hours)
+          // If employeeInfo is available, use their schedule, otherwise default to 8 hours
+          const expectedDailyHours = employee?.schedule?.expectedWorkHours || 8;
+
+          // Calculate OT only if hours worked exceeds expected daily hours
+          if (hoursDecimal > expectedDailyHours) {
+            const otHours = hoursDecimal - expectedDailyHours;
             totalOT += otHours;
+          }
+
+          // Track late arrivals if record has lateByMinutes
+          if (record.lateByMinutes && !isNaN(record.lateByMinutes)) {
+            totalLateMinutes += parseInt(record.lateByMinutes);
+          }
+
+          // Track early departures if record has earlyDepartureMinutes
+          if (record.earlyDepartureMinutes && !isNaN(record.earlyDepartureMinutes)) {
+            totalEarlyDepartureMinutes += parseInt(record.earlyDepartureMinutes);
           }
         }
       }
     });
-    
+
     // Determine which working days to use
     let workingDaysForCalculation;
     let displayWorkingDays;
     let isTillToday = false;
-    
+
     const { totalWorkingDays, tillTodayWorkingDays } = calculateWorkingDays(
-      currentMonth, 
-      currentYear, 
+      currentMonth,
+      currentYear,
       holidays
     );
-    
+
     if (currentMonth === new Date().getMonth() + 1 && currentYear === new Date().getFullYear()) {
       // For current month: use working days up to today
       workingDaysForCalculation = tillTodayWorkingDays;
@@ -521,7 +537,7 @@ export default function MyProfilePage() {
       displayWorkingDays = totalWorkingDays;
       isTillToday = false;
     }
-    
+
     // Calculate attendance rate
     let attendanceRate = 0;
     if (workingDaysForCalculation > 0) {
@@ -529,7 +545,23 @@ export default function MyProfilePage() {
       const effectivePresentDays = presentDays - (halfPresentDays * 0.5);
       attendanceRate = parseFloat(((effectivePresentDays / workingDaysForCalculation) * 100).toFixed(2));
     }
-    
+
+    // Count late arrivals (days where lateByMinutes > 0)
+    const lateArrivalDays = currentMonthRecords.filter(record =>
+      record.lateByMinutes && parseInt(record.lateByMinutes) > 0
+    ).length;
+
+    // Count early departures (days where earlyDepartureMinutes > 0)
+    const earlyDepartureDays = currentMonthRecords.filter(record =>
+      record.earlyDepartureMinutes && parseInt(record.earlyDepartureMinutes) > 0
+    ).length;
+
+    // Calculate average late minutes if there are late arrivals
+    const averageLateMinutes = lateArrivalDays > 0 ? Math.round(totalLateMinutes / lateArrivalDays) : 0;
+
+    // Calculate average early departure minutes if there are early departures
+    const averageEarlyDepartureMinutes = earlyDepartureDays > 0 ? Math.round(totalEarlyDepartureMinutes / earlyDepartureDays) : 0;
+
     return {
       attendanceRate,
       presentDays,
@@ -540,7 +572,13 @@ export default function MyProfilePage() {
       workingDays: workingDaysForCalculation,
       displayWorkingDays,
       isTillToday,
-      totalWorkingDaysInMonth: totalWorkingDays
+      totalWorkingDaysInMonth: totalWorkingDays,
+      lateArrivalDays,
+      earlyDepartureDays,
+      averageLateMinutes,
+      averageEarlyDepartureMinutes,
+      totalLateMinutes,
+      totalEarlyDepartureMinutes
     };
   };
 
@@ -607,7 +645,7 @@ export default function MyProfilePage() {
   };
 
   const activeRHCount = useMemo(() => {
-    const active = new Set(["applied","pending","approved"]);
+    const active = new Set(["applied", "pending", "approved"]);
     return (myRHReqs || []).filter(x => active.has(x.status)).length;
   }, [myRHReqs]);
 
@@ -715,13 +753,13 @@ export default function MyProfilePage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button 
+              <button
                 onClick={openRestrictedHolidays}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all flex items-center gap-2"
               >
                 <span>🎯</span> Restricted Holidays
               </button>
-              <button 
+              <button
                 onClick={openLeaves}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all flex items-center gap-2"
               >
@@ -735,21 +773,19 @@ export default function MyProfilePage() {
             <nav className="flex space-x-8">
               <button
                 onClick={() => setActiveTab('profile')}
-                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === 'profile'
+                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'profile'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 👤 Profile
               </button>
               <button
                 onClick={() => setActiveTab('attendance')}
-                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === 'attendance'
+                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'attendance'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 📊 Attendance
               </button>
@@ -799,7 +835,7 @@ export default function MyProfilePage() {
                 <h3 className="text-lg font-semibold text-gray-900">Edit Profile Information</h3>
                 <p className="text-sm text-gray-600">Update your personal and professional details</p>
               </div>
-              
+
               <div className="p-6">
                 {/* Personal Information */}
                 <div className="mb-8">
@@ -808,14 +844,14 @@ export default function MyProfilePage() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {[
-                      { label: "Full Name", value: ePersonal.name, setter: (val) => setEPersonal({...ePersonal, name: val}), key: 'name' },
+                      { label: "Full Name", value: ePersonal.name, setter: (val) => setEPersonal({ ...ePersonal, name: val }), key: 'name' },
                       { label: "Employee ID", value: ePersonal.employeeId, key: 'employeeId', readOnly: true },
-                      { label: "Date of Birth", value: ePersonal.dob, setter: (val) => setEPersonal({...ePersonal, dob: val}), key: 'dob', type: 'date' },
+                      { label: "Date of Birth", value: ePersonal.dob, setter: (val) => setEPersonal({ ...ePersonal, dob: val }), key: 'dob', type: 'date' },
                       { label: "Date of Joining", value: ePersonal.dateOfJoining, key: 'dateOfJoining', readOnly: true },
-                      { label: "Phone", value: ePersonal.phone, setter: (val) => setEPersonal({...ePersonal, phone: val}), key: 'phone' },
-                      { label: "Emergency Phone", value: ePersonal.emergencyPhone, setter: (val) => setEPersonal({...ePersonal, emergencyPhone: val}), key: 'emergencyPhone' },
-                      { label: "Aadhar Number", value: ePersonal.aadhar, setter: (val) => setEPersonal({...ePersonal, aadhar: val}), key: 'aadhar' },
-                      { label: "Blood Group", value: ePersonal.bloodGroup, setter: (val) => setEPersonal({...ePersonal, bloodGroup: val}), key: 'bloodGroup' },
+                      { label: "Phone", value: ePersonal.phone, setter: (val) => setEPersonal({ ...ePersonal, phone: val }), key: 'phone' },
+                      { label: "Emergency Phone", value: ePersonal.emergencyPhone, setter: (val) => setEPersonal({ ...ePersonal, emergencyPhone: val }), key: 'emergencyPhone' },
+                      { label: "Aadhar Number", value: ePersonal.aadhar, setter: (val) => setEPersonal({ ...ePersonal, aadhar: val }), key: 'aadhar' },
+                      { label: "Blood Group", value: ePersonal.bloodGroup, setter: (val) => setEPersonal({ ...ePersonal, bloodGroup: val }), key: 'bloodGroup' },
                     ].map((field) => (
                       <div key={field.key}>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -838,7 +874,7 @@ export default function MyProfilePage() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         rows="2"
                         value={ePersonal.address || ''}
-                        onChange={(e) => setEPersonal({...ePersonal, address: e.target.value})}
+                        onChange={(e) => setEPersonal({ ...ePersonal, address: e.target.value })}
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -849,7 +885,7 @@ export default function MyProfilePage() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         rows="2"
                         value={ePersonal.medicalIssues || ''}
-                        onChange={(e) => setEPersonal({...ePersonal, medicalIssues: e.target.value})}
+                        onChange={(e) => setEPersonal({ ...ePersonal, medicalIssues: e.target.value })}
                       />
                     </div>
                   </div>
@@ -868,7 +904,7 @@ export default function MyProfilePage() {
                       <input
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         value={eOrg.role || ''}
-                        onChange={(e) => setEOrg({...eOrg, role: e.target.value})}
+                        onChange={(e) => setEOrg({ ...eOrg, role: e.target.value })}
                         readOnly
                       />
                     </div>
@@ -879,7 +915,7 @@ export default function MyProfilePage() {
                       <input
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         value={eOrg.department || ''}
-                        onChange={(e) => setEOrg({...eOrg, department: e.target.value})}
+                        onChange={(e) => setEOrg({ ...eOrg, department: e.target.value })}
                         readOnly
                       />
                     </div>
@@ -908,7 +944,7 @@ export default function MyProfilePage() {
                         </div>
                       ))}
                     </div>
-                    
+
                     <div>
                       <h5 className="text-sm font-medium text-gray-700 mb-4">Issued Equipment</h5>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -924,8 +960,8 @@ export default function MyProfilePage() {
                           { key: 'rainCoverIssued', label: 'Rain Cover', icon: '☔' },
                           { key: 'idCardsIssued', label: 'ID Cards', icon: '🪪' },
                         ].map((item) => (
-                          <div 
-                            key={item.key} 
+                          <div
+                            key={item.key}
                             className={`p-4 border rounded-lg flex flex-col items-center justify-center ${eAssets[item.key] ? 'bg-green-50 border-green-200' : 'bg-gray-100 border-gray-200'}`}
                           >
                             <div className="text-2xl mb-2">{item.icon}</div>
@@ -960,11 +996,10 @@ export default function MyProfilePage() {
                   <button
                     onClick={save}
                     disabled={disabled || saving}
-                    className={`px-8 py-3 rounded-lg font-medium transition-all ${
-                      disabled || saving
+                    className={`px-8 py-3 rounded-lg font-medium transition-all ${disabled || saving
                         ? 'bg-gray-300 cursor-not-allowed'
                         : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl'
-                    }`}
+                      }`}
                   >
                     {saving ? (
                       <span className="flex items-center gap-2">
@@ -988,13 +1023,13 @@ export default function MyProfilePage() {
             {/* Attendance Summary Cards */}
             {attendanceSummary && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                
+
                 <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl p-6 text-white shadow-lg">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm opacity-90">Present Days</p>
                       <p className="text-3xl font-bold mt-2">{attendanceSummary.presentDays || 0}</p>
-                      
+
                       {attendanceSummary.halfPresentDays > 0 && (
                         <p className="text-xs opacity-90 mt-1">
                           ({attendanceSummary.halfPresentDays} half days)
@@ -1024,6 +1059,11 @@ export default function MyProfilePage() {
                       <p className="text-xs opacity-90 mt-1">
                         {attendanceSummary.totalOT?.toFixed(1) || 0}h overtime
                       </p>
+                      {attendanceSummary.lateArrivalDays > 0 && (
+                        <p className="text-xs opacity-90 mt-1">
+                          {attendanceSummary.lateArrivalDays} late arrival{attendanceSummary.lateArrivalDays > 1 ? 's' : ''}
+                        </p>
+                      )}
                     </div>
                     <div className="text-4xl">⚡</div>
                   </div>
@@ -1066,7 +1106,7 @@ export default function MyProfilePage() {
                       type="date"
                       className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={attendanceRange.startDate}
-                      onChange={(e) => setAttendanceRange({...attendanceRange, startDate: e.target.value})}
+                      onChange={(e) => setAttendanceRange({ ...attendanceRange, startDate: e.target.value })}
                     />
                   </div>
                   <div>
@@ -1075,7 +1115,7 @@ export default function MyProfilePage() {
                       type="date"
                       className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={attendanceRange.endDate}
-                      onChange={(e) => setAttendanceRange({...attendanceRange, endDate: e.target.value})}
+                      onChange={(e) => setAttendanceRange({ ...attendanceRange, endDate: e.target.value })}
                     />
                   </div>
                   <div className="flex items-end">
@@ -1095,8 +1135,8 @@ export default function MyProfilePage() {
                 <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
                   <p className="text-sm font-medium text-yellow-800">Debug Info:</p>
                   <p className="text-xs text-yellow-700">
-                    Employee ID: {employee?.personal?.employeeId || 'Not found'} | 
-                    Records: {attendanceData.length} | 
+                    Employee ID: {employee?.personal?.employeeId || 'Not found'} |
+                    Records: {attendanceData.length} |
                     Date Range: {attendanceRange.startDate} to {attendanceRange.endDate}
                   </p>
                 </div>
@@ -1285,11 +1325,10 @@ function RestrictedHolidayModal({
               Cancel
             </button>
             <button
-              className={`px-6 py-2 rounded-lg text-white ${
-                activeRHCount >= 2 || !selectedHolidayId
+              className={`px-6 py-2 rounded-lg text-white ${activeRHCount >= 2 || !selectedHolidayId
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
-              }`}
+                }`}
               disabled={activeRHCount >= 2 || !selectedHolidayId}
               onClick={submitRestrictedHoliday}
             >
@@ -1320,11 +1359,10 @@ function RestrictedHolidayModal({
                         {formatIndianDate(r.holidayDate)}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                          r.status === 'approved' ? 'bg-green-100 text-green-800' :
-                          r.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${r.status === 'approved' ? 'bg-green-100 text-green-800' :
+                            r.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                          }`}>
                           {r.status}
                         </span>
                       </td>
@@ -1332,7 +1370,7 @@ function RestrictedHolidayModal({
                         {r.note || "-"}
                       </td>
                       <td className="px-6 py-4">
-                        {["applied","pending"].includes(r.status) ? (
+                        {["applied", "pending"].includes(r.status) ? (
                           <button
                             className="text-red-600 hover:text-red-800 text-sm font-medium"
                             onClick={() => cancelRH(r._id)}
@@ -1437,11 +1475,10 @@ function LeaveModal({
               Cancel
             </button>
             <button
-              className={`px-6 py-2 rounded-lg text-white ${
-                !fromDate || !toDate
+              className={`px-6 py-2 rounded-lg text-white ${!fromDate || !toDate
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700"
-              }`}
+                }`}
               disabled={!fromDate || !toDate}
               onClick={submitLeave}
             >
@@ -1476,11 +1513,10 @@ function LeaveModal({
                         {L.days || daysBetween(iso(L.startDate), iso(L.endDate))}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                          L.status === 'approved' ? 'bg-green-100 text-green-800' :
-                          L.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${L.status === 'approved' ? 'bg-green-100 text-green-800' :
+                            L.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                          }`}>
                           {L.status || "-"}
                         </span>
                       </td>
@@ -1488,7 +1524,7 @@ function LeaveModal({
                         {L.purpose || "-"}
                       </td>
                       <td className="px-6 py-4">
-                        {["applied","pending"].includes(L.status) ? (
+                        {["applied", "pending"].includes(L.status) ? (
                           <button
                             className="text-red-600 hover:text-red-800 text-sm font-medium"
                             onClick={() => cancelLeave(L._id)}
