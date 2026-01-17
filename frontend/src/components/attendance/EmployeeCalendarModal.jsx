@@ -154,7 +154,6 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     });
     
     // Calculate attendance rate based on working days
-    const totalMarkedDays = presentDays + absentDays + leaveDays + wfhDays + halfPresentDays;
     const attendanceRate = workingDays > 0 ? ((presentDays / workingDays) * 100).toFixed(2) : 0;
     
     const calculatedSummary = {
@@ -265,12 +264,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
   const handleEditClick = (day, e) => {
     e?.stopPropagation(); // Prevent triggering the cell click
     
-    // Don't allow editing for weekends or holidays
-    if (day.isWeekend || day.isHoliday) {
-      toast.info('Cannot edit attendance for weekends or holidays');
-      return;
-    }
-    
+    // Allow editing for ALL days including weekends and holidays
     setSelectedDate(day);
     setEditForm({
       status: day.attendance?.status || '',
@@ -283,7 +277,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
 
   // Handle cell click (alternative edit method)
   const handleCellClick = (day) => {
-    if (!day || day.isWeekend || day.isHoliday || day.leaveInfo) return;
+    if (!day) return;
     handleEditClick(day);
   };
 
@@ -479,10 +473,8 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     );
   };
 
-  // Render edit button for working days
+  // Render edit button for ALL days
   const renderEditButton = (day) => {
-    if (day.isWeekend || day.isHoliday || day.leaveInfo) return null;
-    
     return (
       <button
         onClick={(e) => handleEditClick(day, e)}
@@ -498,40 +490,40 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
   const getDayCellClass = (day) => {
     const isSelected = selectedDate?.date === day.date;
     
-    let baseClass = 'min-h-[100px] p-2 rounded-lg border transition-all group relative ';
+    let baseClass = 'min-h-[100px] p-2 rounded-lg border transition-all group relative cursor-pointer ';
     
     if (isSelected) {
       baseClass += 'ring-2 ring-blue-400 border-blue-400 ';
     }
     
     if (day.isWeekend) {
-      return baseClass + 'bg-gray-50 border-gray-200 opacity-90';
+      return baseClass + 'bg-gray-50 border-gray-200 opacity-90 hover:border-gray-300 hover:shadow-sm';
     }
     if (day.isHoliday) {
-      return baseClass + 'bg-indigo-50 border-indigo-200';
+      return baseClass + 'bg-indigo-50 border-indigo-200 hover:border-indigo-300 hover:shadow-sm';
     }
     if (day.leaveInfo) {
-      return baseClass + 'bg-blue-50 border-blue-200 cursor-default';
+      return baseClass + 'bg-blue-50 border-blue-200 hover:border-blue-300 hover:shadow-sm';
     }
     
     const status = day.attendance?.status?.toLowerCase() || '';
     if (status.includes('present') && !status.includes('½')) {
-      return baseClass + 'bg-green-50 border-green-200 cursor-pointer hover:border-green-400 hover:shadow-sm';
+      return baseClass + 'bg-green-50 border-green-200 hover:border-green-400 hover:shadow-sm';
     }
     if (status.includes('½present') || status.includes('half')) {
-      return baseClass + 'bg-orange-50 border-orange-200 cursor-pointer hover:border-orange-400 hover:shadow-sm';
+      return baseClass + 'bg-orange-50 border-orange-200 hover:border-orange-400 hover:shadow-sm';
     }
     if (status.includes('absent')) {
-      return baseClass + 'bg-red-50 border-red-200 cursor-pointer hover:border-red-400 hover:shadow-sm';
+      return baseClass + 'bg-red-50 border-red-200 hover:border-red-400 hover:shadow-sm';
     }
     if (status.includes('wfh')) {
-      return baseClass + 'bg-purple-50 border-purple-200 cursor-pointer hover:border-purple-400 hover:shadow-sm';
+      return baseClass + 'bg-purple-50 border-purple-200 hover:border-purple-400 hover:shadow-sm';
     }
     if (status.includes('weeklyoff')) {
-      return baseClass + 'bg-yellow-50 border-yellow-200 cursor-pointer hover:border-yellow-400 hover:shadow-sm';
+      return baseClass + 'bg-yellow-50 border-yellow-200 hover:border-yellow-400 hover:shadow-sm';
     }
     
-    return baseClass + 'bg-white border-gray-200 cursor-pointer hover:border-blue-400 hover:shadow-sm';
+    return baseClass + 'bg-white border-gray-200 hover:border-blue-400 hover:shadow-sm';
   };
 
   // Group calendar data into weeks
@@ -633,6 +625,10 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{displaySummary.presentDays || 0}</div>
                 <div className="text-xs text-gray-500">Present</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-red-600">{displaySummary.absentDays || 0}</div>
+                <div className="text-xs text-gray-500">Absent</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">{displaySummary.leaveDays || 0}</div>
@@ -754,7 +750,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                             </span>
                           </div>
                           
-                          {/* Edit button - only for editable days */}
+                          {/* Edit button - for ALL days */}
                           {renderEditButton(day)}
                           
                           <div className="flex flex-col items-center justify-center">
@@ -769,12 +765,10 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                             </div>
                           )}
                           
-                          {/* Click hint for editable days */}
-                          {!day.isWeekend && !day.isHoliday && !day.leaveInfo && (
-                            <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              Click to edit
-                            </div>
-                          )}
+                          {/* Click hint for all days */}
+                          <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to edit
+                          </div>
                         </>
                       )}
                     </div>
@@ -792,6 +786,11 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-medium text-gray-800">
                   Edit Attendance for {selectedDate.date} ({selectedDate.dayName})
+                  {(selectedDate.isWeekend || selectedDate.isHoliday || selectedDate.leaveInfo) && (
+                    <span className="ml-2 text-xs font-normal text-orange-600">
+                      (Weekend/Holiday/Leave Day)
+                    </span>
+                  )}
                 </h3>
                 <button
                   onClick={handleCancelEdit}
@@ -908,12 +907,12 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
             <div className="flex items-center gap-1">
               <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span>
               <span className="flex items-center gap-1">
-                <PencilIcon className="w-3 h-3" /> Click to edit
+                <PencilIcon className="w-3 h-3" /> Click any day to edit
               </span>
             </div>
           </div>
           <div className="text-center mt-2 text-xs text-gray-500">
-            💡 Click on any working day or use the edit button (✏️) to edit attendance
+            💡 Click on any day or use the edit button (✏️) to edit attendance
           </div>
         </div>
 
