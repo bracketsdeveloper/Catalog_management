@@ -236,7 +236,7 @@ export async function exportToPPT(catalog, getBase64ImageFromUrl) {
         const effPrice = baseCost * (1 + margin / 100);
         slide.addText(
           [
-            { text: "Effective Rate (INR/pc): ", bold: true, fontSize: 11 }, // Matches description label
+            { text: "Indicative Rate: ", bold: true, fontSize: 11 }, // Matches description label
             { text: `${effPrice.toFixed(2)}/-`, fontSize: 10 }, // Matches description value
           ],
           {

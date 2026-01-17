@@ -615,7 +615,7 @@ export default function CatalogManagementPage() {
         const baseCost = sub.productCost;
         const margin = catalog.margin || 0;
         const effPrice = baseCost * (1 + margin / 100);
-        page.drawText("Effective Rate in INR (per pc): ", {
+        page.drawText("Indicative Rate: ", {
           x: xText,
           y: yText,
           size: 25,
