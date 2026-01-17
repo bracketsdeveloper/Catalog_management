@@ -26,11 +26,13 @@ const HRMS = {
     axios.post(`${API}/api/hrms/self/leaves`, { startDate, endDate, purpose }, authHeaders()),
   cancelLeave: (id) => axios.patch(`${API}/api/hrms/self/leaves/${id}/cancel`, {}, authHeaders()),
 
-  // New: Attendance APIs
+  // Attendance APIs
   getMyAttendance: (params = {}) => 
     axios.get(`${API}/api/attendance/employee/${params.employeeId}`, { ...authHeaders(), params }),
   getMyAttendanceSummary: (params = {}) =>
     axios.get(`${API}/api/attendance/summary/all`, { ...authHeaders(), params }),
+  getHolidays: (params = {}) => 
+    axios.get(`${API}/api/hrms/holidays`, { ...authHeaders(), params }),
 };
 
 function iso(d) { return d ? String(d).slice(0, 10) : ""; }
@@ -51,10 +53,25 @@ function formatIndianDate(date) {
   });
 }
 
-function formatTime(time) {
+// Helper function to convert decimal hours to hh:mm format
+const formatHoursToHHMM = (decimalHours) => {
+  if (!decimalHours && decimalHours !== 0) return '00:00';
+  
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  
+  // Ensure two-digit format
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  
+  return `${formattedHours}:${formattedMinutes}`;
+};
+
+// Helper function to format time display
+const formatTimeDisplay = (time) => {
   if (!time) return '-';
   return time;
-}
+};
 
 function getStatusColor(status) {
   if (!status) return 'bg-gray-100 text-gray-800';
@@ -69,6 +86,12 @@ function getStatusColor(status) {
   return 'bg-gray-100 text-gray-800';
 }
 
+// Helper function to get day name
+const getDayName = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-IN', { weekday: 'short' });
+};
+
 export default function MyProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,6 +105,9 @@ export default function MyProfilePage() {
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
+  const [holidays, setHolidays] = useState([]);
+  const [currentMonthWorkingDays, setCurrentMonthWorkingDays] = useState(0);
+  const [tillTodayWorkingDays, setTillTodayWorkingDays] = useState(0);
 
   // USER
   const [uForm, setUForm] = useState({
@@ -152,9 +178,15 @@ export default function MyProfilePage() {
 
   useEffect(() => {
     if (employee?.personal?.employeeId && activeTab === 'attendance') {
+      fetchHolidays();
+    }
+  }, [employee, activeTab]);
+
+  useEffect(() => {
+    if (employee?.personal?.employeeId && activeTab === 'attendance' && holidays.length > 0) {
       fetchMyAttendance();
     }
-  }, [employee, activeTab, attendanceRange]);
+  }, [employee, activeTab, attendanceRange, holidays]);
 
   const loadProfile = async () => {
     try {
@@ -223,38 +255,232 @@ export default function MyProfilePage() {
     }
   };
 
+  // Fetch holidays for the current month
+  const fetchHolidays = async () => {
+    try {
+      const today = new Date();
+      const month = today.getMonth() + 1;
+      const year = today.getFullYear();
+      
+      const response = await HRMS.getHolidays({ month, year });
+      setHolidays(response.data || []);
+      
+      // Calculate working days
+      calculateWorkingDays(month, year, response.data || []);
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
+      setHolidays([]);
+    }
+  };
+
+  // Helper function to calculate working days
+  const calculateWorkingDays = (month, year, holidayData) => {
+    const today = new Date();
+    const currentMonth = month - 1;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    let totalWorkingDays = 0;
+    let tillTodayWorkingDays = 0;
+    const todayDate = today.getDate();
+    const isCurrentMonth = today.getMonth() + 1 === month && today.getFullYear() === year;
+    
+    // Get holidays for this month (excluding restricted holidays)
+    const monthHolidays = holidayData.filter(holiday => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate.getMonth() === currentMonth && 
+             holidayDate.getFullYear() === year &&
+             holiday.type !== 'RESTRICTED'; // Restricted holidays are still working days
+    });
+    
+    // Create a Set of holiday dates for quick lookup
+    const holidayDates = new Set(
+      monthHolidays.map(holiday => {
+        const date = new Date(holiday.date);
+        return date.getDate();
+      })
+    );
+    
+    // Count all working days in the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const currentDate = new Date(year, currentMonth, day);
+      const dayOfWeek = currentDate.getDay();
+      
+      // Skip weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        continue;
+      }
+      
+      // Skip non-restricted holidays
+      if (holidayDates.has(day)) {
+        continue;
+      }
+      
+      totalWorkingDays++;
+      
+      // Count working days till today for current month
+      if (isCurrentMonth && day <= todayDate) {
+        tillTodayWorkingDays++;
+      }
+    }
+    
+    setCurrentMonthWorkingDays(totalWorkingDays);
+    setTillTodayWorkingDays(tillTodayWorkingDays);
+    
+    return { totalWorkingDays, tillTodayWorkingDays, isCurrentMonth };
+  };
+
   const fetchMyAttendance = async () => {
     if (!employee?.personal?.employeeId) return;
     
     setAttendanceLoading(true);
     try {
+      const today = new Date();
+      const month = today.getMonth() + 1;
+      const year = today.getFullYear();
+      
       const params = {
         employeeId: employee.personal.employeeId,
         startDate: attendanceRange.startDate,
         endDate: attendanceRange.endDate
       };
 
-      const [attendanceResponse, summaryResponse] = await Promise.all([
-        HRMS.getMyAttendance(params),
-        HRMS.getMyAttendanceSummary({ 
-          month: new Date().getMonth() + 1,
-          year: new Date().getFullYear()
-        })
-      ]);
-
-      setAttendanceData(attendanceResponse.data.attendance || []);
+      const attendanceResponse = await HRMS.getMyAttendance(params);
+      const attendanceRecords = attendanceResponse.data.attendance || [];
       
-      // Find current employee's summary from the list
-      const mySummary = summaryResponse.data.results?.find(
-        emp => emp.employeeId === employee.personal.employeeId
-      );
-      setAttendanceSummary(mySummary?.summary || null);
+      // Process attendance data
+      const processedData = attendanceRecords.map(record => {
+        const formattedRecord = { ...record };
+        
+        // Format times to hh:mm if they're decimal hours
+        if (record.inTime && typeof record.inTime === 'number') {
+          formattedRecord.inTime = formatHoursToHHMM(record.inTime);
+        }
+        if (record.outTime && typeof record.outTime === 'number') {
+          formattedRecord.outTime = formatHoursToHHMM(record.outTime);
+        }
+        if (record.hoursWorked && typeof record.hoursWorked === 'number') {
+          formattedRecord.hoursWorked = formatHoursToHHMM(record.hoursWorked);
+        }
+        
+        // Add day name
+        formattedRecord.dayName = getDayName(record.date);
+        
+        return formattedRecord;
+      });
+      
+      setAttendanceData(processedData);
+      
+      // Calculate summary from the processed data
+      const summary = calculateAttendanceSummary(processedData);
+      setAttendanceSummary(summary);
+      
     } catch (error) {
       console.error('Error fetching attendance:', error);
       toast.error('Failed to load attendance data');
+      setAttendanceData([]);
+      setAttendanceSummary(null);
     } finally {
       setAttendanceLoading(false);
     }
+  };
+
+  // Function to calculate attendance summary from attendance records
+  const calculateAttendanceSummary = (attendanceRecords) => {
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+    
+    // Filter records for current month
+    const currentMonthRecords = attendanceRecords.filter(record => {
+      const recordDate = new Date(record.date);
+      return recordDate.getMonth() + 1 === currentMonth && 
+             recordDate.getFullYear() === currentYear;
+    });
+    
+    // Calculate present days (including half present)
+    const presentDays = currentMonthRecords.filter(record => {
+      const status = record.status?.toLowerCase() || '';
+      return status.includes('present') || status.includes('½present');
+    }).length;
+    
+    // Calculate half present days
+    const halfPresentDays = currentMonthRecords.filter(record => {
+      const status = record.status?.toLowerCase() || '';
+      return status.includes('½present');
+    }).length;
+    
+    // Calculate leaves
+    const leaveDays = currentMonthRecords.filter(record => {
+      const status = record.status?.toLowerCase() || '';
+      return status.includes('leave');
+    }).length;
+    
+    // Calculate total hours and OT hours
+    let totalHours = 0;
+    let totalOT = 0;
+    
+    currentMonthRecords.forEach(record => {
+      if (record.hoursWorked) {
+        // Parse hh:mm to decimal hours
+        const timeParts = record.hoursWorked.split(':');
+        if (timeParts.length === 2) {
+          const hours = parseInt(timeParts[0]) || 0;
+          const minutes = parseInt(timeParts[1]) || 0;
+          totalHours += hours + (minutes / 60);
+          
+          // Assuming standard work day is 8 hours, anything above is OT
+          if (hours > 8 || (hours === 8 && minutes > 0)) {
+            const standardHours = 8;
+            const otHours = (hours + (minutes / 60)) - standardHours;
+            totalOT += otHours;
+          }
+        }
+      }
+    });
+    
+    // Determine which working days to use
+    let workingDaysForCalculation;
+    let displayWorkingDays;
+    let isTillToday = false;
+    
+    const { totalWorkingDays, tillTodayWorkingDays } = calculateWorkingDays(
+      currentMonth, 
+      currentYear, 
+      holidays
+    );
+    
+    if (currentMonth === new Date().getMonth() + 1 && currentYear === new Date().getFullYear()) {
+      // For current month: use working days up to today
+      workingDaysForCalculation = tillTodayWorkingDays;
+      displayWorkingDays = tillTodayWorkingDays;
+      isTillToday = true;
+    } else {
+      // For past months: use total working days
+      workingDaysForCalculation = totalWorkingDays;
+      displayWorkingDays = totalWorkingDays;
+      isTillToday = false;
+    }
+    
+    // Calculate attendance rate
+    let attendanceRate = 0;
+    if (workingDaysForCalculation > 0) {
+      // Count full present as 1, half present as 0.5
+      const effectivePresentDays = presentDays - (halfPresentDays * 0.5);
+      attendanceRate = parseFloat(((effectivePresentDays / workingDaysForCalculation) * 100).toFixed(2));
+    }
+    
+    return {
+      attendanceRate,
+      presentDays,
+      halfPresentDays,
+      leaveDays,
+      totalHours: parseFloat(totalHours.toFixed(2)),
+      totalOT: parseFloat(totalOT.toFixed(2)),
+      workingDays: workingDaysForCalculation,
+      displayWorkingDays,
+      isTillToday,
+      totalWorkingDaysInMonth: totalWorkingDays
+    };
   };
 
   const disabled = useMemo(() => !uForm?.name?.trim(), [uForm?.name]);
@@ -701,21 +927,18 @@ export default function MyProfilePage() {
             {/* Attendance Summary Cards */}
             {attendanceSummary && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm opacity-90">Attendance Rate</p>
-                      <p className="text-3xl font-bold mt-2">{attendanceSummary.attendanceRate || 0}%</p>
-                    </div>
-                    <div className="text-4xl">📊</div>
-                  </div>
-                </div>
+                
                 <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl p-6 text-white shadow-lg">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm opacity-90">Present Days</p>
                       <p className="text-3xl font-bold mt-2">{attendanceSummary.presentDays || 0}</p>
-                      <p className="text-sm opacity-90 mt-1">out of {attendanceSummary.workingDays || 0}</p>
+                      
+                      {attendanceSummary.halfPresentDays > 0 && (
+                        <p className="text-xs opacity-90 mt-1">
+                          ({attendanceSummary.halfPresentDays} half days)
+                        </p>
+                      )}
                     </div>
                     <div className="text-4xl">✅</div>
                   </div>
@@ -724,7 +947,10 @@ export default function MyProfilePage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm opacity-90">Total Hours</p>
-                      <p className="text-3xl font-bold mt-2">{attendanceSummary.totalHours?.toFixed(1) || 0}h</p>
+                      <p className="text-3xl font-bold mt-2">{formatHoursToHHMM(attendanceSummary.totalHours)}</p>
+                      <p className="text-xs opacity-90 mt-1">
+                        {attendanceSummary.totalHours?.toFixed(1) || 0}h total
+                      </p>
                     </div>
                     <div className="text-4xl">⏱️</div>
                   </div>
@@ -733,13 +959,37 @@ export default function MyProfilePage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm opacity-90">OT Hours</p>
-                      <p className="text-3xl font-bold mt-2">{attendanceSummary.totalOT?.toFixed(1) || 0}h</p>
+                      <p className="text-3xl font-bold mt-2">{formatHoursToHHMM(attendanceSummary.totalOT)}</p>
+                      <p className="text-xs opacity-90 mt-1">
+                        {attendanceSummary.totalOT?.toFixed(1) || 0}h overtime
+                      </p>
                     </div>
                     <div className="text-4xl">⚡</div>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Working Days Information */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <span className="text-sm text-blue-700 font-medium">
+                    {attendanceSummary?.isTillToday ? 'Calculated Till Today' : 'Complete Month Data'}
+                  </span>
+                  <div className="text-xs text-blue-600 mt-1">
+                    • Working days exclude weekends and public holidays<br />
+                    • Restricted holidays are counted as working days<br />
+                    • Total working days this month: {currentMonthWorkingDays}<br />
+                    • Working days till today: {tillTodayWorkingDays}<br />
+                    • Leave days: {attendanceSummary?.leaveDays || 0}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Attendance Date Range Filter */}
             <div className="bg-white rounded-xl shadow-lg p-6">
@@ -790,7 +1040,7 @@ export default function MyProfilePage() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">In Time</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Out Time</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours Worked</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
                       </tr>
@@ -805,13 +1055,13 @@ export default function MyProfilePage() {
                             {record.dayName}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatTime(record.inTime)}
+                            {formatTimeDisplay(record.inTime)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatTime(record.outTime)}
+                            {formatTimeDisplay(record.outTime)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {record.hoursWorked ? `${record.hoursWorked.toFixed(1)}h` : '-'}
+                            {record.hoursWorked || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(record.status)}`}>
