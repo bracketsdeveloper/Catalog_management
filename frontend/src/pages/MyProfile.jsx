@@ -28,9 +28,11 @@ const HRMS = {
 
   // Attendance APIs
   getMyAttendance: (params = {}) => 
-    axios.get(`${API}/api/attendance/employee/${params.employeeId}`, { ...authHeaders(), params }),
+    axios.get(`${API}/api/attendance/employee`, { ...authHeaders(), params }),
+    
   getMyAttendanceSummary: (params = {}) =>
     axios.get(`${API}/api/attendance/summary/all`, { ...authHeaders(), params }),
+    
   getHolidays: (params = {}) => 
     axios.get(`${API}/api/hrms/holidays`, { ...authHeaders(), params }),
 };
@@ -67,10 +69,19 @@ const formatHoursToHHMM = (decimalHours) => {
   return `${formattedHours}:${formattedMinutes}`;
 };
 
+// Helper function to convert hh:mm to decimal hours
+const formatHHMMToDecimal = (timeString) => {
+  if (!timeString || !timeString.includes(':')) return 0;
+  const [hours, minutes] = timeString.split(':').map(Number);
+  return hours + (minutes / 60);
+};
+
 // Helper function to format time display
 const formatTimeDisplay = (time) => {
   if (!time) return '-';
-  return time;
+  if (typeof time === 'string' && time.includes(':')) return time;
+  if (typeof time === 'number') return formatHoursToHHMM(time);
+  return String(time);
 };
 
 function getStatusColor(status) {
@@ -183,10 +194,10 @@ export default function MyProfilePage() {
   }, [employee, activeTab]);
 
   useEffect(() => {
-    if (employee?.personal?.employeeId && activeTab === 'attendance' && holidays.length > 0) {
+    if (employee?.personal?.employeeId && activeTab === 'attendance') {
       fetchMyAttendance();
     }
-  }, [employee, activeTab, attendanceRange, holidays]);
+  }, [employee, activeTab, attendanceRange]);
 
   const loadProfile = async () => {
     try {
@@ -330,53 +341,101 @@ export default function MyProfilePage() {
   };
 
   const fetchMyAttendance = async () => {
-    if (!employee?.personal?.employeeId) return;
+    if (!employee?.personal?.employeeId) {
+      console.log('No employee ID available');
+      return;
+    }
     
     setAttendanceLoading(true);
     try {
-      const today = new Date();
-      const month = today.getMonth() + 1;
-      const year = today.getFullYear();
+      console.log('Fetching attendance for employee:', employee.personal.employeeId);
+      console.log('Date range:', attendanceRange);
       
-      const params = {
-        employeeId: employee.personal.employeeId,
-        startDate: attendanceRange.startDate,
-        endDate: attendanceRange.endDate
-      };
-
-      const attendanceResponse = await HRMS.getMyAttendance(params);
-      const attendanceRecords = attendanceResponse.data.attendance || [];
+      // Try the main attendance API endpoint
+      let attendanceResponse;
+      try {
+        attendanceResponse = await HRMS.getMyAttendance({
+          employeeId: employee.personal.employeeId,
+          startDate: attendanceRange.startDate,
+          endDate: attendanceRange.endDate
+        });
+        console.log('Attendance API response:', attendanceResponse.data);
+      } catch (apiError) {
+        console.error('Main API failed:', apiError);
+        
+        // Try alternative endpoint format
+        try {
+          attendanceResponse = await axios.get(
+            `${API}/api/attendance/employee/${employee.personal.employeeId}`,
+            {
+              ...authHeaders(),
+              params: {
+                startDate: attendanceRange.startDate,
+                endDate: attendanceRange.endDate
+              }
+            }
+          );
+          console.log('Alternative API response:', attendanceResponse.data);
+        } catch (altError) {
+          console.error('Alternative API failed:', altError);
+          throw new Error('Could not fetch attendance data');
+        }
+      }
+      
+      // Extract attendance data from response (handle different response formats)
+      let attendanceRecords = [];
+      
+      if (attendanceResponse.data?.attendance) {
+        attendanceRecords = attendanceResponse.data.attendance;
+      } else if (attendanceResponse.data?.records) {
+        attendanceRecords = attendanceResponse.data.records;
+      } else if (attendanceResponse.data?.data) {
+        attendanceRecords = attendanceResponse.data.data;
+      } else if (Array.isArray(attendanceResponse.data)) {
+        attendanceRecords = attendanceResponse.data;
+      } else if (attendanceResponse.data?.results) {
+        attendanceRecords = attendanceResponse.data.results;
+      }
+      
+      console.log(`Found ${attendanceRecords.length} attendance records`);
       
       // Process attendance data
       const processedData = attendanceRecords.map(record => {
         const formattedRecord = { ...record };
         
-        // Format times to hh:mm if they're decimal hours
-        if (record.inTime && typeof record.inTime === 'number') {
-          formattedRecord.inTime = formatHoursToHHMM(record.inTime);
-        }
-        if (record.outTime && typeof record.outTime === 'number') {
-          formattedRecord.outTime = formatHoursToHHMM(record.outTime);
-        }
-        if (record.hoursWorked && typeof record.hoursWorked === 'number') {
-          formattedRecord.hoursWorked = formatHoursToHHMM(record.hoursWorked);
-        }
+        // Format times
+        formattedRecord.inTime = formatTimeDisplay(record.inTime);
+        formattedRecord.outTime = formatTimeDisplay(record.outTime);
+        formattedRecord.hoursWorked = formatTimeDisplay(record.hoursWorked || record.totalHours);
         
         // Add day name
         formattedRecord.dayName = getDayName(record.date);
         
+        // Ensure status is properly formatted
+        if (!formattedRecord.status && record.present) {
+          formattedRecord.status = 'Present';
+        }
+        
         return formattedRecord;
       });
+      
+      // Sort by date descending (most recent first)
+      processedData.sort((a, b) => new Date(b.date) - new Date(a.date));
       
       setAttendanceData(processedData);
       
       // Calculate summary from the processed data
-      const summary = calculateAttendanceSummary(processedData);
-      setAttendanceSummary(summary);
+      if (processedData.length > 0) {
+        const summary = calculateAttendanceSummary(processedData);
+        setAttendanceSummary(summary);
+      } else {
+        setAttendanceSummary(null);
+      }
       
     } catch (error) {
       console.error('Error fetching attendance:', error);
-      toast.error('Failed to load attendance data');
+      console.error('Error details:', error.response?.data || error.message);
+      toast.error('Failed to load attendance data. Please try again.');
       setAttendanceData([]);
       setAttendanceSummary(null);
     } finally {
@@ -392,10 +451,16 @@ export default function MyProfilePage() {
     
     // Filter records for current month
     const currentMonthRecords = attendanceRecords.filter(record => {
-      const recordDate = new Date(record.date);
-      return recordDate.getMonth() + 1 === currentMonth && 
-             recordDate.getFullYear() === currentYear;
+      try {
+        const recordDate = new Date(record.date);
+        return recordDate.getMonth() + 1 === currentMonth && 
+               recordDate.getFullYear() === currentYear;
+      } catch {
+        return false;
+      }
     });
+    
+    console.log('Current month records:', currentMonthRecords.length);
     
     // Calculate present days (including half present)
     const presentDays = currentMonthRecords.filter(record => {
@@ -421,17 +486,13 @@ export default function MyProfilePage() {
     
     currentMonthRecords.forEach(record => {
       if (record.hoursWorked) {
-        // Parse hh:mm to decimal hours
-        const timeParts = record.hoursWorked.split(':');
-        if (timeParts.length === 2) {
-          const hours = parseInt(timeParts[0]) || 0;
-          const minutes = parseInt(timeParts[1]) || 0;
-          totalHours += hours + (minutes / 60);
+        const hoursDecimal = formatHHMMToDecimal(record.hoursWorked);
+        if (!isNaN(hoursDecimal)) {
+          totalHours += hoursDecimal;
           
           // Assuming standard work day is 8 hours, anything above is OT
-          if (hours > 8 || (hours === 8 && minutes > 0)) {
-            const standardHours = 8;
-            const otHours = (hours + (minutes / 60)) - standardHours;
+          if (hoursDecimal > 8) {
+            const otHours = hoursDecimal - 8;
             totalOT += otHours;
           }
         }
@@ -1017,8 +1078,29 @@ export default function MyProfilePage() {
                       onChange={(e) => setAttendanceRange({...attendanceRange, endDate: e.target.value})}
                     />
                   </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={fetchMyAttendance}
+                      disabled={attendanceLoading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {attendanceLoading ? 'Loading...' : 'Refresh'}
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Debug Info - Remove in production */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm font-medium text-yellow-800">Debug Info:</p>
+                  <p className="text-xs text-yellow-700">
+                    Employee ID: {employee?.personal?.employeeId || 'Not found'} | 
+                    Records: {attendanceData.length} | 
+                    Date Range: {attendanceRange.startDate} to {attendanceRange.endDate}
+                  </p>
+                </div>
+              )}
 
               {/* Attendance Table */}
               {attendanceLoading ? (
@@ -1030,6 +1112,29 @@ export default function MyProfilePage() {
                 <div className="text-center py-12">
                   <div className="text-4xl mb-4">📊</div>
                   <p className="text-gray-600">No attendance records found for the selected period</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Try selecting a different date range or check if attendance data exists.
+                  </p>
+                  <div className="mt-4 space-y-2">
+                    <button
+                      onClick={() => setAttendanceRange({
+                        startDate: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().split('T')[0],
+                        endDate: new Date().toISOString().split('T')[0]
+                      })}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm mr-2"
+                    >
+                      Last 2 Months
+                    </button>
+                    <button
+                      onClick={() => setAttendanceRange({
+                        startDate: '2024-01-01',
+                        endDate: new Date().toISOString().split('T')[0]
+                      })}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                    >
+                      Year to Date
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -1047,7 +1152,7 @@ export default function MyProfilePage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {attendanceData.map((record) => (
-                        <tr key={record._id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={record._id || record.date} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {formatIndianDate(record.date)}
                           </td>
