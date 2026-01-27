@@ -662,10 +662,7 @@ const EmployeeCalendarModal = ({
                 <div className="text-lg font-semibold text-green-600">{displaySummary.presentDays || 0}</div>
                 <div className="text-xs text-gray-500">Present</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-red-600">{displaySummary.absentDays || 0}</div>
-                <div className="text-xs text-gray-500">Absent</div>
-              </div>
+              
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">{displaySummary.leaveDays || 0}</div>
                 <div className="text-xs text-gray-500">Leave</div>
