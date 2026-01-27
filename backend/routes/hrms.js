@@ -17,7 +17,7 @@ const WFH = require("../models/WFH");
 const User = require("../models/User");
 const { notifyLeaveApplication, notifyLeaveStatusChange } = require("../utils/leaveNotifications");
 
-// Holidays + RH request  
+// Holidays + RH request
 const Holiday = require("../models/Holiday");
 const RestrictedHolidayRequest = require("../models/RestrictedHolidayRequest");
 
@@ -1723,25 +1723,6 @@ router.patch("/hrms/self/leaves/:id/cancel", authenticate, ensureAuthUser, async
     );
 
     res.json(row);
-  } catch (e) {
-    res.status(500).json({ message: e.message });
-  }
-});
-
-// Add this route to your hrms.js backend file
-router.get("/attendance/employee/:employeeId/calendar", authenticate, async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { month, year } = req.query;
-    
-    // Get calendar data logic here
-    // This should return data in the format expected by EmployeeCalendarModal
-    
-    res.json({
-      calendarData: [], // Your calendar data here
-      summary: {}, // Your summary data here
-      employee: {} // Employee info here
-    });
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
