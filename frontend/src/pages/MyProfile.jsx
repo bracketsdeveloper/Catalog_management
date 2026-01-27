@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import axios from "axios";
+import EmployeeCalendarModal from "../components/attendance/EmployeeCalendarModal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+
 function authHeaders() {
   const token = localStorage.getItem("token");
   return { headers: { Authorization: `Bearer ${token}` } };
@@ -26,18 +28,18 @@ const HRMS = {
     axios.post(`${API}/api/hrms/self/leaves`, { startDate, endDate, purpose }, authHeaders()),
   cancelLeave: (id) => axios.patch(`${API}/api/hrms/self/leaves/${id}/cancel`, {}, authHeaders()),
 
-  // Attendance APIs
-  getMyAttendance: (params = {}) =>
-    axios.get(`${API}/api/attendance/employee`, { ...authHeaders(), params }),
-
-  getMyAttendanceSummary: (params = {}) =>
-    axios.get(`${API}/api/attendance/summary/all`, { ...authHeaders(), params }),
-
-  getHolidays: (params = {}) =>
-    axios.get(`${API}/api/hrms/holidays`, { ...authHeaders(), params }),
+  // Calendar API - Fixed endpoint
+  getEmployeeCalendar: (employeeId, params = {}) => {
+    console.log('Getting calendar for employee:', employeeId); // Debug log
+    return axios.get(`${API}/api/hrms/attendance/${employeeId}`, { 
+      ...authHeaders(), 
+      params 
+    });
+  },
 };
 
 function iso(d) { return d ? String(d).slice(0, 10) : ""; }
+
 function daysBetween(a, b) {
   const A = new Date(a), B = new Date(b);
   if (isNaN(A) || isNaN(B)) return 0;
@@ -69,21 +71,7 @@ const formatHoursToHHMM = (decimalHours) => {
   return `${formattedHours}:${formattedMinutes}`;
 };
 
-// Helper function to convert hh:mm to decimal hours
-const formatHHMMToDecimal = (timeString) => {
-  if (!timeString || !timeString.includes(':')) return 0;
-  const [hours, minutes] = timeString.split(':').map(Number);
-  return hours + (minutes / 60);
-};
-
-// Helper function to format time display
-const formatTimeDisplay = (time) => {
-  if (!time) return '-';
-  if (typeof time === 'string' && time.includes(':')) return time;
-  if (typeof time === 'number') return formatHoursToHHMM(time);
-  return String(time);
-};
-
+// Helper function to get status color
 function getStatusColor(status) {
   if (!status) return 'bg-gray-100 text-gray-800';
   const statusLower = status.toLowerCase();
@@ -109,16 +97,11 @@ export default function MyProfilePage() {
   const [user, setUser] = useState(null);
   const [employee, setEmployee] = useState(null);
   const [activeTab, setActiveTab] = useState('profile');
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
+
+  // Attendance Data
   const [attendanceData, setAttendanceData] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
-  const [attendanceRange, setAttendanceRange] = useState({
-    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
-  });
-  const [holidays, setHolidays] = useState([]);
-  const [currentMonthWorkingDays, setCurrentMonthWorkingDays] = useState(0);
-  const [tillTodayWorkingDays, setTillTodayWorkingDays] = useState(0);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   // USER
   const [uForm, setUForm] = useState({
@@ -183,21 +166,21 @@ export default function MyProfilePage() {
   const [reason, setReason] = useState("");
   const [myLeaves, setMyLeaves] = useState([]);
 
+  // Calendar Modal state
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarLoading, setCalendarLoading] = useState(false);
+
   useEffect(() => {
     loadProfile();
   }, []);
 
   useEffect(() => {
     if (employee?.personal?.employeeId && activeTab === 'attendance') {
-      fetchHolidays();
+      fetchAttendanceData();
     }
   }, [employee, activeTab]);
-
-  useEffect(() => {
-    if (employee?.personal?.employeeId && activeTab === 'attendance') {
-      fetchMyAttendance();
-    }
-  }, [employee, activeTab, attendanceRange]);
 
   const loadProfile = async () => {
     try {
@@ -206,8 +189,15 @@ export default function MyProfilePage() {
       const u = r.data?.user || null;
       const e = r.data?.employee || null;
 
+      console.log('Loaded user:', u);
+      console.log('Loaded employee:', e);
+
       setUser(u);
       setEmployee(e);
+
+      if (e?.personal?.employeeId) {
+        console.log('Employee ID found:', e.personal.employeeId);
+      }
 
       setUForm({
         name: u?.name || "",
@@ -260,325 +250,183 @@ export default function MyProfilePage() {
 
       setBiometricId(e?.biometricId || "");
     } catch (e) {
+      console.error('Error loading profile:', e);
       toast.error(e?.response?.data?.message || e.message || "Failed to load profile");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch holidays for the current month
-  const fetchHolidays = async () => {
-    try {
-      const today = new Date();
-      const month = today.getMonth() + 1;
-      const year = today.getFullYear();
-
-      const response = await HRMS.getHolidays({ month, year });
-      setHolidays(response.data || []);
-
-      // Calculate working days
-      calculateWorkingDays(month, year, response.data || []);
-    } catch (error) {
-      console.error('Error fetching holidays:', error);
-      setHolidays([]);
-    }
-  };
-
-  // Helper function to calculate working days
-  const calculateWorkingDays = (month, year, holidayData) => {
-    const today = new Date();
-    const currentMonth = month - 1;
-    const daysInMonth = new Date(year, month, 0).getDate();
-
-    let totalWorkingDays = 0;
-    let tillTodayWorkingDays = 0;
-    const todayDate = today.getDate();
-    const isCurrentMonth = today.getMonth() + 1 === month && today.getFullYear() === year;
-
-    // Get holidays for this month (excluding restricted holidays)
-    const monthHolidays = holidayData.filter(holiday => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate.getMonth() === currentMonth &&
-        holidayDate.getFullYear() === year &&
-        holiday.type !== 'RESTRICTED'; // Restricted holidays are still working days
-    });
-
-    // Create a Set of holiday dates for quick lookup
-    const holidayDates = new Set(
-      monthHolidays.map(holiday => {
-        const date = new Date(holiday.date);
-        return date.getDate();
-      })
-    );
-
-    // Count all working days in the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const currentDate = new Date(year, currentMonth, day);
-      const dayOfWeek = currentDate.getDay();
-
-      // Skip weekends (0 = Sunday, 6 = Saturday)
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        continue;
-      }
-
-      // Skip non-restricted holidays
-      if (holidayDates.has(day)) {
-        continue;
-      }
-
-      totalWorkingDays++;
-
-      // Count working days till today for current month
-      if (isCurrentMonth && day <= todayDate) {
-        tillTodayWorkingDays++;
-      }
-    }
-
-    setCurrentMonthWorkingDays(totalWorkingDays);
-    setTillTodayWorkingDays(tillTodayWorkingDays);
-
-    return { totalWorkingDays, tillTodayWorkingDays, isCurrentMonth };
-  };
-
-  const fetchMyAttendance = async () => {
+  const fetchAttendanceData = async () => {
     if (!employee?.personal?.employeeId) {
-      console.log('No employee ID available');
+      console.log('No employee ID available for attendance data');
       return;
     }
 
     setAttendanceLoading(true);
     try {
-      console.log('Fetching attendance for employee:', employee.personal.employeeId);
-      console.log('Date range:', attendanceRange);
+      console.log('Fetching attendance data for employee:', employee.personal.employeeId);
+      
+      // Get current month and year for the API call
+      const today = new Date();
+      const currentMonth = today.getMonth() + 1;
+      const currentYear = today.getFullYear();
 
-      // Try the main attendance API endpoint
-      let attendanceResponse;
-      try {
-        attendanceResponse = await HRMS.getMyAttendance({
-          employeeId: employee.personal.employeeId,
-          startDate: attendanceRange.startDate,
-          endDate: attendanceRange.endDate
-        });
-        console.log('Attendance API response:', attendanceResponse.data);
-      } catch (apiError) {
-        console.error('Main API failed:', apiError);
-
-        // Try alternative endpoint format
-        try {
-          attendanceResponse = await axios.get(
-            `${API}/api/attendance/employee/${employee.personal.employeeId}`,
-            {
-              ...authHeaders(),
-              params: {
-                startDate: attendanceRange.startDate,
-                endDate: attendanceRange.endDate
-              }
-            }
-          );
-          console.log('Alternative API response:', attendanceResponse.data);
-        } catch (altError) {
-          console.error('Alternative API failed:', altError);
-          throw new Error('Could not fetch attendance data');
-        }
-      }
-
-      // Extract attendance data from response (handle different response formats)
-      let attendanceRecords = [];
-
-      if (attendanceResponse.data?.attendance) {
-        attendanceRecords = attendanceResponse.data.attendance;
-      } else if (attendanceResponse.data?.records) {
-        attendanceRecords = attendanceResponse.data.records;
-      } else if (attendanceResponse.data?.data) {
-        attendanceRecords = attendanceResponse.data.data;
-      } else if (Array.isArray(attendanceResponse.data)) {
-        attendanceRecords = attendanceResponse.data;
-      } else if (attendanceResponse.data?.results) {
-        attendanceRecords = attendanceResponse.data.results;
-      }
-
-      console.log(`Found ${attendanceRecords.length} attendance records`);
-
-      // Process attendance data
-      const processedData = attendanceRecords.map(record => {
-        const formattedRecord = { ...record };
-
-        // Format times
-        formattedRecord.inTime = formatTimeDisplay(record.inTime);
-        formattedRecord.outTime = formatTimeDisplay(record.outTime);
-        formattedRecord.hoursWorked = formatTimeDisplay(record.hoursWorked || record.totalHours);
-
-        // Add day name
-        formattedRecord.dayName = getDayName(record.date);
-
-        // Ensure status is properly formatted
-        if (!formattedRecord.status && record.present) {
-          formattedRecord.status = 'Present';
-        }
-
-        return formattedRecord;
+      // Use the same API as the calendar modal
+      const response = await HRMS.getEmployeeCalendar(employee.personal.employeeId, {
+        month: currentMonth,
+        year: currentYear
       });
 
-      // Sort by date descending (most recent first)
-      processedData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      console.log('Attendance data response:', response.data);
 
-      setAttendanceData(processedData);
-
-      // Calculate summary from the processed data
-      if (processedData.length > 0) {
-        const summary = calculateAttendanceSummary(processedData);
+      if (response.data && Array.isArray(response.data.rows)) {
+        setAttendanceData(response.data.rows);
+        
+        // Calculate summary from real data
+        const summary = calculateAttendanceSummary(response.data.rows);
         setAttendanceSummary(summary);
       } else {
-        setAttendanceSummary(null);
+        // Handle different response structure if needed
+        const calendarData = response.data.calendar || response.data || [];
+        if (Array.isArray(calendarData)) {
+          setAttendanceData(calendarData);
+          const summary = calculateAttendanceSummary(calendarData);
+          setAttendanceSummary(summary);
+        } else {
+          console.error('Unexpected response structure:', response.data);
+          toast.error('Unable to parse attendance data');
+        }
       }
-
+      
     } catch (error) {
-      console.error('Error fetching attendance:', error);
-      console.error('Error details:', error.response?.data || error.message);
-      toast.error('Failed to load attendance data. Please try again.');
-      setAttendanceData([]);
-      setAttendanceSummary(null);
+      console.error('Error fetching attendance data:', error);
+      toast.error(error?.response?.data?.message || 'Failed to load attendance data');
     } finally {
       setAttendanceLoading(false);
     }
   };
 
-  // Function to calculate attendance summary from attendance records
-  const calculateAttendanceSummary = (attendanceRecords) => {
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1;
-    const currentYear = today.getFullYear();
+  const calculateAttendanceSummary = (calendarData) => {
+    if (!Array.isArray(calendarData) || calendarData.length === 0) {
+      return {
+        presentDays: 0,
+        absentDays: 0,
+        leaveDays: 0,
+        wfhDays: 0,
+        holidayDays: 0,
+        weeklyOffDays: 0,
+        halfPresentDays: 0,
+        totalHours: 0,
+        totalOT: 0,
+        attendanceRate: 0,
+        formattedTotalHours: '00:00',
+        formattedTotalOT: '00:00',
+        expectedHours: 0,
+        lopHours: 0,
+        formattedLOPHours: '00:00',
+        presentDaysWithHours: 0,
+        expectedHoursPerDay: 9,
+        workingDays: 0
+      };
+    }
 
-    // Filter records for current month
-    const currentMonthRecords = attendanceRecords.filter(record => {
-      try {
-        const recordDate = new Date(record.date);
-        return recordDate.getMonth() + 1 === currentMonth &&
-          recordDate.getFullYear() === currentYear;
-      } catch {
-        return false;
-      }
-    });
-
-    console.log('Current month records:', currentMonthRecords.length);
-
-    // Calculate present days (including half present)
-    const presentDays = currentMonthRecords.filter(record => {
-      const status = record.status?.toLowerCase() || '';
-      return status.includes('present') || status.includes('½present');
-    }).length;
-
-    // Calculate half present days
-    const halfPresentDays = currentMonthRecords.filter(record => {
-      const status = record.status?.toLowerCase() || '';
-      return status.includes('½present');
-    }).length;
-
-    // Calculate leaves
-    const leaveDays = currentMonthRecords.filter(record => {
-      const status = record.status?.toLowerCase() || '';
-      return status.includes('leave');
-    }).length;
-
-    // Calculate total hours and OT hours
+    let presentDays = 0;
+    let absentDays = 0;
+    let leaveDays = 0;
+    let wfhDays = 0;
+    let holidayDays = 0;
+    let weeklyOffDays = 0;
+    let halfPresentDays = 0;
     let totalHours = 0;
     let totalOT = 0;
-    let totalLateMinutes = 0;
-    let totalEarlyDepartureMinutes = 0;
 
-    currentMonthRecords.forEach(record => {
-      if (record.hoursWorked) {
-        const hoursDecimal = formatHHMMToDecimal(record.hoursWorked);
-        if (!isNaN(hoursDecimal)) {
-          totalHours += hoursDecimal;
+    // Calculate present days with hours for LOP calculation
+    let presentDaysWithHours = 0;
 
-          // Get employee's expected work hours from schedule (or use default 8 hours)
-          // If employeeInfo is available, use their schedule, otherwise default to 8 hours
-          const expectedDailyHours = employee?.schedule?.expectedWorkHours || 8;
-
-          // Calculate OT only if hours worked exceeds expected daily hours
-          if (hoursDecimal > expectedDailyHours) {
-            const otHours = hoursDecimal - expectedDailyHours;
-            totalOT += otHours;
-          }
-
-          // Track late arrivals if record has lateByMinutes
-          if (record.lateByMinutes && !isNaN(record.lateByMinutes)) {
-            totalLateMinutes += parseInt(record.lateByMinutes);
-          }
-
-          // Track early departures if record has earlyDepartureMinutes
-          if (record.earlyDepartureMinutes && !isNaN(record.earlyDepartureMinutes)) {
-            totalEarlyDepartureMinutes += parseInt(record.earlyDepartureMinutes);
-          }
+    calendarData.forEach(day => {
+      // Check for holiday or weekend first
+      if (day.holidayInfo) {
+        holidayDays++;
+      } else if (day.isWeekend) {
+        weeklyOffDays++;
+      } else if (day.leaveInfo) {
+        leaveDays++;
+      } else if (day.attendance) {
+        const status = day.attendance.status?.toLowerCase() || '';
+        const workHours = day.attendance.workHours || 0;
+        
+        if (status.includes('present') && !status.includes('½') && !status.includes('half')) {
+          presentDays++;
+          presentDaysWithHours++;
+          totalHours += workHours;
+        } else if (status.includes('absent')) {
+          absentDays++;
+        } else if (status.includes('wfh')) {
+          wfhDays++;
+          presentDaysWithHours++;
+          totalHours += workHours;
+        } else if (status.includes('½present') || status.includes('half')) {
+          halfPresentDays++;
+          presentDays += 0.5;
+          presentDaysWithHours += 0.5;
+          totalHours += workHours;
+        } else if (status.includes('present')) {
+          // Catch-all for any present status
+          presentDays++;
+          presentDaysWithHours++;
+          totalHours += workHours;
+        }
+        
+        // Calculate OT hours
+        if (day.attendance.otHours) {
+          totalOT += day.attendance.otHours;
+        }
+      } else {
+        // No attendance marked for a working day
+        if (!day.isWeekend && !day.holidayInfo && !day.leaveInfo) {
+          absentDays++;
         }
       }
     });
 
-    // Determine which working days to use
-    let workingDaysForCalculation;
-    let displayWorkingDays;
-    let isTillToday = false;
+    // Calculate LOP (Loss of Pay) = Expected hours - Actual hours
+    // Expected hours = Present days × 9 hours (or use expectedHoursPerDay from day data if available)
+    const expectedHoursPerDay = 9; // Default value
+    const expectedHours = presentDaysWithHours * expectedHoursPerDay;
+    const lopHours = Math.max(0, expectedHours - totalHours);
 
-    const { totalWorkingDays, tillTodayWorkingDays } = calculateWorkingDays(
-      currentMonth,
-      currentYear,
-      holidays
-    );
-
-    if (currentMonth === new Date().getMonth() + 1 && currentYear === new Date().getFullYear()) {
-      // For current month: use working days up to today
-      workingDaysForCalculation = tillTodayWorkingDays;
-      displayWorkingDays = tillTodayWorkingDays;
-      isTillToday = true;
-    } else {
-      // For past months: use total working days
-      workingDaysForCalculation = totalWorkingDays;
-      displayWorkingDays = totalWorkingDays;
-      isTillToday = false;
-    }
+    // Calculate working days (excluding weekends and holidays)
+    let workingDays = 0;
+    calendarData.forEach(day => {
+      if (!day.isWeekend && !day.holidayInfo) {
+        workingDays++;
+      }
+    });
 
     // Calculate attendance rate
-    let attendanceRate = 0;
-    if (workingDaysForCalculation > 0) {
-      // Count full present as 1, half present as 0.5
-      const effectivePresentDays = presentDays - (halfPresentDays * 0.5);
-      attendanceRate = parseFloat(((effectivePresentDays / workingDaysForCalculation) * 100).toFixed(2));
-    }
-
-    // Count late arrivals (days where lateByMinutes > 0)
-    const lateArrivalDays = currentMonthRecords.filter(record =>
-      record.lateByMinutes && parseInt(record.lateByMinutes) > 0
-    ).length;
-
-    // Count early departures (days where earlyDepartureMinutes > 0)
-    const earlyDepartureDays = currentMonthRecords.filter(record =>
-      record.earlyDepartureMinutes && parseInt(record.earlyDepartureMinutes) > 0
-    ).length;
-
-    // Calculate average late minutes if there are late arrivals
-    const averageLateMinutes = lateArrivalDays > 0 ? Math.round(totalLateMinutes / lateArrivalDays) : 0;
-
-    // Calculate average early departure minutes if there are early departures
-    const averageEarlyDepartureMinutes = earlyDepartureDays > 0 ? Math.round(totalEarlyDepartureMinutes / earlyDepartureDays) : 0;
+    const attendanceRate = workingDays > 0 ? ((presentDays / workingDays) * 100).toFixed(2) : 0;
 
     return {
-      attendanceRate,
-      presentDays,
-      halfPresentDays,
+      presentDays: Math.round(presentDays),
+      absentDays,
       leaveDays,
+      wfhDays,
+      holidayDays,
+      weeklyOffDays,
+      halfPresentDays,
       totalHours: parseFloat(totalHours.toFixed(2)),
       totalOT: parseFloat(totalOT.toFixed(2)),
-      workingDays: workingDaysForCalculation,
-      displayWorkingDays,
-      isTillToday,
-      totalWorkingDaysInMonth: totalWorkingDays,
-      lateArrivalDays,
-      earlyDepartureDays,
-      averageLateMinutes,
-      averageEarlyDepartureMinutes,
-      totalLateMinutes,
-      totalEarlyDepartureMinutes
+      attendanceRate: parseFloat(attendanceRate),
+      formattedTotalHours: formatHoursToHHMM(totalHours),
+      formattedTotalOT: formatHoursToHHMM(totalOT),
+      // LOP calculations
+      expectedHours: parseFloat(expectedHours.toFixed(2)),
+      lopHours: parseFloat(lopHours.toFixed(2)),
+      formattedLOPHours: formatHoursToHHMM(lopHours),
+      presentDaysWithHours: parseFloat(presentDaysWithHours.toFixed(2)),
+      expectedHoursPerDay,
+      workingDays
     };
   };
 
@@ -598,13 +446,11 @@ export default function MyProfilePage() {
           createIfMissing: !employee,
           personal: {
             ...ePersonal,
-            // Don't send employeeId in update - it should be read-only
             employeeId: undefined,
             dob: ePersonal.dob || undefined,
             dateOfJoining: ePersonal.dateOfJoining || undefined,
           },
           org: eOrg,
-          // Don't send assets in update - they should be read-only
           assets: undefined,
           financial: {
             ...eFinancial,
@@ -713,6 +559,25 @@ export default function MyProfilePage() {
     }
   };
 
+  const openCalendarModal = () => {
+    if (!employee?.personal?.employeeId) {
+      toast.error("Employee information not available. Please save your profile first.");
+      return;
+    }
+    
+    console.log('Opening calendar modal for employee:', employee.personal.employeeId);
+    setShowCalendarModal(true);
+  };
+
+  const handleCalendarMonthChange = (newMonth, newYear) => {
+    setCalendarMonth(newMonth);
+    setCalendarYear(newYear);
+  };
+
+  const refreshAttendanceData = () => {
+    fetchAttendanceData();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 p-6 flex items-center justify-center">
@@ -750,6 +615,11 @@ export default function MyProfilePage() {
                     Employee ID: {employee.personal.employeeId}
                   </p>
                 )}
+                {!employee?.personal?.employeeId && (
+                  <p className="text-sm text-red-600 font-medium">
+                    No employee ID assigned. Please contact HR.
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -764,6 +634,16 @@ export default function MyProfilePage() {
                 className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all flex items-center gap-2"
               >
                 <span>📅</span> Apply Leave
+              </button>
+              <button
+                onClick={openCalendarModal}
+                disabled={!employee?.personal?.employeeId}
+                className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${!employee?.personal?.employeeId
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700'
+                  }`}
+              >
+                <span>📊</span> View Attendance
               </button>
             </div>
           </div>
@@ -781,7 +661,10 @@ export default function MyProfilePage() {
                 👤 Profile
               </button>
               <button
-                onClick={() => setActiveTab('attendance')}
+                onClick={() => {
+                  setActiveTab('attendance');
+                  refreshAttendanceData();
+                }}
                 className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'attendance'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -1020,213 +903,235 @@ export default function MyProfilePage() {
         ) : (
           /* ATTENDANCE TAB */
           <div className="space-y-6">
-            {/* Attendance Summary Cards */}
-            {attendanceSummary && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-
-                <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm opacity-90">Present Days</p>
-                      <p className="text-3xl font-bold mt-2">{attendanceSummary.presentDays || 0}</p>
-
-                      {attendanceSummary.halfPresentDays > 0 && (
-                        <p className="text-xs opacity-90 mt-1">
-                          ({attendanceSummary.halfPresentDays} half days)
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-4xl">✅</div>
-                  </div>
-                </div>
-                <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm opacity-90">Total Hours</p>
-                      <p className="text-3xl font-bold mt-2">{formatHoursToHHMM(attendanceSummary.totalHours)}</p>
-                      <p className="text-xs opacity-90 mt-1">
-                        {attendanceSummary.totalHours?.toFixed(1) || 0}h total
-                      </p>
-                    </div>
-                    <div className="text-4xl">⏱️</div>
-                  </div>
-                </div>
-                <div className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm opacity-90">OT Hours</p>
-                      <p className="text-3xl font-bold mt-2">{formatHoursToHHMM(attendanceSummary.totalOT)}</p>
-                      <p className="text-xs opacity-90 mt-1">
-                        {attendanceSummary.totalOT?.toFixed(1) || 0}h overtime
-                      </p>
-                      {attendanceSummary.lateArrivalDays > 0 && (
-                        <p className="text-xs opacity-90 mt-1">
-                          {attendanceSummary.lateArrivalDays} late arrival{attendanceSummary.lateArrivalDays > 1 ? 's' : ''}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-4xl">⚡</div>
-                  </div>
-                </div>
+            {!employee?.personal?.employeeId ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+                <div className="text-4xl mb-4">⚠️</div>
+                <h3 className="text-xl font-semibold text-red-800 mb-2">Employee ID Required</h3>
+                <p className="text-red-600 mb-4">
+                  You don't have an employee ID assigned. Please contact HR to get your employee ID set up.
+                </p>
+                <p className="text-sm text-red-500">
+                  Once you have an employee ID, you'll be able to view your attendance records.
+                </p>
               </div>
+            ) : (
+              <>
+                {/* Attendance Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl p-6 text-white shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm opacity-90">Present Days</p>
+                        <p className="text-3xl font-bold mt-2">{attendanceSummary?.presentDays || 0}</p>
+                        {attendanceSummary?.halfPresentDays > 0 && (
+                          <p className="text-xs opacity-90 mt-1">
+                            ({attendanceSummary.halfPresentDays} half days)
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-4xl">✅</div>
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm opacity-90">Total Hours</p>
+                        <p className="text-3xl font-bold mt-2">{attendanceSummary?.formattedTotalHours || '00:00'}</p>
+                        <p className="text-xs opacity-90 mt-1">
+                          {attendanceSummary?.totalHours?.toFixed(1) || 0}h total
+                        </p>
+                      </div>
+                      <div className="text-4xl">⏱️</div>
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl p-6 text-white shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm opacity-90">OT Hours</p>
+                        <p className="text-3xl font-bold mt-2">{attendanceSummary?.formattedTotalOT || '00:00'}</p>
+                        <p className="text-xs opacity-90 mt-1">
+                          {attendanceSummary?.totalOT?.toFixed(1) || 0}h overtime
+                        </p>
+                      </div>
+                      <div className="text-4xl">⚡</div>
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-r from-red-500 to-rose-600 rounded-xl p-6 text-white shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm opacity-90">LOP Hours</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {attendanceSummary?.formattedLOPHours || '00:00'}
+                        </p>
+                        <p className="text-xs opacity-90 mt-1">
+                          Expected: {attendanceSummary?.expectedHours?.toFixed(1) || 0}h
+                        </p>
+                      </div>
+                      <div className="text-4xl">⚠️</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Working Days Information */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <span className="text-sm text-blue-700 font-medium">
+                        Current Month Summary ({new Date().toLocaleString('default', { month: 'long' })} {new Date().getFullYear()})
+                      </span>
+                      <div className="text-xs text-blue-600 mt-1">
+                        • Working days this month: {attendanceSummary?.workingDays || 0}<br />
+                        • Expected hours/day: {attendanceSummary?.expectedHoursPerDay || 9}h<br />
+                        • LOP (Loss of Pay) = (Present Days × {attendanceSummary?.expectedHoursPerDay || 9}) - Total Hours<br />
+                        • Attendance Rate: {attendanceSummary?.attendanceRate || 0}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* View Calendar Button */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Calendar View</h3>
+                      <p className="text-sm text-gray-600">View your detailed attendance calendar with analytics</p>
+                    </div>
+                    <button
+                      onClick={openCalendarModal}
+                      className="mt-4 md:mt-0 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Open Calendar View
+                    </button>
+                  </div>
+
+                  {/* Quick Stats */}
+                  {attendanceData.length > 0 && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">{attendanceData.length}</div>
+                          <div className="text-sm text-gray-600">Total Days</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">
+                            {attendanceData.filter(r => r.attendance?.status?.toLowerCase().includes('present')).length}
+                          </div>
+                          <div className="text-sm text-gray-600">Present Days</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {attendanceData.filter(r => r.leaveInfo).length}
+                          </div>
+                          <div className="text-sm text-gray-600">Leave Days</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">
+                            {attendanceData.filter(r => r.attendance?.status?.toLowerCase().includes('wfh')).length}
+                          </div>
+                          <div className="text-sm text-gray-600">WFH Days</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Attendance Table */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-4">Recent Attendance</h4>
+                    {attendanceLoading ? (
+                      <div className="text-center py-8">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <p className="mt-2 text-gray-600">Loading recent attendance...</p>
+                      </div>
+                    ) : attendanceData.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                        <p className="text-gray-600">No recent attendance records found</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Day</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">In Time</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Out Time</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {attendanceData.slice(0, 5).map((day) => (
+                              <tr key={day._id || day.date} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                                  {formatIndianDate(day.date)}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {getDayName(day.date)}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {day.attendance?.inTime || '-'}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {day.attendance?.outTime || '-'}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {day.attendance?.workHours ? formatHoursToHHMM(day.attendance.workHours) : '-'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                                    day.leaveInfo ? 'Leave' : 
+                                    day.holidayInfo ? 'Holiday' :
+                                    day.attendance?.status
+                                  )}`}>
+                                    {day.leaveInfo ? 'Leave' : 
+                                     day.holidayInfo ? (day.holidayInfo.type === 'RESTRICTED' ? 'Restricted Holiday' : 'Holiday') :
+                                     day.attendance?.status || 'Not Marked'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {attendanceData.length > 5 && (
+                          <div className="px-4 py-3 bg-gray-50 text-center border-t">
+                            <p className="text-sm text-gray-600">
+                              Showing 5 of {attendanceData.length} records
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
-
-            {/* Working Days Information */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start">
-                <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <span className="text-sm text-blue-700 font-medium">
-                    {attendanceSummary?.isTillToday ? 'Calculated Till Today' : 'Complete Month Data'}
-                  </span>
-                  <div className="text-xs text-blue-600 mt-1">
-                    • Working days exclude weekends and public holidays<br />
-                    • Restricted holidays are counted as working days<br />
-                    • Total working days this month: {currentMonthWorkingDays}<br />
-                    • Working days till today: {tillTodayWorkingDays}<br />
-                    • Leave days: {attendanceSummary?.leaveDays || 0}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Attendance Date Range Filter */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Attendance Records</h3>
-                  <p className="text-sm text-gray-600">View your attendance history</p>
-                </div>
-                <div className="flex gap-4 mt-4 md:mt-0">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-                    <input
-                      type="date"
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={attendanceRange.startDate}
-                      onChange={(e) => setAttendanceRange({ ...attendanceRange, startDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-                    <input
-                      type="date"
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={attendanceRange.endDate}
-                      onChange={(e) => setAttendanceRange({ ...attendanceRange, endDate: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      onClick={fetchMyAttendance}
-                      disabled={attendanceLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {attendanceLoading ? 'Loading...' : 'Refresh'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Debug Info - Remove in production */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm font-medium text-yellow-800">Debug Info:</p>
-                  <p className="text-xs text-yellow-700">
-                    Employee ID: {employee?.personal?.employeeId || 'Not found'} |
-                    Records: {attendanceData.length} |
-                    Date Range: {attendanceRange.startDate} to {attendanceRange.endDate}
-                  </p>
-                </div>
-              )}
-
-              {/* Attendance Table */}
-              {attendanceLoading ? (
-                <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                  <p className="mt-4 text-gray-600">Loading attendance data...</p>
-                </div>
-              ) : attendanceData.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-4">📊</div>
-                  <p className="text-gray-600">No attendance records found for the selected period</p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Try selecting a different date range or check if attendance data exists.
-                  </p>
-                  <div className="mt-4 space-y-2">
-                    <button
-                      onClick={() => setAttendanceRange({
-                        startDate: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().split('T')[0],
-                        endDate: new Date().toISOString().split('T')[0]
-                      })}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm mr-2"
-                    >
-                      Last 2 Months
-                    </button>
-                    <button
-                      onClick={() => setAttendanceRange({
-                        startDate: '2024-01-01',
-                        endDate: new Date().toISOString().split('T')[0]
-                      })}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                    >
-                      Year to Date
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">In Time</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Out Time</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours Worked</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {attendanceData.map((record) => (
-                        <tr key={record._id || record.date} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {formatIndianDate(record.date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {record.dayName}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatTimeDisplay(record.inTime)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatTimeDisplay(record.outTime)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {record.hoursWorked || '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(record.status)}`}>
-                              {record.status || 'Not Marked'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {record.remarks || '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
           </div>
         )}
 
-        {/* Modals (keep existing modals - they're already good) */}
+        {/* Employee Calendar Modal */}
+        {showCalendarModal && employee?.personal?.employeeId && (
+          <EmployeeCalendarModal
+            employee={{
+              ...employee,
+              employeeId: employee.personal.employeeId // Ensure employeeId is passed correctly
+            }}
+            month={calendarMonth}
+            year={calendarYear}
+            onClose={() => setShowCalendarModal(false)}
+            onMonthChange={handleCalendarMonthChange}
+            onDataUpdate={refreshAttendanceData}
+            viewOnly={true}
+            expectedHoursPerDay={9}
+          />
+        )}
+
+        {/* Modals (keep existing modals) */}
         {openRHoliday && (
           <RestrictedHolidayModal
             open={openRHoliday}
@@ -1263,7 +1168,7 @@ export default function MyProfilePage() {
   );
 }
 
-// Separate Modal Components for better organization
+// Modal Components (unchanged)
 function RestrictedHolidayModal({
   open,
   onClose,

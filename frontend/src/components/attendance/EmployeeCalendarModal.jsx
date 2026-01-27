@@ -39,7 +39,16 @@ const getWorkingDaysInMonth = (month, year) => {
   return workingDays;
 };
 
-const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, onDataUpdate }) => {
+const EmployeeCalendarModal = ({ 
+  employee, 
+  month, 
+  year, 
+  onClose, 
+  onMonthChange, 
+  onDataUpdate,
+  viewOnly = false,  // NEW: View-only mode for My Profile page
+  expectedHoursPerDay = 9,  // NEW: Default 9 hours per day for LOP calculation
+}) => {
   const [calendarData, setCalendarData] = useState([]);
   const [summary, setSummary] = useState(null);
   const [employeeInfo, setEmployeeInfo] = useState(null);
@@ -54,7 +63,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     calculatedSummary: null
   });
   
-  // Attendance editing state
+  // Attendance editing state (only for non-view-only mode)
   const [selectedDate, setSelectedDate] = useState(null);
   const [editingStatus, setEditingStatus] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -107,6 +116,10 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     let lateArrivals = 0;
     let earlyDepartures = 0;
     
+    // NEW: Track present days with hours for LOP calculation
+    let presentDaysWithHours = 0; // Full present days
+    let totalExpectedHours = 0;   // Expected hours based on present days
+    
     calendarData.forEach(day => {
       if (day.holidayInfo) {
         holidayDays++;
@@ -119,6 +132,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
         
         if (status.includes('present') && !status.includes('½')) {
           presentDays++;
+          presentDaysWithHours++; // Count as full day for LOP calculation
         } else if (status.includes('absent')) {
           absentDays++;
         } else if (status.includes('wfh')) {
@@ -126,6 +140,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
         } else if (status.includes('½present') || status.includes('half')) {
           halfPresentDays++;
           presentDays += 0.5; // Count half days
+          presentDaysWithHours += 0.5; // Half day for LOP calculation
         } else if (status.includes('weeklyoff')) {
           weeklyOffDays++;
         }
@@ -153,6 +168,11 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
       }
     });
     
+    // NEW: Calculate LOP (Loss of Pay) = Expected hours - Actual hours
+    // Expected hours = Present days × expectedHoursPerDay
+    const expectedHours = presentDaysWithHours * expectedHoursPerDay;
+    const lopHours = Math.max(0, expectedHours - totalHours);
+    
     // Calculate attendance rate based on working days
     const attendanceRate = workingDays > 0 ? ((presentDays / workingDays) * 100).toFixed(2) : 0;
     
@@ -172,7 +192,13 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
       formattedTotalHours: formatHoursToHHMM(totalHours),
       formattedTotalOT: formatHoursToHHMM(totalOT),
       totalWorkingDays: workingDays,
-      totalMonthDays: totalDays
+      totalMonthDays: totalDays,
+      // NEW: LOP calculations
+      expectedHours: parseFloat(expectedHours.toFixed(2)),
+      lopHours: parseFloat(lopHours.toFixed(2)),
+      formattedLOPHours: formatHoursToHHMM(lopHours),
+      presentDaysWithHours: parseFloat(presentDaysWithHours.toFixed(2)),
+      expectedHoursPerDay
     };
     
     setMonthStats({
@@ -260,8 +286,10 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     if (onMonthChange) onMonthChange(newMonth, newYear);
   };
 
-  // Handle edit button click
+  // Handle edit button click (only in non-view-only mode)
   const handleEditClick = (day, e) => {
+    if (viewOnly) return; // Don't allow editing in view-only mode
+    
     e?.stopPropagation(); // Prevent triggering the cell click
     
     // Allow editing for ALL days including weekends and holidays
@@ -275,14 +303,16 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     setEditingStatus(true);
   };
 
-  // Handle cell click (alternative edit method)
+  // Handle cell click (alternative edit method) - only in non-view-only mode
   const handleCellClick = (day) => {
+    if (viewOnly) return; // Don't allow editing in view-only mode
     if (!day) return;
     handleEditClick(day);
   };
 
-  // Handle attendance update
+  // Handle attendance update (only in non-view-only mode)
   const handleStatusUpdate = async () => {
+    if (viewOnly) return; // Don't allow updates in view-only mode
     if (!selectedDate) return;
 
     try {
@@ -308,7 +338,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     }
   };
 
-  // Cancel editing
+  // Cancel editing (only in non-view-only mode)
   const handleCancelEdit = () => {
     setEditingStatus(false);
     setSelectedDate(null);
@@ -473,8 +503,10 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
     );
   };
 
-  // Render edit button for ALL days
+  // Render edit button for ALL days (only in non-view-only mode)
   const renderEditButton = (day) => {
+    if (viewOnly) return null; // Don't show edit button in view-only mode
+    
     return (
       <button
         onClick={(e) => handleEditClick(day, e)}
@@ -572,6 +604,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
             <div>
               <h2 className="text-xl font-semibold text-gray-800">
                 {employeeInfo?.name || employee.name}
+                {viewOnly && <span className="ml-2 text-sm font-normal text-gray-600">(View Only)</span>}
               </h2>
               <p className="text-sm text-gray-600">
                 {employeeInfo?.employeeId || employee.employeeId} • {employeeInfo?.role || employee.role} • {employeeInfo?.department || employee.department}
@@ -587,6 +620,9 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                 </span>
                 <span className="text-xs text-gray-500">
                   Working Days: {monthStats.workingDays}
+                </span>
+                <span className="text-xs text-gray-500">
+                  Expected Hours/Day: {displaySummary?.expectedHoursPerDay || 9}h
                 </span>
               </div>
             </div>
@@ -618,10 +654,10 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
           </button>
         </div>
 
-        {/* Summary Stats */}
+        {/* Summary Stats - Enhanced with LOP */}
         {displaySummary && (
           <div className="px-6 py-3 bg-gray-50 border-b flex-shrink-0">
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{displaySummary.presentDays || 0}</div>
                 <div className="text-xs text-gray-500">Present</div>
@@ -654,15 +690,15 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                 </div>
                 <div className="text-xs text-gray-500">OT Hours</div>
               </div>
+              
+              {/* NEW: LOP Hours */}
               <div className="text-center">
                 <div className={`text-lg font-semibold ${
-                  displaySummary.attendanceRate >= 90 ? 'text-green-600' :
-                  displaySummary.attendanceRate >= 75 ? 'text-yellow-600' : 'text-red-600'
+                  displaySummary.lopHours > 0 ? 'text-red-600' : 'text-green-600'
                 }`}>
-                  {typeof displaySummary.attendanceRate === 'number' ? 
-                    displaySummary.attendanceRate.toFixed(2) : '0.00'}%
+                  {displaySummary.formattedLOPHours || formatHoursToHHMM(0)}h
                 </div>
-                <div className="text-xs text-gray-500">Attendance</div>
+                <div className="text-xs text-gray-500">LOP (Loss of Pay)</div>
               </div>
             </div>
             
@@ -697,6 +733,12 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                     </span>
                   )}
                 </>
+              )}
+              {/* NEW: LOP calculation details */}
+              {displaySummary.lopHours > 0 && (
+                <div className="text-xs text-red-600">
+                  ⚠ LOP: {displaySummary.presentDaysWithHours} days × {displaySummary.expectedHoursPerDay}h = {formatHoursToHHMM(displaySummary.expectedHours)} expected
+                </div>
               )}
             </div>
           </div>
@@ -750,7 +792,7 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                             </span>
                           </div>
                           
-                          {/* Edit button - for ALL days */}
+                          {/* Edit button - for ALL days (only in non-view-only mode) */}
                           {renderEditButton(day)}
                           
                           <div className="flex flex-col items-center justify-center">
@@ -765,10 +807,12 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
                             </div>
                           )}
                           
-                          {/* Click hint for all days */}
-                          <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            Click to edit
-                          </div>
+                          {/* Click hint for all days (only in non-view-only mode) */}
+                          {!viewOnly && (
+                            <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              Click to edit
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -779,8 +823,8 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
           )}
         </div>
 
-        {/* Edit Form - Shows when a date is selected */}
-        {editingStatus && selectedDate && (
+        {/* Edit Form - Shows when a date is selected (only in non-view-only mode) */}
+        {!viewOnly && editingStatus && selectedDate && (
           <div className="px-6 py-4 border-t bg-blue-50 flex-shrink-0">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center justify-between mb-3">
@@ -904,16 +948,20 @@ const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, 
               <span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-300"></span>
               <span>Weekend</span>
             </div>
-            <div className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span>
-              <span className="flex items-center gap-1">
-                <PencilIcon className="w-3 h-3" /> Click any day to edit
-              </span>
+            {!viewOnly && (
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span>
+                <span className="flex items-center gap-1">
+                  <PencilIcon className="w-3 h-3" /> Click any day to edit
+                </span>
+              </div>
+            )}
+          </div>
+          {!viewOnly && (
+            <div className="text-center mt-2 text-xs text-gray-500">
+              💡 Click on any day or use the edit button (✏️) to edit attendance
             </div>
-          </div>
-          <div className="text-center mt-2 text-xs text-gray-500">
-            💡 Click on any day or use the edit button (✏️) to edit attendance
-          </div>
+          )}
         </div>
 
         {/* Footer */}
