@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { HRMS } from '../../api/hrmsClient';
-import { PencilIcon } from '@heroicons/react/24/outline';
 
 // Helper function to convert decimal hours to hh:mm format
 const formatHoursToHHMM = (decimalHours) => {
@@ -39,16 +38,7 @@ const getWorkingDaysInMonth = (month, year) => {
   return workingDays;
 };
 
-const EmployeeCalendarModal = ({ 
-  employee, 
-  month, 
-  year, 
-  onClose, 
-  onMonthChange, 
-  onDataUpdate,
-  viewOnly = false,  // NEW: View-only mode for My Profile page
-  expectedHoursPerDay = 9,  // NEW: Default 9 hours per day for LOP calculation
-}) => {
+const EmployeeCalendarViewModal = ({ employee, month, year, onClose, onMonthChange }) => {
   const [calendarData, setCalendarData] = useState([]);
   const [summary, setSummary] = useState(null);
   const [employeeInfo, setEmployeeInfo] = useState(null);
@@ -63,31 +53,9 @@ const EmployeeCalendarModal = ({
     calculatedSummary: null
   });
   
-  // Attendance editing state (only for non-view-only mode)
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [editingStatus, setEditingStatus] = useState(false);
-  const [editForm, setEditForm] = useState({
-    status: '',
-    inTime: '',
-    outTime: '',
-    remarks: ''
-  });
-  
-  const calendarRef = useRef(null);
-
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  const statusOptions = [
-    'Present',
-    'Absent',
-    'Leave',
-    'WFH',
-    'WeeklyOff',
-    '½Present',
-    'Absent (No OutPunch)'
   ];
 
   useEffect(() => {
@@ -116,10 +84,6 @@ const EmployeeCalendarModal = ({
     let lateArrivals = 0;
     let earlyDepartures = 0;
     
-    // NEW: Track present days with hours for LOP calculation
-    let presentDaysWithHours = 0; // Full present days
-    let totalExpectedHours = 0;   // Expected hours based on present days
-    
     calendarData.forEach(day => {
       if (day.holidayInfo) {
         holidayDays++;
@@ -132,7 +96,6 @@ const EmployeeCalendarModal = ({
         
         if (status.includes('present') && !status.includes('½')) {
           presentDays++;
-          presentDaysWithHours++; // Count as full day for LOP calculation
         } else if (status.includes('absent')) {
           absentDays++;
         } else if (status.includes('wfh')) {
@@ -140,7 +103,6 @@ const EmployeeCalendarModal = ({
         } else if (status.includes('½present') || status.includes('half')) {
           halfPresentDays++;
           presentDays += 0.5; // Count half days
-          presentDaysWithHours += 0.5; // Half day for LOP calculation
         } else if (status.includes('weeklyoff')) {
           weeklyOffDays++;
         }
@@ -168,11 +130,6 @@ const EmployeeCalendarModal = ({
       }
     });
     
-    // NEW: Calculate LOP (Loss of Pay) = Expected hours - Actual hours
-    // Expected hours = Present days × expectedHoursPerDay
-    const expectedHours = presentDaysWithHours * expectedHoursPerDay;
-    const lopHours = Math.max(0, expectedHours - totalHours);
-    
     // Calculate attendance rate based on working days
     const attendanceRate = workingDays > 0 ? ((presentDays / workingDays) * 100).toFixed(2) : 0;
     
@@ -192,13 +149,7 @@ const EmployeeCalendarModal = ({
       formattedTotalHours: formatHoursToHHMM(totalHours),
       formattedTotalOT: formatHoursToHHMM(totalOT),
       totalWorkingDays: workingDays,
-      totalMonthDays: totalDays,
-      // NEW: LOP calculations
-      expectedHours: parseFloat(expectedHours.toFixed(2)),
-      lopHours: parseFloat(lopHours.toFixed(2)),
-      formattedLOPHours: formatHoursToHHMM(lopHours),
-      presentDaysWithHours: parseFloat(presentDaysWithHours.toFixed(2)),
-      expectedHoursPerDay
+      totalMonthDays: totalDays
     };
     
     setMonthStats({
@@ -267,8 +218,6 @@ const EmployeeCalendarModal = ({
     }
     setCurrentMonth(newMonth);
     setCurrentYear(newYear);
-    setEditingStatus(false);
-    setSelectedDate(null);
     if (onMonthChange) onMonthChange(newMonth, newYear);
   };
 
@@ -281,73 +230,7 @@ const EmployeeCalendarModal = ({
     }
     setCurrentMonth(newMonth);
     setCurrentYear(newYear);
-    setEditingStatus(false);
-    setSelectedDate(null);
     if (onMonthChange) onMonthChange(newMonth, newYear);
-  };
-
-  // Handle edit button click (only in non-view-only mode)
-  const handleEditClick = (day, e) => {
-    if (viewOnly) return; // Don't allow editing in view-only mode
-    
-    e?.stopPropagation(); // Prevent triggering the cell click
-    
-    // Allow editing for ALL days including weekends and holidays
-    setSelectedDate(day);
-    setEditForm({
-      status: day.attendance?.status || '',
-      inTime: day.attendance?.inTime || '',
-      outTime: day.attendance?.outTime || '',
-      remarks: day.attendance?.remarks || ''
-    });
-    setEditingStatus(true);
-  };
-
-  // Handle cell click (alternative edit method) - only in non-view-only mode
-  const handleCellClick = (day) => {
-    if (viewOnly) return; // Don't allow editing in view-only mode
-    if (!day) return;
-    handleEditClick(day);
-  };
-
-  // Handle attendance update (only in non-view-only mode)
-  const handleStatusUpdate = async () => {
-    if (viewOnly) return; // Don't allow updates in view-only mode
-    if (!selectedDate) return;
-
-    try {
-      const data = {
-        employeeId: employee.employeeId,
-        date: selectedDate.date,
-        status: editForm.status,
-        inTime: editForm.inTime,
-        outTime: editForm.outTime,
-        remarks: editForm.remarks
-      };
-
-      await HRMS.manualAttendanceEntry(data);
-      
-      toast.success('Attendance updated successfully');
-      setEditingStatus(false);
-      setSelectedDate(null);
-      fetchCalendarData();
-      if (onDataUpdate) onDataUpdate();
-    } catch (error) {
-      console.error('Error updating attendance:', error);
-      toast.error('Failed to update attendance');
-    }
-  };
-
-  // Cancel editing (only in non-view-only mode)
-  const handleCancelEdit = () => {
-    setEditingStatus(false);
-    setSelectedDate(null);
-    setEditForm({
-      status: '',
-      inTime: '',
-      outTime: '',
-      remarks: ''
-    });
   };
 
   const getStatusBadge = (day) => {
@@ -503,59 +386,38 @@ const EmployeeCalendarModal = ({
     );
   };
 
-  // Render edit button for ALL days (only in non-view-only mode)
-  const renderEditButton = (day) => {
-    if (viewOnly) return null; // Don't show edit button in view-only mode
-    
-    return (
-      <button
-        onClick={(e) => handleEditClick(day, e)}
-        className="absolute top-1 right-1 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200"
-        title="Edit attendance"
-      >
-        <PencilIcon className="w-3 h-3" />
-      </button>
-    );
-  };
-
   // Get day cell class based on status and selection
   const getDayCellClass = (day) => {
-    const isSelected = selectedDate?.date === day.date;
-    
-    let baseClass = 'min-h-[100px] p-2 rounded-lg border transition-all group relative cursor-pointer ';
-    
-    if (isSelected) {
-      baseClass += 'ring-2 ring-blue-400 border-blue-400 ';
-    }
+    let baseClass = 'min-h-[100px] p-2 rounded-lg border transition-all ';
     
     if (day.isWeekend) {
-      return baseClass + 'bg-gray-50 border-gray-200 opacity-90 hover:border-gray-300 hover:shadow-sm';
+      return baseClass + 'bg-gray-50 border-gray-200 opacity-90';
     }
     if (day.isHoliday) {
-      return baseClass + 'bg-indigo-50 border-indigo-200 hover:border-indigo-300 hover:shadow-sm';
+      return baseClass + 'bg-indigo-50 border-indigo-200';
     }
     if (day.leaveInfo) {
-      return baseClass + 'bg-blue-50 border-blue-200 hover:border-blue-300 hover:shadow-sm';
+      return baseClass + 'bg-blue-50 border-blue-200';
     }
     
     const status = day.attendance?.status?.toLowerCase() || '';
     if (status.includes('present') && !status.includes('½')) {
-      return baseClass + 'bg-green-50 border-green-200 hover:border-green-400 hover:shadow-sm';
+      return baseClass + 'bg-green-50 border-green-200';
     }
     if (status.includes('½present') || status.includes('half')) {
-      return baseClass + 'bg-orange-50 border-orange-200 hover:border-orange-400 hover:shadow-sm';
+      return baseClass + 'bg-orange-50 border-orange-200';
     }
     if (status.includes('absent')) {
-      return baseClass + 'bg-red-50 border-red-200 hover:border-red-400 hover:shadow-sm';
+      return baseClass + 'bg-red-50 border-red-200';
     }
     if (status.includes('wfh')) {
-      return baseClass + 'bg-purple-50 border-purple-200 hover:border-purple-400 hover:shadow-sm';
+      return baseClass + 'bg-purple-50 border-purple-200';
     }
     if (status.includes('weeklyoff')) {
-      return baseClass + 'bg-yellow-50 border-yellow-200 hover:border-yellow-400 hover:shadow-sm';
+      return baseClass + 'bg-yellow-50 border-yellow-200';
     }
     
-    return baseClass + 'bg-white border-gray-200 hover:border-blue-400 hover:shadow-sm';
+    return baseClass + 'bg-white border-gray-200';
   };
 
   // Group calendar data into weeks
@@ -604,7 +466,6 @@ const EmployeeCalendarModal = ({
             <div>
               <h2 className="text-xl font-semibold text-gray-800">
                 {employeeInfo?.name || employee.name}
-                {viewOnly && <span className="ml-2 text-sm font-normal text-gray-600">(View Only)</span>}
               </h2>
               <p className="text-sm text-gray-600">
                 {employeeInfo?.employeeId || employee.employeeId} • {employeeInfo?.role || employee.role} • {employeeInfo?.department || employee.department}
@@ -620,9 +481,6 @@ const EmployeeCalendarModal = ({
                 </span>
                 <span className="text-xs text-gray-500">
                   Working Days: {monthStats.workingDays}
-                </span>
-                <span className="text-xs text-gray-500">
-                  Expected Hours/Day: {displaySummary?.expectedHoursPerDay || 9}h
                 </span>
               </div>
             </div>
@@ -654,18 +512,15 @@ const EmployeeCalendarModal = ({
           </button>
         </div>
 
-        {/* Summary Stats - Enhanced with LOP */}
+        {/* Summary Stats */}
         {displaySummary && (
           <div className="px-6 py-3 bg-gray-50 border-b flex-shrink-0">
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{displaySummary.presentDays || 0}</div>
                 <div className="text-xs text-gray-500">Present</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-red-600">{displaySummary.absentDays || 0}</div>
-                <div className="text-xs text-gray-500">Absent</div>
-              </div>
+              
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">{displaySummary.leaveDays || 0}</div>
                 <div className="text-xs text-gray-500">Leave</div>
@@ -689,16 +544,6 @@ const EmployeeCalendarModal = ({
                   {displaySummary.formattedTotalOT || formatHoursToHHMM(0)}h
                 </div>
                 <div className="text-xs text-gray-500">OT Hours</div>
-              </div>
-              
-              {/* NEW: LOP Hours */}
-              <div className="text-center">
-                <div className={`text-lg font-semibold ${
-                  displaySummary.lopHours > 0 ? 'text-red-600' : 'text-green-600'
-                }`}>
-                  {displaySummary.formattedLOPHours || formatHoursToHHMM(0)}h
-                </div>
-                <div className="text-xs text-gray-500">LOP (Loss of Pay)</div>
               </div>
             </div>
             
@@ -734,18 +579,12 @@ const EmployeeCalendarModal = ({
                   )}
                 </>
               )}
-              {/* NEW: LOP calculation details */}
-              {displaySummary.lopHours > 0 && (
-                <div className="text-xs text-red-600">
-                  ⚠ LOP: {displaySummary.presentDaysWithHours} days × {displaySummary.expectedHoursPerDay}h = {formatHoursToHHMM(displaySummary.expectedHours)} expected
-                </div>
-              )}
             </div>
           </div>
         )}
 
         {/* Calendar */}
-        <div className="flex-1 overflow-auto p-4" ref={calendarRef}>
+        <div className="flex-1 overflow-auto p-4">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -777,7 +616,6 @@ const EmployeeCalendarModal = ({
                           ? 'min-h-[100px] p-2 rounded-lg border bg-gray-50 border-gray-100'
                           : getDayCellClass(day)
                       }
-                      onClick={() => handleCellClick(day)}
                     >
                       {day && (
                         <>
@@ -792,9 +630,6 @@ const EmployeeCalendarModal = ({
                             </span>
                           </div>
                           
-                          {/* Edit button - for ALL days (only in non-view-only mode) */}
-                          {renderEditButton(day)}
-                          
                           <div className="flex flex-col items-center justify-center">
                             {getStatusBadge(day)}
                             {renderTimeInfo(day)}
@@ -806,13 +641,6 @@ const EmployeeCalendarModal = ({
                               📝 {day.attendance.remarks}
                             </div>
                           )}
-                          
-                          {/* Click hint for all days (only in non-view-only mode) */}
-                          {!viewOnly && (
-                            <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              Click to edit
-                            </div>
-                          )}
                         </>
                       )}
                     </div>
@@ -822,96 +650,6 @@ const EmployeeCalendarModal = ({
             </div>
           )}
         </div>
-
-        {/* Edit Form - Shows when a date is selected (only in non-view-only mode) */}
-        {!viewOnly && editingStatus && selectedDate && (
-          <div className="px-6 py-4 border-t bg-blue-50 flex-shrink-0">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-gray-800">
-                  Edit Attendance for {selectedDate.date} ({selectedDate.dayName})
-                  {(selectedDate.isWeekend || selectedDate.isHoliday || selectedDate.leaveInfo) && (
-                    <span className="ml-2 text-xs font-normal text-orange-600">
-                      (Weekend/Holiday/Leave Day)
-                    </span>
-                  )}
-                </h3>
-                <button
-                  onClick={handleCancelEdit}
-                  className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status *
-                  </label>
-                  <select
-                    value={editForm.status}
-                    onChange={(e) => setEditForm({...editForm, status: e.target.value})}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select Status</option>
-                    {statusOptions.map(option => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    In Time
-                  </label>
-                  <input
-                    type="time"
-                    value={editForm.inTime}
-                    onChange={(e) => setEditForm({...editForm, inTime: e.target.value})}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Out Time
-                  </label>
-                  <input
-                    type="time"
-                    value={editForm.outTime}
-                    onChange={(e) => setEditForm({...editForm, outTime: e.target.value})}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Remarks
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.remarks}
-                    onChange={(e) => setEditForm({...editForm, remarks: e.target.value})}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Optional remarks"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-4">
-                <button
-                  onClick={handleCancelEdit}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStatusUpdate}
-                  disabled={!editForm.status}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  Update Attendance
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Legend */}
         <div className="px-6 py-3 border-t bg-gray-50 flex-shrink-0">
@@ -948,20 +686,10 @@ const EmployeeCalendarModal = ({
               <span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-300"></span>
               <span>Weekend</span>
             </div>
-            {!viewOnly && (
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span>
-                <span className="flex items-center gap-1">
-                  <PencilIcon className="w-3 h-3" /> Click any day to edit
-                </span>
-              </div>
-            )}
           </div>
-          {!viewOnly && (
-            <div className="text-center mt-2 text-xs text-gray-500">
-              💡 Click on any day or use the edit button (✏️) to edit attendance
-            </div>
-          )}
+          <div className="text-center mt-2 text-xs text-gray-500">
+            💡 View-only mode - No edit permissions
+          </div>
         </div>
 
         {/* Footer */}
@@ -978,4 +706,4 @@ const EmployeeCalendarModal = ({
   );
 };
 
-export default EmployeeCalendarModal;
+export default EmployeeCalendarViewModal;
