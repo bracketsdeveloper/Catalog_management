@@ -681,24 +681,21 @@ const AttendanceSummaryPage = () => {
       {/* Employee Calendar Modal */}
       {calendarModalOpen && selectedEmployee && (
         <EmployeeCalendarModal
-        employee={selectedEmployee}
-        month={month}
-        year={year}
-        onClose={() => {
-          setCalendarModalOpen(false);
-          setSelectedEmployee(null);
-        }}
-        onMonthChange={(newMonth, newYear) => {
-          setMonth(newMonth);
-          setYear(newYear);
-        }}
-        onDataUpdate={() => {
-          fetchSummary();
-        }}
-        // Add these missing props:
-        viewOnly={false}  // or determine based on user role
-        expectedHoursPerDay={9}  // default value
-      />
+          employee={selectedEmployee}
+          month={month}
+          year={year}
+          onClose={() => {
+            setCalendarModalOpen(false);
+            setSelectedEmployee(null);
+          }}
+          onMonthChange={(newMonth, newYear) => {
+            setMonth(newMonth);
+            setYear(newYear);
+          }}
+          onDataUpdate={() => {
+            fetchSummary();
+          }}
+        />
       )}
 
       {/* Attendance Upload Modal */}
