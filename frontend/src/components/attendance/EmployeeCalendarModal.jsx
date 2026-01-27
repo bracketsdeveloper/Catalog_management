@@ -209,54 +209,144 @@ const EmployeeCalendarModal = ({
   };
 
   const fetchCalendarData = async () => {
-    setLoading(true);
-    try {
-      const response = await HRMS.getEmployeeCalendar(employee.employeeId, {
-        month: currentMonth,
-        year: currentYear
-      });
+  setLoading(true);
+  try {
+    const response = await HRMS.getEmployeeCalendar(employee.employeeId, {
+      month: currentMonth,
+      year: currentYear
+    });
+    
+    console.log("Calendar API Response:", response.data); // Add this for debugging
+    
+    // Check if we have calendar data
+    const calendarData = response.data.calendarData || [];
+    
+    // If no calendar data, generate it
+    if (calendarData.length === 0) {
+      // Generate calendar days for the month
+      const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+      const generatedCalendar = [];
       
-      // Format times in calendar data
-      const formattedCalendarData = (response.data.calendarData || []).map(day => {
-        if (day.attendance) {
-          return {
-            ...day,
-            attendance: {
-              ...day.attendance,
-              // Format display times
-              formattedWorkHours: formatHoursToHHMM(day.attendance.workHours || 0),
-              formattedOTHours: formatHoursToHHMM(day.attendance.otHours || 0),
-              // Ensure inTime and outTime are in HH:mm format
-              inTime: day.attendance.inTime || '',
-              outTime: day.attendance.outTime || ''
-            }
-          };
-        }
-        return day;
-      });
-      
-      // Use backend summary if available, otherwise we'll calculate it
-      const backendSummary = response.data.summary;
-      let formattedSummary = null;
-      
-      if (backendSummary) {
-        formattedSummary = {
-          ...backendSummary,
-          formattedTotalHours: formatHoursToHHMM(backendSummary.totalHours || 0),
-          formattedTotalOT: formatHoursToHHMM(backendSummary.totalOT || 0)
-        };
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(currentYear, currentMonth - 1, day);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateString = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        generatedCalendar.push({
+          date: dateString,
+          day: day,
+          dayName: dayName,
+          isWeekend: date.getDay() === 0 || date.getDay() === 6,
+          isHoliday: false,
+          holidayInfo: null,
+          leaveInfo: null,
+          attendance: null, // No attendance data
+          status: 'Not Marked'
+        });
       }
       
+      setCalendarData(generatedCalendar);
+    } else {
+      // Format existing calendar data
+      const formattedCalendarData = calendarData.map(day => {
+        const date = new Date(day.date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+        
+        const formattedDay = {
+          date: day.date || '',
+          day: date.getDate(),
+          dayName: dayName,
+          isWeekend: date.getDay() === 0 || date.getDay() === 6,
+          isHoliday: !!day.holidayInfo,
+          holidayInfo: day.holidayInfo || null,
+          leaveInfo: day.leaveInfo || null,
+          attendance: day.attendance || null,
+          status: 'Not Marked' // Default status
+        };
+        
+        // Determine status based on available data
+        if (formattedDay.attendance?.status) {
+          formattedDay.status = formattedDay.attendance.status;
+        } else if (formattedDay.leaveInfo) {
+          formattedDay.status = 'Leave';
+        } else if (formattedDay.holidayInfo) {
+          formattedDay.status = formattedDay.holidayInfo.type === 'RESTRICTED' ? 'RH' : 'Holiday';
+        } else if (formattedDay.isWeekend) {
+          formattedDay.status = 'Weekend';
+        }
+        
+        // Format times if attendance exists
+        if (formattedDay.attendance) {
+          formattedDay.attendance = {
+            ...formattedDay.attendance,
+            formattedWorkHours: formatHoursToHHMM(formattedDay.attendance.workHours || 0),
+            formattedOTHours: formatHoursToHHMM(formattedDay.attendance.otHours || 0),
+            inTime: formattedDay.attendance.inTime || '',
+            outTime: formattedDay.attendance.outTime || ''
+          };
+        }
+        
+        return formattedDay;
+      });
+      
       setCalendarData(formattedCalendarData);
-      setSummary(formattedSummary);
-      setEmployeeInfo(response.data.employee || null);
-    } catch (error) {
-      console.error('Error fetching calendar:', error);
-      toast.error('Failed to load calendar data');
-    } finally {
-      setLoading(false);
     }
-  };
+    
+    // Use backend summary if available, otherwise we'll calculate it
+    const backendSummary = response.data.summary;
+    let formattedSummary = null;
+    
+    if (backendSummary) {
+      formattedSummary = {
+        ...backendSummary,
+        formattedTotalHours: formatHoursToHHMM(backendSummary.totalHours || 0),
+        formattedTotalOT: formatHoursToHHMM(backendSummary.totalOT || 0)
+      };
+    }
+    
+    setSummary(formattedSummary);
+    setEmployeeInfo(response.data.employee || null);
+  } catch (error) {
+    console.error('Error fetching calendar:', error);
+    toast.error('Failed to load calendar data');
+    // Generate a basic calendar even on error
+    generateFallbackCalendar();
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Fallback function to generate calendar if API fails
+const generateFallbackCalendar = () => {
+  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+  const fallbackCalendar = [];
+  
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(currentYear, currentMonth - 1, day);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dateString = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    fallbackCalendar.push({
+      date: dateString,
+      day: day,
+      dayName: dayName,
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+      isHoliday: false,
+      holidayInfo: null,
+      leaveInfo: null,
+      attendance: null,
+      status: 'Not Marked'
+    });
+  }
+  
+  setCalendarData(fallbackCalendar);
+  setEmployeeInfo({
+    name: employee.name,
+    employeeId: employee.employeeId,
+    role: employee.role || '-',
+    department: employee.department || '-'
+  });
+};
 
   const handlePrevMonth = () => {
     let newMonth = currentMonth - 1;
