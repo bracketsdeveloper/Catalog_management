@@ -39,16 +39,7 @@ const getWorkingDaysInMonth = (month, year) => {
   return workingDays;
 };
 
-const EmployeeCalendarModal = ({ 
-  employee, 
-  month, 
-  year, 
-  onClose, 
-  onMonthChange, 
-  onDataUpdate,
-  viewOnly = false,  // NEW: View-only mode for My Profile page
-  expectedHoursPerDay = 9,  // NEW: Default 9 hours per day for LOP calculation
-}) => {
+const EmployeeCalendarModal = ({ employee, month, year, onClose, onMonthChange, onDataUpdate }) => {
   const [calendarData, setCalendarData] = useState([]);
   const [summary, setSummary] = useState(null);
   const [employeeInfo, setEmployeeInfo] = useState(null);
@@ -63,7 +54,7 @@ const EmployeeCalendarModal = ({
     calculatedSummary: null
   });
   
-  // Attendance editing state (only for non-view-only mode)
+  // Attendance editing state
   const [selectedDate, setSelectedDate] = useState(null);
   const [editingStatus, setEditingStatus] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -116,10 +107,6 @@ const EmployeeCalendarModal = ({
     let lateArrivals = 0;
     let earlyDepartures = 0;
     
-    // NEW: Track present days with hours for LOP calculation
-    let presentDaysWithHours = 0; // Full present days
-    let totalExpectedHours = 0;   // Expected hours based on present days
-    
     calendarData.forEach(day => {
       if (day.holidayInfo) {
         holidayDays++;
@@ -132,7 +119,6 @@ const EmployeeCalendarModal = ({
         
         if (status.includes('present') && !status.includes('½')) {
           presentDays++;
-          presentDaysWithHours++; // Count as full day for LOP calculation
         } else if (status.includes('absent')) {
           absentDays++;
         } else if (status.includes('wfh')) {
@@ -140,7 +126,6 @@ const EmployeeCalendarModal = ({
         } else if (status.includes('½present') || status.includes('half')) {
           halfPresentDays++;
           presentDays += 0.5; // Count half days
-          presentDaysWithHours += 0.5; // Half day for LOP calculation
         } else if (status.includes('weeklyoff')) {
           weeklyOffDays++;
         }
@@ -168,11 +153,6 @@ const EmployeeCalendarModal = ({
       }
     });
     
-    // NEW: Calculate LOP (Loss of Pay) = Expected hours - Actual hours
-    // Expected hours = Present days × expectedHoursPerDay
-    const expectedHours = presentDaysWithHours * expectedHoursPerDay;
-    const lopHours = Math.max(0, expectedHours - totalHours);
-    
     // Calculate attendance rate based on working days
     const attendanceRate = workingDays > 0 ? ((presentDays / workingDays) * 100).toFixed(2) : 0;
     
@@ -192,13 +172,7 @@ const EmployeeCalendarModal = ({
       formattedTotalHours: formatHoursToHHMM(totalHours),
       formattedTotalOT: formatHoursToHHMM(totalOT),
       totalWorkingDays: workingDays,
-      totalMonthDays: totalDays,
-      // NEW: LOP calculations
-      expectedHours: parseFloat(expectedHours.toFixed(2)),
-      lopHours: parseFloat(lopHours.toFixed(2)),
-      formattedLOPHours: formatHoursToHHMM(lopHours),
-      presentDaysWithHours: parseFloat(presentDaysWithHours.toFixed(2)),
-      expectedHoursPerDay
+      totalMonthDays: totalDays
     };
     
     setMonthStats({
@@ -209,144 +183,54 @@ const EmployeeCalendarModal = ({
   };
 
   const fetchCalendarData = async () => {
-  setLoading(true);
-  try {
-    const response = await HRMS.getEmployeeCalendar(employee.employeeId, {
-      month: currentMonth,
-      year: currentYear
-    });
-    
-    console.log("Calendar API Response:", response.data); // Add this for debugging
-    
-    // Check if we have calendar data
-    const calendarData = response.data.calendarData || [];
-    
-    // If no calendar data, generate it
-    if (calendarData.length === 0) {
-      // Generate calendar days for the month
-      const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-      const generatedCalendar = [];
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(currentYear, currentMonth - 1, day);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const dateString = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        generatedCalendar.push({
-          date: dateString,
-          day: day,
-          dayName: dayName,
-          isWeekend: date.getDay() === 0 || date.getDay() === 6,
-          isHoliday: false,
-          holidayInfo: null,
-          leaveInfo: null,
-          attendance: null, // No attendance data
-          status: 'Not Marked'
-        });
-      }
-      
-      setCalendarData(generatedCalendar);
-    } else {
-      // Format existing calendar data
-      const formattedCalendarData = calendarData.map(day => {
-        const date = new Date(day.date);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-        
-        const formattedDay = {
-          date: day.date || '',
-          day: date.getDate(),
-          dayName: dayName,
-          isWeekend: date.getDay() === 0 || date.getDay() === 6,
-          isHoliday: !!day.holidayInfo,
-          holidayInfo: day.holidayInfo || null,
-          leaveInfo: day.leaveInfo || null,
-          attendance: day.attendance || null,
-          status: 'Not Marked' // Default status
-        };
-        
-        // Determine status based on available data
-        if (formattedDay.attendance?.status) {
-          formattedDay.status = formattedDay.attendance.status;
-        } else if (formattedDay.leaveInfo) {
-          formattedDay.status = 'Leave';
-        } else if (formattedDay.holidayInfo) {
-          formattedDay.status = formattedDay.holidayInfo.type === 'RESTRICTED' ? 'RH' : 'Holiday';
-        } else if (formattedDay.isWeekend) {
-          formattedDay.status = 'Weekend';
-        }
-        
-        // Format times if attendance exists
-        if (formattedDay.attendance) {
-          formattedDay.attendance = {
-            ...formattedDay.attendance,
-            formattedWorkHours: formatHoursToHHMM(formattedDay.attendance.workHours || 0),
-            formattedOTHours: formatHoursToHHMM(formattedDay.attendance.otHours || 0),
-            inTime: formattedDay.attendance.inTime || '',
-            outTime: formattedDay.attendance.outTime || ''
-          };
-        }
-        
-        return formattedDay;
+    setLoading(true);
+    try {
+      const response = await HRMS.getEmployeeCalendar(employee.employeeId, {
+        month: currentMonth,
+        year: currentYear
       });
       
+      // Format times in calendar data
+      const formattedCalendarData = (response.data.calendarData || []).map(day => {
+        if (day.attendance) {
+          return {
+            ...day,
+            attendance: {
+              ...day.attendance,
+              // Format display times
+              formattedWorkHours: formatHoursToHHMM(day.attendance.workHours || 0),
+              formattedOTHours: formatHoursToHHMM(day.attendance.otHours || 0),
+              // Ensure inTime and outTime are in HH:mm format
+              inTime: day.attendance.inTime || '',
+              outTime: day.attendance.outTime || ''
+            }
+          };
+        }
+        return day;
+      });
+      
+      // Use backend summary if available, otherwise we'll calculate it
+      const backendSummary = response.data.summary;
+      let formattedSummary = null;
+      
+      if (backendSummary) {
+        formattedSummary = {
+          ...backendSummary,
+          formattedTotalHours: formatHoursToHHMM(backendSummary.totalHours || 0),
+          formattedTotalOT: formatHoursToHHMM(backendSummary.totalOT || 0)
+        };
+      }
+      
       setCalendarData(formattedCalendarData);
+      setSummary(formattedSummary);
+      setEmployeeInfo(response.data.employee || null);
+    } catch (error) {
+      console.error('Error fetching calendar:', error);
+      toast.error('Failed to load calendar data');
+    } finally {
+      setLoading(false);
     }
-    
-    // Use backend summary if available, otherwise we'll calculate it
-    const backendSummary = response.data.summary;
-    let formattedSummary = null;
-    
-    if (backendSummary) {
-      formattedSummary = {
-        ...backendSummary,
-        formattedTotalHours: formatHoursToHHMM(backendSummary.totalHours || 0),
-        formattedTotalOT: formatHoursToHHMM(backendSummary.totalOT || 0)
-      };
-    }
-    
-    setSummary(formattedSummary);
-    setEmployeeInfo(response.data.employee || null);
-  } catch (error) {
-    console.error('Error fetching calendar:', error);
-    toast.error('Failed to load calendar data');
-    // Generate a basic calendar even on error
-    generateFallbackCalendar();
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Fallback function to generate calendar if API fails
-const generateFallbackCalendar = () => {
-  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-  const fallbackCalendar = [];
-  
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(currentYear, currentMonth - 1, day);
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-    const dateString = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    fallbackCalendar.push({
-      date: dateString,
-      day: day,
-      dayName: dayName,
-      isWeekend: date.getDay() === 0 || date.getDay() === 6,
-      isHoliday: false,
-      holidayInfo: null,
-      leaveInfo: null,
-      attendance: null,
-      status: 'Not Marked'
-    });
-  }
-  
-  setCalendarData(fallbackCalendar);
-  setEmployeeInfo({
-    name: employee.name,
-    employeeId: employee.employeeId,
-    role: employee.role || '-',
-    department: employee.department || '-'
-  });
-};
+  };
 
   const handlePrevMonth = () => {
     let newMonth = currentMonth - 1;
@@ -376,10 +260,8 @@ const generateFallbackCalendar = () => {
     if (onMonthChange) onMonthChange(newMonth, newYear);
   };
 
-  // Handle edit button click (only in non-view-only mode)
+  // Handle edit button click
   const handleEditClick = (day, e) => {
-    if (viewOnly) return; // Don't allow editing in view-only mode
-    
     e?.stopPropagation(); // Prevent triggering the cell click
     
     // Allow editing for ALL days including weekends and holidays
@@ -393,16 +275,14 @@ const generateFallbackCalendar = () => {
     setEditingStatus(true);
   };
 
-  // Handle cell click (alternative edit method) - only in non-view-only mode
+  // Handle cell click (alternative edit method)
   const handleCellClick = (day) => {
-    if (viewOnly) return; // Don't allow editing in view-only mode
     if (!day) return;
     handleEditClick(day);
   };
 
-  // Handle attendance update (only in non-view-only mode)
+  // Handle attendance update
   const handleStatusUpdate = async () => {
-    if (viewOnly) return; // Don't allow updates in view-only mode
     if (!selectedDate) return;
 
     try {
@@ -428,7 +308,7 @@ const generateFallbackCalendar = () => {
     }
   };
 
-  // Cancel editing (only in non-view-only mode)
+  // Cancel editing
   const handleCancelEdit = () => {
     setEditingStatus(false);
     setSelectedDate(null);
@@ -593,10 +473,8 @@ const generateFallbackCalendar = () => {
     );
   };
 
-  // Render edit button for ALL days (only in non-view-only mode)
+  // Render edit button for ALL days
   const renderEditButton = (day) => {
-    if (viewOnly) return null; // Don't show edit button in view-only mode
-    
     return (
       <button
         onClick={(e) => handleEditClick(day, e)}
@@ -694,7 +572,6 @@ const generateFallbackCalendar = () => {
             <div>
               <h2 className="text-xl font-semibold text-gray-800">
                 {employeeInfo?.name || employee.name}
-                {viewOnly && <span className="ml-2 text-sm font-normal text-gray-600">(View Only)</span>}
               </h2>
               <p className="text-sm text-gray-600">
                 {employeeInfo?.employeeId || employee.employeeId} • {employeeInfo?.role || employee.role} • {employeeInfo?.department || employee.department}
@@ -710,9 +587,6 @@ const generateFallbackCalendar = () => {
                 </span>
                 <span className="text-xs text-gray-500">
                   Working Days: {monthStats.workingDays}
-                </span>
-                <span className="text-xs text-gray-500">
-                  Expected Hours/Day: {displaySummary?.expectedHoursPerDay || 9}h
                 </span>
               </div>
             </div>
@@ -744,10 +618,10 @@ const generateFallbackCalendar = () => {
           </button>
         </div>
 
-        {/* Summary Stats - Enhanced with LOP */}
+        {/* Summary Stats */}
         {displaySummary && (
           <div className="px-6 py-3 bg-gray-50 border-b flex-shrink-0">
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{displaySummary.presentDays || 0}</div>
                 <div className="text-xs text-gray-500">Present</div>
@@ -780,15 +654,15 @@ const generateFallbackCalendar = () => {
                 </div>
                 <div className="text-xs text-gray-500">OT Hours</div>
               </div>
-              
-              {/* NEW: LOP Hours */}
               <div className="text-center">
                 <div className={`text-lg font-semibold ${
-                  displaySummary.lopHours > 0 ? 'text-red-600' : 'text-green-600'
+                  displaySummary.attendanceRate >= 90 ? 'text-green-600' :
+                  displaySummary.attendanceRate >= 75 ? 'text-yellow-600' : 'text-red-600'
                 }`}>
-                  {displaySummary.formattedLOPHours || formatHoursToHHMM(0)}h
+                  {typeof displaySummary.attendanceRate === 'number' ? 
+                    displaySummary.attendanceRate.toFixed(2) : '0.00'}%
                 </div>
-                <div className="text-xs text-gray-500">LOP (Loss of Pay)</div>
+                <div className="text-xs text-gray-500">Attendance</div>
               </div>
             </div>
             
@@ -823,12 +697,6 @@ const generateFallbackCalendar = () => {
                     </span>
                   )}
                 </>
-              )}
-              {/* NEW: LOP calculation details */}
-              {displaySummary.lopHours > 0 && (
-                <div className="text-xs text-red-600">
-                  ⚠ LOP: {displaySummary.presentDaysWithHours} days × {displaySummary.expectedHoursPerDay}h = {formatHoursToHHMM(displaySummary.expectedHours)} expected
-                </div>
               )}
             </div>
           </div>
@@ -882,7 +750,7 @@ const generateFallbackCalendar = () => {
                             </span>
                           </div>
                           
-                          {/* Edit button - for ALL days (only in non-view-only mode) */}
+                          {/* Edit button - for ALL days */}
                           {renderEditButton(day)}
                           
                           <div className="flex flex-col items-center justify-center">
@@ -897,12 +765,10 @@ const generateFallbackCalendar = () => {
                             </div>
                           )}
                           
-                          {/* Click hint for all days (only in non-view-only mode) */}
-                          {!viewOnly && (
-                            <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              Click to edit
-                            </div>
-                          )}
+                          {/* Click hint for all days */}
+                          <div className="text-[10px] text-gray-400 mt-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to edit
+                          </div>
                         </>
                       )}
                     </div>
@@ -913,8 +779,8 @@ const generateFallbackCalendar = () => {
           )}
         </div>
 
-        {/* Edit Form - Shows when a date is selected (only in non-view-only mode) */}
-        {!viewOnly && editingStatus && selectedDate && (
+        {/* Edit Form - Shows when a date is selected */}
+        {editingStatus && selectedDate && (
           <div className="px-6 py-4 border-t bg-blue-50 flex-shrink-0">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center justify-between mb-3">
@@ -1038,20 +904,16 @@ const generateFallbackCalendar = () => {
               <span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-300"></span>
               <span>Weekend</span>
             </div>
-            {!viewOnly && (
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span>
-                <span className="flex items-center gap-1">
-                  <PencilIcon className="w-3 h-3" /> Click any day to edit
-                </span>
-              </div>
-            )}
-          </div>
-          {!viewOnly && (
-            <div className="text-center mt-2 text-xs text-gray-500">
-              💡 Click on any day or use the edit button (✏️) to edit attendance
+            <div className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></span>
+              <span className="flex items-center gap-1">
+                <PencilIcon className="w-3 h-3" /> Click any day to edit
+              </span>
             </div>
-          )}
+          </div>
+          <div className="text-center mt-2 text-xs text-gray-500">
+            💡 Click on any day or use the edit button (✏️) to edit attendance
+          </div>
         </div>
 
         {/* Footer */}
