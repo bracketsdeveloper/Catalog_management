@@ -2395,6 +2395,7 @@ useEffect(() => {
                         value={item.product}
                         onChange={(e) => updateItemField(index, "product", e.target.value)}
                         className="border p-0.5 w-full text-[10px] rounded wrap-text"
+                        disabled
                       />
                     </td>
                     {editableQuotation.displayHSNCodes && (
@@ -2414,6 +2415,7 @@ useEffect(() => {
                         onChange={(e) => updateItemField(index, "quantity", e.target.value)}
                         className="border p-0.5 w-full text-[10px] text-center rounded"
                         min="1"
+                        disabled
                       />
                     </td>
                     <td className="p-1">
@@ -2424,6 +2426,7 @@ useEffect(() => {
                         className="border p-0.5 w-full text-[10px] text-right rounded"
                         min="0"
                         step="0.01"
+                        disabled
                       />
                     </td>
                     {editableQuotation.displayTotals && (
@@ -2437,6 +2440,7 @@ useEffect(() => {
                             className="border p-0.5 w-full text-[10px] text-center rounded"
                             min="0"
                             step="0.1"
+                            disabled
                           />
                         </td>
                         <td className="p-1 text-right font-medium">{formatIndianNumber(total)}</td>
