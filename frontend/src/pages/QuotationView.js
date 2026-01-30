@@ -2395,7 +2395,7 @@ useEffect(() => {
                         value={item.product}
                         onChange={(e) => updateItemField(index, "product", e.target.value)}
                         className="border p-0.5 w-full text-[10px] rounded wrap-text"
-                        disabled
+                        
                       />
                     </td>
                     {editableQuotation.displayHSNCodes && (
