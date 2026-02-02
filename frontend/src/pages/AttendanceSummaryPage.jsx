@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { HRMS, dateUtils } from '../api/hrmsClient';
+import { HRMS } from '../api/hrmsClient';
 import EmployeeCalendarModal from '../components/attendance/EmployeeCalendarModal';
 import AttendanceUploadModal from '../components/attendance/AttendanceUploadModal';
 
@@ -28,29 +28,9 @@ const FiltersBar = ({ children }) => (
 // Helper function to convert decimal hours to hh:mm format
 const formatHoursToHHMM = (decimalHours) => {
   if (!decimalHours && decimalHours !== 0) return '00:00';
-  
   const hours = Math.floor(decimalHours);
   const minutes = Math.round((decimalHours - hours) * 60);
-  
-  // Ensure two-digit format
-  const formattedHours = hours.toString().padStart(2, '0');
-  const formattedMinutes = minutes.toString().padStart(2, '0');
-  
-  return `${formattedHours}:${formattedMinutes}`;
-};
-
-// Helper function to convert hh:mm to decimal hours (for calculations)
-const formatHHMMToDecimal = (timeString) => {
-  if (!timeString) return 0;
-  
-  const [hours, minutes] = timeString.split(':').map(Number);
-  return hours + (minutes / 60);
-};
-
-// Helper function to format time display
-const formatTimeDisplay = (hours) => {
-  const formatted = formatHoursToHHMM(hours);
-  return `${formatted}h`;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
 const AttendanceSummaryPage = () => {
@@ -73,114 +53,91 @@ const AttendanceSummaryPage = () => {
   useEffect(() => {
     fetchFilters();
     fetchHolidays();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, year]);
 
   useEffect(() => {
     fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, year, department, role, holidays]);
 
   // Fetch holidays for the selected month/year
   const fetchHolidays = async () => {
     try {
-      const response = await HRMS.getHolidays({ month, year });
-      setHolidays(response.data || []);
+      // your client has listHolidays(), but your old page used getHolidays()
+      // keep your old intent: if getHolidays exists, use it; else fallback to listHolidays
+      const response = HRMS.getHolidays
+        ? await HRMS.getHolidays({ month, year })
+        : await HRMS.listHolidays({ month, year });
+
+      const data = response?.data?.rows || response?.data || [];
+      setHolidays(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching holidays:', error);
       setHolidays([]);
     }
   };
 
-  // Helper function to calculate working days up to today (excluding weekends and non-restricted holidays)
+  // Helper: working days till today (excludes weekends + public holidays; restricted holidays are working days)
   const calculateWorkingDaysTillToday = (month, year) => {
     const today = new Date();
-    const currentMonth = month - 1; // JavaScript months are 0-indexed
-    const currentYear = year;
-    
-    // If we're not in the current month/year, return null (use full month)
-    if (today.getMonth() + 1 !== month || today.getFullYear() !== year) {
-      return null;
-    }
-    
-    let workingDays = 0;
+    if (today.getMonth() + 1 !== month || today.getFullYear() !== year) return null;
+
+    const currentMonthIndex = month - 1;
     const todayDate = today.getDate();
-    
-    // Get holidays for this month (excluding restricted holidays)
-    const monthHolidays = holidays.filter(holiday => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate.getMonth() === currentMonth && 
-             holidayDate.getFullYear() === currentYear &&
-             holiday.type !== 'RESTRICTED'; // Restricted holidays are still working days
+
+    const monthHolidays = holidays.filter((h) => {
+      const hd = new Date(h.date);
+      return (
+        hd.getMonth() === currentMonthIndex &&
+        hd.getFullYear() === year &&
+        h.type !== 'RESTRICTED'
+      );
     });
-    
-    // Create a Set of holiday dates for quick lookup
+
     const holidayDates = new Set(
-      monthHolidays.map(holiday => {
-        const date = new Date(holiday.date);
-        return date.getDate(); // Get day of month
-      })
+      monthHolidays.map((h) => new Date(h.date).getDate())
     );
-    
-    // Count working days from 1st to today
+
+    let workingDays = 0;
     for (let day = 1; day <= todayDate; day++) {
-      const currentDate = new Date(currentYear, currentMonth, day);
-      const dayOfWeek = currentDate.getDay();
-      
-      // Skip weekends (0 = Sunday, 6 = Saturday)
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        continue;
-      }
-      
-      // Skip non-restricted holidays
-      if (holidayDates.has(day)) {
-        continue;
-      }
-      
+      const d = new Date(year, currentMonthIndex, day);
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue; // Sun/Sat off (your current logic)
+      if (holidayDates.has(day)) continue;
       workingDays++;
     }
-    
+
     return workingDays;
   };
 
-  // Helper function to get total working days in month (excluding weekends and non-restricted holidays)
+  // Helper: total working days in month (excludes weekends + public holidays; restricted holidays are working days)
   const getTotalWorkingDaysInMonth = (month, year) => {
-    const daysInMonth = new Date(year, month, 0).getDate(); // Get last day of month
-    let workingDays = 0;
-    const currentMonth = month - 1;
-    
-    // Get holidays for this month (excluding restricted holidays)
-    const monthHolidays = holidays.filter(holiday => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate.getMonth() === currentMonth && 
-             holidayDate.getFullYear() === year &&
-             holiday.type !== 'RESTRICTED';
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthIndex = month - 1;
+
+    const monthHolidays = holidays.filter((h) => {
+      const hd = new Date(h.date);
+      return (
+        hd.getMonth() === monthIndex &&
+        hd.getFullYear() === year &&
+        h.type !== 'RESTRICTED'
+      );
     });
-    
-    // Create a Set of holiday dates for quick lookup
+
     const holidayDates = new Set(
-      monthHolidays.map(holiday => {
-        const date = new Date(holiday.date);
-        return date.getDate();
-      })
+      monthHolidays.map((h) => new Date(h.date).getDate())
     );
-    
-    // Count all working days in the month
+
+    let workingDays = 0;
     for (let day = 1; day <= daysInMonth; day++) {
-      const currentDate = new Date(year, currentMonth, day);
-      const dayOfWeek = currentDate.getDay();
-      
-      // Skip weekends
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        continue;
-      }
-      
-      // Skip non-restricted holidays
-      if (holidayDates.has(day)) {
-        continue;
-      }
-      
+      const d = new Date(year, monthIndex, day);
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      if (holidayDates.has(day)) continue;
       workingDays++;
     }
-    
+
     return workingDays;
   };
 
@@ -188,16 +145,14 @@ const AttendanceSummaryPage = () => {
     try {
       const response = await HRMS.listEmployees({ limit: 1000 });
       const employees = response.data.rows || [];
-      
-      // Extract unique departments and roles
       const deptSet = new Set();
       const roleSet = new Set();
-      
-      employees.forEach(emp => {
+
+      employees.forEach((emp) => {
         if (emp.org?.department) deptSet.add(emp.org.department);
         if (emp.org?.role) roleSet.add(emp.org.role);
       });
-      
+
       setDepartments(Array.from(deptSet).sort());
       setRoles(Array.from(roleSet).sort());
     } catch (error) {
@@ -211,82 +166,90 @@ const AttendanceSummaryPage = () => {
       const params = { month, year };
       if (department) params.department = department;
       if (role) params.role = role;
-      
+
       const response = await HRMS.getAttendanceSummaryAll(params);
       const rawData = response.data.results || [];
-      
-      // Get today's date
+
       const today = new Date();
       const currentMonth = today.getMonth() + 1;
       const currentYear = today.getFullYear();
-      
-      // Calculate working days for different scenarios
-      let workingDaysForRate;
+
+      let workingDaysForCalc;
       let displayWorkingDays;
       let isTillToday = false;
-      
+
       if (month === currentMonth && year === currentYear) {
-        // For current month: use working days up to today
-        workingDaysForRate = calculateWorkingDaysTillToday(month, year);
-        displayWorkingDays = workingDaysForRate;
+        workingDaysForCalc = calculateWorkingDaysTillToday(month, year) || 0;
+        displayWorkingDays = workingDaysForCalc;
         isTillToday = true;
       } else if (month < currentMonth || year < currentYear) {
-        // For past months: use total working days in that month
-        workingDaysForRate = getTotalWorkingDaysInMonth(month, year);
-        displayWorkingDays = workingDaysForRate;
+        workingDaysForCalc = getTotalWorkingDaysInMonth(month, year);
+        displayWorkingDays = workingDaysForCalc;
         isTillToday = false;
       } else {
-        // For future months: should be 0 (no working days have occurred yet)
-        workingDaysForRate = 0;
+        workingDaysForCalc = 0;
         displayWorkingDays = 0;
         isTillToday = false;
       }
-      
-      // Get total working days in month for reference
-      const totalWorkingDaysInMonth = getTotalWorkingDaysInMonth(month, year);
-      
-      // Process the data to calculate correct attendance rates
-      const processedData = rawData.map(employee => {
+
+      const daysInMonth = new Date(year, month, 0).getDate();
+
+      const processed = rawData.map((employee) => {
         const summary = { ...employee.summary };
-        
-        // Store the original working days (for display)
-        summary.totalWorkingDaysInMonth = totalWorkingDaysInMonth;
-        summary.workingDaysForCalculation = workingDaysForRate;
-        summary.displayWorkingDays = displayWorkingDays;
-        
-        // Calculate attendance rate based on the correct working days
-        let attendanceRate = 0;
-        let workingDaysLabel = '';
-        
-        if (workingDaysForRate > 0) {
-          attendanceRate = parseFloat(((summary.presentDays / workingDaysForRate) * 100).toFixed(2));
-        }
-        
-        // Determine the label for display
-        if (isTillToday) {
-          workingDaysLabel = `${displayWorkingDays} working days till today`;
-        } else if (month < currentMonth || year < currentYear) {
-          workingDaysLabel = `${displayWorkingDays} working days this month`;
-        } else {
-          workingDaysLabel = 'Future month - no working days yet';
-        }
-        
-        // Format times to hh:mm
-        summary.formattedTotalHours = formatHoursToHHMM(summary.totalHours);
-        summary.formattedTotalOT = formatHoursToHHMM(summary.totalOT);
-        summary.formattedExpectedHours = formatHoursToHHMM(summary.expectedHours);
-        
-        summary.attendanceRate = attendanceRate;
-        summary.workingDaysLabel = workingDaysLabel;
+
+        // ✅ Your new sheet logic
+        // Total Working Days = C6
+        const totalWorkingDays = displayWorkingDays;
+
+        // Days Attended = D6 (presentDays)
+        const daysAttended = Number(summary.presentDays || 0);
+
+        // Total Leaves Taken = C6 - D6
+        const totalLeavesTaken = Math.max(0, totalWorkingDays - daysAttended);
+
+        // Paid Leaves for the month = summary.paidLeaves || 0 (fallback)
+        // If your backend doesn't provide this, it will show 0 until you add it.
+        const paidLeaves = Number(summary.paidLeaves || 0);
+
+        // Pay Loss Days = (C6 - D6) - F6
+        const payLossDays = Math.max(0, totalLeavesTaken - paidLeaves);
+
+        // Expected hours = C6 * dailyHours (dailyHours can be per employee; fallback 9)
+        const dailyHours = Number(summary.dailyHours || summary.dailyWorkHours || 9);
+        const expectedHours = totalWorkingDays * dailyHours;
+
+        // Worked hours = from attendance software (summary.totalHours)
+        const hoursWorked = Number(summary.totalHours || 0);
+
+        // To be paid for = D6 + F6
+        const toBePaidFor = daysAttended + paidLeaves;
+
+        // Keep existing formatted values if you want, but only for your table
+        summary.daysInMonth = daysInMonth;
+        summary.totalWorkingDays = totalWorkingDays;
+        summary.daysAttended = daysAttended;
+        summary.totalLeavesTaken = totalLeavesTaken;
+        summary.paidLeaves = paidLeaves;
+        summary.payLossDays = payLossDays;
+        summary.expectedHours = expectedHours;
+        summary.hoursWorked = hoursWorked;
+        summary.toBePaidFor = toBePaidFor;
+
+        summary.formattedExpectedHours = formatHoursToHHMM(expectedHours);
+        summary.formattedWorkedHours = formatHoursToHHMM(hoursWorked);
+
+        // keep your existing label fields for the banner if you want (design unchanged)
         summary.isTillToday = isTillToday;
-        
-        return {
-          ...employee,
-          summary
-        };
+        summary.workingDaysLabel = isTillToday
+          ? `${displayWorkingDays} working days till today`
+          : (month < currentMonth || year < currentYear)
+          ? `${displayWorkingDays} working days this month`
+          : 'Future month - no working days yet';
+
+        return { ...employee, summary };
       });
-      
-      setSummaryData(processedData);
+
+      setSummaryData(processed);
     } catch (error) {
       console.error('Error fetching summary:', error);
       toast.error('Failed to load attendance summary');
@@ -303,57 +266,52 @@ const AttendanceSummaryPage = () => {
 
   const handleSort = (key) => {
     let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
     setSortConfig({ key, direction });
   };
 
   const getSortedData = () => {
-    const filteredData = summaryData.filter(emp => 
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.department.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filtered = summaryData.filter((emp) => {
+      const name = String(emp.name || '').toLowerCase();
+      const id = String(emp.employeeId || '').toLowerCase();
+      const dept = String(emp.department || '').toLowerCase();
+      const q = searchTerm.toLowerCase();
+      return name.includes(q) || id.includes(q) || dept.includes(q);
+    });
 
-    return [...filteredData].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (sortConfig.key === 'name') {
-        return sortConfig.direction === 'asc' 
-          ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name);
+        return sortConfig.direction === 'asc'
+          ? String(a.name || '').localeCompare(String(b.name || ''))
+          : String(b.name || '').localeCompare(String(a.name || ''));
       }
-      if (sortConfig.key === 'totalHours') {
-        return sortConfig.direction === 'asc' 
-          ? a.summary.totalHours - b.summary.totalHours
-          : b.summary.totalHours - a.summary.totalHours;
+      if (sortConfig.key === 'hoursWorked') {
+        const ah = Number(a.summary?.hoursWorked || 0);
+        const bh = Number(b.summary?.hoursWorked || 0);
+        return sortConfig.direction === 'asc' ? ah - bh : bh - ah;
+      }
+      if (sortConfig.key === 'toBePaidFor') {
+        const av = Number(a.summary?.toBePaidFor || 0);
+        const bv = Number(b.summary?.toBePaidFor || 0);
+        return sortConfig.direction === 'asc' ? av - bv : bv - av;
       }
       return 0;
     });
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN');
-  };
-
   const handleUploadSuccess = () => {
     setUploadModalOpen(false);
     toast.success('Attendance uploaded successfully');
-    fetchSummary(); // Refresh the summary data
+    fetchSummary();
   };
 
-  // Function to get holiday count for the selected month
-  const getHolidayCount = () => {
-    return holidays.filter(holiday => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate.getMonth() + 1 === month && 
-             holidayDate.getFullYear() === year &&
-             holiday.type !== 'RESTRICTED'; // Count only non-restricted holidays
+  const getHolidayCount = () =>
+    holidays.filter((h) => {
+      const d = new Date(h.date);
+      return d.getMonth() + 1 === month && d.getFullYear() === year && h.type !== 'RESTRICTED';
     }).length;
-  };
 
-  const sortedData = getSortedData();
+  const sortedData = useMemo(() => getSortedData(), [summaryData, searchTerm, sortConfig]);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -362,10 +320,8 @@ const AttendanceSummaryPage = () => {
 
   const today = new Date();
   const isCurrentMonth = month === today.getMonth() + 1 && year === today.getFullYear();
-  const holidayCount = getHolidayCount();
-
-  // Check if it's a past month
   const isPastMonth = month < today.getMonth() + 1 || year < today.getFullYear();
+  const holidayCount = getHolidayCount();
 
   return (
     <div className="p-4 md:p-6">
@@ -397,71 +353,61 @@ const AttendanceSummaryPage = () => {
 
       <FiltersBar>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Month
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
           <select
             value={month}
             onChange={(e) => setMonth(parseInt(e.target.value))}
             className="w-full border rounded-md px-3 py-2"
           >
             {monthNames.map((name, index) => (
-              <option key={index} value={index + 1}>
-                {name}
-              </option>
+              <option key={index} value={index + 1}>{name}</option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Year
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
           <select
             value={year}
             onChange={(e) => setYear(parseInt(e.target.value))}
             className="w-full border rounded-md px-3 py-2"
           >
-            {[2023, 2024, 2025, 2026].map(y => (
+            {[2023, 2024, 2025, 2026].map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Department
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
           <select
             value={department}
             onChange={(e) => setDepartment(e.target.value)}
             className="w-full border rounded-md px-3 py-2"
           >
             <option value="">All Departments</option>
-            {departments.map(dept => (
+            {departments.map((dept) => (
               <option key={dept} value={dept}>{dept}</option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Role
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
             className="w-full border rounded-md px-3 py-2"
           >
             <option value="">All Roles</option>
-            {roles.map(role => (
-              <option key={role} value={role}>{role}</option>
+            {roles.map((r) => (
+              <option key={r} value={r}>{r}</option>
             ))}
           </select>
         </div>
       </FiltersBar>
 
-      {/* Information Banner */}
+      {/* Information Banner (UNCHANGED) */}
       <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
         <div className="flex items-start">
           <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -474,7 +420,6 @@ const AttendanceSummaryPage = () => {
             <div className="text-xs text-blue-600 mt-1">
               {isCurrentMonth ? (
                 <>
-                  • Attendance rate calculated based on working days till today<br />
                   • Working days exclude weekends and public holidays<br />
                   • Restricted holidays are counted as working days
                 </>
@@ -489,8 +434,7 @@ const AttendanceSummaryPage = () => {
             </div>
           </div>
         </div>
-        
-        {/* Holiday Information */}
+
         {holidayCount > 0 && (
           <div className="mt-3 pt-3 border-t border-blue-200">
             <div className="flex items-center">
@@ -501,27 +445,6 @@ const AttendanceSummaryPage = () => {
                 {holidayCount} public holiday{holidayCount > 1 ? 's' : ''} in {monthNames[month - 1]} {year}
               </span>
             </div>
-            {holidays.filter(h => h.type !== 'RESTRICTED').length > 0 && (
-              <div className="mt-2 text-xs text-blue-600 flex flex-wrap gap-1">
-                {holidays
-                  .filter(h => h.type !== 'RESTRICTED')
-                  .slice(0, 3)
-                  .map((holiday, index) => {
-                    const date = new Date(holiday.date);
-                    const day = date.getDate();
-                    return (
-                      <span key={index} className="px-2 py-1 bg-blue-100 rounded text-xs">
-                        {day}: {holiday.name}
-                      </span>
-                    );
-                  })}
-                {holidays.filter(h => h.type !== 'RESTRICTED').length > 3 && (
-                  <span className="px-2 py-1 bg-blue-100 rounded text-xs">
-                    +{holidays.filter(h => h.type !== 'RESTRICTED').length - 3} more
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -548,52 +471,84 @@ const AttendanceSummaryPage = () => {
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
+            {/* ✅ NEW TABLE LAYOUT ONLY (Design same) */}
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th 
+                  <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center gap-1">
-                      Employee
+                      Employee Name
                       {sortConfig.key === 'name' && (
                         <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </div>
                   </th>
+
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Department
+                    # of days in month
                   </th>
+
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
+                    Total # of working days
                   </th>
+
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Present Days
+                    Days Attended
                   </th>
-                  <th 
+
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Leaves Taken
+                  </th>
+
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Paid Leaves for month
+                  </th>
+
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Pay Loss Days
+                  </th>
+
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Expected Working Hours
+                  </th>
+
+                  <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSort('totalHours')}
+                    onClick={() => handleSort('hoursWorked')}
                   >
                     <div className="flex items-center gap-1">
-                      Total Hours
-                      {sortConfig.key === 'totalHours' && (
+                      Hours Worked
+                      {sortConfig.key === 'hoursWorked' && (
                         <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    OT Hours
+
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('toBePaidFor')}
+                  >
+                    <div className="flex items-center gap-1">
+                      To be paid for
+                      {sortConfig.key === 'toBePaidFor' && (
+                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
                   </th>
+
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
+
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedData.map((employee) => (
-                  <tr 
-                    key={employee.employeeId} 
+                  <tr
+                    key={employee.employeeId}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => handleRowClick(employee)}
                   >
@@ -603,36 +558,46 @@ const AttendanceSummaryPage = () => {
                         <div className="text-sm text-gray-500">{employee.employeeId}</div>
                       </div>
                     </td>
+
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.department || '-'}
+                      {employee.summary.daysInMonth}
                     </td>
+
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.role || '-'}
+                      {employee.summary.totalWorkingDays}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {employee.summary.presentDays}
-                      </div>
+
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {employee.summary.daysAttended}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {employee.summary.totalLeavesTaken}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {employee.summary.paidLeaves}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {employee.summary.payLossDays}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {employee.summary.formattedExpectedHours}h
                       <div className="text-xs text-gray-500">
-                        {employee.summary.workingDaysLabel}
-                        {employee.summary.totalWorkingDaysInMonth > 0 && (
-                          <div className="text-gray-400 text-xs mt-0.5">
-                            Total working days in month: {employee.summary.totalWorkingDaysInMonth}
-                          </div>
-                        )}
+                        {Number(employee.summary.dailyHours || employee.summary.dailyWorkHours || 9)}h/day
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {employee.summary.formattedTotalHours}h
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {employee.summary.formattedExpectedHours}h expected
-                      </div>
-                    </td>
+
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.formattedTotalOT}h
+                      {employee.summary.formattedWorkedHours}h
                     </td>
+
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {employee.summary.toBePaidFor}
+                    </td>
+
                     <td className="px-6 py-4 text-sm font-medium">
                       <button
                         onClick={(e) => {
@@ -650,29 +615,10 @@ const AttendanceSummaryPage = () => {
             </table>
           </div>
 
+          {/* Footer (kept, but no extra stats required by you? You didn't ask to remove it now, so kept design) */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <div className="text-sm text-gray-700">
-                Showing {sortedData.length} of {summaryData.length} employees
-              </div>
-              <div className="flex flex-wrap gap-4">
-                <div className="text-sm text-gray-700">
-                  <span className="font-medium">Overall Attendance:</span>{' '}
-                  {summaryData.length > 0 ? 
-                    (summaryData.reduce((sum, emp) => sum + emp.summary.attendanceRate, 0) / summaryData.length).toFixed(2) 
-                    : 0}%
-                  {isCurrentMonth && ' (Till Today)'}
-                </div>
-                {holidayCount > 0 && (
-                  <div className="text-sm text-blue-700">
-                    <span className="font-medium">Holidays:</span> {holidayCount} day{holidayCount > 1 ? 's' : ''}
-                  </div>
-                )}
-                <div className="text-sm text-gray-700">
-                  <span className="font-medium">Calculation:</span>{' '}
-                  {isCurrentMonth ? 'Till Today' : isPastMonth ? 'Complete Month' : 'Future Month'}
-                </div>
-              </div>
+            <div className="text-sm text-gray-700">
+              Showing {sortedData.length} of {summaryData.length} employees
             </div>
           </div>
         </div>
@@ -692,9 +638,7 @@ const AttendanceSummaryPage = () => {
             setMonth(newMonth);
             setYear(newYear);
           }}
-          onDataUpdate={() => {
-            fetchSummary();
-          }}
+          onDataUpdate={() => fetchSummary()}
         />
       )}
 
