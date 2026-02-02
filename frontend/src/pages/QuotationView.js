@@ -708,7 +708,7 @@ export default function QuotationView() {
     }
   }, [editableQuotation, catalogData]);
 
-// Live sync: Map operations breakdown rate, GST%, and QUANTITY to quotation items
+// Live sync: Map operations breakdown rate, GST%, QUANTITY, and PRODUCT to quotation items
 useEffect(() => {
   // Skip sync during initial load or when removing items
   if (isInitialLoad.current) return;
@@ -731,12 +731,6 @@ useEffect(() => {
     });
 
     const updatedItems = prev.items.map((item, idx) => {
-      // Skip if item has no product name
-      if (!item.product) {
-        console.log(`Item at index ${idx} has no product name, skipping sync`);
-        return item;
-      }
-
       // Try to find matching opRow by product name first (exact match)
       let opRow = opRowByProduct[item.product.toLowerCase()];
 
@@ -761,33 +755,37 @@ useEffect(() => {
         return item;
       }
 
-      // Get rate, GST, and QUANTITY from operations breakdown
+      // Get values from operations breakdown
       const opRate = num(opRow.rate);
       const opGst = parseGstPercent(opRow.gst);
       const opQuantity = num(opRow.quantity);
+      const opProduct = opRow.product?.trim() || "";
 
-      // Keep original values if opRow values are 0 (not set)
+      // Keep original values if opRow values are 0/empty (not set)
       const newRate = opRate > 0 ? opRate : num(item.rate);
       const newGst = opGst > 0 ? opGst : (item.productGST != null ? num(item.productGST) : 0);
       const newQuantity = opQuantity > 0 ? opQuantity : (num(item.quantity) || 1);
+      const newProduct = opProduct || item.product || "";
 
       // Only update if values are different to prevent unnecessary re-renders
       if (
         newRate === num(item.rate) && 
         newGst === (item.productGST != null ? num(item.productGST) : 0) &&
-        newQuantity === (num(item.quantity) || 1)
+        newQuantity === (num(item.quantity) || 1) &&
+        newProduct === item.product
       ) {
         return item;
       }
 
-      console.log(`Updating item "${item.product}" - Rate: ${item.rate} -> ${newRate}, GST: ${item.productGST} -> ${newGst}, Quantity: ${item.quantity} -> ${newQuantity}`);
+      console.log(`Updating item "${item.product}" -> "${newProduct}" - Rate: ${item.rate} -> ${newRate}, GST: ${item.productGST} -> ${newGst}, Quantity: ${item.quantity} -> ${newQuantity}`);
 
-      // Recalculate amount and total with new quantity
+      // Recalculate amount and total with new values
       const amount = newQuantity * newRate;
       const total = amount * (1 + newGst / 100);
 
       return {
         ...item,
+        product: newProduct,
         rate: newRate,
         productprice: newRate,
         productGST: newGst,
@@ -2395,6 +2393,7 @@ useEffect(() => {
                         value={item.product}
                         onChange={(e) => updateItemField(index, "product", e.target.value)}
                         className="border p-0.5 w-full text-[10px] rounded wrap-text"
+                        disabled
                         
                       />
                     </td>
