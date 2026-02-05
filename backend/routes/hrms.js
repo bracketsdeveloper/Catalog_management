@@ -1,4 +1,4 @@
-// routes/hrms.js
+// server/routes/hrms.js
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
@@ -15,7 +15,10 @@ const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const WFH = require("../models/WFH");
 const User = require("../models/User");
-const { notifyLeaveApplication, notifyLeaveStatusChange } = require("../utils/leaveNotifications");
+const {
+  notifyLeaveApplication,
+  notifyLeaveStatusChange,
+} = require("../utils/leaveNotifications");
 
 // Holidays + RH request
 const Holiday = require("../models/Holiday");
@@ -41,13 +44,13 @@ const upload = multer({
       const ts = Date.now();
       const base = file.originalname.replace(/\s+/g, "_");
       cb(null, `${ts}_${base}`);
-    }
+    },
   }),
   fileFilter: (_req, file, cb) => {
     const ok = /\.(xlsx?|csv)$/i.test(file.originalname);
     cb(ok ? null : new Error("Only .xls, .xlsx, .csv allowed"), ok);
   },
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 /* ========================= Helpers ========================= */
@@ -161,6 +164,7 @@ function pick(obj, keys) {
   for (const k of keys) if (obj[k] != null) out[k] = obj[k];
   return out;
 }
+
 // Accepts "09:32", "9:32", "09:32:10", "9:32 AM", "18:03", "18.03", numeric excel fractions etc.
 function parseTimeToMinutes(raw) {
   if (raw == null || raw === "") return null;
@@ -194,12 +198,7 @@ function parseTimeToMinutes(raw) {
   if (H < 0 || H > 23 || M < 0 || M > 59) return null;
   return H * 60 + M;
 }
-function minutesDiffToHours(minIn, minOut) {
-  if (minIn == null || minOut == null) return 0;
-  const diff = minOut - minIn;
-  if (diff <= 0) return 0;
-  return +(diff / 60).toFixed(2);
-}
+
 function parseExcelDateCell(v) {
   if (v == null || v === "") return null;
   if (v instanceof Date && !isNaN(v)) return v;
@@ -215,13 +214,16 @@ function parseExcelDateCell(v) {
   if (!isNaN(d)) return d;
   const m = String(v).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m) {
-    const dd = +m[1], mm = +m[2], yy = +m[3];
+    const dd = +m[1],
+      mm = +m[2],
+      yy = +m[3];
     const Y = yy < 100 ? 2000 + yy : yy;
     const dt = new Date(Y, mm - 1, dd);
     if (!isNaN(dt)) return dt;
   }
   return null;
 }
+
 async function isHolidayDate(d) {
   const sameDayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const sameDayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
@@ -229,12 +231,83 @@ async function isHolidayDate(d) {
   return !!h;
 }
 
+/* =======================================================================
+   FIX: Never mix include/exclude in a Mongo projection
+   ======================================================================= */
+function buildSafeEmployeeProjection(req, includeFields = {}) {
+  const finProj = financialProjectionFor(req.user) || {};
+  const isExclusion = Object.values(finProj).some((v) => v === 0);
+
+  // If exclusion projection, do not add includes (would mix include + exclude)
+  if (isExclusion) return finProj;
+
+  // Include-based: safe to add includeFields
+  return { ...finProj, ...includeFields };
+}
+
+/* ========================= Leave Allocation helpers ========================= */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function buildDefaultLeaveMonthlyAllocation() {
+  return MONTHS.map((m) => ({ month: m, earned: 0, sick: 0, additional: 0, special: 0 }));
+}
+
+function normalizeLeaveMonthlyAllocation(input) {
+  const base = buildDefaultLeaveMonthlyAllocation();
+
+  // Allow unset/empty -> default
+  if (!Array.isArray(input) || input.length === 0) return base;
+
+  const allowedMonths = new Set(MONTHS);
+  const map = new Map(input.map((x) => [String(x?.month || "").trim(), x]));
+
+  // ensure only valid months; duplicates naturally overwritten by map; we explicitly reject duplicates:
+  const seen = new Set();
+  for (const row of input) {
+    const m = String(row?.month || "").trim();
+    if (!allowedMonths.has(m)) {
+      throw new Error(`Invalid month in leaveMonthlyAllocation: ${m || "(empty)"}`);
+    }
+    if (seen.has(m)) {
+      throw new Error(`Duplicate month in leaveMonthlyAllocation: ${m}`);
+    }
+    seen.add(m);
+  }
+
+  // enforce all 12 months (your current UI always sends 12)
+  if (seen.size !== 12) {
+    throw new Error("leaveMonthlyAllocation must contain all 12 months (Jan..Dec).");
+  }
+
+  const n = (v) => (Number.isFinite(+v) ? Math.max(0, +(+v).toFixed(2)) : 0);
+
+  return base.map((row) => {
+    const got = map.get(row.month) || {};
+    return {
+      month: row.month,
+      earned: n(got.earned),
+      sick: n(got.sick),
+      additional: n(got.additional),
+      special: n(got.special),
+    };
+  });
+}
+
 /* ========================= Employees ========================= */
 
 // CREATE / UPDATE (upsert) employee (entered by HR only)
 router.post("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
   try {
-    const { personal, org, assets, financial, schedule, biometricId, mappedUser } = req.body;
+    const {
+      personal,
+      org,
+      assets,
+      financial,
+      schedule,
+      biometricId,
+      mappedUser,
+      leaveMonthlyAllocation,
+    } = req.body;
 
     if (!personal?.employeeId || !personal?.name) {
       return res.status(400).json({ message: "employeeId and name are required." });
@@ -243,15 +316,47 @@ router.post("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
     // normalize employeeId on write
     personal.employeeId = String(personal.employeeId).trim();
 
-    const update = { personal, org, assets, financial };
-    if (schedule) update.schedule = schedule;  // NEW: Add schedule
+    // normalize additionalProducts (supports old string array OR new object array)
+    let normalizedAssets = assets || {};
+    if (normalizedAssets && Array.isArray(normalizedAssets.additionalProducts)) {
+      normalizedAssets = { ...normalizedAssets };
+      normalizedAssets.additionalProducts = normalizedAssets.additionalProducts
+        .map((p) => {
+          if (p == null) return null;
+          if (typeof p === "string") {
+            return { name: p, serialOrDesc: "", issuedOn: undefined };
+          }
+          return {
+            name: String(p.name || "").trim(),
+            serialOrDesc: String(p.serialOrDesc || "").trim(),
+            issuedOn: p.issuedOn ? new Date(p.issuedOn) : undefined,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    let normalizedLeaveMonthly = undefined;
+    if (leaveMonthlyAllocation !== undefined) {
+      try {
+        normalizedLeaveMonthly = normalizeLeaveMonthlyAllocation(leaveMonthlyAllocation);
+      } catch (e) {
+        return res.status(400).json({ message: e.message || "Invalid leaveMonthlyAllocation" });
+      }
+    }
+
+    const update = { personal, org, assets: normalizedAssets, financial };
+
+    if (schedule) update.schedule = schedule;
     if (typeof biometricId === "string") update.biometricId = biometricId.trim();
     if (mappedUser) update.mappedUser = mappedUser;
+
+    // ✅ always set allocation: if provided use it; else default 12 months
+    update.leaveMonthlyAllocation = normalizedLeaveMonthly || buildDefaultLeaveMonthlyAllocation();
 
     const up = await Employee.findOneAndUpdate(
       { "personal.employeeId": personal.employeeId },
       update,
-      { new: true, upsert: true }
+      { new: true, upsert: true, runValidators: true }
     ).populate("mappedUser", "name email phone role isSuperAdmin");
 
     res.json(up);
@@ -263,23 +368,67 @@ router.post("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
 // UPDATE specific employee by employeeId (edit modal save)
 router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req, res) => {
   try {
-    const { personal, org, assets, financial, schedule, biometricId, mappedUser, isActive } = req.body;
+    const {
+      personal,
+      org,
+      assets,
+      financial,
+      schedule,
+      biometricId,
+      mappedUser,
+      isActive,
+      leaveMonthlyAllocation,
+    } = req.body;
 
     const update = {};
+
     if (personal) {
-      if (personal.employeeId) personal.employeeId = String(personal.employeeId).trim();
+      // do not allow employeeId change through edit
+      if (personal.employeeId) delete personal.employeeId;
       update.personal = personal;
     }
     if (org) update.org = org;
-    if (assets) update.assets = assets;
+
+    if (assets) {
+      // normalize additionalProducts (supports old string array OR new object array)
+      let normalizedAssets = assets;
+      if (normalizedAssets && Array.isArray(normalizedAssets.additionalProducts)) {
+        normalizedAssets = { ...normalizedAssets };
+        normalizedAssets.additionalProducts = normalizedAssets.additionalProducts
+          .map((p) => {
+            if (p == null) return null;
+            if (typeof p === "string") {
+              return { name: p, serialOrDesc: "", issuedOn: undefined };
+            }
+            return {
+              name: String(p.name || "").trim(),
+              serialOrDesc: String(p.serialOrDesc || "").trim(),
+              issuedOn: p.issuedOn ? new Date(p.issuedOn) : undefined,
+            };
+          })
+          .filter(Boolean);
+      }
+      update.assets = normalizedAssets;
+    }
+
     if (financial) update.financial = financial;
-    if (schedule) update.schedule = schedule;  // NEW: Add schedule
+    if (schedule) update.schedule = schedule;
     if (typeof biometricId === "string") update.biometricId = biometricId.trim();
     if (typeof isActive === "boolean") update.isActive = isActive;
+
     if (mappedUser === null) {
       update.mappedUser = undefined;
     } else if (mappedUser) {
       update.mappedUser = mappedUser;
+    }
+
+    // ✅ NEW: validate + normalize monthly leave allocation if provided
+    if (leaveMonthlyAllocation !== undefined) {
+      try {
+        update.leaveMonthlyAllocation = normalizeLeaveMonthlyAllocation(leaveMonthlyAllocation);
+      } catch (e) {
+        return res.status(400).json({ message: e.message || "Invalid leaveMonthlyAllocation" });
+      }
     }
 
     const row = await Employee.findOneAndUpdate(
@@ -292,7 +441,7 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
         },
       },
       { $set: update },
-      { new: true }
+      { new: true, runValidators: true }
     ).populate("mappedUser", "name email phone role isSuperAdmin");
 
     if (!row) return res.status(404).json({ message: "Not found" });
@@ -320,7 +469,7 @@ router.delete("/hrms/employees/:employeeId", authenticate, requireAdmin, async (
   }
 });
 
-// LIST with search/filter/sort
+// LIST with search/filter/sort  (FIXED projection)
 router.get("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
   try {
     const {
@@ -341,9 +490,18 @@ router.get("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
     if (active === "true") filter.isActive = true;
     if (active === "false") filter.isActive = false;
 
-    const finProj = financialProjectionFor(req.user) || {};
-    const isExclusion = Object.values(finProj).some((v) => v === 0);
-    const projection = isExclusion ? finProj : { ...finProj, biometricId: 1, mappedUser: 1, "personal.employeeId": 1, "personal.name": 1, "org.role": 1, "org.department": 1 };
+    const projection = buildSafeEmployeeProjection(req, {
+      biometricId: 1,
+      mappedUser: 1,
+      "personal.employeeId": 1,
+      "personal.name": 1,
+      "org.role": 1,
+      "org.department": 1,
+      isActive: 1,
+
+      // ✅ include allocation if you want it available in list calls too
+      leaveMonthlyAllocation: 1,
+    });
 
     const skip = (Number(page) - 1) * Number(limit);
     const sort = { [sortBy]: dir === "desc" ? -1 : 1 };
@@ -362,19 +520,24 @@ router.get("/hrms/employees", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// GET single (resilient; always include name + normalized match)
+// GET single (resilient; always include name + normalized match) (FIXED projection)
 router.get("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req, res) => {
   try {
-    const finProj = financialProjectionFor(req.user) || {};
-    const projection = {
-      ...finProj,
-      "personal.employeeId": 1,
-      "personal.name": 1,
-      "org.role": 1,
-      "org.department": 1,
+    const projection = buildSafeEmployeeProjection(req, {
+      personal: 1,
+      org: 1,
+      assets: 1,
+      financial: 1,
+      schedule: 1,
       biometricId: 1,
       mappedUser: 1,
-    };
+      isActive: 1,
+      createdAt: 1,
+      updatedAt: 1,
+
+      // ✅ CRITICAL: return allocation so edit modal can load it
+      leaveMonthlyAllocation: 1,
+    });
 
     const idParam = String(req.params.employeeId || "");
     const emp = await Employee.findOne(
@@ -499,7 +662,7 @@ router.post("/hrms/attendance/bulk", authenticate, requireAdmin, async (req, res
       .filter((r) => (r.status || "Present").trim() === "WFH")
       .map((r) => {
         const empId = String(r.employeeId || "").trim();
-        return ({
+        return {
           updateOne: {
             filter: { employeeId: empId, date: when },
             update: {
@@ -507,7 +670,7 @@ router.post("/hrms/attendance/bulk", authenticate, requireAdmin, async (req, res
             },
             upsert: true,
           },
-        });
+        };
       });
     if (wfhOps.length) await WFH.bulkWrite(wfhOps);
 
@@ -516,7 +679,6 @@ router.post("/hrms/attendance/bulk", authenticate, requireAdmin, async (req, res
     res.status(500).json({ message: e.message });
   }
 });
-
 
 router.post(
   "/hrms/attendance/import-file",
@@ -592,30 +754,27 @@ router.post(
       return null;
     }
 
-    // Your exact headers, plus a few aliases
     const colEmployee = pickCol("E. Code", "E Code", "ecode", "employee code", "emp code");
-    const colDate     = pickCol("Date", "Punch Date", "Attendance Date", "Att Date");
-    const colIn       = pickCol("InTime", "In Time", "In", "First In", "Punch In");
-    const colOut      = pickCol("OutTime", "Out Time", "Out", "Last Out", "Punch Out");
-    const colWorkDur  = pickCol("Work Dur.", "Work Dur", "Working Hours", "Work Duration", "Duration");
-    const colTotDur   = pickCol("Tot. Dur.", "Tot Dur.", "Total Dur.", "Total Hours", "Tot. Hours");
-    const colStatus   = pickCol("Status");
-    const colRemarks  = pickCol("Remarks", "Remark", "Note", "Notes");
+    const colDate = pickCol("Date", "Punch Date", "Attendance Date", "Att Date");
+    const colIn = pickCol("InTime", "In Time", "In", "First In", "Punch In");
+    const colOut = pickCol("OutTime", "Out Time", "Out", "Last Out", "Punch Out");
+    const colWorkDur = pickCol("Work Dur.", "Work Dur", "Working Hours", "Work Duration", "Duration");
+    const colTotDur = pickCol("Tot. Dur.", "Tot Dur.", "Total Dur.", "Total Hours", "Tot. Hours");
+    const colStatus = pickCol("Status");
+    const colRemarks = pickCol("Remarks", "Remark", "Note", "Notes");
 
     if (!colEmployee) {
       fs.unlink(filePath, () => {});
       return res.status(400).json({ message: "Required header not found: E. Code" });
     }
 
-    // When there is no Date column, allow explicit date via query/body
     let defaultDate = null;
     if (!colDate) {
       const qp = (req.query?.date || req.body?.date || "").toString().trim();
       if (!qp) {
         fs.unlink(filePath, () => {});
         return res.status(400).json({
-          message:
-            "Date column not found. Pass ?date=YYYY-MM-DD or include a Date column.",
+          message: "Date column not found. Pass ?date=YYYY-MM-DD or include a Date column.",
         });
       }
       const d = new Date(qp);
@@ -640,7 +799,6 @@ router.post(
         continue;
       }
 
-      // resolve date
       let dateOnly = null;
       if (colDate) {
         const v = src[colDate];
@@ -665,14 +823,12 @@ router.post(
         continue;
       }
 
-      const inStr  = colIn ? String(src[colIn] || "").trim() : "";
+      const inStr = colIn ? String(src[colIn] || "").trim() : "";
       const outStr = colOut ? String(src[colOut] || "").trim() : "";
 
-      // parseTimeToMinutes already exists above in this file
-      const minIn  = inStr ? parseTimeToMinutes(inStr) : null;
+      const minIn = inStr ? parseTimeToMinutes(inStr) : null;
       const minOut = outStr ? parseTimeToMinutes(outStr) : null;
 
-      // hours preference: Work Dur. > Tot. Dur. > diff(in,out)
       let hours = 0;
       const hv = colWorkDur ? src[colWorkDur] : undefined;
       const tv = colTotDur ? src[colTotDur] : undefined;
@@ -681,7 +837,7 @@ router.post(
         if (val == null || val === "") return null;
         if (!isNaN(+val)) return +(+val).toFixed(2);
         const m = String(val).match(/^(\d{1,2})[:.](\d{2})$/);
-        if (m) return +( (+m[1]) + (+m[2]) / 60 ).toFixed(2);
+        if (m) return +((+m[1] + +m[2] / 60).toFixed(2));
         return null;
       }
 
@@ -692,7 +848,6 @@ router.post(
         hours = diff > 0 ? +(diff / 60).toFixed(2) : 0;
       }
 
-      // weekend / holiday flags
       const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dateOnly.getDay()];
       const weekend = dateOnly.getDay() === 0 || dateOnly.getDay() === 6;
       let holiday = false;
@@ -700,23 +855,26 @@ router.post(
         holiday = await isHolidayDate(dateOnly);
       } catch {}
 
-      // status and remarks mapping
       const statusRaw = colStatus ? String(src[colStatus] || "").trim() : "";
       const remarksRaw = colRemarks ? String(src[colRemarks] || "").trim() : "";
 
-      // If sheet says Leave, respect it
       let note = remarksRaw || statusRaw || "";
       if (/^leave$/i.test(statusRaw)) {
         hours = 0;
         note = note || "Leave";
       }
       if (/^wfh$/i.test(statusRaw)) {
-        // keep computed hours, but mark note
         note = note || "WFH";
       }
 
-      const login  = minIn  != null ? `${String(Math.floor(minIn/60)).padStart(2,"0")}:${String(minIn%60).padStart(2,"0")}` : "";
-      const logout = minOut != null ? `${String(Math.floor(minOut/60)).padStart(2,"0")}:${String(minOut%60).padStart(2,"0")}` : "";
+      const login =
+        minIn != null
+          ? `${String(Math.floor(minIn / 60)).padStart(2, "0")}:${String(minIn % 60).padStart(2, "0")}`
+          : "";
+      const logout =
+        minOut != null
+          ? `${String(Math.floor(minOut / 60)).padStart(2, "0")}:${String(minOut % 60).padStart(2, "0")}`
+          : "";
 
       const payload = {
         employeeId: employeeIdRaw,
@@ -752,7 +910,6 @@ router.post(
     res.json({ imported, skipped, errors });
   }
 );
-
 
 // ATTENDANCE SUMMARY + TABLE
 router.get("/hrms/attendance/:employeeId", authenticate, requireAdmin, async (req, res) => {
@@ -808,7 +965,10 @@ router.get("/hrms/attendance/:employeeId/export", authenticate, requireAdmin, as
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     XLSX.utils.book_append_sheet(wb, ws, "Attendance");
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-    res.setHeader("Content-Disposition", `attachment; filename="attendance_${String(req.params.employeeId || "").trim()}.xlsx"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="attendance_${String(req.params.employeeId || "").trim()}.xlsx"`
+    );
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(buf);
   } catch (e) {
@@ -819,7 +979,6 @@ router.get("/hrms/attendance/:employeeId/export", authenticate, requireAdmin, as
 /* ========================= Leaves (admin) ========================= */
 
 // LIST ALL LEAVES with filters, header search, sorting, pagination
-// GET /api/hrms/leaves?q=&employeeId=&employeeName=&type=&status=&from=YYYY-MM-DD&to=YYYY-MM-DD&sortBy=startDate|endDate|createdAt|updatedAt&dir=asc|desc&page=1&limit=50
 router.get("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
   try {
     const {
@@ -875,9 +1034,7 @@ router.get("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
           { "personal.employeeId": 1, "personal.name": 1, "org.department": 1, "org.role": 1 }
         ).lean();
 
-        const nameMap = new Map(
-          emps.map((e) => [String(e.personal.employeeId || "").trim().toUpperCase(), e])
-        );
+        const nameMap = new Map(emps.map((e) => [String(e.personal.employeeId || "").trim().toUpperCase(), e]));
 
         for (const r of rows) {
           const key = String(r.employeeId || "").trim().toUpperCase();
@@ -911,10 +1068,10 @@ router.get("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
                 $expr: {
                   $eq: [
                     { $toUpper: { $trim: { input: "$personal.employeeId" } } },
-                    { $toUpper: { $trim: { input: "$$empId" } } }
-                  ]
-                }
-              }
+                    { $toUpper: { $trim: { input: "$$empId" } } },
+                  ],
+                },
+              },
             },
             {
               $project: {
@@ -949,10 +1106,10 @@ router.get("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
                   $expr: {
                     $eq: [
                       { $toUpper: { $trim: { input: "$personal.employeeId" } } },
-                      { $toUpper: { $trim: { input: "$$empId" } } }
-                    ]
-                  }
-                }
+                      { $toUpper: { $trim: { input: "$$empId" } } },
+                    ],
+                  },
+                },
               },
               { $project: { employeeId: "$personal.employeeId", name: "$personal.name" } },
             ],
@@ -984,27 +1141,24 @@ router.patch("/hrms/leaves/:id/status", authenticate, requireSuperAdmin, async (
 
     const uid = getUserId(req);
     const user = await User.findById(uid, "name").lean();
-    
+
     const row = await Leave.findByIdAndUpdate(
       id,
-      { 
-        $set: { 
-          status, 
+      {
+        $set: {
+          status,
           approvedBy: uid,
           statusChangedBy: uid,
           statusChangedByName: user?.name || "Super Admin",
           statusChangedAt: new Date(),
-        } 
+        },
       },
       { new: true }
     );
-    
+
     if (!row) return res.status(404).json({ message: "Not found" });
 
-    // Send email notification to employee about status change
-    notifyLeaveStatusChange(row, user).catch(err => 
-      console.error("Email notification error:", err)
-    );
+    notifyLeaveStatusChange(row, user).catch((err) => console.error("Email notification error:", err));
 
     res.json(row);
   } catch (e) {
@@ -1012,12 +1166,8 @@ router.patch("/hrms/leaves/:id/status", authenticate, requireSuperAdmin, async (
   }
 });
 
-
 /* ========================= Restricted Holidays (admin) ========================= */
 
-/**
- * LIST ALL RH REQUESTS (admin)
- */
 router.get("/hrms/rh/requests", authenticate, requireAdmin, async (req, res) => {
   try {
     const {
@@ -1104,10 +1254,10 @@ router.get("/hrms/rh/requests", authenticate, requireAdmin, async (req, res) => 
                 $expr: {
                   $eq: [
                     { $toUpper: { $trim: { input: "$personal.employeeId" } } },
-                    { $toUpper: { $trim: { input: "$$empId" } } }
-                  ]
-                }
-              }
+                    { $toUpper: { $trim: { input: "$$empId" } } },
+                  ],
+                },
+              },
             },
             {
               $project: {
@@ -1142,10 +1292,10 @@ router.get("/hrms/rh/requests", authenticate, requireAdmin, async (req, res) => 
                   $expr: {
                     $eq: [
                       { $toUpper: { $trim: { input: "$personal.employeeId" } } },
-                      { $toUpper: { $trim: { input: "$$empId" } } }
-                    ]
-                  }
-                }
+                      { $toUpper: { $trim: { input: "$$empId" } } },
+                    ],
+                  },
+                },
               },
               { $project: { employeeId: "$personal.employeeId", name: "$personal.name" } },
             ],
@@ -1165,9 +1315,6 @@ router.get("/hrms/rh/requests", authenticate, requireAdmin, async (req, res) => 
   }
 });
 
-/**
- * UPDATE RH STATUS (super admin)
- */
 router.patch("/hrms/rh/:id/status", authenticate, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1213,10 +1360,10 @@ router.post("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid start/end date" });
     }
     const days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
-    
+
     const uid = getUserId(req);
     const user = await User.findById(uid, "name").lean();
-    
+
     const leave = await Leave.create({
       employeeId: String(employeeId).trim(),
       type,
@@ -1231,10 +1378,7 @@ router.post("/hrms/leaves", authenticate, requireAdmin, async (req, res) => {
       statusChangedAt: new Date(),
     });
 
-    // Send email notification to super admins
-    notifyLeaveApplication(leave).catch(err => 
-      console.error("Email notification error:", err)
-    );
+    notifyLeaveApplication(leave).catch((err) => console.error("Email notification error:", err));
 
     res.status(201).json(leave);
   } catch (e) {
@@ -1257,8 +1401,8 @@ router.patch("/hrms/leaves/:id/decision", authenticate, requireAdmin, async (req
 
     const up = await Leave.findByIdAndUpdate(
       req.params.id,
-      { 
-        status, 
+      {
+        status,
         approvedBy: uid,
         statusChangedBy: uid,
         statusChangedByName: user?.name || "Admin",
@@ -1266,13 +1410,10 @@ router.patch("/hrms/leaves/:id/decision", authenticate, requireAdmin, async (req
       },
       { new: true }
     );
-    
+
     if (!up) return res.status(404).json({ message: "Not found" });
 
-    // Send email notification to employee
-    notifyLeaveStatusChange(up, user).catch(err => 
-      console.error("Email notification error:", err)
-    );
+    notifyLeaveStatusChange(up, user).catch((err) => console.error("Email notification error:", err));
 
     res.json(up);
   } catch (e) {
@@ -1350,10 +1491,17 @@ router.get("/hrms/salary/calc", authenticate, requireAdmin, async (req, res) => 
 
     if (!isValidDate(start) || !isValidDate(end)) return res.status(400).json({ message: "Invalid date range" });
 
-    const employees = await Employee.find(
-      { isActive: true },
-      { ...financialProjectionFor(req.user), biometricId: 1, mappedUser: 1, "personal.name": 1, "personal.employeeId": 1, "org.role": 1, "org.department": 1 }
-    );
+    const empProjection = buildSafeEmployeeProjection(req, {
+      biometricId: 1,
+      mappedUser: 1,
+      "personal.name": 1,
+      "personal.employeeId": 1,
+      "org.role": 1,
+      "org.department": 1,
+    });
+
+    const employees = await Employee.find({ isActive: true }, empProjection);
+
     const rows = [];
     for (const emp of employees) {
       const id = String(emp.personal.employeeId || "").trim();
@@ -1393,7 +1541,10 @@ router.get("/hrms/salary/calc", authenticate, requireAdmin, async (req, res) => 
         allocation: { earnedToAdd, sickToAdd, additionalToAdd },
         salary: {
           mode,
-          month: mode === "monthly" ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}` : undefined,
+          month:
+            mode === "monthly"
+              ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`
+              : undefined,
           salaryDeductionDays,
           remarks: salaryDeductionDays > 0 ? `${salaryDeductionDays} day(s) salary deduction per policy` : "Full pay",
         },
@@ -1437,15 +1588,12 @@ router.post("/hrms/salary/finalize", authenticate, requireSuperAdmin, async (req
    SELF-SERVICE ENDPOINTS (authenticate + ensureAuthUser) + PROFILE APIs
    ====================================================================== */
 
-/* ---------- Profile: Get combined user + employee ---------- */
 router.get("/me/profile", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
     if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
-    const user = await User.findById(uid).select(
-      "name email phone address dateOfBirth role isSuperAdmin permissions"
-    );
+    const user = await User.findById(uid).select("name email phone address dateOfBirth role isSuperAdmin permissions");
 
     const employee = await Employee.findOne({ mappedUser: uid })
       .populate("mappedUser", "name email phone")
@@ -1457,7 +1605,6 @@ router.get("/me/profile", authenticate, ensureAuthUser, async (req, res) => {
   }
 });
 
-/* ---------- Profile: Update user + employee ---------- */
 router.put("/me/profile", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
@@ -1515,16 +1662,21 @@ router.put("/me/profile", authenticate, ensureAuthUser, async (req, res) => {
           };
         }
         if (typeof e.biometricId === "string") emp.biometricId = e.biometricId.trim();
+
+        // ✅ allow self-service to update leaveMonthlyAllocation only if you want:
+        // If not desired, remove this block.
+        if (e.leaveMonthlyAllocation !== undefined) {
+          try {
+            emp.leaveMonthlyAllocation = normalizeLeaveMonthlyAllocation(e.leaveMonthlyAllocation);
+          } catch {}
+        }
+
         await emp.save();
       }
     }
 
-    const freshUser = await User.findById(uid).select(
-      "name email phone address dateOfBirth role isSuperAdmin permissions"
-    );
-    const freshEmp = await Employee.findOne({ mappedUser: uid })
-      .populate("mappedUser", "name email phone")
-      .lean();
+    const freshUser = await User.findById(uid).select("name email phone address dateOfBirth role isSuperAdmin permissions");
+    const freshEmp = await Employee.findOne({ mappedUser: uid }).populate("mappedUser", "name email phone").lean();
 
     res.json({ user: freshUser, employee: freshEmp });
   } catch (e) {
@@ -1532,7 +1684,6 @@ router.put("/me/profile", authenticate, ensureAuthUser, async (req, res) => {
   }
 });
 
-/* ---------- Restricted Holidays: list (RESTRICTED) ---------- */
 router.get("/hrms/holidays/restricted", authenticate, ensureAuthUser, async (_req, res) => {
   try {
     const rows = await Holiday.find({ type: "RESTRICTED" }).sort({ date: 1 }).lean();
@@ -1542,7 +1693,6 @@ router.get("/hrms/holidays/restricted", authenticate, ensureAuthUser, async (_re
   }
 });
 
-/* ---------- My Restricted Holiday requests ---------- */
 router.get("/hrms/self/rh", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
@@ -1558,15 +1708,13 @@ router.get("/hrms/self/rh", authenticate, ensureAuthUser, async (req, res) => {
   }
 });
 
-/* ---------- Apply Restricted Holiday (max 2 active per calendar year) ---------- */
 router.post("/hrms/self/rh", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
     if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
     const { holidayId, note = "" } = req.body || {};
-    if (!holidayId || !isValidObjectId(holidayId))
-      return res.status(400).json({ message: "holidayId is required" });
+    if (!holidayId || !isValidObjectId(holidayId)) return res.status(400).json({ message: "holidayId is required" });
 
     const empId = await employeeIdForUserId(uid);
     if (!empId) return res.status(400).json({ message: "No employee mapped to this user" });
@@ -1605,7 +1753,6 @@ router.post("/hrms/self/rh", authenticate, ensureAuthUser, async (req, res) => {
   }
 });
 
-/* ---------- Cancel my Restricted Holiday ---------- */
 router.patch("/hrms/self/rh/:id/cancel", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
@@ -1627,7 +1774,6 @@ router.patch("/hrms/self/rh/:id/cancel", authenticate, ensureAuthUser, async (re
   }
 });
 
-/* ---------- My Leaves ---------- */
 router.get("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
@@ -1643,7 +1789,6 @@ router.get("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) =
   }
 });
 
-/* ---------- Apply Leave (self) ---------- */
 router.post("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
@@ -1663,7 +1808,6 @@ router.post("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) 
 
     const days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
 
-    // Get user details for tracking
     const user = await User.findById(uid, "name").lean();
 
     const row = await Leave.create({
@@ -1680,10 +1824,7 @@ router.post("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) 
       statusChangedAt: new Date(),
     });
 
-    // Send email notification to super admins (don't await - run in background)
-    notifyLeaveApplication(row).catch(err => 
-      console.error("Email notification error:", err)
-    );
+    notifyLeaveApplication(row).catch((err) => console.error("Email notification error:", err));
 
     res.status(201).json(row);
   } catch (e) {
@@ -1691,7 +1832,6 @@ router.post("/hrms/self/leaves", authenticate, ensureAuthUser, async (req, res) 
   }
 });
 
-/* ---------- Cancel my Leave ---------- */
 router.patch("/hrms/self/leaves/:id/cancel", authenticate, ensureAuthUser, async (req, res) => {
   try {
     const uid = getUserId(req);
@@ -1717,16 +1857,12 @@ router.patch("/hrms/self/leaves/:id/cancel", authenticate, ensureAuthUser, async
     row.statusChangedAt = new Date();
     await row.save();
 
-    // Optionally notify admins about cancellation
-    notifyLeaveStatusChange(row, user).catch(err => 
-      console.error("Email notification error:", err)
-    );
+    notifyLeaveStatusChange(row, user).catch((err) => console.error("Email notification error:", err));
 
     res.json(row);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 });
-
 
 module.exports = router;

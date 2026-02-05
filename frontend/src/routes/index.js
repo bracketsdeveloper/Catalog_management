@@ -91,6 +91,7 @@ import AttendanceUploadModal from "../components/attendance/AttendanceUploadModa
 import BankStatementUpload from "../pages/BankStatementUpload";
 import SuspenseAccountManager from "../pages/SuspenseAccountManager";
 import ConfigurationPage from "../pages/ConfigurationPage";
+import EmployeeConfigPage from "../pages/hrms/EmployeeConfigPage";
 
 
 const router = createBrowserRouter([
@@ -473,6 +474,10 @@ const router = createBrowserRouter([
                     {
                         path:"hrms/configuration",
                         element:<ConfigurationPage/>
+                    },
+                    {
+                        path:"hrms/employees/:employeeId/config",
+                        element:<EmployeeConfigPage/>
                     }
                 ]
             }

@@ -8,54 +8,32 @@ import { toast } from "react-toastify";
 import EmployeeModal from "../components/hrms/EmployeeModal.jsx";
 
 /* Small helpers */
-function fmtISO(d) {
-  if (!d) return "";
-  try {
-    const x = new Date(d);
-    if (Number.isNaN(+x)) return "";
-    return x.toISOString().slice(0, 10);
-  } catch {
-    return "";
-  }
-}
-
 function formatToDMY(date) {
   if (!date) return "";
   try {
     const d = new Date(date);
     if (Number.isNaN(+d)) return "";
-    
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
     const year = d.getFullYear();
-    
     return `${day}-${month}-${year}`;
   } catch {
     return "";
   }
 }
-
 function clampStr(v) {
   return (v || "").toString().trim();
 }
-
-// Convert D-M-Y to Y-M-D for date input compatibility
 function dmyToYmd(dmy) {
   if (!dmy) return "";
-  const [day, month, year] = dmy.split('-');
-  if (day && month && year) {
-    return `${year}-${month}-${day}`;
-  }
+  const [day, month, year] = dmy.split("-");
+  if (day && month && year) return `${year}-${month}-${day}`;
   return dmy;
 }
-
-// Convert Y-M-D to D-M-Y for display
 function ymdToDmy(ymd) {
   if (!ymd) return "";
-  const [year, month, day] = ymd.split('-');
-  if (year && month && day) {
-    return `${day}-${month}-${year}`;
-  }
+  const [year, month, day] = ymd.split("-");
+  if (year && month && day) return `${day}-${month}-${year}`;
   return ymd;
 }
 
@@ -73,7 +51,7 @@ export default function EmployeesPage() {
   const [hasMappedUser, setHasMappedUser] = useState(""); // "", "yes", "no"
 
   /* sorting */
-  const [sortBy, setSortBy] = useState("personal.name"); // default A-Z by name
+  const [sortBy, setSortBy] = useState("personal.name");
   const [dir, setDir] = useState("asc");
 
   /* modals */
@@ -95,7 +73,6 @@ export default function EmployeesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, role, dept, active, sortBy, dir]);
 
-  /* client-side post filters (fields not supported by API yet) */
   const displayed = useMemo(() => {
     let out = rows || [];
 
@@ -129,7 +106,6 @@ export default function EmployeesPage() {
     return out;
   }, [rows, dojFrom, dojTo, hasBiometric, hasMappedUser]);
 
-  /* template download */
   const downloadTemplate = () => {
     const headers = [
       "employeeId",
@@ -167,16 +143,15 @@ export default function EmployeesPage() {
       "lastRevisedSalaryAt(YYYY-MM-DD)",
       "nextAppraisalOn(YYYY-MM-DD)",
       "biometricId",
-      "mappedUser(ObjectId)"
+      "mappedUser(ObjectId)",
     ];
-  
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     XLSX.utils.book_append_sheet(wb, ws, "EmployeesTemplate");
     XLSX.writeFile(wb, "HRMS_Employees_Template.xlsx");
   };
 
-  /* bulk upload */
   const handleBulkUploadClick = () => fileInputRef.current?.click();
 
   const handleBulkFile = async (e) => {
@@ -187,28 +162,33 @@ export default function EmployeesPage() {
       const wb = XLSX.read(data);
       const ws = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
-  
+
       if (!json.length) {
         toast.warn("No rows found in uploaded file.");
         return;
       }
-  
+
       const toDate = (v) => (v ? new Date(v) : undefined);
       const toBool = (v) => String(v).toLowerCase() === "true";
       const toNum = (v) => (v === "" || v === null ? undefined : Number(v));
       const parseAdditionalProducts = (v) => {
         if (!v) return [];
-        return String(v).split(';').map(s => s.trim()).filter(Boolean);
+        return String(v)
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean);
       };
-  
+
       const payloads = json.map((r, idx) => {
         const employeeId = String(r["employeeId"] || "").trim();
         const name = String(r["name"] || "").trim();
         if (!employeeId || !name) {
           throw new Error(`Row ${idx + 2}: 'employeeId' and 'name' are required.`);
         }
-        const mappedUser = r["mappedUser(ObjectId)"] ? String(r["mappedUser(ObjectId)"]).trim() : undefined;
-  
+        const mappedUser = r["mappedUser(ObjectId)"]
+          ? String(r["mappedUser(ObjectId)"]).trim()
+          : undefined;
+
         return {
           personal: {
             employeeId,
@@ -219,12 +199,14 @@ export default function EmployeesPage() {
             emergencyPhone: r["emergencyPhone"] || "",
             aadhar: r["aadhar"] || "",
             bloodGroup: r["bloodGroup"] || "",
-            dateOfJoining: r["dateOfJoining(YYYY-MM-DD)"] ? toDate(r["dateOfJoining(YYYY-MM-DD)"]) : undefined,
-            medicalIssues: r["medicalIssues"] || ""
+            dateOfJoining: r["dateOfJoining(YYYY-MM-DD)"]
+              ? toDate(r["dateOfJoining(YYYY-MM-DD)"])
+              : undefined,
+            medicalIssues: r["medicalIssues"] || "",
           },
           org: {
             role: r["role"] || "",
-            department: r["department"] || ""
+            department: r["department"] || "",
           },
           assets: {
             laptopSerial: r["laptopSerial"] || "",
@@ -240,33 +222,39 @@ export default function EmployeesPage() {
             laptopBag: toBool(r["laptopBag(true/false)"]),
             rainCoverIssued: toBool(r["rainCoverIssued(true/false)"]),
             idCardsIssued: toBool(r["idCardsIssued(true/false)"]),
-            additionalProducts: parseAdditionalProducts(r["additionalProducts(semicolon-separated)"])
+            additionalProducts: parseAdditionalProducts(
+              r["additionalProducts(semicolon-separated)"]
+            ),
           },
           schedule: {
             expectedLoginTime: r["expectedLoginTime(e.g., 09:00 AM)"] || "",
-            expectedLogoutTime: r["expectedLogoutTime(e.g., 06:00 PM)"] || ""
+            expectedLogoutTime: r["expectedLogoutTime(e.g., 06:00 PM)"] || "",
           },
           financial: {
             bankName: r["bankName"] || "",
             bankAccountNumber: r["bankAccountNumber"] || "",
             currentCTC: toNum(r["currentCTC"]),
             currentTakeHome: toNum(r["currentTakeHome"]),
-            lastRevisedSalaryAt: r["lastRevisedSalaryAt(YYYY-MM-DD)"] ? toDate(r["lastRevisedSalaryAt(YYYY-MM-DD)"]) : undefined,
-            nextAppraisalOn: r["nextAppraisalOn(YYYY-MM-DD)"] ? toDate(r["nextAppraisalOn(YYYY-MM-DD)"]) : undefined
+            lastRevisedSalaryAt: r["lastRevisedSalaryAt(YYYY-MM-DD)"]
+              ? toDate(r["lastRevisedSalaryAt(YYYY-MM-DD)"])
+              : undefined,
+            nextAppraisalOn: r["nextAppraisalOn(YYYY-MM-DD)"]
+              ? toDate(r["nextAppraisalOn(YYYY-MM-DD)"])
+              : undefined,
           },
           biometricId: r["biometricId"] || "",
-          mappedUser
+          mappedUser,
         };
       });
-  
+
       toast.info(`Uploading ${payloads.length} employees...`);
       const results = await Promise.allSettled(payloads.map((p) => HRMS.upsertEmployee(p)));
       const ok = results.filter((r) => r.status === "fulfilled").length;
       const fail = results.length - ok;
-  
+
       if (ok) toast.success(`Uploaded ${ok} employee(s) successfully.`);
       if (fail) toast.error(`${fail} row(s) failed. Check data and retry.`);
-  
+
       refresh();
     } catch (err) {
       console.error(err);
@@ -276,7 +264,6 @@ export default function EmployeesPage() {
     }
   };
 
-  /* delete row */
   const handleDelete = async (employeeId) => {
     if (!window.confirm("Delete this employee?")) return;
     try {
@@ -288,11 +275,10 @@ export default function EmployeesPage() {
     }
   };
 
-  /* header sorting widgets */
   const SortHead = ({ label, field, className = "" }) => {
-    const active = sortBy === field;
-    const nextDir = active && dir === "asc" ? "desc" : "asc";
-    const arrow = !active ? "↕" : dir === "asc" ? "↑" : "↓";
+    const activeCol = sortBy === field;
+    const nextDir = activeCol && dir === "asc" ? "desc" : "asc";
+    const arrow = !activeCol ? "↕" : dir === "asc" ? "↑" : "↓";
     return (
       <th
         className={`border px-2 py-1 text-left cursor-pointer select-none ${className}`}
@@ -318,7 +304,10 @@ export default function EmployeesPage() {
             <button onClick={downloadTemplate} className="px-3 py-1 text-xs rounded border">
               Download Template
             </button>
-            <button onClick={handleBulkUploadClick} className="px-3 py-1 text-xs rounded bg-indigo-600 text-white">
+            <button
+              onClick={handleBulkUploadClick}
+              className="px-3 py-1 text-xs rounded bg-indigo-600 text-white"
+            >
               Bulk Upload
             </button>
             <button
@@ -341,7 +330,6 @@ export default function EmployeesPage() {
         }
       />
 
-      {/* Filters */}
       <FiltersBar>
         <div>
           <div className="text-xs">Search</div>
@@ -389,10 +377,7 @@ export default function EmployeesPage() {
             type="date"
             className="border rounded px-2 py-1 text-sm"
             value={dmyToYmd(dojFrom)}
-            onChange={(e) => {
-              const ymdDate = e.target.value;
-              setDojFrom(ymdToDmy(ymdDate));
-            }}
+            onChange={(e) => setDojFrom(ymdToDmy(e.target.value))}
           />
         </div>
         <div>
@@ -401,10 +386,7 @@ export default function EmployeesPage() {
             type="date"
             className="border rounded px-2 py-1 text-sm"
             value={dmyToYmd(dojTo)}
-            onChange={(e) => {
-              const ymdDate = e.target.value;
-              setDojTo(ymdToDmy(ymdDate));
-            }}
+            onChange={(e) => setDojTo(ymdToDmy(e.target.value))}
           />
         </div>
 
@@ -435,7 +417,6 @@ export default function EmployeesPage() {
         </div>
       </FiltersBar>
 
-      {/* Table */}
       <div className="overflow-x-auto border rounded">
         <table className="table-auto w-full text-sm">
           <thead className="bg-gray-50">
@@ -448,7 +429,7 @@ export default function EmployeesPage() {
               <SortHead label="Biometric ID" field="biometricId" />
               <th className="border px-2 py-1 text-left">Mapped User</th>
               <SortHead label="Active" field="isActive" className="w-20" />
-              <th className="border px-2 py-1 w-40"></th>
+              <th className="border px-2 py-1 w-[260px]"></th>
             </tr>
           </thead>
           <tbody>
@@ -457,10 +438,8 @@ export default function EmployeesPage() {
                 <td className="border px-2 py-1">{e.personal.employeeId}</td>
                 <td className="border px-2 py-1">{e.personal.name}</td>
                 <td className="border px-2 py-1">{e.org?.role || "-"}</td>
-                <td className="border px-2 py-1">{e.org?.department || "-"} </td>
-                <td className="border px-2 py-1">
-                  {formatToDMY(e.personal?.dateOfJoining)}
-                </td>
+                <td className="border px-2 py-1">{e.org?.department || "-"}</td>
+                <td className="border px-2 py-1">{formatToDMY(e.personal?.dateOfJoining)}</td>
                 <td className="border px-2 py-1">{e.biometricId || "-"}</td>
                 <td className="border px-2 py-1">
                   {e.mappedUser
@@ -469,7 +448,16 @@ export default function EmployeesPage() {
                 </td>
                 <td className="border px-2 py-1">{e.isActive ? "Yes" : "No"}</td>
                 <td className="border px-2 py-1">
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-3">
+                    {/* ✅ FIX: leading slash + matches your route */}
+                    <Link
+                      className="text-emerald-700 text-xs underline"
+                      to={`/admin-dashboard/hrms/employees/${encodeURIComponent(e.personal.employeeId)}/config`}
+                      title="Employee salary/attendance policy config"
+                    >
+                      Config
+                    </Link>
+
                     <button
                       onClick={() => {
                         setEditing(e);
@@ -479,6 +467,7 @@ export default function EmployeesPage() {
                     >
                       Edit
                     </button>
+
                     <button
                       onClick={() => handleDelete(e.personal.employeeId)}
                       className="text-red-600 text-xs underline"

@@ -39,7 +39,9 @@ function TimePicker12Hr({ value, onChange, label }) {
           onChange={(e) => handleChange("hour", e.target.value)}
         >
           {hours.map((h) => (
-            <option key={h} value={h}>{h}</option>
+            <option key={h} value={h}>
+              {h}
+            </option>
           ))}
         </select>
         <span className="self-center">:</span>
@@ -49,7 +51,9 @@ function TimePicker12Hr({ value, onChange, label }) {
           onChange={(e) => handleChange("minute", e.target.value)}
         >
           {minutes.map((m) => (
-            <option key={m} value={m}>{m}</option>
+            <option key={m} value={m}>
+              {m}
+            </option>
           ))}
         </select>
         <select
@@ -63,6 +67,38 @@ function TimePicker12Hr({ value, onChange, label }) {
       </div>
     </div>
   );
+}
+
+function buildDefaultMonthlyLeaveAllocation() {
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+  return months.map((m) => ({
+    month: m,
+    earned: 0,
+    sick: 0,
+    additional: 0,
+    special: 0,
+  }));
+}
+
+function normalizeMonthlyLeaveAllocation(input) {
+  const base = buildDefaultMonthlyLeaveAllocation();
+  if (!Array.isArray(input) || input.length !== 12) return base;
+
+  // map by month label if possible
+  const map = new Map(input.map((x) => [String(x?.month || "").trim(), x]));
+  return base.map((row) => {
+    const got = map.get(row.month) || {};
+    return {
+      month: row.month,
+      earned: Number.isFinite(+got.earned) ? +got.earned : 0,
+      sick: Number.isFinite(+got.sick) ? +got.sick : 0,
+      additional: Number.isFinite(+got.additional) ? +got.additional : 0,
+      special: Number.isFinite(+got.special) ? +got.special : 0,
+    };
+  });
 }
 
 export default function EmployeeModal({ onClose, onSaved, initial }) {
@@ -90,7 +126,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     laptopSerial: initial?.assets?.laptopSerial || "",
     mobileImei: initial?.assets?.mobileImei || "",
     mobileNumber: initial?.assets?.mobileNumber || "",
-    
+
     // Asset checkboxes
     mousepad: Boolean(initial?.assets?.mousepad) || false,
     mouse: Boolean(initial?.assets?.mouse) || false,
@@ -102,10 +138,10 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     laptopBag: Boolean(initial?.assets?.laptopBag) || false,
     rainCoverIssued: Boolean(initial?.assets?.rainCoverIssued) || false,
     idCardsIssued: Boolean(initial?.assets?.idCardsIssued) || false,
-    
+
     // Additional products array
-    additionalProducts: Array.isArray(initial?.assets?.additionalProducts) 
-      ? initial.assets.additionalProducts 
+    additionalProducts: Array.isArray(initial?.assets?.additionalProducts)
+      ? initial.assets.additionalProducts
       : [],
   }));
 
@@ -114,8 +150,12 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     bankAccountNumber: initial?.financial?.bankAccountNumber || "",
     currentCTC: initial?.financial?.currentCTC ?? "",
     currentTakeHome: initial?.financial?.currentTakeHome ?? "",
-    lastRevisedSalaryAt: initial?.financial?.lastRevisedSalaryAt ? initial.financial.lastRevisedSalaryAt.slice(0, 10) : "",
-    nextAppraisalOn: initial?.financial?.nextAppraisalOn ? initial.financial.nextAppraisalOn.slice(0, 10) : "",
+    lastRevisedSalaryAt: initial?.financial?.lastRevisedSalaryAt
+      ? initial.financial.lastRevisedSalaryAt.slice(0, 10)
+      : "",
+    nextAppraisalOn: initial?.financial?.nextAppraisalOn
+      ? initial.financial.nextAppraisalOn.slice(0, 10)
+      : "",
   }));
 
   const [schedule, setSchedule] = useState(() => ({
@@ -124,19 +164,28 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
   }));
 
   const [biometricId, setBiometricId] = useState(initial?.biometricId || "");
-  
+
   // Additional products state
   const [newAdditionalProduct, setNewAdditionalProduct] = useState("");
   const [additionalProducts, setAdditionalProducts] = useState(
-    Array.isArray(initial?.assets?.additionalProducts) 
-      ? initial.assets.additionalProducts 
-      : []
+    Array.isArray(initial?.assets?.additionalProducts) ? initial.assets.additionalProducts : []
+  );
+
+  // ✅ NEW: monthly leave allocation (per employee)
+  const [monthlyLeaveAllocation, setMonthlyLeaveAllocation] = useState(() =>
+    normalizeMonthlyLeaveAllocation(initial?.leaveMonthlyAllocation)
   );
 
   const [mappedUserId, setMappedUserId] = useState(initial?.mappedUser?._id || "");
   const [mappedUserLabel, setMappedUserLabel] = useState(
     initial?.mappedUser
-      ? `${initial.mappedUser.name}${initial.mappedUser.email ? " — " + initial.mappedUser.email : initial.mappedUser.phone ? " — " + initial.mappedUser.phone : ""}`
+      ? `${initial.mappedUser.name}${
+          initial.mappedUser.email
+            ? " — " + initial.mappedUser.email
+            : initial.mappedUser.phone
+              ? " — " + initial.mappedUser.phone
+              : ""
+        }`
       : ""
   );
 
@@ -198,7 +247,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
     if (!newAdditionalProduct.trim()) return;
     const updatedProducts = [...additionalProducts, newAdditionalProduct.trim()];
     setAdditionalProducts(updatedProducts);
-    setAssets(prev => ({ ...prev, additionalProducts: updatedProducts }));
+    setAssets((prev) => ({ ...prev, additionalProducts: updatedProducts }));
     setNewAdditionalProduct("");
   };
 
@@ -206,7 +255,31 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
   const removeAdditionalProduct = (index) => {
     const updatedProducts = additionalProducts.filter((_, i) => i !== index);
     setAdditionalProducts(updatedProducts);
-    setAssets(prev => ({ ...prev, additionalProducts: updatedProducts }));
+    setAssets((prev) => ({ ...prev, additionalProducts: updatedProducts }));
+  };
+
+  // ✅ NEW: update monthly leaves (by month index + field)
+  const updateMonthlyLeave = (idx, field, value) => {
+    setMonthlyLeaveAllocation((prev) => {
+      const next = [...prev];
+      const v = value === "" ? "" : value;
+      next[idx] = {
+        ...next[idx],
+        [field]: v,
+      };
+      return next;
+    });
+  };
+
+  const sanitizeMonthlyLeaveAllocation = () => {
+    // ensure numbers, no negatives, fixed to 2 decimals if needed
+    return monthlyLeaveAllocation.map((m) => ({
+      month: m.month,
+      earned: Math.max(0, Number.isFinite(+m.earned) ? +(+m.earned).toFixed(2) : 0),
+      sick: Math.max(0, Number.isFinite(+m.sick) ? +(+m.sick).toFixed(2) : 0),
+      additional: Math.max(0, Number.isFinite(+m.additional) ? +(+m.additional).toFixed(2) : 0),
+      special: Math.max(0, Number.isFinite(+m.special) ? +(+m.special).toFixed(2) : 0),
+    }));
   };
 
   const save = async () => {
@@ -233,6 +306,9 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
         schedule,
         biometricId: biometricId || "",
         mappedUser: mappedUserId || undefined,
+
+        // ✅ NEW: send monthly leave allocation to backend
+        leaveMonthlyAllocation: sanitizeMonthlyLeaveAllocation(),
       };
 
       if (isEdit) {
@@ -250,24 +326,52 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
 
   // Asset checkbox configuration
   const assetCheckboxes = [
-    { key: 'mousepad', label: 'Mousepad', icon: '🖱️' },
-    { key: 'mouse', label: 'Mouse', icon: '🐭' },
-    { key: 'mobileCharger', label: 'Mobile Charger', icon: '🔌' },
-    { key: 'neckband', label: 'Neckband', icon: '🎧' },
-    { key: 'bottle', label: 'Bottle', icon: '💧' },
-    { key: 'diary', label: 'Diary', icon: '📔' },
-    { key: 'pen', label: 'Pen', icon: '🖊️' },
-    { key: 'laptopBag', label: 'Laptop Bag', icon: '💼' },
-    { key: 'rainCoverIssued', label: 'Rain Cover', icon: '☔' },
-    { key: 'idCardsIssued', label: 'ID Cards', icon: '🪪' },
+    { key: "mousepad", label: "Mousepad", icon: "🖱️" },
+    { key: "mouse", label: "Mouse", icon: "🐭" },
+    { key: "mobileCharger", label: "Mobile Charger", icon: "🔌" },
+    { key: "neckband", label: "Neckband", icon: "🎧" },
+    { key: "bottle", label: "Bottle", icon: "💧" },
+    { key: "diary", label: "Diary", icon: "📔" },
+    { key: "pen", label: "Pen", icon: "🖊️" },
+    { key: "laptopBag", label: "Laptop Bag", icon: "💼" },
+    { key: "rainCoverIssued", label: "Rain Cover", icon: "☔" },
+    { key: "idCardsIssued", label: "ID Cards", icon: "🪪" },
   ];
+
+  const monthlyTotals = useMemo(() => {
+    const sum = { earned: 0, sick: 0, additional: 0, special: 0 };
+    for (const m of monthlyLeaveAllocation) {
+      sum.earned += Number.isFinite(+m.earned) ? +m.earned : 0;
+      sum.sick += Number.isFinite(+m.sick) ? +m.sick : 0;
+      sum.additional += Number.isFinite(+m.additional) ? +m.additional : 0;
+      sum.special += Number.isFinite(+m.special) ? +m.special : 0;
+    }
+    return {
+      earned: +sum.earned.toFixed(2),
+      sick: +sum.sick.toFixed(2),
+      additional: +sum.additional.toFixed(2),
+      special: +sum.special.toFixed(2),
+    };
+  }, [monthlyLeaveAllocation]);
+
+  const applySameForAllMonths = (type, value) => {
+    const v = value === "" ? 0 : Math.max(0, Number(value));
+    setMonthlyLeaveAllocation((prev) =>
+      prev.map((m) => ({
+        ...m,
+        [type]: Number.isFinite(v) ? v : 0,
+      }))
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">{isEdit ? "Edit Employee" : "Create Employee"}</h2>
-          <button onClick={onClose} className="text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-2xl leading-none">
+            ×
+          </button>
         </div>
 
         {/* Personal Information */}
@@ -406,10 +510,137 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
           )}
         </div>
 
+        {/* ✅ NEW: Monthly Leave Allocation */}
+        <div className="mb-6 p-4 border rounded bg-white">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-gray-700">Monthly Leave Allocation</h3>
+            <div className="text-xs text-gray-500">
+              Yearly totals — Earned: {monthlyTotals.earned}, Sick: {monthlyTotals.sick}, Additional:{" "}
+              {monthlyTotals.additional}, Special: {monthlyTotals.special}
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="border rounded p-2 bg-gray-50">
+              <div className="text-xs font-semibold text-gray-600 mb-1">Quick Fill (All Months)</div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs w-16">Earned</label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  defaultValue=""
+                  placeholder="e.g. 1.25"
+                  onBlur={(e) => applySameForAllMonths("earned", e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <label className="text-xs w-16">Sick</label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  defaultValue=""
+                  placeholder="e.g. 1"
+                  onBlur={(e) => applySameForAllMonths("sick", e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <label className="text-xs w-16">Additional</label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  defaultValue=""
+                  placeholder="e.g. 0"
+                  onBlur={(e) => applySameForAllMonths("additional", e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <label className="text-xs w-16">Special</label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-2 py-1 text-sm"
+                  defaultValue=""
+                  placeholder="e.g. 0"
+                  onBlur={(e) => applySameForAllMonths("special", e.target.value)}
+                />
+              </div>
+              <div className="text-[11px] text-gray-500 mt-2">
+                Tip: type a value and click outside the input to apply to all months.
+              </div>
+            </div>
+
+            <div className="md:col-span-3">
+              <div className="overflow-auto border rounded">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 border-b">Month</th>
+                      <th className="text-left px-3 py-2 border-b">Earned</th>
+                      <th className="text-left px-3 py-2 border-b">Sick</th>
+                      <th className="text-left px-3 py-2 border-b">Additional</th>
+                      <th className="text-left px-3 py-2 border-b">Special</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyLeaveAllocation.map((m, idx) => (
+                      <tr key={m.month} className="odd:bg-white even:bg-gray-50">
+                        <td className="px-3 py-2 border-b font-medium">{m.month}</td>
+                        <td className="px-3 py-2 border-b">
+                          <input
+                            type="number"
+                            className="w-24 border rounded px-2 py-1"
+                            value={m.earned}
+                            onChange={(e) => updateMonthlyLeave(idx, "earned", e.target.value)}
+                            min="0"
+                            step="0.25"
+                          />
+                        </td>
+                        <td className="px-3 py-2 border-b">
+                          <input
+                            type="number"
+                            className="w-24 border rounded px-2 py-1"
+                            value={m.sick}
+                            onChange={(e) => updateMonthlyLeave(idx, "sick", e.target.value)}
+                            min="0"
+                            step="0.25"
+                          />
+                        </td>
+                        <td className="px-3 py-2 border-b">
+                          <input
+                            type="number"
+                            className="w-24 border rounded px-2 py-1"
+                            value={m.additional}
+                            onChange={(e) => updateMonthlyLeave(idx, "additional", e.target.value)}
+                            min="0"
+                            step="0.25"
+                          />
+                        </td>
+                        <td className="px-3 py-2 border-b">
+                          <input
+                            type="number"
+                            className="w-24 border rounded px-2 py-1"
+                            value={m.special}
+                            onChange={(e) => updateMonthlyLeave(idx, "special", e.target.value)}
+                            min="0"
+                            step="0.25"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-2 text-xs text-gray-500">
+                This is per-employee leave credit setup (Jan–Dec). Your backend should store this on the employee record.
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Asset Assignment */}
         <div className="mb-6">
           <h3 className="text-sm font-semibold mb-3 text-gray-700 border-b pb-2">Asset Assignment</h3>
-          
+
           {/* Serial Numbers */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div>
@@ -446,20 +677,24 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
             <h4 className="text-xs font-semibold mb-3 text-gray-600">Equipment Issued</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {assetCheckboxes.map((item) => (
-                <div 
-                  key={item.key} 
+                <div
+                  key={item.key}
                   className={`p-3 border rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${
-                    assets[item.key] 
-                      ? 'bg-green-50 border-green-300 ring-1 ring-green-200' 
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    assets[item.key]
+                      ? "bg-green-50 border-green-300 ring-1 ring-green-200"
+                      : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                   }`}
-                  onClick={() => setAssets(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                  onClick={() => setAssets((prev) => ({ ...prev, [item.key]: !prev[item.key] }))}
                 >
                   <div className="text-2xl mb-2">{item.icon}</div>
                   <div className="text-center">
                     <div className="text-sm font-medium text-gray-900">{item.label}</div>
-                    <div className={`text-xs font-medium mt-1 ${assets[item.key] ? 'text-green-600' : 'text-gray-500'}`}>
-                      {assets[item.key] ? '✓ Issued' : '× Not Issued'}
+                    <div
+                      className={`text-xs font-medium mt-1 ${
+                        assets[item.key] ? "text-green-600" : "text-gray-500"
+                      }`}
+                    >
+                      {assets[item.key] ? "✓ Issued" : "× Not Issued"}
                     </div>
                   </div>
                 </div>
@@ -477,7 +712,7 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
                 value={newAdditionalProduct}
                 onChange={(e) => setNewAdditionalProduct(e.target.value)}
                 placeholder="e.g., Monitor, Keyboard, Headset, etc."
-                onKeyPress={(e) => e.key === 'Enter' && addAdditionalProduct()}
+                onKeyDown={(e) => e.key === "Enter" && addAdditionalProduct()}
               />
               <button
                 type="button"
@@ -487,12 +722,12 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
                 Add
               </button>
             </div>
-            
+
             {additionalProducts.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {additionalProducts.map((product, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full flex items-center gap-2"
                   >
                     {product}
@@ -651,19 +886,14 @@ export default function EmployeeModal({ onClose, onSaved, initial }) {
 
         {/* Actions */}
         <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-          <button 
-            onClick={onClose} 
-            className="border px-4 py-2 rounded hover:bg-gray-50"
-          >
+          <button onClick={onClose} className="border px-4 py-2 rounded hover:bg-gray-50">
             Cancel
           </button>
           <button
             onClick={save}
             disabled={disabled}
             className={`px-4 py-2 text-white rounded ${
-              disabled 
-                ? "bg-blue-400 cursor-not-allowed" 
-                : "bg-blue-600 hover:bg-blue-700"
+              disabled ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
             {isEdit ? "Save Changes" : "Create Employee"}

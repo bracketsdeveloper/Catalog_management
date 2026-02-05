@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
-import { HRMS } from '../api/hrmsClient';
-import EmployeeCalendarModal from '../components/attendance/EmployeeCalendarModal';
-import AttendanceUploadModal from '../components/attendance/AttendanceUploadModal';
+// client/src/pages/AttendanceSummaryPage.jsx
+import React, { useState, useEffect, useMemo } from "react";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+import { HRMS } from "../api/hrmsClient";
+import EmployeeCalendarModal from "../components/attendance/EmployeeCalendarModal";
+import AttendanceUploadModal from "../components/attendance/AttendanceUploadModal";
 
 const PageHeader = ({ title, subtitle, actions }) => (
   <div className="mb-6">
@@ -19,53 +20,62 @@ const PageHeader = ({ title, subtitle, actions }) => (
 
 const FiltersBar = ({ children }) => (
   <div className="mb-6 bg-gray-50 p-4 rounded-lg border">
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {children}
-    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">{children}</div>
   </div>
 );
 
 // Helper function to convert decimal hours to hh:mm format
 const formatHoursToHHMM = (decimalHours) => {
-  if (!decimalHours && decimalHours !== 0) return '00:00';
+  if (!decimalHours && decimalHours !== 0) return "00:00";
   const hours = Math.floor(decimalHours);
   const minutes = Math.round((decimalHours - hours) * 60);
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 };
+
+// month number -> label used in Employee.leaveMonthlyAllocation
+const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const AttendanceSummaryPage = () => {
   const navigate = useNavigate();
   const [summaryData, setSummaryData] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [department, setDepartment] = useState('');
-  const [role, setRole] = useState('');
+
+  const [department, setDepartment] = useState("");
+  const [role, setRole] = useState("");
+
   const [departments, setDepartments] = useState([]);
   const [roles, setRoles] = useState([]);
+
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
-  const [searchTerm, setSearchTerm] = useState('');
+
+  const [sortConfig, setSortConfig] = useState({ key: "name", direction: "asc" });
+  const [searchTerm, setSearchTerm] = useState("");
+
   const [holidays, setHolidays] = useState([]);
 
+  // ✅ NEW: map of employeeId -> leaveMonthlyAllocation[]
+  const [leaveAllocMap, setLeaveAllocMap] = useState(new Map());
+
   useEffect(() => {
-    fetchFilters();
+    fetchFilters(); // still used for departments/roles dropdowns
     fetchHolidays();
+    // ✅ NEW: also fetch employee leave allocation map
+    fetchEmployeeLeaveAllocations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, year]);
 
   useEffect(() => {
     fetchSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, year, department, role, holidays]);
+  }, [month, year, department, role, holidays, leaveAllocMap]);
 
-  // Fetch holidays for the selected month/year
   const fetchHolidays = async () => {
     try {
-      // your client has listHolidays(), but your old page used getHolidays()
-      // keep your old intent: if getHolidays exists, use it; else fallback to listHolidays
       const response = HRMS.getHolidays
         ? await HRMS.getHolidays({ month, year })
         : await HRMS.listHolidays({ month, year });
@@ -73,7 +83,7 @@ const AttendanceSummaryPage = () => {
       const data = response?.data?.rows || response?.data || [];
       setHolidays(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching holidays:', error);
+      console.error("Error fetching holidays:", error);
       setHolidays([]);
     }
   };
@@ -88,22 +98,16 @@ const AttendanceSummaryPage = () => {
 
     const monthHolidays = holidays.filter((h) => {
       const hd = new Date(h.date);
-      return (
-        hd.getMonth() === currentMonthIndex &&
-        hd.getFullYear() === year &&
-        h.type !== 'RESTRICTED'
-      );
+      return hd.getMonth() === currentMonthIndex && hd.getFullYear() === year && h.type !== "RESTRICTED";
     });
 
-    const holidayDates = new Set(
-      monthHolidays.map((h) => new Date(h.date).getDate())
-    );
+    const holidayDates = new Set(monthHolidays.map((h) => new Date(h.date).getDate()));
 
     let workingDays = 0;
     for (let day = 1; day <= todayDate; day++) {
       const d = new Date(year, currentMonthIndex, day);
       const dow = d.getDay();
-      if (dow === 0 || dow === 6) continue; // Sun/Sat off (your current logic)
+      if (dow === 0 || dow === 6) continue;
       if (holidayDates.has(day)) continue;
       workingDays++;
     }
@@ -111,23 +115,17 @@ const AttendanceSummaryPage = () => {
     return workingDays;
   };
 
-  // Helper: total working days in month (excludes weekends + public holidays; restricted holidays are working days)
+  // Helper: total working days in month
   const getTotalWorkingDaysInMonth = (month, year) => {
     const daysInMonth = new Date(year, month, 0).getDate();
     const monthIndex = month - 1;
 
     const monthHolidays = holidays.filter((h) => {
       const hd = new Date(h.date);
-      return (
-        hd.getMonth() === monthIndex &&
-        hd.getFullYear() === year &&
-        h.type !== 'RESTRICTED'
-      );
+      return hd.getMonth() === monthIndex && hd.getFullYear() === year && h.type !== "RESTRICTED";
     });
 
-    const holidayDates = new Set(
-      monthHolidays.map((h) => new Date(h.date).getDate())
-    );
+    const holidayDates = new Set(monthHolidays.map((h) => new Date(h.date).getDate()));
 
     let workingDays = 0;
     for (let day = 1; day <= daysInMonth; day++) {
@@ -144,7 +142,7 @@ const AttendanceSummaryPage = () => {
   const fetchFilters = async () => {
     try {
       const response = await HRMS.listEmployees({ limit: 1000 });
-      const employees = response.data.rows || [];
+      const employees = response?.data?.rows || [];
       const deptSet = new Set();
       const roleSet = new Set();
 
@@ -156,8 +154,55 @@ const AttendanceSummaryPage = () => {
       setDepartments(Array.from(deptSet).sort());
       setRoles(Array.from(roleSet).sort());
     } catch (error) {
-      console.error('Error fetching filters:', error);
+      console.error("Error fetching filters:", error);
     }
+  };
+
+  // ✅ NEW: fetch leave allocations once (employeeId -> leaveMonthlyAllocation array)
+  const fetchEmployeeLeaveAllocations = async () => {
+    try {
+      // IMPORTANT: backend must include leaveMonthlyAllocation in listEmployees projection
+      const resp = await HRMS.listEmployees({ limit: 2000 });
+      const rows = resp?.data?.rows || [];
+
+      const map = new Map();
+      for (const emp of rows) {
+        const empId = String(emp?.personal?.employeeId || emp?.employeeId || "").trim();
+        if (!empId) continue;
+
+        // try multiple shapes just in case
+        const alloc =
+          emp.leaveMonthlyAllocation ||
+          emp?.leaveMonthlyAllocation ||
+          emp?.employee?.leaveMonthlyAllocation ||
+          null;
+
+        if (Array.isArray(alloc)) {
+          map.set(empId, alloc);
+        }
+      }
+      setLeaveAllocMap(map);
+    } catch (e) {
+      console.error("Failed to fetch employee leave allocations:", e);
+      setLeaveAllocMap(new Map());
+    }
+  };
+
+  // ✅ get allocation for a given employeeId + selected month
+  const getAllocForEmpMonth = (employeeId, monthNumber) => {
+    const empId = String(employeeId || "").trim();
+    const arr = leaveAllocMap.get(empId);
+    if (!Array.isArray(arr) || !arr.length) return { sick: 0, earned: 0, special: 0 };
+
+    const label = MONTH_LABELS[monthNumber - 1];
+    const row = arr.find((x) => String(x?.month || "").trim() === label);
+    if (!row) return { sick: 0, earned: 0, special: 0 };
+
+    return {
+      sick: Number.isFinite(+row.sick) ? +row.sick : 0,
+      earned: Number.isFinite(+row.earned) ? +row.earned : 0,
+      special: Number.isFinite(+row.special) ? +row.special : 0,
+    };
   };
 
   const fetchSummary = async () => {
@@ -168,26 +213,22 @@ const AttendanceSummaryPage = () => {
       if (role) params.role = role;
 
       const response = await HRMS.getAttendanceSummaryAll(params);
-      const rawData = response.data.results || [];
+      const rawData = response?.data?.results || [];
 
       const today = new Date();
       const currentMonth = today.getMonth() + 1;
       const currentYear = today.getFullYear();
 
-      let workingDaysForCalc;
-      let displayWorkingDays;
+      let displayWorkingDays = 0;
       let isTillToday = false;
 
       if (month === currentMonth && year === currentYear) {
-        workingDaysForCalc = calculateWorkingDaysTillToday(month, year) || 0;
-        displayWorkingDays = workingDaysForCalc;
+        displayWorkingDays = calculateWorkingDaysTillToday(month, year) || 0;
         isTillToday = true;
       } else if (month < currentMonth || year < currentYear) {
-        workingDaysForCalc = getTotalWorkingDaysInMonth(month, year);
-        displayWorkingDays = workingDaysForCalc;
+        displayWorkingDays = getTotalWorkingDaysInMonth(month, year);
         isTillToday = false;
       } else {
-        workingDaysForCalc = 0;
         displayWorkingDays = 0;
         isTillToday = false;
       }
@@ -197,39 +238,48 @@ const AttendanceSummaryPage = () => {
       const processed = rawData.map((employee) => {
         const summary = { ...employee.summary };
 
-        // ✅ Your new sheet logic
-        // Total Working Days = C6
+        // Total Working Days
         const totalWorkingDays = displayWorkingDays;
 
-        // Days Attended = D6 (presentDays)
+        // Days Attended
         const daysAttended = Number(summary.presentDays || 0);
 
-        // Total Leaves Taken = C6 - D6
+        // Total Leaves Taken
         const totalLeavesTaken = Math.max(0, totalWorkingDays - daysAttended);
 
-        // Paid Leaves for the month = summary.paidLeaves || 0 (fallback)
-        // If your backend doesn't provide this, it will show 0 until you add it.
-        const paidLeaves = Number(summary.paidLeaves || 0);
+        // ✅ THIS IS THE CHANGE: use per-employee monthly allocation (NOT Leave applications)
+        const alloc = getAllocForEmpMonth(employee.employeeId, month);
 
-        // Pay Loss Days = (C6 - D6) - F6
-        const payLossDays = Math.max(0, totalLeavesTaken - paidLeaves);
+        const sickLeaves = Number(alloc.sick || 0);
+        const earnedLeaves = Number(alloc.earned || 0);
+        const specialLeaves = Number(alloc.special || 0);
 
-        // Expected hours = C6 * dailyHours (dailyHours can be per employee; fallback 9)
+        const totalPaidLeaves = Math.max(0, sickLeaves + earnedLeaves + specialLeaves);
+
+        // Pay Loss Days
+        const payLossDays = Math.max(0, totalLeavesTaken - totalPaidLeaves);
+
+        // Expected hours
         const dailyHours = Number(summary.dailyHours || summary.dailyWorkHours || 9);
         const expectedHours = totalWorkingDays * dailyHours;
 
-        // Worked hours = from attendance software (summary.totalHours)
+        // Worked hours
         const hoursWorked = Number(summary.totalHours || 0);
 
-        // To be paid for = D6 + F6
-        const toBePaidFor = daysAttended + paidLeaves;
+        // To be paid for
+        const toBePaidFor = daysAttended + totalPaidLeaves;
 
-        // Keep existing formatted values if you want, but only for your table
         summary.daysInMonth = daysInMonth;
         summary.totalWorkingDays = totalWorkingDays;
         summary.daysAttended = daysAttended;
         summary.totalLeavesTaken = totalLeavesTaken;
-        summary.paidLeaves = paidLeaves;
+
+        // ✅ expose allocation-based paid leave breakdown
+        summary.sickLeaves = sickLeaves;
+        summary.earnedLeaves = earnedLeaves;
+        summary.specialLeaves = specialLeaves;
+        summary.paidLeaves = totalPaidLeaves;
+
         summary.payLossDays = payLossDays;
         summary.expectedHours = expectedHours;
         summary.hoursWorked = hoursWorked;
@@ -238,21 +288,20 @@ const AttendanceSummaryPage = () => {
         summary.formattedExpectedHours = formatHoursToHHMM(expectedHours);
         summary.formattedWorkedHours = formatHoursToHHMM(hoursWorked);
 
-        // keep your existing label fields for the banner if you want (design unchanged)
         summary.isTillToday = isTillToday;
         summary.workingDaysLabel = isTillToday
           ? `${displayWorkingDays} working days till today`
-          : (month < currentMonth || year < currentYear)
+          : month < currentMonth || year < currentYear
           ? `${displayWorkingDays} working days this month`
-          : 'Future month - no working days yet';
+          : "Future month - no working days yet";
 
         return { ...employee, summary };
       });
 
       setSummaryData(processed);
     } catch (error) {
-      console.error('Error fetching summary:', error);
-      toast.error('Failed to load attendance summary');
+      console.error("Error fetching summary:", error);
+      toast.error("Failed to load attendance summary");
       setSummaryData([]);
     } finally {
       setLoading(false);
@@ -265,35 +314,35 @@ const AttendanceSummaryPage = () => {
   };
 
   const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
     setSortConfig({ key, direction });
   };
 
   const getSortedData = () => {
     const filtered = summaryData.filter((emp) => {
-      const name = String(emp.name || '').toLowerCase();
-      const id = String(emp.employeeId || '').toLowerCase();
-      const dept = String(emp.department || '').toLowerCase();
+      const name = String(emp.name || "").toLowerCase();
+      const id = String(emp.employeeId || "").toLowerCase();
+      const dept = String(emp.department || "").toLowerCase();
       const q = searchTerm.toLowerCase();
       return name.includes(q) || id.includes(q) || dept.includes(q);
     });
 
     return [...filtered].sort((a, b) => {
-      if (sortConfig.key === 'name') {
-        return sortConfig.direction === 'asc'
-          ? String(a.name || '').localeCompare(String(b.name || ''))
-          : String(b.name || '').localeCompare(String(a.name || ''));
+      if (sortConfig.key === "name") {
+        return sortConfig.direction === "asc"
+          ? String(a.name || "").localeCompare(String(b.name || ""))
+          : String(b.name || "").localeCompare(String(a.name || ""));
       }
-      if (sortConfig.key === 'hoursWorked') {
+      if (sortConfig.key === "hoursWorked") {
         const ah = Number(a.summary?.hoursWorked || 0);
         const bh = Number(b.summary?.hoursWorked || 0);
-        return sortConfig.direction === 'asc' ? ah - bh : bh - ah;
+        return sortConfig.direction === "asc" ? ah - bh : bh - ah;
       }
-      if (sortConfig.key === 'toBePaidFor') {
+      if (sortConfig.key === "toBePaidFor") {
         const av = Number(a.summary?.toBePaidFor || 0);
         const bv = Number(b.summary?.toBePaidFor || 0);
-        return sortConfig.direction === 'asc' ? av - bv : bv - av;
+        return sortConfig.direction === "asc" ? av - bv : bv - av;
       }
       return 0;
     });
@@ -301,21 +350,21 @@ const AttendanceSummaryPage = () => {
 
   const handleUploadSuccess = () => {
     setUploadModalOpen(false);
-    toast.success('Attendance uploaded successfully');
+    toast.success("Attendance uploaded successfully");
     fetchSummary();
   };
 
   const getHolidayCount = () =>
     holidays.filter((h) => {
       const d = new Date(h.date);
-      return d.getMonth() + 1 === month && d.getFullYear() === year && h.type !== 'RESTRICTED';
+      return d.getMonth() + 1 === month && d.getFullYear() === year && h.type !== "RESTRICTED";
     }).length;
 
   const sortedData = useMemo(() => getSortedData(), [summaryData, searchTerm, sortConfig]);
 
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December",
   ];
 
   const today = new Date();
@@ -328,12 +377,12 @@ const AttendanceSummaryPage = () => {
       <PageHeader
         title="Attendance Summary"
         subtitle={`${monthNames[month - 1]} ${year} - ${summaryData.length} employees${
-          isCurrentMonth ? ' (Till Today)' : isPastMonth ? '' : ' (Future Month)'
-        }${holidayCount > 0 ? ` • ${holidayCount} holiday${holidayCount > 1 ? 's' : ''}` : ''}`}
+          isCurrentMonth ? " (Till Today)" : isPastMonth ? "" : " (Future Month)"
+        }${holidayCount > 0 ? ` • ${holidayCount} holiday${holidayCount > 1 ? "s" : ""}` : ""}`}
         actions={
           <div className="flex gap-2">
             <button
-              onClick={() => navigate('/admin-dashboard/hrms/attendance')}
+              onClick={() => navigate("/admin-dashboard/hrms/attendance")}
               className="px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
             >
               Individual View
@@ -343,7 +392,12 @@ const AttendanceSummaryPage = () => {
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                />
               </svg>
               Upload Attendance
             </button>
@@ -360,7 +414,9 @@ const AttendanceSummaryPage = () => {
             className="w-full border rounded-md px-3 py-2"
           >
             {monthNames.map((name, index) => (
-              <option key={index} value={index + 1}>{name}</option>
+              <option key={index} value={index + 1}>
+                {name}
+              </option>
             ))}
           </select>
         </div>
@@ -373,7 +429,9 @@ const AttendanceSummaryPage = () => {
             className="w-full border rounded-md px-3 py-2"
           >
             {[2023, 2024, 2025, 2026].map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
           </select>
         </div>
@@ -387,7 +445,9 @@ const AttendanceSummaryPage = () => {
           >
             <option value="">All Departments</option>
             {departments.map((dept) => (
-              <option key={dept} value={dept}>{dept}</option>
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
             ))}
           </select>
         </div>
@@ -401,53 +461,13 @@ const AttendanceSummaryPage = () => {
           >
             <option value="">All Roles</option>
             {roles.map((r) => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r} value={r}>
+                {r}
+              </option>
             ))}
           </select>
         </div>
       </FiltersBar>
-
-      {/* Information Banner (UNCHANGED) */}
-      <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <div className="flex items-start">
-          <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <span className="text-sm text-blue-700 font-medium">
-              {isCurrentMonth ? 'Calculated Till Today' : isPastMonth ? 'Complete Month Data' : 'Future Month'}
-            </span>
-            <div className="text-xs text-blue-600 mt-1">
-              {isCurrentMonth ? (
-                <>
-                  • Working days exclude weekends and public holidays<br />
-                  • Restricted holidays are counted as working days
-                </>
-              ) : isPastMonth ? (
-                <>
-                  • Complete month data shown<br />
-                  • Working days exclude weekends and public holidays
-                </>
-              ) : (
-                <>• Future month - no attendance data available yet</>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {holidayCount > 0 && (
-          <div className="mt-3 pt-3 border-t border-blue-200">
-            <div className="flex items-center">
-              <svg className="w-4 h-4 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-              <span className="text-xs text-blue-700">
-                {holidayCount} public holiday{holidayCount > 1 ? 's' : ''} in {monthNames[month - 1]} {year}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
 
       <div className="mb-4">
         <input
@@ -471,19 +491,16 @@ const AttendanceSummaryPage = () => {
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
-            {/* ✅ NEW TABLE LAYOUT ONLY (Design same) */}
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSort('name')}
+                    onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center gap-1">
                       Employee Name
-                      {sortConfig.key === 'name' && (
-                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                      {sortConfig.key === "name" && <span>{sortConfig.direction === "asc" ? "↑" : "↓"}</span>}
                     </div>
                   </th>
 
@@ -517,25 +534,21 @@ const AttendanceSummaryPage = () => {
 
                   <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSort('hoursWorked')}
+                    onClick={() => handleSort("hoursWorked")}
                   >
                     <div className="flex items-center gap-1">
                       Hours Worked
-                      {sortConfig.key === 'hoursWorked' && (
-                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                      {sortConfig.key === "hoursWorked" && <span>{sortConfig.direction === "asc" ? "↑" : "↓"}</span>}
                     </div>
                   </th>
 
                   <th
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSort('toBePaidFor')}
+                    onClick={() => handleSort("toBePaidFor")}
                   >
                     <div className="flex items-center gap-1">
                       To be paid for
-                      {sortConfig.key === 'toBePaidFor' && (
-                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                      {sortConfig.key === "toBePaidFor" && <span>{sortConfig.direction === "asc" ? "↑" : "↓"}</span>}
                     </div>
                   </th>
 
@@ -559,29 +572,21 @@ const AttendanceSummaryPage = () => {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.daysInMonth}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.daysInMonth}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.totalWorkingDays}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.daysAttended}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.totalLeavesTaken}</td>
 
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.totalWorkingDays}
+                      <div className="font-medium">{employee.summary.paidLeaves}</div>
+                      <div className="text-xs text-gray-500 mt-1 leading-4">
+                        <div>Sick: {employee.summary.sickLeaves}</div>
+                        <div>Earned: {employee.summary.earnedLeaves}</div>
+                        <div>Special: {employee.summary.specialLeaves}</div>
+                      </div>
                     </td>
 
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.daysAttended}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.totalLeavesTaken}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.paidLeaves}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.payLossDays}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.payLossDays}</td>
 
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {employee.summary.formattedExpectedHours}h
@@ -590,13 +595,8 @@ const AttendanceSummaryPage = () => {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.formattedWorkedHours}h
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {employee.summary.toBePaidFor}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.formattedWorkedHours}h</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{employee.summary.toBePaidFor}</td>
 
                     <td className="px-6 py-4 text-sm font-medium">
                       <button
@@ -615,7 +615,6 @@ const AttendanceSummaryPage = () => {
             </table>
           </div>
 
-          {/* Footer (kept, but no extra stats required by you? You didn't ask to remove it now, so kept design) */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
             <div className="text-sm text-gray-700">
               Showing {sortedData.length} of {summaryData.length} employees
@@ -624,7 +623,6 @@ const AttendanceSummaryPage = () => {
         </div>
       )}
 
-      {/* Employee Calendar Modal */}
       {calendarModalOpen && selectedEmployee && (
         <EmployeeCalendarModal
           employee={selectedEmployee}
@@ -642,7 +640,6 @@ const AttendanceSummaryPage = () => {
         />
       )}
 
-      {/* Attendance Upload Modal */}
       {uploadModalOpen && (
         <AttendanceUploadModal
           onClose={() => setUploadModalOpen(false)}
