@@ -15,11 +15,49 @@ const ConfigurationPage = () => {
     fetchDepartments();
   }, []);
 
+  const normalizeConfig = (cfg) => {
+    const c = cfg || {};
+
+    return {
+      ...c,
+      attendanceSettings: c.attendanceSettings || {},
+      biWeeklyRule: c.biWeeklyRule || {},
+      leavePolicy: {
+        ...(c.leavePolicy || {}),
+        sickLeave: (c.leavePolicy && c.leavePolicy.sickLeave) || {},
+        earnedLeave: (c.leavePolicy && c.leavePolicy.earnedLeave) || {},
+        specialLeaves: (c.leavePolicy && c.leavePolicy.specialLeaves) || {},
+        holidays: (c.leavePolicy && c.leavePolicy.holidays) || {},
+        weekendDeductionTiers: Array.isArray(c.leavePolicy?.weekendDeductionTiers)
+          ? c.leavePolicy.weekendDeductionTiers
+          : [],
+      },
+      disciplinePolicy: {
+        ...(c.disciplinePolicy || {}),
+        ncncPenalty: (c.disciplinePolicy && c.disciplinePolicy.ncncPenalty) || {},
+        overtimePolicy: (c.disciplinePolicy && c.disciplinePolicy.overtimePolicy) || {},
+      },
+      wfhPolicy: {
+        ...(c.wfhPolicy || {}),
+        emergencyWFH: (c.wfhPolicy && c.wfhPolicy.emergencyWFH) || {},
+        casualWFH: (c.wfhPolicy && c.wfhPolicy.casualWFH) || {},
+      },
+      incentives: {
+        ...(c.incentives || {}),
+        attendanceBonus: (c.incentives && c.incentives.attendanceBonus) || {},
+        departmentWeightage: Array.isArray(c.incentives?.departmentWeightage) ? c.incentives.departmentWeightage : [],
+      },
+      statutoryDefaults: c.statutoryDefaults || {},
+      financialYear: c.financialYear || {},
+      defaultSalaryBreakdown: c.defaultSalaryBreakdown || {},
+    };
+  };
+
   const fetchCompanyConfig = async () => {
     setLoading(true);
     try {
       const response = await HRMS.getCompanyConfig();
-      setCompanyConfig(response.data.config);
+      setCompanyConfig(normalizeConfig(response.data.config));
     } catch (error) {
       console.error('Error fetching config:', error);
       toast.error('Failed to load configuration');
@@ -32,7 +70,7 @@ const ConfigurationPage = () => {
     try {
       const response = await HRMS.listEmployees({ limit: 1000 });
       const deptSet = new Set();
-      (response.data.rows || []).forEach(emp => {
+      (response.data.rows || []).forEach((emp) => {
         if (emp.org?.department) deptSet.add(emp.org.department);
       });
       setDepartments(Array.from(deptSet).sort());
@@ -58,13 +96,13 @@ const ConfigurationPage = () => {
     if (!window.confirm('Apply this configuration to ALL employees? This will override their individual settings.')) {
       return;
     }
-    
+
     try {
       const response = await HRMS.applyConfigToAll({
         overrideExisting: true,
-        department: selectedDepartment || null
+        department: selectedDepartment || null,
       });
-      
+
       toast.success(`Applied to ${response.data.results.updated} employees`);
     } catch (error) {
       console.error('Error applying config:', error);
@@ -74,15 +112,16 @@ const ConfigurationPage = () => {
 
   const handleChange = (path, value) => {
     const keys = path.split('.');
-    setCompanyConfig(prev => {
-      const newConfig = JSON.parse(JSON.stringify(prev));
+    setCompanyConfig((prev) => {
+      const base = normalizeConfig(prev);
+      const newConfig = JSON.parse(JSON.stringify(base));
       let current = newConfig;
-      
+
       for (let i = 0; i < keys.length - 1; i++) {
         if (!current[keys[i]]) current[keys[i]] = {};
         current = current[keys[i]];
       }
-      
+
       current[keys[keys.length - 1]] = value;
       return newConfig;
     });
@@ -93,42 +132,51 @@ const ConfigurationPage = () => {
       minExcessDays: 0,
       maxExcessDays: 0,
       sundaysDeducted: 0,
-      description: ''
+      description: '',
     };
-    
-    setCompanyConfig(prev => ({
-      ...prev,
-      leavePolicy: {
-        ...prev.leavePolicy,
-        weekendDeductionTiers: [...prev.leavePolicy.weekendDeductionTiers, newTier]
-      }
-    }));
+
+    setCompanyConfig((prev) => {
+      const c = normalizeConfig(prev);
+      return {
+        ...c,
+        leavePolicy: {
+          ...c.leavePolicy,
+          weekendDeductionTiers: [...(c.leavePolicy.weekendDeductionTiers || []), newTier],
+        },
+      };
+    });
   };
 
   const handleRemoveWeekendTier = (index) => {
-    setCompanyConfig(prev => ({
-      ...prev,
-      leavePolicy: {
-        ...prev.leavePolicy,
-        weekendDeductionTiers: prev.leavePolicy.weekendDeductionTiers.filter((_, i) => i !== index)
-      }
-    }));
+    setCompanyConfig((prev) => {
+      const c = normalizeConfig(prev);
+      return {
+        ...c,
+        leavePolicy: {
+          ...c.leavePolicy,
+          weekendDeductionTiers: (c.leavePolicy.weekendDeductionTiers || []).filter((_, i) => i !== index),
+        },
+      };
+    });
   };
 
   const handleAddDepartmentWeightage = () => {
     const newWeightage = {
       department: '',
       revenueWeightage: 80,
-      attendanceWeightage: 20
+      attendanceWeightage: 20,
     };
-    
-    setCompanyConfig(prev => ({
-      ...prev,
-      incentives: {
-        ...prev.incentives,
-        departmentWeightage: [...prev.incentives.departmentWeightage, newWeightage]
-      }
-    }));
+
+    setCompanyConfig((prev) => {
+      const c = normalizeConfig(prev);
+      return {
+        ...c,
+        incentives: {
+          ...c.incentives,
+          departmentWeightage: [...(c.incentives.departmentWeightage || []), newWeightage],
+        },
+      };
+    });
   };
 
   if (loading) {
@@ -154,12 +202,8 @@ const ConfigurationPage = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Salary Configuration</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Company-wide salary and attendance policy settings
-            </p>
-            <div className="mt-2 text-sm text-gray-500">
-              Version: {companyConfig.version || '1.0'}
-            </div>
+            <p className="mt-1 text-sm text-gray-600">Company-wide salary and attendance policy settings</p>
+            <div className="mt-2 text-sm text-gray-500">Version: {companyConfig.version ?? '1.0'}</div>
           </div>
           <div className="flex gap-2 mt-4 sm:mt-0">
             <button
@@ -169,10 +213,7 @@ const ConfigurationPage = () => {
             >
               {saving ? 'Saving...' : 'Save Configuration'}
             </button>
-            <button
-              onClick={handleApplyToAll}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
+            <button onClick={handleApplyToAll} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
               Apply to All
             </button>
           </div>
@@ -189,15 +230,13 @@ const ConfigurationPage = () => {
             { id: 'wfh', label: 'WFH Policy' },
             { id: 'incentives', label: 'Incentives' },
             { id: 'statutory', label: 'Statutory' },
-            { id: 'salary', label: 'Salary Structure' }
-          ].map(tab => (
+            { id: 'salary', label: 'Salary Structure' },
+          ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`py-3 px-1 border-b-2 whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
               {tab.label}
@@ -210,37 +249,33 @@ const ConfigurationPage = () => {
       <div className="bg-white rounded-lg shadow p-6">
         {/* Department Filter for Apply */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Apply Configuration to Department (Optional)
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Apply Configuration to Department (Optional)</label>
           <select
             value={selectedDepartment}
             onChange={(e) => setSelectedDepartment(e.target.value)}
             className="w-full max-w-xs border rounded-md px-3 py-2"
           >
             <option value="">All Departments</option>
-            {departments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
+            {departments.map((dept) => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
             ))}
           </select>
-          <p className="text-sm text-gray-500 mt-2">
-            Leave empty to apply to all employees. Warning: This will override individual settings.
-          </p>
+          <p className="text-sm text-gray-500 mt-2">Leave empty to apply to all employees. Warning: This will override individual settings.</p>
         </div>
 
         {/* Attendance Settings */}
         {activeTab === 'attendance' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Attendance Settings</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Daily Work Hours
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Daily Work Hours</label>
                 <input
                   type="number"
-                  value={companyConfig.attendanceSettings?.dailyWorkHours || 9}
+                  value={companyConfig.attendanceSettings?.dailyWorkHours ?? 9}
                   onChange={(e) => handleChange('attendanceSettings.dailyWorkHours', parseFloat(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="1"
@@ -248,39 +283,33 @@ const ConfigurationPage = () => {
                 />
                 <p className="text-xs text-gray-500 mt-1">Standard: 9 hours (10 AM to 7 PM)</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Standard Start Time
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Standard Start Time</label>
                 <input
                   type="text"
-                  value={companyConfig.attendanceSettings?.standardStartTime || '10:00'}
+                  value={companyConfig.attendanceSettings?.standardStartTime ?? '10:00'}
                   onChange={(e) => handleChange('attendanceSettings.standardStartTime', e.target.value)}
                   className="w-full border rounded-md px-3 py-2"
                   placeholder="HH:MM"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Standard End Time
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Standard End Time</label>
                 <input
                   type="text"
-                  value={companyConfig.attendanceSettings?.standardEndTime || '19:00'}
+                  value={companyConfig.attendanceSettings?.standardEndTime ?? '19:00'}
                   onChange={(e) => handleChange('attendanceSettings.standardEndTime', e.target.value)}
                   className="w-full border rounded-md px-3 py-2"
                   placeholder="HH:MM"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Saturdays Off Pattern
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Saturdays Off Pattern</label>
                 <select
-                  value={companyConfig.saturdaysPattern || '1st_3rd'}
+                  value={companyConfig.saturdaysPattern ?? '1st_3rd'}
                   onChange={(e) => handleChange('saturdaysPattern', e.target.value)}
                   className="w-full border rounded-md px-3 py-2"
                 >
@@ -291,33 +320,29 @@ const ConfigurationPage = () => {
                 </select>
               </div>
             </div>
-            
+
             {/* 99-Hour Rule Settings */}
             <div className="mt-8 pt-6 border-t">
               <h4 className="text-md font-medium text-gray-900 mb-4">99-Hour Rule Settings</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bi-Weekly Target Hours
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bi-Weekly Target Hours</label>
                   <input
                     type="number"
-                    value={companyConfig.biWeeklyRule?.targetHours || 99}
+                    value={companyConfig.biWeeklyRule?.targetHours ?? 99}
                     onChange={(e) => handleChange('biWeeklyRule.targetHours', parseFloat(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="1"
-                    max="336" // 24*14
+                    max="336"
                   />
                   <p className="text-xs text-gray-500 mt-1">Target hours per 2 weeks (11 working days × 9 hours)</p>
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Grace Period Hours
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Grace Period Hours</label>
                   <input
                     type="number"
-                    value={companyConfig.biWeeklyRule?.gracePeriodHours || 2}
+                    value={companyConfig.biWeeklyRule?.gracePeriodHours ?? 2}
                     onChange={(e) => handleChange('biWeeklyRule.gracePeriodHours', parseFloat(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
@@ -325,14 +350,12 @@ const ConfigurationPage = () => {
                   />
                   <p className="text-xs text-gray-500 mt-1">No deduction for first N hours of shortfall</p>
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Deduction per Hour (₹)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Deduction per Hour (₹)</label>
                   <input
                     type="number"
-                    value={companyConfig.biWeeklyRule?.deductionPerHour || 500}
+                    value={companyConfig.biWeeklyRule?.deductionPerHour ?? 500}
                     onChange={(e) => handleChange('biWeeklyRule.deductionPerHour', parseFloat(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
@@ -348,40 +371,40 @@ const ConfigurationPage = () => {
         {activeTab === 'leaves' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Leave Policy</h3>
-            
+
             {/* Sick Leave */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Sick Leave (SL)</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Days per Month
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Days per Month</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.sickLeave?.perMonth || 1}
+                    value={companyConfig.leavePolicy?.sickLeave?.perMonth ?? 1}
                     onChange={(e) => handleChange('leavePolicy.sickLeave.perMonth', parseFloat(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                     step="0.5"
                   />
                 </div>
+
                 <div className="flex items-center">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.leavePolicy?.sickLeave?.nonCumulative || true}
+                      checked={companyConfig.leavePolicy?.sickLeave?.nonCumulative ?? true}
                       onChange={(e) => handleChange('leavePolicy.sickLeave.nonCumulative', e.target.checked)}
                       className="mr-2"
                     />
                     <span className="text-sm text-gray-700">Non-cumulative (expires monthly)</span>
                   </label>
                 </div>
+
                 <div className="flex items-center">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.leavePolicy?.sickLeave?.cannotBeBundled || true}
+                      checked={companyConfig.leavePolicy?.sickLeave?.cannotBeBundled ?? true}
                       onChange={(e) => handleChange('leavePolicy.sickLeave.cannotBeBundled', e.target.checked)}
                       className="mr-2"
                     />
@@ -390,52 +413,51 @@ const ConfigurationPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Earned Leave */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Earned Leave (EL)</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Days per 20 Working Days
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Days per 20 Working Days</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.earnedLeave?.per20WorkingDays || 1.25}
+                    value={companyConfig.leavePolicy?.earnedLeave?.per20WorkingDays ?? 1.25}
                     onChange={(e) => handleChange('leavePolicy.earnedLeave.per20WorkingDays', parseFloat(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                     step="0.25"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Max Carry Forward Days
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Carry Forward Days</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.earnedLeave?.maxCarryForward || 30}
+                    value={companyConfig.leavePolicy?.earnedLeave?.maxCarryForward ?? 30}
                     onChange={(e) => handleChange('leavePolicy.earnedLeave.maxCarryForward', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                   />
                 </div>
+
                 <div className="flex items-center">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.leavePolicy?.earnedLeave?.encashAtYearEnd || true}
+                      checked={companyConfig.leavePolicy?.earnedLeave?.encashAtYearEnd ?? true}
                       onChange={(e) => handleChange('leavePolicy.earnedLeave.encashAtYearEnd', e.target.checked)}
                       className="mr-2"
                     />
                     <span className="text-sm text-gray-700">Encash excess at year end</span>
                   </label>
                 </div>
+
                 <div className="flex items-center">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.leavePolicy?.earnedLeave?.requires7DaysNotice || true}
+                      checked={companyConfig.leavePolicy?.earnedLeave?.requires7DaysNotice ?? true}
                       onChange={(e) => handleChange('leavePolicy.earnedLeave.requires7DaysNotice', e.target.checked)}
                       className="mr-2"
                     />
@@ -444,30 +466,27 @@ const ConfigurationPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Special Leaves */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Special Leaves (Compassionate)</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Death in Immediate Family
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Death in Immediate Family</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.specialLeaves?.deathInFamily || 10}
+                    value={companyConfig.leavePolicy?.specialLeaves?.deathInFamily ?? 10}
                     onChange={(e) => handleChange('leavePolicy.specialLeaves.deathInFamily', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Self Marriage
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Self Marriage</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.specialLeaves?.selfMarriage || 2}
+                    value={companyConfig.leavePolicy?.specialLeaves?.selfMarriage ?? 2}
                     onChange={(e) => handleChange('leavePolicy.specialLeaves.selfMarriage', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
@@ -475,40 +494,38 @@ const ConfigurationPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Holidays */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Holidays</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Compulsory Holidays per Year
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Compulsory Holidays per Year</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.holidays?.compulsoryPerYear || 10}
+                    value={companyConfig.leavePolicy?.holidays?.compulsoryPerYear ?? 10}
                     onChange={(e) => handleChange('leavePolicy.holidays.compulsoryPerYear', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Restricted Holidays per Year
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Restricted Holidays per Year</label>
                   <input
                     type="number"
-                    value={companyConfig.leavePolicy?.holidays?.restrictedPerYear || 2}
+                    value={companyConfig.leavePolicy?.holidays?.restrictedPerYear ?? 2}
                     onChange={(e) => handleChange('leavePolicy.holidays.restrictedPerYear', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                   />
                 </div>
+
                 <div className="flex items-center">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.leavePolicy?.holidays?.canConvertToEL || true}
+                      checked={companyConfig.leavePolicy?.holidays?.canConvertToEL ?? true}
                       onChange={(e) => handleChange('leavePolicy.holidays.canConvertToEL', e.target.checked)}
                       className="mr-2"
                     />
@@ -517,31 +534,26 @@ const ConfigurationPage = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Weekend Deduction Tiers */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="font-medium text-gray-900">Weekend Deduction Tiers</h4>
-                <button
-                  onClick={handleAddWeekendTier}
-                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
+                <button onClick={handleAddWeekendTier} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
                   Add Tier
                 </button>
               </div>
-              
-              <p className="text-sm text-gray-600 mb-4">
-                Tiered deduction for Sundays based on excess leaves beyond available balance
-              </p>
-              
+
+              <p className="text-sm text-gray-600 mb-4">Tiered deduction for Sundays based on excess leaves beyond available balance</p>
+
               <div className="space-y-4">
-                {companyConfig.leavePolicy?.weekendDeductionTiers?.map((tier, index) => (
+                {(companyConfig.leavePolicy?.weekendDeductionTiers || []).map((tier, index) => (
                   <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center p-3 bg-white rounded border">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Min Excess Days</label>
                       <input
                         type="number"
-                        value={tier.minExcessDays}
+                        value={tier.minExcessDays ?? 0}
                         onChange={(e) => {
                           const newTiers = [...companyConfig.leavePolicy.weekendDeductionTiers];
                           newTiers[index].minExcessDays = parseInt(e.target.value);
@@ -555,7 +567,7 @@ const ConfigurationPage = () => {
                       <label className="block text-xs text-gray-500 mb-1">Max Excess Days</label>
                       <input
                         type="number"
-                        value={tier.maxExcessDays}
+                        value={tier.maxExcessDays ?? 0}
                         onChange={(e) => {
                           const newTiers = [...companyConfig.leavePolicy.weekendDeductionTiers];
                           newTiers[index].maxExcessDays = parseInt(e.target.value);
@@ -569,7 +581,7 @@ const ConfigurationPage = () => {
                       <label className="block text-xs text-gray-500 mb-1">Sundays Deducted</label>
                       <input
                         type="number"
-                        value={tier.sundaysDeducted}
+                        value={tier.sundaysDeducted ?? 0}
                         onChange={(e) => {
                           const newTiers = [...companyConfig.leavePolicy.weekendDeductionTiers];
                           newTiers[index].sundaysDeducted = parseInt(e.target.value);
@@ -583,7 +595,7 @@ const ConfigurationPage = () => {
                       <label className="block text-xs text-gray-500 mb-1">Description</label>
                       <input
                         type="text"
-                        value={tier.description || ''}
+                        value={tier.description ?? ''}
                         onChange={(e) => {
                           const newTiers = [...companyConfig.leavePolicy.weekendDeductionTiers];
                           newTiers[index].description = e.target.value;
@@ -594,25 +606,12 @@ const ConfigurationPage = () => {
                       />
                     </div>
                     <div>
-                      <button
-                        onClick={() => handleRemoveWeekendTier(index)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
+                      <button onClick={() => handleRemoveWeekendTier(index)} className="text-red-600 hover:text-red-800 text-sm">
                         Remove
                       </button>
                     </div>
                   </div>
                 ))}
-              </div>
-              
-              <div className="mt-4 text-sm text-gray-500">
-                <p>Example tiers from policy:</p>
-                <ul className="list-disc pl-5 mt-1">
-                  <li>0-2 excess days: No deduction</li>
-                  <li>3-4 excess days: 1 Sunday deduction</li>
-                  <li>5-6 excess days: 2 Sundays deduction</li>
-                  <li>7+ excess days: All Sundays deduction (LOP for weekends)</li>
-                </ul>
               </div>
             </div>
           </div>
@@ -622,89 +621,75 @@ const ConfigurationPage = () => {
         {activeTab === 'wfh' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Work From Home Policy</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Emergency WFH */}
               <div className="border rounded-lg p-4 bg-gray-50">
                 <h4 className="font-medium text-gray-900 mb-3">Emergency WFH</h4>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Salary Percentage (%)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Salary Percentage (%)</label>
                     <input
                       type="number"
-                      value={companyConfig.wfhPolicy?.emergencyWFH?.salaryPercentage || 75}
+                      value={companyConfig.wfhPolicy?.emergencyWFH?.salaryPercentage ?? 75}
                       onChange={(e) => handleChange('wfhPolicy.emergencyWFH.salaryPercentage', parseFloat(e.target.value))}
                       className="w-full border rounded-md px-3 py-2"
                       min="0"
                       max="100"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Salary credited for emergency WFH days</p>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Deduction Percentage (%)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deduction Percentage (%)</label>
                     <input
                       type="number"
-                      value={companyConfig.wfhPolicy?.emergencyWFH?.deductionPercentage || 25}
+                      value={companyConfig.wfhPolicy?.emergencyWFH?.deductionPercentage ?? 25}
                       onChange={(e) => handleChange('wfhPolicy.emergencyWFH.deductionPercentage', parseFloat(e.target.value))}
                       className="w-full border rounded-md px-3 py-2"
                       min="0"
                       max="100"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Deduction from daily rate</p>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <p><strong>Example:</strong> Hospitalization of dependent, urgent family travel</p>
                   </div>
                 </div>
               </div>
-              
+
               {/* Casual WFH */}
               <div className="border rounded-lg p-4 bg-gray-50">
                 <h4 className="font-medium text-gray-900 mb-3">Casual WFH</h4>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Salary Percentage (%)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Salary Percentage (%)</label>
                     <input
                       type="number"
-                      value={companyConfig.wfhPolicy?.casualWFH?.salaryPercentage || 50}
+                      value={companyConfig.wfhPolicy?.casualWFH?.salaryPercentage ?? 50}
                       onChange={(e) => handleChange('wfhPolicy.casualWFH.salaryPercentage', parseFloat(e.target.value))}
                       className="w-full border rounded-md px-3 py-2"
                       min="0"
                       max="100"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Deduction Percentage (%)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deduction Percentage (%)</label>
                     <input
                       type="number"
-                      value={companyConfig.wfhPolicy?.casualWFH?.deductionPercentage || 50}
+                      value={companyConfig.wfhPolicy?.casualWFH?.deductionPercentage ?? 50}
                       onChange={(e) => handleChange('wfhPolicy.casualWFH.deductionPercentage', parseFloat(e.target.value))}
                       className="w-full border rounded-md px-3 py-2"
                       min="0"
                       max="100"
                     />
                   </div>
-                  <div className="text-sm text-gray-600">
-                    <p><strong>Example:</strong> Personal errands, chores</p>
-                  </div>
                 </div>
               </div>
             </div>
-            
+
             <div className="border rounded-lg p-4 bg-gray-50">
               <div className="flex items-center">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={companyConfig.wfhPolicy?.requiresPermission || true}
+                    checked={companyConfig.wfhPolicy?.requiresPermission ?? true}
                     onChange={(e) => handleChange('wfhPolicy.requiresPermission', e.target.checked)}
                     className="mr-2"
                   />
@@ -719,37 +704,31 @@ const ConfigurationPage = () => {
         {activeTab === 'deductions' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Deductions & Penalties</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Missed Punch Penalty (₹)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Missed Punch Penalty (₹)</label>
                 <input
                   type="number"
-                  value={companyConfig.disciplinePolicy?.missedPunchPenalty || 250}
+                  value={companyConfig.disciplinePolicy?.missedPunchPenalty ?? 250}
                   onChange={(e) => handleChange('disciplinePolicy.missedPunchPenalty', parseFloat(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="0"
                 />
-                <p className="text-xs text-gray-500 mt-1">Penalty for each missed login/logout</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  NCNS Max Instances per Quarter
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">NCNS Max Instances per Quarter</label>
                 <input
                   type="number"
-                  value={companyConfig.disciplinePolicy?.ncncPenalty?.maxInstancesPerQuarter || 2}
+                  value={companyConfig.disciplinePolicy?.ncncPenalty?.maxInstancesPerQuarter ?? 2}
                   onChange={(e) => handleChange('disciplinePolicy.ncncPenalty.maxInstancesPerQuarter', parseInt(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="0"
                 />
-                <p className="text-xs text-gray-500 mt-1">No Call No Show instances before termination</p>
               </div>
             </div>
-            
+
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Overtime Policy</h4>
               <div className="space-y-3">
@@ -757,7 +736,7 @@ const ConfigurationPage = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.disciplinePolicy?.overtimePolicy?.noMonetaryCompensation || true}
+                      checked={companyConfig.disciplinePolicy?.overtimePolicy?.noMonetaryCompensation ?? true}
                       onChange={(e) => handleChange('disciplinePolicy.overtimePolicy.noMonetaryCompensation', e.target.checked)}
                       className="mr-2"
                     />
@@ -768,7 +747,7 @@ const ConfigurationPage = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.disciplinePolicy?.overtimePolicy?.forAppraisalOnly || true}
+                      checked={companyConfig.disciplinePolicy?.overtimePolicy?.forAppraisalOnly ?? true}
                       onChange={(e) => handleChange('disciplinePolicy.overtimePolicy.forAppraisalOnly', e.target.checked)}
                       className="mr-2"
                     />
@@ -784,30 +763,26 @@ const ConfigurationPage = () => {
         {activeTab === 'incentives' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Incentives & Bonuses</h3>
-            
+
             {/* Attendance Bonus */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Attendance Bonus</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bonus Amount (₹)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bonus Amount (₹)</label>
                   <input
                     type="number"
-                    value={companyConfig.incentives?.attendanceBonus?.amount || 1000}
+                    value={companyConfig.incentives?.attendanceBonus?.amount ?? 1000}
                     onChange={(e) => handleChange('incentives.attendanceBonus.amount', parseFloat(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Consecutive Months
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Consecutive Months</label>
                   <input
                     type="number"
-                    value={companyConfig.incentives?.attendanceBonus?.consecutiveMonths || 4}
+                    value={companyConfig.incentives?.attendanceBonus?.consecutiveMonths ?? 4}
                     onChange={(e) => handleChange('incentives.attendanceBonus.consecutiveMonths', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="1"
@@ -817,7 +792,7 @@ const ConfigurationPage = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={companyConfig.incentives?.attendanceBonus?.requires100Percent || true}
+                      checked={companyConfig.incentives?.attendanceBonus?.requires100Percent ?? true}
                       onChange={(e) => handleChange('incentives.attendanceBonus.requires100Percent', e.target.checked)}
                       className="mr-2"
                     />
@@ -825,49 +800,38 @@ const ConfigurationPage = () => {
                   </label>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
-                Bonus awarded for perfect attendance over consecutive months
-              </p>
             </div>
-            
+
             {/* Department Weightage */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="font-medium text-gray-900">Department Weightage (for Appraisal)</h4>
-                <button
-                  onClick={handleAddDepartmentWeightage}
-                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
+                <button onClick={handleAddDepartmentWeightage} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
                   Add Department
                 </button>
               </div>
-              
-              <p className="text-sm text-gray-600 mb-4">
-                Weightage for revenue vs attendance in performance appraisal
-              </p>
-              
+
               <div className="space-y-4">
-                {companyConfig.incentives?.departmentWeightage?.map((weightage, index) => (
+                {(companyConfig.incentives?.departmentWeightage || []).map((weightage, index) => (
                   <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center p-3 bg-white rounded border">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Department</label>
                       <input
                         type="text"
-                        value={weightage.department}
+                        value={weightage.department ?? ''}
                         onChange={(e) => {
                           const newWeightages = [...companyConfig.incentives.departmentWeightage];
                           newWeightages[index].department = e.target.value;
                           handleChange('incentives.departmentWeightage', newWeightages);
                         }}
                         className="w-full border rounded px-2 py-1 text-sm"
-                        placeholder="e.g., Sales"
                       />
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Revenue Weightage (%)</label>
                       <input
                         type="number"
-                        value={weightage.revenueWeightage}
+                        value={weightage.revenueWeightage ?? 80}
                         onChange={(e) => {
                           const newWeightages = [...companyConfig.incentives.departmentWeightage];
                           newWeightages[index].revenueWeightage = parseInt(e.target.value);
@@ -882,7 +846,7 @@ const ConfigurationPage = () => {
                       <label className="block text-xs text-gray-500 mb-1">Attendance Weightage (%)</label>
                       <input
                         type="number"
-                        value={weightage.attendanceWeightage}
+                        value={weightage.attendanceWeightage ?? 20}
                         onChange={(e) => {
                           const newWeightages = [...companyConfig.incentives.departmentWeightage];
                           newWeightages[index].attendanceWeightage = parseInt(e.target.value);
@@ -907,10 +871,6 @@ const ConfigurationPage = () => {
                   </div>
                 ))}
               </div>
-              
-              <div className="mt-4 text-sm text-gray-500">
-                <p>Example: Sales team - 80% revenue weightage, 20% attendance weightage</p>
-              </div>
             </div>
           </div>
         )}
@@ -919,29 +879,25 @@ const ConfigurationPage = () => {
         {activeTab === 'statutory' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Statutory Deductions</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PF Percentage (%)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">PF Percentage (%)</label>
                 <input
                   type="number"
-                  value={companyConfig.statutoryDefaults?.pfPercentage || 12}
+                  value={companyConfig.statutoryDefaults?.pfPercentage ?? 12}
                   onChange={(e) => handleChange('statutoryDefaults.pfPercentage', parseFloat(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="0"
                   max="100"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ESI Percentage (%)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ESI Percentage (%)</label>
                 <input
                   type="number"
-                  value={companyConfig.statutoryDefaults?.esiPercentage || 0.75}
+                  value={companyConfig.statutoryDefaults?.esiPercentage ?? 0.75}
                   onChange={(e) => handleChange('statutoryDefaults.esiPercentage', parseFloat(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="0"
@@ -949,35 +905,30 @@ const ConfigurationPage = () => {
                   step="0.01"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ESI Salary Threshold (₹)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ESI Salary Threshold (₹)</label>
                 <input
                   type="number"
-                  value={companyConfig.statutoryDefaults?.esiSalaryThreshold || 21000}
+                  value={companyConfig.statutoryDefaults?.esiSalaryThreshold ?? 21000}
                   onChange={(e) => handleChange('statutoryDefaults.esiSalaryThreshold', parseFloat(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="0"
                 />
-                <p className="text-xs text-gray-500 mt-1">ESI applicable if salary ≤ this amount</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Professional Tax (₹)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Professional Tax (₹)</label>
                 <input
                   type="number"
-                  value={companyConfig.statutoryDefaults?.professionalTax || 200}
+                  value={companyConfig.statutoryDefaults?.professionalTax ?? 200}
                   onChange={(e) => handleChange('statutoryDefaults.professionalTax', parseFloat(e.target.value))}
                   className="w-full border rounded-md px-3 py-2"
                   min="0"
                 />
               </div>
             </div>
-            
+
             {/* Financial Year */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <h4 className="font-medium text-gray-900 mb-3">Financial Year Settings</h4>
@@ -985,7 +936,7 @@ const ConfigurationPage = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Start Month</label>
                   <select
-                    value={companyConfig.financialYear?.startMonth || 4}
+                    value={companyConfig.financialYear?.startMonth ?? 4}
                     onChange={(e) => handleChange('financialYear.startMonth', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                   >
@@ -996,21 +947,23 @@ const ConfigurationPage = () => {
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Start Day</label>
                   <input
                     type="number"
-                    value={companyConfig.financialYear?.startDay || 1}
+                    value={companyConfig.financialYear?.startDay ?? 1}
                     onChange={(e) => handleChange('financialYear.startDay', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="1"
                     max="31"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">End Month</label>
                   <select
-                    value={companyConfig.financialYear?.endMonth || 3}
+                    value={companyConfig.financialYear?.endMonth ?? 3}
                     onChange={(e) => handleChange('financialYear.endMonth', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                   >
@@ -1021,11 +974,12 @@ const ConfigurationPage = () => {
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">End Day</label>
                   <input
                     type="number"
-                    value={companyConfig.financialYear?.endDay || 31}
+                    value={companyConfig.financialYear?.endDay ?? 31}
                     onChange={(e) => handleChange('financialYear.endDay', parseInt(e.target.value))}
                     className="w-full border rounded-md px-3 py-2"
                     min="1"
@@ -1042,131 +996,50 @@ const ConfigurationPage = () => {
         {activeTab === 'salary' && (
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Default Salary Structure</h3>
-            
+
             <div className="border rounded-lg p-4 bg-gray-50">
-              <p className="text-sm text-gray-600 mb-4">
-                Default percentage breakdown for salary components (sum should be 100%)
-              </p>
-              
+              <p className="text-sm text-gray-600 mb-4">Default percentage breakdown for salary components (sum should be 100%)</p>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Basic Salary (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={companyConfig.defaultSalaryBreakdown?.basicPercentage || 45}
-                    onChange={(e) => handleChange('defaultSalaryBreakdown.basicPercentage', parseFloat(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    HRA (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={companyConfig.defaultSalaryBreakdown?.hraPercentage || 22.5}
-                    onChange={(e) => handleChange('defaultSalaryBreakdown.hraPercentage', parseFloat(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Conveyance Allowance (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={companyConfig.defaultSalaryBreakdown?.conveyancePercentage || 12.5}
-                    onChange={(e) => handleChange('defaultSalaryBreakdown.conveyancePercentage', parseFloat(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Medical Allowance (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={companyConfig.defaultSalaryBreakdown?.medicalPercentage || 0}
-                    onChange={(e) => handleChange('defaultSalaryBreakdown.medicalPercentage', parseFloat(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Special Allowance (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={companyConfig.defaultSalaryBreakdown?.specialPercentage || 15}
-                    onChange={(e) => handleChange('defaultSalaryBreakdown.specialPercentage', parseFloat(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Other Allowances (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={companyConfig.defaultSalaryBreakdown?.otherPercentage || 5}
-                    onChange={(e) => handleChange('defaultSalaryBreakdown.otherPercentage', parseFloat(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2"
-                    min="0"
-                    max="100"
-                  />
-                </div>
+                {[
+                  ['basicPercentage', 'Basic Salary (%)', 45],
+                  ['hraPercentage', 'HRA (%)', 22.5],
+                  ['conveyancePercentage', 'Conveyance Allowance (%)', 12.5],
+                  ['medicalPercentage', 'Medical Allowance (%)', 0],
+                  ['specialPercentage', 'Special Allowance (%)', 15],
+                  ['otherPercentage', 'Other Allowances (%)', 5],
+                ].map(([key, label, def]) => (
+                  <div key={key}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                    <input
+                      type="number"
+                      value={companyConfig.defaultSalaryBreakdown?.[key] ?? def}
+                      onChange={(e) => handleChange(`defaultSalaryBreakdown.${key}`, parseFloat(e.target.value))}
+                      className="w-full border rounded-md px-3 py-2"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                ))}
               </div>
-              
+
               <div className="mt-4 p-3 bg-white rounded border">
                 <div className="flex justify-between">
                   <span className="font-medium">Total Percentage:</span>
-                  <span className={`font-bold ${
-                    (companyConfig.defaultSalaryBreakdown?.basicPercentage || 0) +
-                    (companyConfig.defaultSalaryBreakdown?.hraPercentage || 0) +
-                    (companyConfig.defaultSalaryBreakdown?.conveyancePercentage || 0) +
-                    (companyConfig.defaultSalaryBreakdown?.medicalPercentage || 0) +
-                    (companyConfig.defaultSalaryBreakdown?.specialPercentage || 0) +
-                    (companyConfig.defaultSalaryBreakdown?.otherPercentage || 0)
-                  } === 100 ? 'text-green-600' : 'text-red-600'`}>
-                    {(
-                      (companyConfig.defaultSalaryBreakdown?.basicPercentage || 0) +
-                      (companyConfig.defaultSalaryBreakdown?.hraPercentage || 0) +
-                      (companyConfig.defaultSalaryBreakdown?.conveyancePercentage || 0) +
-                      (companyConfig.defaultSalaryBreakdown?.medicalPercentage || 0) +
-                      (companyConfig.defaultSalaryBreakdown?.specialPercentage || 0) +
-                      (companyConfig.defaultSalaryBreakdown?.otherPercentage || 0)
-                    ).toFixed(2)}%
-                  </span>
+                  {(() => {
+                    const b = companyConfig.defaultSalaryBreakdown || {};
+                    const total =
+                      (b.basicPercentage ?? 45) +
+                      (b.hraPercentage ?? 22.5) +
+                      (b.conveyancePercentage ?? 12.5) +
+                      (b.medicalPercentage ?? 0) +
+                      (b.specialPercentage ?? 15) +
+                      (b.otherPercentage ?? 5);
+                    return (
+                      <span className={`font-bold ${total === 100 ? 'text-green-600' : 'text-red-600'}`}>{total.toFixed(2)}%</span>
+                    );
+                  })()}
                 </div>
-                {(
-                  (companyConfig.defaultSalaryBreakdown?.basicPercentage || 0) +
-                  (companyConfig.defaultSalaryBreakdown?.hraPercentage || 0) +
-                  (companyConfig.defaultSalaryBreakdown?.conveyancePercentage || 0) +
-                  (companyConfig.defaultSalaryBreakdown?.medicalPercentage || 0) +
-                  (companyConfig.defaultSalaryBreakdown?.specialPercentage || 0) +
-                  (companyConfig.defaultSalaryBreakdown?.otherPercentage || 0)
-                ) !== 100 && (
-                  <p className="text-sm text-red-600 mt-1">
-                    Total should be exactly 100%
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -1175,10 +1048,7 @@ const ConfigurationPage = () => {
 
       {/* Footer Actions */}
       <div className="mt-6 flex justify-end gap-3">
-        <button
-          onClick={() => window.history.back()}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-        >
+        <button onClick={() => window.history.back()} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
           Cancel
         </button>
         <button
