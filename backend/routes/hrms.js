@@ -380,26 +380,33 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
       leaveMonthlyAllocation,
     } = req.body;
 
-    const update = {};
+    const $set = {};
 
+    // ✅ Personal: update fields individually (do NOT replace personal object)
     if (personal) {
-      // do not allow employeeId change through edit
-      if (personal.employeeId) delete personal.employeeId;
-      update.personal = personal;
+      const p = { ...personal };
+      delete p.employeeId; // still prevent changing it
+      for (const [k, v] of Object.entries(p)) {
+        $set[`personal.${k}`] = v;
+      }
     }
-    if (org) update.org = org;
 
+    // Org
+    if (org) {
+      for (const [k, v] of Object.entries(org)) {
+        $set[`org.${k}`] = v;
+      }
+    }
+
+    // Assets (keep your normalization, but set the whole assets object is OK because it has no required fields)
     if (assets) {
-      // normalize additionalProducts (supports old string array OR new object array)
       let normalizedAssets = assets;
       if (normalizedAssets && Array.isArray(normalizedAssets.additionalProducts)) {
         normalizedAssets = { ...normalizedAssets };
         normalizedAssets.additionalProducts = normalizedAssets.additionalProducts
           .map((p) => {
             if (p == null) return null;
-            if (typeof p === "string") {
-              return { name: p, serialOrDesc: "", issuedOn: undefined };
-            }
+            if (typeof p === "string") return { name: p, serialOrDesc: "", issuedOn: undefined };
             return {
               name: String(p.name || "").trim(),
               serialOrDesc: String(p.serialOrDesc || "").trim(),
@@ -408,24 +415,27 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
           })
           .filter(Boolean);
       }
-      update.assets = normalizedAssets;
+      $set.assets = normalizedAssets;
     }
 
-    if (financial) update.financial = financial;
-    if (schedule) update.schedule = schedule;
-    if (typeof biometricId === "string") update.biometricId = biometricId.trim();
-    if (typeof isActive === "boolean") update.isActive = isActive;
+    // Financial / Schedule
+    if (financial) $set.financial = financial;
+    if (schedule) $set.schedule = schedule;
+
+    // Other fields
+    if (typeof biometricId === "string") $set.biometricId = biometricId.trim();
+    if (typeof isActive === "boolean") $set.isActive = isActive;
 
     if (mappedUser === null) {
-      update.mappedUser = undefined;
+      $set.mappedUser = undefined;
     } else if (mappedUser) {
-      update.mappedUser = mappedUser;
+      $set.mappedUser = mappedUser;
     }
 
-    // ✅ NEW: validate + normalize monthly leave allocation if provided
+    // Leave allocation
     if (leaveMonthlyAllocation !== undefined) {
       try {
-        update.leaveMonthlyAllocation = normalizeLeaveMonthlyAllocation(leaveMonthlyAllocation);
+        $set.leaveMonthlyAllocation = normalizeLeaveMonthlyAllocation(leaveMonthlyAllocation);
       } catch (e) {
         return res.status(400).json({ message: e.message || "Invalid leaveMonthlyAllocation" });
       }
@@ -440,7 +450,7 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
           ],
         },
       },
-      { $set: update },
+      { $set },
       { new: true, runValidators: true }
     ).populate("mappedUser", "name email phone role isSuperAdmin");
 
