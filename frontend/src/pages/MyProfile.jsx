@@ -496,7 +496,7 @@ export default function MyProfilePage() {
 
   const cancelLeave = async (id) => {
     try {
-      await HRMS.cancelLeave(id);
+      await HRMS.cancelMyLeave(id);
       const r = await HRMS.myLeaves();
       setMyLeaves(r?.data?.rows || r?.data || []);
       toast.success("Leave cancelled");
@@ -573,11 +573,10 @@ export default function MyProfilePage() {
               <button
                 onClick={openCalendarModal}
                 disabled={!employee?.personal?.employeeId}
-                className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  !employee?.personal?.employeeId
+                className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${!employee?.personal?.employeeId
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700"
-                }`}
+                  }`}
               >
                 <span>📊</span> View Attendance
               </button>
@@ -589,22 +588,20 @@ export default function MyProfilePage() {
             <nav className="flex space-x-8">
               <button
                 onClick={() => setActiveTab("profile")}
-                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === "profile"
+                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === "profile"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 👤 Profile
               </button>
 
               <button
                 onClick={() => setActiveTab("attendance")}
-                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === "attendance"
+                className={`py-2 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === "attendance"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 📊 Attendance
               </button>
@@ -674,11 +671,10 @@ export default function MyProfilePage() {
                 <button
                   onClick={save}
                   disabled={disabled || saving}
-                  className={`px-8 py-3 rounded-lg font-medium transition-all ${
-                    disabled || saving
+                  className={`px-8 py-3 rounded-lg font-medium transition-all ${disabled || saving
                       ? "bg-gray-300 cursor-not-allowed"
                       : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl"
-                  }`}
+                    }`}
                 >
                   {saving ? "Saving..." : "Save Profile Changes"}
                 </button>
@@ -969,11 +965,10 @@ function RestrictedHolidayModal({
               Cancel
             </button>
             <button
-              className={`px-6 py-2 rounded-lg text-white ${
-                activeRHCount >= 2 || !selectedHolidayId
+              className={`px-6 py-2 rounded-lg text-white ${activeRHCount >= 2 || !selectedHolidayId
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
-              }`}
+                }`}
               disabled={activeRHCount >= 2 || !selectedHolidayId}
               onClick={submitRestrictedHoliday}
             >
@@ -1003,13 +998,12 @@ function RestrictedHolidayModal({
                       <td className="px-6 py-4 text-sm text-gray-500">{formatIndianDate(r.holidayDate)}</td>
                       <td className="px-6 py-4">
                         <span
-                          className={`px-3 py-1 text-xs font-medium rounded-full ${
-                            r.status === "approved"
+                          className={`px-3 py-1 text-xs font-medium rounded-full ${r.status === "approved"
                               ? "bg-green-100 text-green-800"
                               : r.status === "rejected"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
+                                ? "bg-red-100 text-red-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
                         >
                           {r.status}
                         </span>
@@ -1128,11 +1122,10 @@ function LeaveModal({
               Cancel
             </button>
             <button
-              className={`px-6 py-2 rounded-lg text-white ${
-                !fromDate || !toDate
+              className={`px-6 py-2 rounded-lg text-white ${!fromDate || !toDate
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700"
-              }`}
+                }`}
               disabled={!fromDate || !toDate}
               onClick={submitLeave}
             >
@@ -1164,13 +1157,12 @@ function LeaveModal({
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`px-3 py-1 text-xs font-medium rounded-full ${
-                            L.status === "approved"
+                          className={`px-3 py-1 text-xs font-medium rounded-full ${L.status === "approved"
                               ? "bg-green-100 text-green-800"
                               : L.status === "rejected"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
+                                ? "bg-red-100 text-red-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
                         >
                           {L.status || "-"}
                         </span>

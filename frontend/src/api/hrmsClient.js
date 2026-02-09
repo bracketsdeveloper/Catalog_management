@@ -371,8 +371,8 @@ export const excelUtils = {
         emp.summary.attendanceRate >= 90
           ? "Excellent"
           : emp.summary.attendanceRate >= 75
-          ? "Good"
-          : "Needs Attention",
+            ? "Good"
+            : "Needs Attention",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData, { header: headers });
@@ -771,6 +771,29 @@ export const HRMS = {
   // ✅ FIXED: this must match your backend route: PATCH /api/hrms/rh/:id/status
   updateRHRequestStatus(id, status) {
     return api.patch(`/api/hrms/rh/${encodeURIComponent(id)}/status`, { status });
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SELF-SERVICE (Leaves & RH)
+  // ─────────────────────────────────────────────────────────────────────────
+  myRestrictedHolidayRequests() {
+    return api.get("/api/hrms/self/rh");
+  },
+  applyRestrictedHoliday(holidayId, note) {
+    return api.post("/api/hrms/self/rh", { holidayId, note });
+  },
+  cancelRestrictedHolidayRequest(id) {
+    return api.patch(`/api/hrms/self/rh/${encodeURIComponent(id)}/cancel`);
+  },
+
+  myLeaves() {
+    return api.get("/api/hrms/self/leaves");
+  },
+  applyLeaveSelf(data) {
+    return api.post("/api/hrms/self/leaves", data);
+  },
+  cancelMyLeave(id) {
+    return api.patch(`/api/hrms/self/leaves/${encodeURIComponent(id)}/cancel`);
   },
 
   // ─────────────────────────────────────────────────────────────────────────
