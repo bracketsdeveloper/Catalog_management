@@ -1,1551 +1,716 @@
 const express = require("express");
 const router = express.Router();
-const mongoose = require("mongoose");
-const XLSX = require("xlsx");
+
 const { authenticate, requireAdmin } = require("../middleware/hrmsAuth");
-const SalaryConfig = require("../models/Salaryconfig");
-const SalaryRecord = require("../models/Salaryrecord");
-const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
+const Attendance = require("../models/Attendance");
 const Holiday = require("../models/Holiday");
 const Leave = require("../models/Leave");
 const RestrictedHolidayRequest = require("../models/RestrictedHolidayRequest");
-const CompanyConfig = require("../models/CompanyConfig");
+const SalaryRecord = require("../models/SalaryRecord");
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UPDATED HELPER FUNCTIONS FOR NEW REQUIREMENTS
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Get the nth Saturday of a month (1st, 2nd, 3rd, 4th, 5th)
- */
-function getNthSaturdayOfMonth(year, month, n) {
-  const firstDay = new Date(year, month, 1);
-  const firstSaturday = new Date(year, month, 1 + (6 - firstDay.getDay() + 7) % 7);
-  const nthSaturday = new Date(firstSaturday);
-  nthSaturday.setDate(firstSaturday.getDate() + (n - 1) * 7);
-  
-  if (nthSaturday.getMonth() !== month) {
-    return null;
+function parseDateString(dateString) {
+  if (!dateString) return new Date();
+  const parts = String(dateString).split("-");
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
   }
-  return nthSaturday;
+  const d = new Date(dateString);
+  return d;
 }
 
-/**
- * Get all Saturdays off based on pattern
- */
-function getSaturdaysOffByPattern(year, month, pattern) {
-  const saturdaysOff = [];
-  const monthIndex = month - 1;
-  
-  if (pattern === 'none') return saturdaysOff;
-  if (pattern === 'all') {
-    const allDates = getAllDatesInMonth(year, monthIndex);
-    return allDates.filter(d => new Date(d).getDay() === 6);
-  }
-  
-  if (pattern === '1st_3rd') {
-    const firstSat = getNthSaturdayOfMonth(year, monthIndex, 1);
-    const thirdSat = getNthSaturdayOfMonth(year, monthIndex, 3);
-    if (firstSat) saturdaysOff.push(firstSat.toISOString().split('T')[0]);
-    if (thirdSat) saturdaysOff.push(thirdSat.toISOString().split('T')[0]);
-  } else if (pattern === '2nd_4th') {
-    const secondSat = getNthSaturdayOfMonth(year, monthIndex, 2);
-    const fourthSat = getNthSaturdayOfMonth(year, monthIndex, 4);
-    if (secondSat) saturdaysOff.push(secondSat.toISOString().split('T')[0]);
-    if (fourthSat) saturdaysOff.push(fourthSat.toISOString().split('T')[0]);
-  }
-  
-  return saturdaysOff;
+function toISODate(d) {
+  return new Date(d).toISOString().split("T")[0];
 }
 
-/**
- * Get all Sundays in a month
- */
-function getSundaysInMonth(year, month) {
-  const sundays = [];
-  const date = new Date(year, month, 1);
-  
-  while (date.getMonth() === month) {
-    if (date.getDay() === 0) {
-      sundays.push(new Date(date).toISOString().split('T')[0]);
-    }
-    date.setDate(date.getDate() + 1);
-  }
-  
-  return sundays;
+function clamp2(n) {
+  return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
 }
 
-/**
- * Get all dates in a month
- */
-function getAllDatesInMonth(year, month) {
-  const dates = [];
-  const date = new Date(year, month, 1);
-  
-  while (date.getMonth() === month) {
-    dates.push(new Date(date).toISOString().split('T')[0]);
-    date.setDate(date.getDate() + 1);
-  }
-  
-  return dates;
+function normalizeStatus(s) {
+  return String(s || "").trim().toLowerCase();
 }
 
-/**
- * Calculate bi-weekly periods for 99-hour rule
- */
-function getBiWeeklyPeriods99Hour(year, month) {
-  const monthIndex = month - 1;
-  const daysInMonth = new Date(year, month, 0).getDate();
-  
-  return [
-    {
-      periodNumber: 1,
-      startDate: new Date(Date.UTC(year, monthIndex, 1)),
-      endDate: new Date(Date.UTC(year, monthIndex, 15, 23, 59, 59, 999)),
-      workingDays: 0,
-      expectedHours: 0,
-      actualHours: 0,
-      shortfallHours: 0,
-      deduction: 0
-    },
-    {
-      periodNumber: 2,
-      startDate: new Date(Date.UTC(year, monthIndex, 16)),
-      endDate: new Date(Date.UTC(year, monthIndex, daysInMonth, 23, 59, 59, 999)),
-      workingDays: 0,
-      expectedHours: 0,
-      actualHours: 0,
-      shortfallHours: 0,
-      deduction: 0
-    }
-  ];
+function isSpecialLeaveFromAttendance(att) {
+  return !!att?.specialLeaveType;
 }
 
-/**
- * Calculate 99-hour rule deduction
- */
-function calculate99HourDeduction(shortfallHours, gracePeriodHours, deductionRate) {
-  if (shortfallHours <= gracePeriodHours) {
-    return 0;
-  }
-  return (shortfallHours - gracePeriodHours) * deductionRate;
-}
+function getHoursForAttendance(att, expectedHoursPerDay) {
+  if (!att) return 0;
 
-/**
- * Calculate weekend deductions based on excess leave days
- */
-function calculateWeekendDeduction(excessDays, weekendTiers, dailyRate, sundaysInMonth) {
-  if (!weekendTiers || weekendTiers.length === 0) return 0;
-  
-  for (const tier of weekendTiers) {
-    if (excessDays >= tier.minExcessDays && excessDays <= tier.maxExcessDays) {
-      const sundaysToDeduct = Math.min(tier.sundaysDeducted, sundaysInMonth);
-      return sundaysToDeduct * dailyRate;
-    }
+  // special leave = fixed 9h
+  if (isSpecialLeaveFromAttendance(att)) return expectedHoursPerDay;
+
+  const status = normalizeStatus(att.status);
+  const hoursWorked = Number(att.hoursWorked || 0);
+
+  if (status.includes("½present") || status.includes("half") || status.includes("0.5")) {
+    return expectedHoursPerDay * 0.5;
   }
+
+  // Prefer stored hours if present
+  if (hoursWorked > 0) return hoursWorked;
+
+  // If present/wfh/weeklyoff present but hours missing -> assume full day hours
+  if (status.includes("present") || status.includes("wfh") || (status.includes("weeklyoff") && status.includes("present"))) {
+    return expectedHoursPerDay;
+  }
+
   return 0;
 }
 
-/**
- * Calculate WFH deductions
- */
-function calculateWFHDeduction(emergencyWFHDays, casualWFHDays, dailyRate, emergencyDeductionRate, casualDeductionRate) {
-  const emergencyDeduction = emergencyWFHDays * dailyRate * emergencyDeductionRate;
-  const casualDeduction = casualWFHDays * dailyRate * casualDeductionRate;
-  return emergencyDeduction + casualDeduction;
+// Sunday compliance: if payable working days in a week >= 3, Sunday is payable
+function computePaidSunday(weekDates, payableWorkingDaysCount) {
+  if (payableWorkingDaysCount < 3) return 0;
+  const hasSunday = weekDates.some((d) => new Date(d).getUTCDay() === 0);
+  return hasSunday ? 1 : 0;
 }
 
-/**
- * Check if employee is in probation
- */
-function isInProbation(joiningDate, probationPeriodDays) {
-  if (!joiningDate) return true;
-  
-  const probationEnd = new Date(joiningDate);
-  probationEnd.setDate(probationEnd.getDate() + probationPeriodDays);
-  
-  return new Date() < probationEnd;
+// ISO week (Mon-Sun) splitting inside a period
+function splitIntoIsoWeeks(periodStart, periodEnd) {
+  const start = new Date(periodStart);
+  const end = new Date(periodEnd);
+
+  // Normalize to UTC midnight
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(0, 0, 0, 0);
+
+  const weeks = [];
+  let cursor = new Date(start);
+
+  // move cursor to Monday of its week
+  const day = cursor.getUTCDay(); // Sun=0..Sat=6
+  const deltaToMonday = (day === 0 ? -6 : 1 - day);
+  cursor.setUTCDate(cursor.getUTCDate() + deltaToMonday);
+
+  while (cursor <= end) {
+    const weekStart = new Date(cursor);
+    const weekEnd = new Date(cursor);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+
+    // Clamp week to period
+    const clampedStart = new Date(Math.max(weekStart.getTime(), start.getTime()));
+    const clampedEnd = new Date(Math.min(weekEnd.getTime(), end.getTime()));
+
+    weeks.push({ weekStart: clampedStart, weekEnd: clampedEnd });
+
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
+  }
+
+  return weeks;
 }
 
-/**
- * Get effective configuration for employee (with inheritance)
- */
-async function getEffectiveConfig(employeeId) {
-  const companyConfig = await CompanyConfig.findOne({ isActive: true }).lean();
-  const employeeConfig = await SalaryConfig.findOne({ employeeId }).lean();
-  const employee = await Employee.findOne({ "personal.employeeId": employeeId }).lean();
-  
-  // Default effective config
-  const effective = {
-    // Basic
-    salaryOffered: employee?.financial?.currentCTC || 0,
-    
-    // Attendance
-    dailyWorkHours: 9,
-    biWeeklyTargetHours: 99,
-    gracePeriodHours: 2,
-    hourlyDeductionRate: 500,
-    saturdaysOffPattern: '1st_3rd',
-    
-    // Leave
-    sickLeavePerMonth: 1,
-    earnedLeavePer20Days: 1.25,
-    maxCarryForwardEL: 30,
-    deathInFamilyLeave: 10,
-    selfMarriageLeave: 2,
-    compulsoryHolidaysPerYear: 10,
-    restrictedHolidaysPerYear: 2,
-    
-    // WFH
-    emergencyWFHDeduction: 0.25,
-    casualWFHDeduction: 0.50,
-    
-    // Penalties
-    missedPunchPenalty: 250,
-    
-    // Probation
-    probationPeriodDays: 30,
-    isProbationary: true,
-    
-    // Weekend deduction tiers
-    weekendDeductionTiers: [
-      { minExcessDays: 0, maxExcessDays: 2, sundaysDeducted: 0, description: "No weekend deduction" },
-      { minExcessDays: 3, maxExcessDays: 4, sundaysDeducted: 1, description: "1 Sunday deduction" },
-      { minExcessDays: 5, maxExcessDays: 6, sundaysDeducted: 2, description: "2 Sundays deduction" },
-      { minExcessDays: 7, maxExcessDays: 999, sundaysDeducted: 4, description: "All Sundays (LOP for weekends)" }
-    ],
-    
-    // Statutory
-    pfEnabled: true,
-    pfPercentage: 12,
-    esiEnabled: false,
-    esiPercentage: 0.75,
-    esiSalaryThreshold: 21000,
-    professionalTaxEnabled: true,
-    professionalTaxAmount: 200,
-    tdsEnabled: false,
-    tdsPercentage: 0,
-    
-    // Attendance bonus
-    attendanceBonusAmount: 1000,
-    attendanceBonusMonths: 4
-  };
-  
-  // Override with company config
-  if (companyConfig) {
-    effective.dailyWorkHours = companyConfig.attendanceSettings?.dailyWorkHours || effective.dailyWorkHours;
-    effective.biWeeklyTargetHours = companyConfig.biWeeklyRule?.targetHours || effective.biWeeklyTargetHours;
-    effective.gracePeriodHours = companyConfig.biWeeklyRule?.gracePeriodHours || effective.gracePeriodHours;
-    effective.hourlyDeductionRate = companyConfig.biWeeklyRule?.deductionPerHour || effective.hourlyDeductionRate;
-    effective.saturdaysOffPattern = companyConfig.saturdaysPattern || effective.saturdaysOffPattern;
-    
-    effective.sickLeavePerMonth = companyConfig.leavePolicy?.sickLeave?.perMonth || effective.sickLeavePerMonth;
-    effective.earnedLeavePer20Days = companyConfig.leavePolicy?.earnedLeave?.per20WorkingDays || effective.earnedLeavePer20Days;
-    effective.maxCarryForwardEL = companyConfig.leavePolicy?.earnedLeave?.maxCarryForward || effective.maxCarryForwardEL;
-    effective.deathInFamilyLeave = companyConfig.leavePolicy?.specialLeaves?.deathInFamily || effective.deathInFamilyLeave;
-    effective.selfMarriageLeave = companyConfig.leavePolicy?.specialLeaves?.selfMarriage || effective.selfMarriageLeave;
-    
-    effective.emergencyWFHDeduction = companyConfig.wfhPolicy?.emergencyWFH?.deductionPercentage || effective.emergencyWFHDeduction;
-    effective.casualWFHDeduction = companyConfig.wfhPolicy?.casualWFH?.deductionPercentage || effective.casualWFHDeduction;
-    
-    effective.missedPunchPenalty = companyConfig.disciplinePolicy?.missedPunchPenalty || effective.missedPunchPenalty;
-    effective.probationPeriodDays = companyConfig.eligibilityPolicy?.probationPeriodDays || effective.probationPeriodDays;
-    
-    effective.weekendDeductionTiers = companyConfig.leavePolicy?.weekendDeductionTiers || effective.weekendDeductionTiers;
-    
-    effective.attendanceBonusAmount = companyConfig.incentives?.attendanceBonus?.amount || effective.attendanceBonusAmount;
-    effective.attendanceBonusMonths = companyConfig.incentives?.attendanceBonus?.consecutiveMonths || effective.attendanceBonusMonths;
-    
-    effective.pfPercentage = companyConfig.statutoryDefaults?.pfPercentage || effective.pfPercentage;
-    effective.esiPercentage = companyConfig.statutoryDefaults?.esiPercentage || effective.esiPercentage;
-    effective.esiSalaryThreshold = companyConfig.statutoryDefaults?.esiSalaryThreshold || effective.esiSalaryThreshold;
-    effective.professionalTaxAmount = companyConfig.statutoryDefaults?.professionalTax || effective.professionalTaxAmount;
-  }
-  
-  // Override with employee-specific config
-  if (employeeConfig) {
-    // If employee config has useGlobalSettings = false, override all
-    if (!employeeConfig.useGlobalSettings) {
-      Object.keys(effective).forEach(key => {
-        if (employeeConfig[key] !== undefined && employeeConfig[key] !== null) {
-          effective[key] = employeeConfig[key];
-        }
-      });
-    } else {
-      // Only override specific values that are set in employee config
-      const overrideKeys = [
-        'salaryOffered', 'dailyWorkHours', 'biWeeklyTargetHours', 'gracePeriodHours',
-        'hourlyDeductionRate', 'saturdaysOffPattern', 'sickLeavePerMonth',
-        'earnedLeavePer20Days', 'maxCarryForwardEL', 'emergencyWFHDeduction',
-        'casualWFHDeduction', 'missedPunchPenalty', 'probationPeriodDays',
-        'pfEnabled', 'pfPercentage', 'esiEnabled', 'esiPercentage',
-        'professionalTaxEnabled', 'professionalTaxAmount', 'tdsEnabled', 'tdsPercentage'
-      ];
-      
-      overrideKeys.forEach(key => {
-        if (employeeConfig[key] !== undefined && employeeConfig[key] !== null) {
-          effective[key] = employeeConfig[key];
-        }
-      });
-      
-      // Handle weekend tiers specifically
-      if (employeeConfig.weekendDeductionTiers && employeeConfig.weekendDeductionTiers.length > 0) {
-        effective.weekendDeductionTiers = employeeConfig.weekendDeductionTiers;
-      }
-    }
-  }
-  
-  // Calculate probation status
-  if (employee?.personal?.dateOfJoining) {
-    effective.isProbationary = isInProbation(
-      employee.personal.dateOfJoining,
-      effective.probationPeriodDays
-    );
-  }
-  
-  return effective;
+// Saturday off pattern
+function isSaturdayOffByPattern(dateObj, pattern = "1st_3rd") {
+  if (dateObj.getUTCDay() !== 6) return false; // Saturday
+  const p = String(pattern || "1st_3rd").toLowerCase();
+  if (p === "all") return true;
+  if (p === "none") return false;
+
+  const dayOfMonth = dateObj.getUTCDate();
+  const weekIndex = Math.floor((dayOfMonth - 1) / 7) + 1; // 1..5
+
+  if (p === "1st_3rd") return weekIndex === 1 || weekIndex === 3;
+  if (p === "2nd_4th") return weekIndex === 2 || weekIndex === 4;
+
+  return weekIndex === 1 || weekIndex === 3;
+}
+
+function isWeeklyOffByPolicy(dateObj, saturdaysPattern) {
+  const dow = dateObj.getUTCDay();
+  if (dow === 0) return true; // Sunday
+  if (dow === 6 && isSaturdayOffByPattern(dateObj, saturdaysPattern)) return true;
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UPDATED MAIN CALCULATION FUNCTION
+// Data fetch helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function calculateEmployeeSalary(employeeId, month, year, calculatedBy, overrides = {}) {
-  const monthIndex = month - 1;
-  
-  // Get employee details
-  const employee = await Employee.findOne(
-    { "personal.employeeId": employeeId }
-  ).lean();
-  
-  if (!employee) {
-    throw new Error(`Employee not found: ${employeeId}`);
-  }
-  
-  // Get effective configuration
-  const effectiveConfig = await getEffectiveConfig(employeeId);
-  
-  // Apply overrides
-  const finalConfig = { ...effectiveConfig, ...overrides };
-  
-  // Check probation status
-  const isProbationary = isInProbation(
-    employee.personal?.dateOfJoining,
-    finalConfig.probationPeriodDays
-  );
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 1: Calculate days and dates
-  // ─────────────────────────────────────────────────────────────────────────
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const periodStart = new Date(Date.UTC(year, monthIndex, 1));
-  const periodEnd = new Date(Date.UTC(year, monthIndex, daysInMonth, 23, 59, 59, 999));
-  
-  // Get all dates in month
-  const allDates = getAllDatesInMonth(year, monthIndex);
-  
-  // Get Sundays
-  const sundays = getSundaysInMonth(year, monthIndex);
-  
-  // Get Saturdays off based on pattern
-  const saturdaysOffDates = getSaturdaysOffByPattern(year, monthIndex, finalConfig.saturdaysOffPattern);
-  
-  // Get public holidays
-  const publicHolidays = await Holiday.find({
-    type: "PUBLIC",
-    date: { $gte: periodStart, $lte: periodEnd }
+async function getHolidaysInRange(startDate, endDate) {
+  return Holiday.find({ date: { $gte: startDate, $lte: endDate } }).lean();
+}
+
+async function getAttendanceInRange(employeeId, startDate, endDate) {
+  return Attendance.find({
+    employeeId,
+    date: { $gte: startDate, $lte: endDate }
   }).lean();
-  const publicHolidayDates = publicHolidays.map(h => 
-    new Date(h.date).toISOString().split('T')[0]
-  );
-  
-  // Get restricted holidays (approved)
-  const restrictedHolidayRequests = await RestrictedHolidayRequest.find({
+}
+
+async function getApprovedLeavesInRange(employeeId, startDate, endDate) {
+  return Leave.find({
     employeeId,
     status: "approved",
-    holidayDate: { $gte: periodStart, $lte: periodEnd }
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate }
   }).lean();
-  const restrictedHolidayDates = restrictedHolidayRequests.map(r => 
-    new Date(r.holidayDate).toISOString().split('T')[0]
-  );
-  
-  // Calculate total working days (excluding Sundays, off Saturdays, holidays)
-  let totalWorkingDays = 0;
-  const nonWorkingDates = new Set([
-    ...sundays,
-    ...saturdaysOffDates,
-    ...publicHolidayDates,
-    ...restrictedHolidayDates
-  ]);
-  
-  for (const dateStr of allDates) {
-    if (!nonWorkingDates.has(dateStr)) {
-      totalWorkingDays++;
+}
+
+async function getApprovedRHRequestsInRange(employeeId, userId, startDate, endDate) {
+  return RestrictedHolidayRequest.find({
+    $or: [{ employeeId }, { userId }],
+    status: "approved",
+    holidayDate: { $gte: startDate, $lte: endDate }
+  }).lean();
+}
+
+function expandLeaveDates(approvedLeaves) {
+  const set = new Set();
+  for (const leave of approvedLeaves || []) {
+    const s = new Date(leave.startDate);
+    const e = new Date(leave.endDate);
+    s.setUTCHours(0, 0, 0, 0);
+    e.setUTCHours(0, 0, 0, 0);
+    for (let d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+      set.add(toISODate(d));
     }
   }
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 2: Get attendance and calculate hours
-  // ─────────────────────────────────────────────────────────────────────────
-  const attendance = await Attendance.find({
-    employeeId,
-    date: { $gte: periodStart, $lte: periodEnd }
-  }).lean();
-  
-  // Create attendance map
-  const attendanceMap = {};
-  let daysPresent = 0;
-  let daysAbsent = 0;
-  let totalHoursWorked = 0;
-  let emergencyWFHDays = 0;
-  let casualWFHDays = 0;
-  let missedPunches = 0;
-  let overtimeHours = 0;
-  
-  attendance.forEach(a => {
-    const status = a.status?.toLowerCase() || '';
-    const dateStr = new Date(a.date).toISOString().split('T')[0];
-    attendanceMap[dateStr] = a;
-    
-    if (status.includes('present') || status.includes('wfh')) {
-      daysPresent++;
-      totalHoursWorked += a.hoursWorked || 0;
-      overtimeHours += a.hoursOT || 0;
-      
-      // Check for WFH
-      if (status.includes('wfh')) {
-        if (a.remarks?.toLowerCase().includes('emergency')) {
-          emergencyWFHDays++;
-        } else {
-          casualWFHDays++;
-        }
-      }
-      
-      // Check for missed punches
-      if ((!a.inTime && !a.outTime) || status.includes('nopunch') || status.includes('missed')) {
-        missedPunches++;
-      }
-    } else if (status.includes('absent')) {
-      daysAbsent++;
-    }
-  });
-  
-  // Calculate expected hours
-  const totalExpectedHours = totalWorkingDays * finalConfig.dailyWorkHours;
-  const hoursShortfall = Math.max(0, totalExpectedHours - totalHoursWorked);
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 3: Bi-weekly 99-hour rule calculation
-  // ─────────────────────────────────────────────────────────────────────────
-  const biWeeklyPeriods = getBiWeeklyPeriods99Hour(year, month);
-  let totalHourlyDeduction = 0;
-  
-  for (const period of biWeeklyPeriods) {
-    let periodHoursWorked = 0;
-    let periodWorkingDays = 0;
-    
-    const periodStartStr = period.startDate.toISOString().split('T')[0];
-    const periodEndStr = period.endDate.toISOString().split('T')[0];
-    
-    // Calculate for this period
-    for (const dateStr of allDates) {
-      if (dateStr >= periodStartStr && dateStr <= periodEndStr) {
-        // Check if it's a working day
-        if (!nonWorkingDates.has(dateStr)) {
-          periodWorkingDays++;
-        }
-        
-        // Get hours worked on this date
-        const att = attendanceMap[dateStr];
-        if (att && (att.status?.toLowerCase().includes('present') || att.status?.toLowerCase().includes('wfh'))) {
-          periodHoursWorked += att.hoursWorked || 0;
-        }
+  return set;
+}
+
+function buildHolidayMaps(holidays, approvedRHRequests) {
+  const publicSet = new Set();
+  const restrictedByDate = new Map(); // date -> holiday
+  const restrictedIdsApproved = new Set((approvedRHRequests || []).map((r) => String(r.holidayId)));
+
+  for (const h of holidays || []) {
+    const iso = toISODate(h.date);
+    const type = String(h.type || "").toUpperCase();
+    if (type === "PUBLIC") publicSet.add(iso);
+    if (type === "RESTRICTED") {
+      // include ONLY if approved for employee (policy: RH is working unless approved request)
+      if (restrictedIdsApproved.has(String(h._id))) {
+        restrictedByDate.set(iso, h);
       }
     }
-    
-    const periodExpectedHours = periodWorkingDays * finalConfig.dailyWorkHours;
-    const periodShortfall = Math.max(0, periodExpectedHours - periodHoursWorked);
-    
-    // Apply 99-hour rule deduction (only if not in probation)
-    let periodDeduction = 0;
-    if (!isProbationary) {
-      periodDeduction = calculate99HourDeduction(
-        periodShortfall,
-        finalConfig.gracePeriodHours,
-        finalConfig.hourlyDeductionRate
+  }
+
+  return { publicSet, restrictedByDate };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Core salary computation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function computeSalaryForEmployee({
+  employee,
+  attendance,
+  holidays,
+  approvedLeaves,
+  approvedRHRequests,
+  periodStart,
+  periodEnd,
+  expectedHoursPerDay = 9,
+  saturdaysPattern = "1st_3rd",
+  salaryOffered = 0,
+  pfTaxDeduction = 0,
+  incentive = 0,
+  bonus = 0,
+  damages = 0,
+  advanceRecovery = 0
+}) {
+  const leaveDates = expandLeaveDates(approvedLeaves);
+  const { publicSet: publicHolidayDates, restrictedByDate: approvedRestrictedHolidayByDate } =
+    buildHolidayMaps(holidays, approvedRHRequests);
+
+  // map attendance by date
+  const attByDate = new Map();
+  for (const a of attendance || []) {
+    attByDate.set(toISODate(a.date), a);
+  }
+
+  // build all dates in period
+  const start = new Date(periodStart);
+  const end = new Date(periodEnd);
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(0, 0, 0, 0);
+
+  const allDates = [];
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    allDates.push(new Date(d));
+  }
+
+  // weekly breakdown
+  const weeks = splitIntoIsoWeeks(start, end).map((w) => ({
+    weekStart: w.weekStart,
+    weekEnd: w.weekEnd,
+    expectedHours: 0,
+    actualHours: 0,
+    missedHours: 0,
+    hourlyDeduction: 0,
+    payableWorkingDays: 0,
+    paidSundays: 0,
+    notes: ""
+  }));
+
+  const weekIndexForDate = (dateObj) => {
+    const t = dateObj.getTime();
+    for (let i = 0; i < weeks.length; i++) {
+      if (t >= weeks[i].weekStart.getTime() && t <= weeks[i].weekEnd.getTime()) return i;
+    }
+    return -1;
+  };
+
+  let totalExpectedHours = 0;
+  let totalActualHours = 0;
+
+  // Payable days logic
+  // - PUBLIC holiday payable
+  // - Approved leave payable (as per your earlier approach)
+  // - Approved RH payable (employee requested)
+  // - Saturday off by pattern: payable weekly off
+  // - Sunday payable only if >=3 payable working-days in that week
+  // - Working days payable if attended (present/wfh/half/special) OR has approved leave
+  let payableDays = 0;
+
+  // First pass: compute week expected/actual + working day pay counts
+  for (const dateObj of allDates) {
+    const iso = toISODate(dateObj);
+    const wi = weekIndexForDate(dateObj);
+    const isWeeklyOff = isWeeklyOffByPolicy(dateObj, saturdaysPattern);
+
+    const isPublicHoliday = publicHolidayDates.has(iso);
+    const isApprovedRH = approvedRestrictedHolidayByDate.has(iso);
+    const isOnLeave = leaveDates.has(iso);
+
+    // Working day definition for expected-hours:
+    // not weekly off, not public holiday, not approved RH, not leave
+    const isWorkingDayForExpected = !isWeeklyOff && !isPublicHoliday && !isApprovedRH && !isOnLeave;
+
+    const att = attByDate.get(iso);
+    const status = normalizeStatus(att?.status);
+    const hasPaidAttendance =
+      isSpecialLeaveFromAttendance(att) ||
+      status.includes("present") ||
+      status.includes("wfh") ||
+      status.includes("½present") ||
+      status.includes("half") ||
+      status.includes("0.5") ||
+      (status.includes("weeklyoff") && status.includes("present"));
+
+    if (isWorkingDayForExpected) {
+      totalExpectedHours += expectedHoursPerDay;
+      if (wi >= 0) weeks[wi].expectedHours += expectedHoursPerDay;
+    }
+
+    // actual hours counted only on working days for expected comparison
+    if (isWorkingDayForExpected) {
+      const h = getHoursForAttendance(att, expectedHoursPerDay);
+      totalActualHours += h;
+      if (wi >= 0) weeks[wi].actualHours += h;
+
+      // payableWorkingDays counts only working days that are payable due to attendance (or leave)
+      if (hasPaidAttendance) {
+        if (wi >= 0) weeks[wi].payableWorkingDays += 1;
+      }
+    }
+
+    // Payable days:
+    if (isPublicHoliday || isApprovedRH || isOnLeave) {
+      payableDays += 1;
+      continue;
+    }
+
+    // Saturday off payable always (weekly off)
+    if (dateObj.getUTCDay() === 6 && isSaturdayOffByPattern(dateObj, saturdaysPattern)) {
+      payableDays += 1;
+      continue;
+    }
+
+    // Working day payable if has paid attendance
+    if (!isWeeklyOff && !isPublicHoliday && !isApprovedRH && !isOnLeave) {
+      if (hasPaidAttendance) payableDays += 1;
+      continue;
+    }
+
+    // Sunday handled in second pass (compliance rule)
+  }
+
+  // Second pass: Sunday compliance payment per week
+  for (let i = 0; i < weeks.length; i++) {
+    const w = weeks[i];
+
+    // collect dates in this week
+    const weekDates = [];
+    for (let d = new Date(w.weekStart); d <= w.weekEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+      weekDates.push(new Date(d));
+    }
+
+    const paidSunday = computePaidSunday(weekDates, w.payableWorkingDays);
+    if (paidSunday) {
+      // Count ONLY if that Sunday is inside the pay period and not already counted by holiday/leave
+      const sunday = weekDates.find((d) => d.getUTCDay() === 0);
+      if (sunday) {
+        const iso = toISODate(sunday);
+        const isPublicHoliday = publicHolidayDates.has(iso);
+        const isApprovedRH = approvedRestrictedHolidayByDate.has(iso);
+        const isOnLeave = leaveDates.has(iso);
+
+        // don't double count if already payable
+        if (!isPublicHoliday && !isApprovedRH && !isOnLeave) {
+          payableDays += 1;
+          w.paidSundays = 1;
+          w.notes = "Sunday paid (>=3 working days attended in week)";
+        }
+      }
+    }
+
+    // weekly deduction
+    w.expectedHours = clamp2(w.expectedHours);
+    w.actualHours = clamp2(w.actualHours);
+
+    w.missedHours = clamp2(Math.max(0, w.expectedHours - w.actualHours));
+    const missedRounded = Math.ceil(w.missedHours);
+    w.hourlyDeduction = missedRounded * 500;
+  }
+
+  totalExpectedHours = clamp2(totalExpectedHours);
+  totalActualHours = clamp2(totalActualHours);
+  const totalMissed = clamp2(Math.max(0, totalExpectedHours - totalActualHours));
+  const totalHourlyDeduction = weeks.reduce((s, w) => s + Number(w.hourlyDeduction || 0), 0);
+
+  // Gross salary: prorate from salaryOffered based on payableDays out of calendar days in period
+  const totalCalendarDays = allDates.length || 1;
+  const perDay = Number(salaryOffered || 0) / totalCalendarDays;
+  const grossSalary = clamp2(perDay * payableDays);
+
+  const takeHome = clamp2(
+    grossSalary
+      - Number(totalHourlyDeduction || 0)
+      - Number(pfTaxDeduction || 0)
+      - Number(damages || 0)
+      - Number(advanceRecovery || 0)
+      + Number(incentive || 0)
+      + Number(bonus || 0)
+  );
+
+  return {
+    employeeId: employee?.personal?.employeeId,
+    employeeName: employee?.personal?.name || "",
+    department: employee?.org?.department || "",
+    role: employee?.org?.role || "",
+
+    periodStart: start,
+    periodEnd: end,
+
+    salaryOffered: Number(salaryOffered || 0),
+    payableDays: clamp2(payableDays),
+    grossSalary,
+
+    expectedHours: totalExpectedHours,
+    actualHours: totalActualHours,
+    missedHours: totalMissed,
+
+    hourlyDeduction: totalHourlyDeduction,
+
+    pfTaxDeduction: Number(pfTaxDeduction || 0),
+    incentive: Number(incentive || 0),
+    bonus: Number(bonus || 0),
+    damages: Number(damages || 0),
+    advanceRecovery: Number(advanceRecovery || 0),
+
+    takeHome,
+    weeks
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * PREVIEW salary for one employee or all employees
+ * GET /salary/preview?startDate=2026-02-01&endDate=2026-02-14&employeeId=EMP001
+ */
+router.get("/preview", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { startDate, endDate, employeeId } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, message: "startDate and endDate are required" });
+    }
+
+    const periodStart = parseDateString(startDate);
+    const periodEnd = parseDateString(endDate);
+    if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime())) {
+      return res.status(400).json({ success: false, message: "Invalid date format" });
+    }
+
+    const empFilter = { isActive: true };
+    if (employeeId) empFilter["personal.employeeId"] = String(employeeId);
+
+    const employees = await Employee.find(empFilter, {
+      personal: 1,
+      org: 1,
+      schedule: 1,
+      mappedUser: 1
+    }).lean();
+
+    const holidays = await getHolidaysInRange(periodStart, periodEnd);
+
+    const results = [];
+
+    for (const emp of employees) {
+      const empId = emp?.personal?.employeeId;
+      if (!empId) continue;
+
+      const attendance = await getAttendanceInRange(empId, periodStart, periodEnd);
+      const approvedLeaves = await getApprovedLeavesInRange(empId, periodStart, periodEnd);
+      const approvedRHRequests = await getApprovedRHRequestsInRange(
+        empId,
+        emp.mappedUser,
+        periodStart,
+        periodEnd
       );
+
+      const saturdaysPattern =
+        emp?.schedule?.saturdaysOffPattern ||
+        emp?.schedule?.saturdaysPattern ||
+        "1st_3rd";
+
+      const expectedHoursPerDay = 9;
+
+      // Salary offered: pick from employee.salaryConfig if you have it; fallback 0
+      const salaryOffered = Number(emp?.salary?.offered || emp?.org?.salaryOffered || 0);
+
+      const computed = computeSalaryForEmployee({
+        employee: emp,
+        attendance,
+        holidays,
+        approvedLeaves,
+        approvedRHRequests,
+        periodStart,
+        periodEnd,
+        expectedHoursPerDay,
+        saturdaysPattern,
+        salaryOffered,
+        pfTaxDeduction: 0,
+        incentive: 0,
+        bonus: 0,
+        damages: 0,
+        advanceRecovery: 0
+      });
+
+      results.push(computed);
     }
-    
-    // Update period object
-    period.workingDays = periodWorkingDays;
-    period.expectedHours = periodExpectedHours;
-    period.actualHours = periodHoursWorked;
-    period.shortfallHours = periodShortfall;
-    period.deduction = periodDeduction;
-    
-    totalHourlyDeduction += periodDeduction;
+
+    res.json({
+      success: true,
+      startDate: toISODate(periodStart),
+      endDate: toISODate(periodEnd),
+      count: results.length,
+      results
+    });
+  } catch (error) {
+    console.error("Salary preview error:", error);
+    res.status(500).json({ success: false, message: "Error generating salary preview", error: error.message });
   }
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 4: Leave calculations
-  // ─────────────────────────────────────────────────────────────────────────
-  const leaves = await Leave.find({
-    employeeId,
-    status: "approved",
-    startDate: { $lte: periodEnd },
-    endDate: { $gte: periodStart }
-  }).lean();
-  
-  let sickLeavesUsed = 0;
-  let earnedLeavesUsed = 0;
-  let specialLeavesUsed = 0;
-  let totalLeavesTaken = 0;
-  
-  leaves.forEach(leave => {
-    // Calculate days within this month
-    const leaveStart = new Date(Math.max(new Date(leave.startDate), periodStart));
-    const leaveEnd = new Date(Math.min(new Date(leave.endDate), periodEnd));
-    
-    const leaveDays = Math.ceil((leaveEnd - leaveStart) / (1000 * 60 * 60 * 24)) + 1;
-    totalLeavesTaken += leaveDays;
-    
-    // Categorize by type
-    if (leave.type === 'sick') {
-      sickLeavesUsed += leaveDays;
-    } else if (leave.type === 'earned') {
-      earnedLeavesUsed += leaveDays;
-    } else if (leave.type === 'special') {
-      specialLeavesUsed += leaveDays;
-    }
-  });
-  
-  // Calculate available leaves (only if not in probation)
-  const sickLeaveAvailable = isProbationary ? 0 : finalConfig.sickLeavePerMonth;
-  const earnedLeaveAvailable = isProbationary ? 0 : 0; // This should come from leave balance
-  
-  // Calculate excess leaves (beyond available)
-  const excessSickLeaves = Math.max(0, sickLeavesUsed - sickLeaveAvailable);
-  const excessEarnedLeaves = Math.max(0, earnedLeavesUsed - earnedLeaveAvailable);
-  const totalExcessLeaves = excessSickLeaves + excessEarnedLeaves;
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 5: Weekend deductions for excess leaves
-  // ─────────────────────────────────────────────────────────────────────────
-  let weekendDeduction = 0;
-  if (!isProbationary && totalExcessLeaves > 0) {
-    weekendDeduction = calculateWeekendDeduction(
-      totalExcessLeaves,
-      finalConfig.weekendDeductionTiers,
-      finalConfig.salaryOffered / daysInMonth,
-      sundays.length
-    );
-  }
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 6: Other deductions
-  // ─────────────────────────────────────────────────────────────────────────
-  // WFH deductions
-  const wfhDeduction = calculateWFHDeduction(
-    emergencyWFHDays,
-    casualWFHDays,
-    finalConfig.salaryOffered / daysInMonth,
-    finalConfig.emergencyWFHDeduction,
-    finalConfig.casualWFHDeduction
-  );
-  
-  // Missed punch penalty
-  const missedPunchPenalty = missedPunches * finalConfig.missedPunchPenalty;
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 7: Salary calculation
-  // ─────────────────────────────────────────────────────────────────────────
-  const perDaySalary = finalConfig.salaryOffered / daysInMonth;
-  
-  // Calculate days to be paid for
-  let daysToBePaidFor = daysPresent;
-  
-  // Add paid leaves (if not in probation)
-  if (!isProbationary) {
-    // Sick leaves (up to available)
-    daysToBePaidFor += Math.min(sickLeavesUsed, sickLeaveAvailable);
-    
-    // Earned leaves (up to available)
-    daysToBePaidFor += Math.min(earnedLeavesUsed, earnedLeaveAvailable);
-    
-    // Special leaves (always paid)
-    daysToBePaidFor += specialLeavesUsed;
-    
-    // Holidays (always paid)
-    daysToBePaidFor += publicHolidayDates.length + restrictedHolidayDates.length;
-    
-    // Off Saturdays (paid if not in probation)
-    daysToBePaidFor += saturdaysOffDates.length;
-    
-    // Sundays (all Sundays paid if not in probation)
-    daysToBePaidFor += sundays.length;
-  } else {
-    // In probation: only pay for days present
-    daysToBePaidFor = daysPresent;
-  }
-  
-  const grossSalary = Math.round(perDaySalary * daysToBePaidFor);
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 8: Calculate all deductions
-  // ─────────────────────────────────────────────────────────────────────────
-  const deductions = {
-    // 99-hour rule deductions
-    hourlyShortfallDeduction: totalHourlyDeduction,
-    hourlyDeductionRate: finalConfig.hourlyDeductionRate,
-    
-    // Weekend deductions for excess leaves
-    weekendExcessLeaveDeduction: weekendDeduction,
-    excessLeaves: totalExcessLeaves,
-    
-    // WFH deductions
-    emergencyWFHDeduction: Math.round(emergencyWFHDays * perDaySalary * finalConfig.emergencyWFHDeduction),
-    casualWFHDeduction: Math.round(casualWFHDays * perDaySalary * finalConfig.casualWFHDeduction),
-    totalWFHDeduction: wfhDeduction,
-    
-    // Penalties
-    missedPunchPenalty: missedPunchPenalty,
-    missedPunchCount: missedPunches,
-    
-    // Statutory deductions
-    pfDeduction: 0,
-    esiDeduction: 0,
-    professionalTax: finalConfig.professionalTaxAmount || 200,
-    tdsDeduction: 0,
-    
-    // Other
-    otherDeductions: 0
-  };
-  
-  // Calculate statutory deductions (only if not in probation)
-  if (!isProbationary) {
-    if (finalConfig.pfEnabled) {
-      const basicSalary = grossSalary * 0.5; // Assuming basic is 50% of gross
-      deductions.pfDeduction = Math.round(basicSalary * (finalConfig.pfPercentage / 100));
-    }
-    
-    if (finalConfig.esiEnabled && grossSalary <= finalConfig.esiSalaryThreshold) {
-      deductions.esiDeduction = Math.round(grossSalary * (finalConfig.esiPercentage / 100));
-    }
-  }
-  
-  const totalDeductions = Object.values(deductions).reduce((sum, val) => {
-    if (typeof val === 'number') return sum + val;
-    return sum;
-  }, 0);
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 9: Calculate net payable
-  // ─────────────────────────────────────────────────────────────────────────
-  const netPayable = grossSalary - totalDeductions;
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 10: Save salary record with new structure
-  // ─────────────────────────────────────────────────────────────────────────
-  const salaryRecord = await SalaryRecord.findOneAndUpdate(
-    { employeeId, month, year },
-    {
+});
+
+/**
+ * GENERATE (save) salary records
+ * POST /salary/generate
+ * body: { startDate, endDate, employeeId?, overrides? }
+ */
+router.post("/generate", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const {
+      startDate,
+      endDate,
       employeeId,
-      employeeName: employee.personal.name,
-      month,
-      year,
-      periodStart,
-      periodEnd,
-      
-      // Probation status
-      isProbationary,
-      dateOfJoining: employee.personal?.dateOfJoining,
-      
-      // Days breakdown
-      daysInMonth,
-      totalWorkingDays,
-      daysPresent,
-      daysAbsent,
-      totalLeavesTaken,
-      sickLeavesUsed,
-      earnedLeavesUsed,
-      specialLeavesUsed,
-      sickLeaveAvailable,
-      earnedLeaveAvailable,
-      excessLeaves: totalExcessLeaves,
-      
-      // Dates
-      sundaysInMonth: sundays.length,
-      saturdaysOff: saturdaysOffDates.length,
-      publicHolidays: publicHolidayDates.length,
-      restrictedHolidays: restrictedHolidayDates.length,
-      daysToBePaidFor,
-      
-      // Hours
-      expectedWorkHoursPerDay: finalConfig.dailyWorkHours,
-      totalExpectedHours,
-      totalHoursWorked: Math.round(totalHoursWorked * 100) / 100,
-      hoursShortfall: Math.round(hoursShortfall * 100) / 100,
-      overtimeHours: Math.round(overtimeHours * 100) / 100,
-      
-      // 99-hour rule details
-      biWeeklyCalculations: biWeeklyPeriods,
-      totalHourlyDeduction,
-      
-      // WFH details
-      emergencyWFHDays,
-      casualWFHDays,
-      
-      // Penalties
-      missedPunchCount: missedPunches,
-      
-      // Salary
-      salaryOffered: finalConfig.salaryOffered,
-      perDaySalary: Math.round(perDaySalary * 100) / 100,
-      grossSalary,
-      deductions,
-      totalDeductions,
-      
-      // Additions
-      additions: {
-        attendanceBonus: 0,
-        performanceBonus: 0,
-        otherAdditions: 0
-      },
-      totalAdditions: 0,
-      
-      // Final
-      netPayable,
-      
-      // Status
-      status: 'calculated',
-      calculatedAt: new Date(),
-      calculatedBy,
-      
-      // Configuration used
-      configurationUsed: finalConfig,
-      
-      // Calculation details
-      calculationDetails: {
-        config: finalConfig,
-        sundays,
-        saturdaysOffDates,
-        publicHolidayDates,
-        restrictedHolidayDates,
-        attendanceCount: attendance.length,
-        isProbationary
-      }
-    },
-    { new: true, upsert: true, runValidators: true }
-  );
-  
-  return salaryRecord;
-}
+      frequency = "custom",
+      overrides = {} // { salaryOffered, pfTaxDeduction, incentive, bonus, damages, advanceRecovery }
+    } = req.body || {};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SALARY CONFIG ENDPOINTS (UPDATED)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Get salary config for an employee with inheritance
- */
-router.get("/config/:employeeId", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    
-    const effectiveConfig = await getEffectiveConfig(employeeId);
-    
-    res.json({ success: true, config: effectiveConfig });
-    
-  } catch (error) {
-    console.error("Get config error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Create/Update salary config
- */
-router.post("/config", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { employeeId, ...configData } = req.body;
-    
-    if (!employeeId) {
-      return res.status(400).json({ success: false, message: "Employee ID required" });
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, message: "startDate and endDate are required" });
     }
-    
-    const config = await SalaryConfig.findOneAndUpdate(
-      { employeeId },
-      { 
-        ...configData,
-        employeeId,
-        lastRevisedAt: new Date(),
-        revisedBy: req.user?._id
-      },
-      { new: true, upsert: true, runValidators: true }
-    );
-    
-    res.json({ success: true, message: "Config saved", config });
-    
-  } catch (error) {
-    console.error("Save config error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
-/**
- * Get all salary configs
- */
-router.get("/configs", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const configs = await SalaryConfig.find({ isActive: true })
-      .sort({ employeeId: 1 })
-      .lean();
-    
-    res.json({ success: true, configs });
-    
-  } catch (error) {
-    console.error("Get configs error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NEW: COMPANY CONFIGURATION ENDPOINTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Get company configuration
- */
-router.get("/company-config", authenticate, requireAdmin, async (req, res) => {
-  try {
-    let config = await CompanyConfig.findOne({ isActive: true }).lean();
-    
-    if (!config) {
-      // Create default config
-      config = new CompanyConfig();
-      await config.save();
-      config = config.toObject();
+    const periodStart = parseDateString(startDate);
+    const periodEnd = parseDateString(endDate);
+    if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime())) {
+      return res.status(400).json({ success: false, message: "Invalid date format" });
     }
-    
-    res.json({ success: true, config });
-    
-  } catch (error) {
-    console.error("Get company config error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
-/**
- * Update company configuration
- */
-router.post("/company-config", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const configData = req.body;
-    
-    const config = await CompanyConfig.findOneAndUpdate(
-      { isActive: true },
-      { 
-        ...configData,
-        lastUpdatedBy: req.user?._id,
-        lastUpdatedAt: new Date()
-      },
-      { new: true, upsert: true, runValidators: true }
-    );
-    
-    res.json({ success: true, message: "Company config saved", config });
-    
-  } catch (error) {
-    console.error("Save company config error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
+    const empFilter = { isActive: true };
+    if (employeeId) empFilter["personal.employeeId"] = String(employeeId);
 
-/**
- * Apply company config to all employees
- */
-router.post("/apply-company-config", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { overrideExisting = false, department = null } = req.body;
-    
-    const companyConfig = await CompanyConfig.findOne({ isActive: true }).lean();
-    if (!companyConfig) {
-      return res.status(404).json({ success: false, message: "Company config not found" });
-    }
-    
-    // Get all active employees
-    const filter = { isActive: true };
-    if (department) {
-      filter["org.department"] = department;
-    }
-    
-    const employees = await Employee.find(filter, { "personal.employeeId": 1 }).lean();
-    
-    const results = {
-      total: employees.length,
-      updated: 0,
-      skipped: 0,
-      errors: []
-    };
-    
+    const employees = await Employee.find(empFilter, {
+      personal: 1,
+      org: 1,
+      schedule: 1,
+      mappedUser: 1
+    }).lean();
+
+    const holidays = await getHolidaysInRange(periodStart, periodEnd);
+
+    const saved = [];
+    const skipped = [];
+
     for (const emp of employees) {
+      const empId = emp?.personal?.employeeId;
+      if (!empId) continue;
+
+      const attendance = await getAttendanceInRange(empId, periodStart, periodEnd);
+      const approvedLeaves = await getApprovedLeavesInRange(empId, periodStart, periodEnd);
+      const approvedRHRequests = await getApprovedRHRequestsInRange(empId, emp.mappedUser, periodStart, periodEnd);
+
+      const saturdaysPattern =
+        emp?.schedule?.saturdaysOffPattern ||
+        emp?.schedule?.saturdaysPattern ||
+        "1st_3rd";
+
+      const expectedHoursPerDay = 9;
+
+      const baseSalaryOffered = Number(emp?.salary?.offered || emp?.org?.salaryOffered || 0);
+
+      const computed = computeSalaryForEmployee({
+        employee: emp,
+        attendance,
+        holidays,
+        approvedLeaves,
+        approvedRHRequests,
+        periodStart,
+        periodEnd,
+        expectedHoursPerDay,
+        saturdaysPattern,
+
+        salaryOffered: Number(overrides.salaryOffered ?? baseSalaryOffered),
+        pfTaxDeduction: Number(overrides.pfTaxDeduction ?? 0),
+        incentive: Number(overrides.incentive ?? 0),
+        bonus: Number(overrides.bonus ?? 0),
+        damages: Number(overrides.damages ?? 0),
+        advanceRecovery: Number(overrides.advanceRecovery ?? 0)
+      });
+
       try {
-        const existingConfig = await SalaryConfig.findOne({ employeeId: emp.personal.employeeId });
-        
-        if (existingConfig && !overrideExisting) {
-          results.skipped++;
-          continue;
-        }
-        
-        // Create employee config from company defaults
-        const employeeConfig = {
-          employeeId: emp.personal.employeeId,
-          useGlobalSettings: true,
-          
-          // Copy settings from company config
-          dailyWorkHours: companyConfig.attendanceSettings.dailyWorkHours,
-          biWeeklyTargetHours: companyConfig.biWeeklyRule.targetHours,
-          gracePeriodHours: companyConfig.biWeeklyRule.gracePeriodHours,
-          hourlyDeductionRate: companyConfig.biWeeklyRule.deductionPerHour,
-          saturdaysOffPattern: companyConfig.saturdaysPattern,
-          
-          // Leave settings
-          sickLeavePerMonth: companyConfig.leavePolicy.sickLeave.perMonth,
-          earnedLeavePer20Days: companyConfig.leavePolicy.earnedLeave.per20WorkingDays,
-          maxCarryForwardEL: companyConfig.leavePolicy.earnedLeave.maxCarryForward,
-          
-          // WFH settings
-          emergencyWFHDeduction: companyConfig.wfhPolicy.emergencyWFH.deductionPercentage,
-          casualWFHDeduction: companyConfig.wfhPolicy.casualWFH.deductionPercentage,
-          
-          // Penalties
-          missedPunchPenalty: companyConfig.disciplinePolicy.missedPunchPenalty,
-          
-          // Probation
-          probationPeriodDays: companyConfig.eligibilityPolicy.probationPeriodDays,
-          
-          // Bonus
-          attendanceBonusAmount: companyConfig.incentives.attendanceBonus.amount,
-          attendanceBonusMonths: companyConfig.incentives.attendanceBonus.consecutiveMonths,
-          
-          // Weekend tiers
-          weekendDeductionTiers: companyConfig.leavePolicy.weekendDeductionTiers,
-          
-          // Statutory
-          pfPercentage: companyConfig.statutoryDefaults.pfPercentage,
-          esiPercentage: companyConfig.statutoryDefaults.esiPercentage,
-          esiSalaryThreshold: companyConfig.statutoryDefaults.esiSalaryThreshold,
-          professionalTaxAmount: companyConfig.statutoryDefaults.professionalTax,
-          
-          // If overriding existing config, keep employee-specific overrides
-          ...(existingConfig ? {
-            salaryOffered: existingConfig.salaryOffered,
-            salaryComponents: existingConfig.salaryComponents,
-            bankDetails: existingConfig.bankDetails
-          } : {})
-        };
-        
-        await SalaryConfig.findOneAndUpdate(
-          { employeeId: emp.personal.employeeId },
-          employeeConfig,
-          { new: true, upsert: true, runValidators: true }
+        const doc = await SalaryRecord.findOneAndUpdate(
+          { employeeId: computed.employeeId, periodStart: computed.periodStart, periodEnd: computed.periodEnd },
+          {
+            $set: {
+              ...computed,
+              frequency,
+              meta: { createdBy: req.user?._id, note: "" }
+            }
+          },
+          { new: true, upsert: true }
         );
-        
-        results.updated++;
-        
-      } catch (err) {
-        results.errors.push({
-          employeeId: emp.personal.employeeId,
-          error: err.message
-        });
+        saved.push(doc);
+      } catch (e) {
+        // duplicate unique index can happen with race; just skip
+        skipped.push({ employeeId: empId, reason: e.message });
       }
     }
-    
-    res.json({ success: true, results });
-    
-  } catch (error) {
-    console.error("Apply company config error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SALARY CALCULATION ENDPOINTS (UPDATED)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Calculate salary for a single employee (NEW LOGIC)
- */
-router.post("/calculate/:employeeId", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { month, year, overrides = {} } = req.body;
-    
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year required" });
-    }
-    
-    const result = await calculateEmployeeSalary(employeeId, month, year, req.user?._id, overrides);
-    
-    res.json({ success: true, salary: result });
-    
+    res.json({
+      success: true,
+      savedCount: saved.length,
+      skippedCount: skipped.length,
+      saved,
+      skipped
+    });
   } catch (error) {
-    console.error("Calculate salary error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Salary generate error:", error);
+    res.status(500).json({ success: false, message: "Error generating salary records", error: error.message });
   }
 });
 
 /**
- * Calculate salary for all employees (NEW LOGIC)
- */
-router.post("/calculate-all", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { month, year, department, recalculate = false } = req.body;
-    
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year required" });
-    }
-    
-    // Get all active employees
-    const filter = { isActive: true };
-    if (department) {
-      filter["org.department"] = department;
-    }
-    
-    const employees = await Employee.find(filter, { "personal.employeeId": 1 }).lean();
-    
-    const results = {
-      total: employees.length,
-      success: 0,
-      failed: 0,
-      skipped: 0,
-      errors: []
-    };
-    
-    for (const emp of employees) {
-      try {
-        const existingRecord = await SalaryRecord.findOne({
-          employeeId: emp.personal.employeeId,
-          month,
-          year
-        });
-        
-        if (existingRecord && !recalculate) {
-          results.skipped++;
-          continue;
-        }
-        
-        await calculateEmployeeSalary(emp.personal.employeeId, month, year, req.user?._id);
-        results.success++;
-        
-      } catch (err) {
-        results.failed++;
-        results.errors.push({
-          employeeId: emp.personal.employeeId,
-          error: err.message
-        });
-      }
-    }
-    
-    res.json({ success: true, results });
-    
-  } catch (error) {
-    console.error("Calculate all error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SALARY RECORDS ENDPOINTS (UPDATED)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Get salary records for a month (ENHANCED)
+ * LIST salary records
+ * GET /salary/records?startDate=...&endDate=...
  */
 router.get("/records", authenticate, requireAdmin, async (req, res) => {
   try {
-    const { month, year, status, department, probationStatus } = req.query;
-    
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year required" });
+    const { startDate, endDate, employeeId, page = 1, limit = 50 } = req.query;
+
+    const query = {};
+    if (employeeId) query.employeeId = String(employeeId);
+
+    if (startDate && endDate) {
+      const s = parseDateString(startDate);
+      const e = parseDateString(endDate);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+        query.periodStart = { $gte: s };
+        query.periodEnd = { $lte: e };
+      }
     }
-    
-    let query = { month: parseInt(month), year: parseInt(year) };
-    if (status) query.status = status;
-    if (probationStatus === 'true') query.isProbationary = true;
-    if (probationStatus === 'false') query.isProbationary = false;
-    
-    let records = await SalaryRecord.find(query)
-      .sort({ employeeName: 1 })
-      .lean();
-    
-    // Filter by department if needed
-    if (department) {
-      const employeesInDept = await Employee.find(
-        { "org.department": department },
-        { "personal.employeeId": 1 }
-      ).lean();
-      const empIds = new Set(employeesInDept.map(e => e.personal.employeeId));
-      records = records.filter(r => empIds.has(r.employeeId));
-    }
-    
-    // Calculate enhanced summary
-    const summary = {
-      totalEmployees: records.length,
-      probationEmployees: records.filter(r => r.isProbationary).length,
-      regularEmployees: records.filter(r => !r.isProbationary).length,
-      totalGross: records.reduce((sum, r) => sum + r.grossSalary, 0),
-      totalDeductions: records.reduce((sum, r) => sum + r.totalDeductions, 0),
-      total99HourDeductions: records.reduce((sum, r) => sum + (r.deductions?.hourlyShortfallDeduction || 0), 0),
-      totalWFHDeductions: records.reduce((sum, r) => sum + (r.deductions?.totalWFHDeduction || 0), 0),
-      totalPenalties: records.reduce((sum, r) => sum + (r.deductions?.missedPunchPenalty || 0), 0),
-      totalNet: records.reduce((sum, r) => sum + r.netPayable, 0),
-      byStatus: {}
-    };
-    
-    records.forEach(r => {
-      summary.byStatus[r.status] = (summary.byStatus[r.status] || 0) + 1;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [rows, total] = await Promise.all([
+      SalaryRecord.find(query).sort({ periodStart: -1, employeeName: 1 }).skip(skip).limit(parseInt(limit)).lean(),
+      SalaryRecord.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
     });
-    
-    res.json({ success: true, records, summary });
-    
   } catch (error) {
-    console.error("Get records error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Salary records error:", error);
+    res.status(500).json({ success: false, message: "Error fetching salary records", error: error.message });
   }
 });
 
 /**
- * Get single salary record with enhanced details
+ * UPDATE record adjustments
+ * PATCH /salary/records/:id
+ * body: { pfTaxDeduction, incentive, bonus, damages, advanceRecovery, metaNote }
  */
-router.get("/record/:employeeId/:month/:year", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { employeeId, month, year } = req.params;
-    
-    const record = await SalaryRecord.findOne({
-      employeeId,
-      month: parseInt(month),
-      year: parseInt(year)
-    }).lean();
-    
-    if (!record) {
-      return res.status(404).json({ success: false, message: "Record not found" });
-    }
-    
-    // Get employee details
-    const employee = await Employee.findOne(
-      { "personal.employeeId": employeeId }
-    ).lean();
-    
-    // Get attendance for the month
-    const monthIndex = parseInt(month) - 1;
-    const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
-    const periodStart = new Date(Date.UTC(parseInt(year), monthIndex, 1));
-    const periodEnd = new Date(Date.UTC(parseInt(year), monthIndex, daysInMonth, 23, 59, 59, 999));
-    
-    const attendance = await Attendance.find({
-      employeeId,
-      date: { $gte: periodStart, $lte: periodEnd }
-    }).sort({ date: 1 }).lean();
-    
-    // Get leaves for the month
-    const leaves = await Leave.find({
-      employeeId,
-      status: "approved",
-      startDate: { $lte: periodEnd },
-      endDate: { $gte: periodStart }
-    }).lean();
-    
-    res.json({ 
-      success: true, 
-      record,
-      employee: employee || null,
-      attendance: attendance || [],
-      leaves: leaves || []
-    });
-    
-  } catch (error) {
-    console.error("Get record error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Update salary record (for manual adjustments) - ENHANCED
- */
-router.put("/record/:id", authenticate, requireAdmin, async (req, res) => {
+router.patch("/records/:id", authenticate, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
-    
-    // Prevent updating certain fields
-    delete updates._id;
-    delete updates.employeeId;
-    delete updates.month;
-    delete updates.year;
-    delete updates.calculatedAt;
-    delete updates.calculatedBy;
-    delete updates.configurationUsed;
-    
-    const record = await SalaryRecord.findByIdAndUpdate(
-      id,
-      { $set: updates },
-      { new: true, runValidators: true }
-    );
-    
-    if (!record) {
-      return res.status(404).json({ success: false, message: "Record not found" });
-    }
-    
-    res.json({ success: true, message: "Record updated", record });
-    
+    const {
+      salaryOffered,
+      pfTaxDeduction,
+      incentive,
+      bonus,
+      damages,
+      advanceRecovery,
+      metaNote
+    } = req.body || {};
+
+    const rec = await SalaryRecord.findById(id);
+    if (!rec) return res.status(404).json({ success: false, message: "Record not found" });
+
+    if (salaryOffered !== undefined) rec.salaryOffered = Number(salaryOffered || 0);
+    if (pfTaxDeduction !== undefined) rec.pfTaxDeduction = Number(pfTaxDeduction || 0);
+    if (incentive !== undefined) rec.incentive = Number(incentive || 0);
+    if (bonus !== undefined) rec.bonus = Number(bonus || 0);
+    if (damages !== undefined) rec.damages = Number(damages || 0);
+    if (advanceRecovery !== undefined) rec.advanceRecovery = Number(advanceRecovery || 0);
+    if (metaNote !== undefined) rec.meta = { ...(rec.meta || {}), note: String(metaNote || "") };
+
+    // recompute takeHome (weekly calc stays same)
+    rec.takeHome =
+      Number(rec.grossSalary || 0)
+      - Number(rec.hourlyDeduction || 0)
+      - Number(rec.pfTaxDeduction || 0)
+      - Number(rec.damages || 0)
+      - Number(rec.advanceRecovery || 0)
+      + Number(rec.incentive || 0)
+      + Number(rec.bonus || 0);
+
+    await rec.save();
+
+    res.json({ success: true, record: rec });
   } catch (error) {
-    console.error("Update record error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Add manual adjustment - ENHANCED
- */
-router.post("/record/:id/adjustment", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { description, amount, type, category } = req.body;
-    
-    if (!description || !amount || !type) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Description, amount, and type required" 
-      });
-    }
-    
-    const record = await SalaryRecord.findByIdAndUpdate(
-      id,
-      {
-        $push: {
-          manualAdjustments: {
-            description,
-            amount,
-            type,
-            category: category || 'other',
-            adjustedBy: req.user?._id,
-            adjustedAt: new Date()
-          }
-        }
-      },
-      { new: true }
-    );
-    
-    if (!record) {
-      return res.status(404).json({ success: false, message: "Record not found" });
-    }
-    
-    // Recalculate net payable
-    record.netPayable = record.grossSalary - record.totalDeductions + record.totalAdditions;
-    
-    // Add manual adjustments
-    if (record.manualAdjustments && record.manualAdjustments.length > 0) {
-      record.manualAdjustments.forEach(adj => {
-        if (adj.type === 'addition') {
-          record.netPayable += adj.amount;
-        } else {
-          record.netPayable -= adj.amount;
-        }
-      });
-    }
-    
-    await record.save();
-    
-    res.json({ success: true, message: "Adjustment added", record });
-    
-  } catch (error) {
-    console.error("Add adjustment error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Approve salary record
- */
-router.post("/record/:id/approve", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const record = await SalaryRecord.findByIdAndUpdate(
-      id,
-      {
-        status: 'approved',
-        approvedAt: new Date(),
-        approvedBy: req.user?._id
-      },
-      { new: true }
-    );
-    
-    if (!record) {
-      return res.status(404).json({ success: false, message: "Record not found" });
-    }
-    
-    res.json({ success: true, message: "Record approved", record });
-    
-  } catch (error) {
-    console.error("Approve error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Mark as paid
- */
-router.post("/record/:id/mark-paid", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paymentReference, paymentMode, paymentDate } = req.body;
-    
-    const record = await SalaryRecord.findByIdAndUpdate(
-      id,
-      {
-        status: 'paid',
-        paidAt: paymentDate ? new Date(paymentDate) : new Date(),
-        paymentReference,
-        paymentMode: paymentMode || 'bank_transfer'
-      },
-      { new: true }
-    );
-    
-    if (!record) {
-      return res.status(404).json({ success: false, message: "Record not found" });
-    }
-    
-    res.json({ success: true, message: "Marked as paid", record });
-    
-  } catch (error) {
-    console.error("Mark paid error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORT - ENHANCED FOR NEW REQUIREMENTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Export salary records to Excel (ENHANCED)
- */
-router.get("/export", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { month, year, department } = req.query;
-    
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year required" });
-    }
-    
-    const records = await SalaryRecord.find({
-      month: parseInt(month),
-      year: parseInt(year)
-    }).sort({ employeeName: 1 }).lean();
-    
-    if (records.length === 0) {
-      return res.status(404).json({ success: false, message: "No records found" });
-    }
-    
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    const excelData = records.map((r, i) => ({
-      "S.No": i + 1,
-      "Employee ID": r.employeeId,
-      "Employee Name": r.employeeName,
-      "Probation": r.isProbationary ? "Yes" : "No",
-      "Days in Month": r.daysInMonth,
-      "Working Days": r.totalWorkingDays,
-      "Days Present": r.daysPresent,
-      "Total Leaves": r.totalLeavesTaken,
-      "Sick Leaves Used": r.sickLeavesUsed,
-      "Earned Leaves Used": r.earnedLeavesUsed,
-      "Excess Leaves": r.excessLeaves || 0,
-      "Days to Pay": r.daysToBePaidFor,
-      "Expected Hours": r.totalExpectedHours,
-      "Hours Worked": r.totalHoursWorked?.toFixed(1),
-      "Hours Shortfall": r.hoursShortfall?.toFixed(1),
-      "99-Hour Deduction": r.deductions?.hourlyShortfallDeduction || 0,
-      "Emergency WFH Days": r.emergencyWFHDays || 0,
-      "Casual WFH Days": r.casualWFHDays || 0,
-      "WFH Deduction": r.deductions?.totalWFHDeduction || 0,
-      "Missed Punches": r.missedPunchCount || 0,
-      "Missed Punch Penalty": r.deductions?.missedPunchPenalty || 0,
-      "Weekend Deduction": r.deductions?.weekendExcessLeaveDeduction || 0,
-      "Salary Offered": r.salaryOffered,
-      "Per Day Salary": r.perDaySalary?.toFixed(2),
-      "Gross Salary": r.grossSalary,
-      "PF Deduction": r.deductions?.pfDeduction || 0,
-      "ESI Deduction": r.deductions?.esiDeduction || 0,
-      "Professional Tax": r.deductions?.professionalTax || 0,
-      "Total Deductions": r.totalDeductions,
-      "Net Payable": r.netPayable,
-      "Status": r.status
-    }));
-    
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Salary");
-    
-    // Add summary sheet
-    const summaryData = [
-      ["Salary Summary", monthNames[month - 1], year],
-      ["Total Employees", records.length],
-      ["Probation Employees", records.filter(r => r.isProbationary).length],
-      ["Regular Employees", records.filter(r => !r.isProbationary).length],
-      ["Total Gross Salary", records.reduce((sum, r) => sum + r.grossSalary, 0)],
-      ["Total 99-Hour Deductions", records.reduce((sum, r) => sum + (r.deductions?.hourlyShortfallDeduction || 0), 0)],
-      ["Total WFH Deductions", records.reduce((sum, r) => sum + (r.deductions?.totalWFHDeduction || 0), 0)],
-      ["Total Penalties", records.reduce((sum, r) => sum + (r.deductions?.missedPunchPenalty || 0), 0)],
-      ["Total Deductions", records.reduce((sum, r) => sum + r.totalDeductions, 0)],
-      ["Total Net Payable", records.reduce((sum, r) => sum + r.netPayable, 0)]
-    ];
-    
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
-    
-    const filename = `Salary_${monthNames[month - 1]}_${year}.xlsx`;
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(buffer);
-    
-  } catch (error) {
-    console.error("Export error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Get salary preview (without saving)
- */
-router.post("/preview/:employeeId", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { month, year, overrides = {} } = req.body;
-    
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year required" });
-    }
-    
-    // Calculate without saving
-    const result = await calculateEmployeeSalary(employeeId, month, year, req.user?._id, overrides);
-    
-    res.json({ success: true, preview: result });
-    
-  } catch (error) {
-    console.error("Preview error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NEW: CONFIGURATION TEMPLATE ENDPOINTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Get configuration templates
- */
-router.get("/config-templates", authenticate, requireAdmin, async (req, res) => {
-  try {
-    // Default templates based on department
-    const templates = {
-      sales: {
-        departmentWeightage: {
-          revenueWeightage: 80,
-          attendanceWeightage: 20
-        },
-        notes: "Sales team: 80% revenue weightage, 20% attendance"
-      },
-      operations: {
-        departmentWeightage: {
-          revenueWeightage: 30,
-          attendanceWeightage: 70
-        },
-        notes: "Operations team: 30% revenue weightage, 70% attendance"
-      },
-      default: {
-        departmentWeightage: {
-          revenueWeightage: 50,
-          attendanceWeightage: 50
-        },
-        notes: "Default template"
-      }
-    };
-    
-    res.json({ success: true, templates });
-    
-  } catch (error) {
-    console.error("Get templates error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-/**
- * Apply template to department
- */
-router.post("/apply-template", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { department, templateName } = req.body;
-    
-    if (!department) {
-      return res.status(400).json({ success: false, message: "Department required" });
-    }
-    
-    const employees = await Employee.find(
-      { "org.department": department, isActive: true },
-      { "personal.employeeId": 1 }
-    ).lean();
-    
-    const template = {
-      sales: {
-        departmentWeightage: { revenueWeightage: 80, attendanceWeightage: 20 }
-      },
-      operations: {
-        departmentWeightage: { revenueWeightage: 30, attendanceWeightage: 70 }
-      },
-      default: {
-        departmentWeightage: { revenueWeightage: 50, attendanceWeightage: 50 }
-      }
-    };
-    
-    const selectedTemplate = template[templateName] || template.default;
-    
-    const results = {
-      department,
-      total: employees.length,
-      updated: 0,
-      errors: []
-    };
-    
-    for (const emp of employees) {
-      try {
-        await SalaryConfig.findOneAndUpdate(
-          { employeeId: emp.personal.employeeId },
-          { 
-            $set: selectedTemplate,
-            useDepartmentSettings: true
-          },
-          { upsert: true }
-        );
-        results.updated++;
-      } catch (err) {
-        results.errors.push({
-          employeeId: emp.personal.employeeId,
-          error: err.message
-        });
-      }
-    }
-    
-    res.json({ success: true, results });
-    
-  } catch (error) {
-    console.error("Apply template error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Salary patch error:", error);
+    res.status(500).json({ success: false, message: "Error updating salary record", error: error.message });
   }
 });
 

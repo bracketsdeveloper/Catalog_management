@@ -869,6 +869,10 @@ export const HRMS = {
   exportSalaryRecords(params = {}) {
     return api.get("/api/salary/export", { params, responseType: "blob" });
   },
+  previewSalary: (params) => api.get("/hrms/salary/preview", { params }),
+  generateSalary: (payload) => api.post("/hrms/salary/generate", payload),
+  listSalaryRecords: (params) => api.get("/hrms/salary/records", { params }),
+  updateSalaryRecord: (id, payload) => api.patch(`/hrms/salary/records/${id}`, payload),
 
   // ─────────────────────────────────────────────────────────────────────────
   // PROFILE MANAGEMENT

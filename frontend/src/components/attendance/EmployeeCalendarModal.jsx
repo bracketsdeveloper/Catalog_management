@@ -63,8 +63,22 @@ const isSaturdayOffByPattern = (dateObj, pattern = '1st_3rd') => {
 
 const normalizeStatus = (statusRaw) => String(statusRaw || '').trim().toLowerCase();
 
-const getAttendanceFraction = (statusRaw) => {
+const hasSpecialLeaveTag = (remarks) => {
+  const r = String(remarks || '').toLowerCase();
+  return (
+    r.includes('special_leave:birth') ||
+    r.includes('special_leave:death') ||
+    r.includes('special_leave:marriage')
+  );
+};
+
+const getAttendanceFraction = (statusRaw, remarks) => {
   const status = normalizeStatus(statusRaw);
+  const special = hasSpecialLeaveTag(remarks);
+
+  // ✅ Special leave counts as 1 day
+  if (special) return 1;
+
   if (!status) return 0;
 
   if (status.includes('½present') || status.includes('half') || status.includes('0.5')) return 0.5;
@@ -113,6 +127,24 @@ const getMonthlyPaidLeaveAllocation = (employeeInfo, monthNumber) => {
 const pickEmployeeId = (obj) =>
   String(obj?.personal?.employeeId || obj?.employeeId || obj?.id || '').trim();
 
+const normalizeSpecialLeave = (v) => {
+  const x = String(v || '').trim().toLowerCase();
+  if (!x) return '';
+  if (x === 'birth') return 'birth';
+  if (x === 'death') return 'death';
+  if (x === 'marriage') return 'marriage';
+  return '';
+};
+
+// detect special leave type from remarks tag if present
+const inferSpecialLeaveFromRemarks = (remarks) => {
+  const r = String(remarks || '').toLowerCase();
+  if (r.includes('special_leave:birth')) return 'birth';
+  if (r.includes('special_leave:death')) return 'death';
+  if (r.includes('special_leave:marriage')) return 'marriage';
+  return '';
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +168,15 @@ const EmployeeCalendarModal = ({
 
   const [selectedDate, setSelectedDate] = useState(null);
   const [editingStatus, setEditingStatus] = useState(false);
-  const [editForm, setEditForm] = useState({ status: '', inTime: '', outTime: '', remarks: '' });
+
+  // ✅ NEW: special leave dropdown value
+  const [editForm, setEditForm] = useState({
+    status: '',
+    inTime: '',
+    outTime: '',
+    remarks: '',
+    specialLeaveType: '', // birth | death | marriage | ''
+  });
 
   const calendarRef = useRef(null);
 
@@ -159,26 +199,21 @@ const EmployeeCalendarModal = ({
     [employeeInfo, saturdaysPattern]
   );
 
-  // ✅ ensure leaveMonthlyAllocation exists (because getEmployeeCalendar often doesn't include it)
+  // ✅ ensure leaveMonthlyAllocation exists
   const ensureEmployeeAllocation = useCallback(
     async (baseEmployeeInfo) => {
       const empId = pickEmployeeId(baseEmployeeInfo) || pickEmployeeId(employee);
       if (!empId) return baseEmployeeInfo;
 
-      // already present
       if (Array.isArray(baseEmployeeInfo?.leaveMonthlyAllocation)) return baseEmployeeInfo;
 
       try {
-        // 1) Try a direct employee fetch if your client has it
         if (typeof HRMS.getEmployee === 'function') {
           const r = await HRMS.getEmployee(empId);
           const fullEmp = r?.data?.employee || r?.data || null;
-          if (fullEmp) {
-            return { ...baseEmployeeInfo, ...fullEmp };
-          }
+          if (fullEmp) return { ...baseEmployeeInfo, ...fullEmp };
         }
 
-        // 2) Fallback: listEmployees and find by employeeId
         const resp = await HRMS.listEmployees({ limit: 2000 });
         const rows = resp?.data?.rows || [];
         const match =
@@ -186,9 +221,7 @@ const EmployeeCalendarModal = ({
           rows.find((x) => String(x?.employeeId || '').trim() === empId) ||
           null;
 
-        if (match) {
-          return { ...baseEmployeeInfo, ...match };
-        }
+        if (match) return { ...baseEmployeeInfo, ...match };
       } catch (e) {
         console.error('Failed to hydrate employee leave allocation:', e);
       }
@@ -219,6 +252,7 @@ const EmployeeCalendarModal = ({
               formattedOTHours: formatHoursToHHMM(day.attendance.otHours || 0),
               inTime: day.attendance.inTime || '',
               outTime: day.attendance.outTime || '',
+              remarks: day.attendance.remarks || '',
             },
           };
         }
@@ -290,7 +324,7 @@ const EmployeeCalendarModal = ({
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // ✅ Till-today summary (same style as AttendanceSummaryPage)
+  // Till-today summary
   // ─────────────────────────────────────────────────────────────────────────────
 
   const { tableSummary, detailedSummary } = useMemo(() => {
@@ -350,14 +384,18 @@ const EmployeeCalendarModal = ({
       }
 
       const status = normalizeStatus(day?.attendance?.status);
+      const remarks = day?.attendance?.remarks || '';
 
       // ✅ salary attendance ONLY on working days
-      if (status && isWorkingDayByPolicy(dt)) {
-        daysAttended += getAttendanceFraction(status);
+      if ((status || hasSpecialLeaveTag(remarks)) && isWorkingDayByPolicy(dt)) {
+        daysAttended += getAttendanceFraction(status, remarks);
       }
 
       // display buckets
-      if (status) {
+      const specialType = inferSpecialLeaveFromRemarks(remarks);
+      if (specialType) {
+        presentDays += 1;
+      } else if (status) {
         if (status.includes('½present') || status.includes('half') || status.includes('0.5')) {
           halfPresentDays += 1;
           presentDays += 0.5;
@@ -390,7 +428,8 @@ const EmployeeCalendarModal = ({
     const hoursWorked = Number(((totalWorkingDaysTill - totalLeavesTaken) * dailyHours).toFixed(2));
 
     const toBePaidFor = Number((daysAttended + paidLeaves).toFixed(2));
-    const attendanceRate = totalWorkingDaysTill > 0 ? Number(((daysAttended / totalWorkingDaysTill) * 100).toFixed(1)) : 0;
+    const attendanceRate =
+      totalWorkingDaysTill > 0 ? Number(((daysAttended / totalWorkingDaysTill) * 100).toFixed(1)) : 0;
 
     const workingDaysLabel = isFuture
       ? 'Future month - no working days yet'
@@ -473,12 +512,15 @@ const EmployeeCalendarModal = ({
     e?.stopPropagation();
     if (!day?.date) return;
 
+    const inferredSpecial = inferSpecialLeaveFromRemarks(day?.attendance?.remarks);
+
     setSelectedDate(day);
     setEditForm({
       status: day.attendance?.status || '',
       inTime: day.attendance?.inTime || '',
       outTime: day.attendance?.outTime || '',
       remarks: day.attendance?.remarks || '',
+      specialLeaveType: inferredSpecial || '',
     });
     setEditingStatus(true);
   };
@@ -489,18 +531,54 @@ const EmployeeCalendarModal = ({
     handleEditClick(day);
   };
 
+  const applySpecialLeaveDefaults = (specialType, prev) => {
+    const t = normalizeSpecialLeave(specialType);
+    if (!t) return prev;
+
+    const tag = `SPECIAL_LEAVE:${t}`;
+    const remarks = String(prev.remarks || '');
+    const cleaned = remarks
+      .replace(/SPECIAL_LEAVE:(birth|death|marriage)/gi, '')
+      .trim();
+
+    // ✅ Force Present + default 9h slot
+    return {
+      ...prev,
+      specialLeaveType: t,
+      status: 'Present',
+      inTime: prev.inTime || '10:00',
+      outTime: prev.outTime || '19:00',
+      remarks: cleaned ? `${cleaned} ${tag}` : tag,
+    };
+  };
+
+  const clearSpecialLeave = (prev) => {
+    const remarks = String(prev.remarks || '');
+    const cleaned = remarks.replace(/SPECIAL_LEAVE:(birth|death|marriage)/gi, '').trim();
+    return { ...prev, specialLeaveType: '', remarks: cleaned };
+  };
+
   const handleStatusUpdate = async () => {
     if (viewOnly) return;
     if (!selectedDate?.date) return;
 
     try {
+      const special = normalizeSpecialLeave(editForm.specialLeaveType);
+
+      // If special leave selected, ensure defaults applied
+      const finalForm = special
+        ? applySpecialLeaveDefaults(special, editForm)
+        : clearSpecialLeave(editForm);
+
       await HRMS.manualAttendanceEntry({
         employeeId: employee.employeeId,
         date: selectedDate.date,
-        status: editForm.status,
-        inTime: editForm.inTime,
-        outTime: editForm.outTime,
-        remarks: editForm.remarks,
+        status: finalForm.status,
+        inTime: finalForm.inTime,
+        outTime: finalForm.outTime,
+        remarks: finalForm.remarks,
+        // ✅ NEW: send explicit specialLeaveType to backend
+        specialLeaveType: special || '',
       });
 
       toast.success('Attendance updated successfully');
@@ -518,7 +596,7 @@ const EmployeeCalendarModal = ({
   const handleCancelEdit = () => {
     setEditingStatus(false);
     setSelectedDate(null);
-    setEditForm({ status: '', inTime: '', outTime: '', remarks: '' });
+    setEditForm({ status: '', inTime: '', outTime: '', remarks: '', specialLeaveType: '' });
   };
 
   const renderEditButton = (day) => {
@@ -542,6 +620,18 @@ const EmployeeCalendarModal = ({
     if (!day) return null;
 
     const status = normalizeStatus(day?.attendance?.status);
+    const remarks = day?.attendance?.remarks || '';
+    const specialType = inferSpecialLeaveFromRemarks(remarks);
+
+    // ✅ Special leave badge
+    if (specialType) {
+      const label = specialType === 'birth' ? 'Birth' : specialType === 'death' ? 'Death' : 'Marriage';
+      return (
+        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800">
+          {label} Leave
+        </span>
+      );
+    }
 
     if (status) {
       if (status.includes('½present') || status.includes('half') || status.includes('0.5')) {
@@ -605,6 +695,15 @@ const EmployeeCalendarModal = ({
 
   const renderHoursInfo = (day) => {
     if (!day?.attendance) return null;
+
+    const remarks = day.attendance.remarks || '';
+    const specialType = inferSpecialLeaveFromRemarks(remarks);
+
+    // ✅ Special leave: show fixed 09:00
+    if (specialType) {
+      return <div className="text-xs text-gray-500 mt-0.5">09:00h</div>;
+    }
+
     const workHours = Number(day.attendance.workHours || 0);
     const otHours = Number(day.attendance.otHours || 0);
     if (workHours <= 0 && otHours <= 0) return null;
@@ -623,7 +722,10 @@ const EmployeeCalendarModal = ({
     if (isSelected) base += 'ring-2 ring-blue-400 border-blue-400 ';
 
     const status = normalizeStatus(day?.attendance?.status);
+    const remarks = day?.attendance?.remarks || '';
+    const specialType = inferSpecialLeaveFromRemarks(remarks);
 
+    if (specialType) return base + 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 hover:shadow-sm';
     if (status.includes('weeklyoff')) return base + 'bg-yellow-50 border-yellow-200 hover:border-yellow-400 hover:shadow-sm';
     if (status.includes('½present') || status.includes('half') || status.includes('0.5')) return base + 'bg-orange-50 border-orange-200 hover:border-orange-400 hover:shadow-sm';
     if (status.includes('absent')) return base + 'bg-red-50 border-red-200 hover:border-red-400 hover:shadow-sm';
@@ -773,10 +875,6 @@ const EmployeeCalendarModal = ({
                 <div className="text-xs text-gray-500">To be paid for</div>
               </div>
             </div>
-
-            {/* <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 text-center">
-              Till-today logic: Leaves = WorkingDays - Attended • PayLoss = Leaves - PaidLeaves (allocation) • ExpectedHours = WorkingDays × {Number(expectedHoursPerDay || 9)}h/day • HoursWorked = (WorkingDays - Leaves) × {Number(expectedHoursPerDay || 9)}h/day • ToBePaidFor = Attended + PaidLeaves
-            </div> */}
           </div>
 
           <div className="px-6 py-3 bg-white border-t">
@@ -917,7 +1015,7 @@ const EmployeeCalendarModal = ({
         {/* Edit panel */}
         {!viewOnly && editingStatus && selectedDate && (
           <div className="px-6 py-4 border-t bg-blue-50 flex-shrink-0">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-5xl mx-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-medium text-gray-800">
                   Edit Attendance for {selectedDate.date} ({selectedDate.dayName})
@@ -927,13 +1025,35 @@ const EmployeeCalendarModal = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                {/* ✅ NEW: Special Leave dropdown */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Special Leave (Counts Present + 9h)</label>
+                  <select
+                    value={editForm.specialLeaveType}
+                    onChange={(e) => {
+                      const v = normalizeSpecialLeave(e.target.value);
+                      setEditForm((prev) => (v ? applySpecialLeaveDefaults(v, prev) : clearSpecialLeave(prev)));
+                    }}
+                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">None</option>
+                    <option value="birth">Birth</option>
+                    <option value="death">Death</option>
+                    <option value="marriage">Marriage</option>
+                  </select>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    If selected, system forces <b>Present</b> and adds <b>09:00</b>.
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
                   <select
                     value={editForm.status}
                     onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!!normalizeSpecialLeave(editForm.specialLeaveType)}
+                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                   >
                     <option value="">Select Status</option>
                     {statusOptions.map((opt) => (
@@ -942,6 +1062,9 @@ const EmployeeCalendarModal = ({
                       </option>
                     ))}
                   </select>
+                  {!!normalizeSpecialLeave(editForm.specialLeaveType) && (
+                    <div className="text-[11px] text-gray-500 mt-1">Status locked to Present (special leave).</div>
+                  )}
                 </div>
 
                 <div>
@@ -950,7 +1073,8 @@ const EmployeeCalendarModal = ({
                     type="time"
                     value={editForm.inTime}
                     onChange={(e) => setEditForm({ ...editForm, inTime: e.target.value })}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!!normalizeSpecialLeave(editForm.specialLeaveType)}
+                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                   />
                 </div>
 
@@ -960,7 +1084,8 @@ const EmployeeCalendarModal = ({
                     type="time"
                     value={editForm.outTime}
                     onChange={(e) => setEditForm({ ...editForm, outTime: e.target.value })}
-                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!!normalizeSpecialLeave(editForm.specialLeaveType)}
+                    className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                   />
                 </div>
 
@@ -982,7 +1107,7 @@ const EmployeeCalendarModal = ({
                 </button>
                 <button
                   onClick={handleStatusUpdate}
-                  disabled={!editForm.status}
+                  disabled={!editForm.status && !normalizeSpecialLeave(editForm.specialLeaveType)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   Update Attendance

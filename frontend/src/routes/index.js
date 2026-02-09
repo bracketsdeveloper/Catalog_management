@@ -92,6 +92,7 @@ import BankStatementUpload from "../pages/BankStatementUpload";
 import SuspenseAccountManager from "../pages/SuspenseAccountManager";
 import ConfigurationPage from "../pages/ConfigurationPage";
 import EmployeeConfigPage from "../pages/hrms/EmployeeConfigPage";
+import SalaryModulePage from "../pages/SalaryModulePage";
 
 
 const router = createBrowserRouter([
@@ -429,7 +430,7 @@ const router = createBrowserRouter([
                     },
                     {
                         path : "hrms/salary",
-                        element:<SalaryPage/>
+                        element:<SalaryModulePage/>
                     },
                     {
                         path: "purchase-orders",

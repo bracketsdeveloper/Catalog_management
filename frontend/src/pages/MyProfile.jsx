@@ -55,6 +55,62 @@ const monthNames = [
   "December",
 ];
 
+// Try to detect a usable calendar API on HRMS client
+function pickCalendarMethod() {
+  if (!HRMS) return null;
+  if (typeof HRMS.getEmployeeCalendar === "function") return "getEmployeeCalendar";
+  if (typeof HRMS.getAttendanceCalendar === "function") return "getAttendanceCalendar";
+  if (typeof HRMS.getCalendar === "function") return "getCalendar";
+  if (typeof HRMS.employeeCalendar === "function") return "employeeCalendar";
+  if (typeof HRMS.attendanceCalendar === "function") return "attendanceCalendar";
+  return null;
+}
+
+// Convert calendar/daily attendance rows -> summary (fallback when summary endpoint is missing)
+function computeSummaryFromDailyRows(dailyRows = []) {
+  const rows = Array.isArray(dailyRows) ? dailyRows : [];
+  let totalDays = rows.length;
+
+  let presentDays = 0;
+  let absentDays = 0;
+  let wfhDays = 0;
+  let weeklyOffDays = 0;
+  let holidayDays = 0;
+
+  let totalHours = 0;
+  let totalOT = 0;
+
+  rows.forEach((r) => {
+    const status = String(r?.status || r?.dayStatus || "").toLowerCase();
+
+    // common statuses: present, absent, wfh, weeklyoff, holiday
+    if (status.includes("present")) presentDays++;
+    else if (status.includes("absent")) absentDays++;
+    else if (status.includes("wfh")) wfhDays++;
+    else if (status.includes("weekly")) weeklyOffDays++;
+    else if (status.includes("holiday")) holidayDays++;
+
+    totalHours += Number(r?.hoursWorked ?? r?.hours ?? r?.totalHours ?? 0) || 0;
+    totalOT += Number(r?.hoursOT ?? r?.otHours ?? r?.totalOT ?? 0) || 0;
+  });
+
+  // expectedHours is unknown in fallback; keep 0 unless provided
+  const expectedHours = 0;
+
+  return {
+    totalDays,
+    presentDays,
+    absentDays,
+    wfhDays,
+    weeklyOffDays,
+    holidayDays,
+    leaveDays: 0,
+    totalHours: Number(totalHours.toFixed(2)),
+    totalOT: Number(totalOT.toFixed(2)),
+    expectedHours,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +123,6 @@ export default function MyProfilePage() {
 
   const [activeTab, setActiveTab] = useState("profile");
 
-  // Profile forms (keep what you need; minimal is fine)
   const [uForm, setUForm] = useState({
     name: "",
     email: "",
@@ -119,7 +174,6 @@ export default function MyProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When attendance tab is opened (or month/year changes), fetch summary like admin page
   useEffect(() => {
     if (activeTab === "attendance" && employee?.personal?.employeeId) {
       fetchMyAttendanceSummary();
@@ -134,9 +188,6 @@ export default function MyProfilePage() {
     try {
       setLoading(true);
 
-      // ✅ Use HRMS client
-      // Your hrmsClient should have profile endpoint; commonly it's HRMS.getMyProfile / HRMS.getProfile
-      // We'll try getProfile first, then fallback to getMyProfile.
       let r;
       if (typeof HRMS.getProfile === "function") {
         r = await HRMS.getProfile();
@@ -191,8 +242,6 @@ export default function MyProfilePage() {
     try {
       setSaving(true);
 
-      // ✅ Use HRMS client
-      // Common naming: updateProfile / updateMyProfile
       const payload = {
         user: {
           name: uForm.name,
@@ -235,46 +284,117 @@ export default function MyProfilePage() {
     }
   };
 
-  // ✅ This is the key change you requested:
-  // Fetch from the SAME route as AttendanceSummaryPage and show only the logged-in user row
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Attendance summary fetcher (works for employee users)
+  // ─────────────────────────────────────────────────────────────────────────────
   const fetchMyAttendanceSummary = async () => {
     const empId = employee?.personal?.employeeId;
     if (!empId) return;
 
     setAttendanceLoading(true);
+
+    const params = { month: calendarMonth, year: calendarYear };
+
     try {
-      const params = { month: calendarMonth, year: calendarYear };
+      // ✅ 1) Preferred: self-service endpoint (NO ADMIN)
+      // You must implement backend route /attendance/me/summary and hrmsClient method getMyAttendanceSummary.
+      if (typeof HRMS.getMyAttendanceSummary === "function") {
+        const res = await HRMS.getMyAttendanceSummary(params);
 
-      // Must exist in hrmsClient (it existed in AttendanceSummaryPage)
-      const res = await HRMS.getAttendanceSummaryAll(params);
+        const payload = res?.data;
+        const summary = payload?.summary || payload?.data?.summary || null;
 
-      const rows = res?.data?.results || res?.data?.rows || [];
-      const mine =
-        rows.find((r) => String(r.employeeId || r.employee_id || r.empId) === String(empId)) ||
-        rows.find((r) => String(r?.personal?.employeeId) === String(empId));
+        if (summary) {
+          const s = { ...summary };
+          s.formattedTotalHours = formatHoursToHHMM(s.totalHours || 0);
+          s.formattedTotalOT = formatHoursToHHMM(s.totalOT || 0);
+          s.formattedExpectedHours = formatHoursToHHMM(s.expectedHours || 0);
 
-      if (!mine) {
-        setMySummaryRow(null);
+          setMySummaryRow({
+            employeeId: payload?.employeeId || empId,
+            name: payload?.name || employee?.personal?.name || user?.name || "Me",
+            department: payload?.department || employee?.org?.department || "-",
+            role: payload?.role || employee?.org?.role || "-",
+            summary: s,
+          });
+          return;
+        }
+      }
+
+      // ✅ 2) Fallback: admin route (will fail for non-admin)
+      if (typeof HRMS.getAttendanceSummaryAll === "function") {
+        const res = await HRMS.getAttendanceSummaryAll(params);
+
+        const rows = res?.data?.results || res?.data?.rows || [];
+        const mine =
+          rows.find((r) => String(r.employeeId || r.employee_id || r.empId) === String(empId)) ||
+          rows.find((r) => String(r?.personal?.employeeId) === String(empId));
+
+        if (mine) {
+          const s = { ...(mine.summary || {}) };
+          s.formattedTotalHours = formatHoursToHHMM(s.totalHours || 0);
+          s.formattedTotalOT = formatHoursToHHMM(s.totalOT || 0);
+          s.formattedExpectedHours = formatHoursToHHMM(s.expectedHours || 0);
+
+          setMySummaryRow({
+            employeeId: mine.employeeId || empId,
+            name: mine.name || employee?.personal?.name || user?.name || "Me",
+            department: mine.department || employee?.org?.department || "-",
+            role: mine.role || employee?.org?.role || "-",
+            summary: s,
+          });
+          return;
+        }
+      }
+
+      // ✅ 3) Fallback: compute from calendar daily entries if available
+      const calMethod = pickCalendarMethod();
+      if (calMethod) {
+        const res = await HRMS[calMethod]({
+          employeeId: empId,
+          month: calendarMonth,
+          year: calendarYear,
+        });
+
+        const dailyRows =
+          res?.data?.days || res?.data?.rows || res?.data?.data?.days || res?.data?.data?.rows || [];
+
+        const computed = computeSummaryFromDailyRows(dailyRows);
+
+        const s = { ...computed };
+        s.formattedTotalHours = formatHoursToHHMM(s.totalHours || 0);
+        s.formattedTotalOT = formatHoursToHHMM(s.totalOT || 0);
+        s.formattedExpectedHours = formatHoursToHHMM(s.expectedHours || 0);
+
+        setMySummaryRow({
+          employeeId: empId,
+          name: employee?.personal?.name || user?.name || "Me",
+          department: employee?.org?.department || "-",
+          role: employee?.org?.role || "-",
+          summary: s,
+        });
         return;
       }
 
-      const s = { ...(mine.summary || {}) };
-
-      // Ensure formatted fields match AttendanceSummaryPage usage
-      s.formattedTotalHours = s.formattedTotalHours || formatHoursToHHMM(s.totalHours || 0);
-      s.formattedTotalOT = s.formattedTotalOT || formatHoursToHHMM(s.totalOT || 0);
-      s.formattedExpectedHours = s.formattedExpectedHours || formatHoursToHHMM(s.expectedHours || 0);
-
-      setMySummaryRow({
-        employeeId: mine.employeeId || empId,
-        name: mine.name || employee?.personal?.name || user?.name || "Me",
-        department: mine.department || employee?.org?.department || "-",
-        role: mine.role || employee?.org?.role || "-",
-        summary: s,
-      });
+      // If nothing worked:
+      setMySummaryRow(null);
+      toast.error(
+        "Attendance summary API not available for employees. Add HRMS.getMyAttendanceSummary() (recommended)."
+      );
     } catch (err) {
       console.error(err);
-      toast.error(err?.response?.data?.message || "Failed to load attendance summary");
+
+      const status = err?.response?.status;
+      if (status === 401) {
+        toast.error("Unauthorized. Please login again.");
+      } else if (status === 403) {
+        toast.error(
+          "You don’t have permission to view /attendance/summary/all (admin-only). Add /attendance/me/summary for employees."
+        );
+      } else {
+        toast.error(err?.response?.data?.message || err.message || "Failed to load attendance summary");
+      }
+
       setMySummaryRow(null);
     } finally {
       setAttendanceLoading(false);
@@ -569,7 +689,6 @@ export default function MyProfilePage() {
             </div>
           </div>
         ) : (
-          // ✅ ATTENDANCE TAB (table layout same as AttendanceSummaryPage, but only self row)
           <div className="space-y-6">
             {!employee?.personal?.employeeId ? (
               <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
@@ -631,10 +750,12 @@ export default function MyProfilePage() {
                 ) : !mySummaryRow ? (
                   <div className="text-center py-10 bg-gray-50 rounded-lg border">
                     <p className="text-gray-600">No attendance summary found for this month.</p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      If you are not an admin, you need a self-service endpoint: <b>/attendance/me/summary</b>
+                    </p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    {/* ✅ SAME TABLE COLUMNS as AttendanceSummaryPage */}
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
@@ -679,7 +800,9 @@ export default function MyProfilePage() {
                             <div className="text-sm font-medium text-gray-900">
                               {mySummaryRow.summary?.presentDays ?? 0}
                             </div>
-                            <div className="text-xs text-gray-500">{mySummaryRow.summary?.workingDaysLabel || ""}</div>
+                            <div className="text-xs text-gray-500">
+                              {mySummaryRow.summary?.workingDaysLabel || ""}
+                            </div>
                           </td>
 
                           <td className="px-6 py-4">
@@ -775,7 +898,7 @@ export default function MyProfilePage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modals (same as your file — unchanged behavior)
+// Modals (unchanged behavior)
 // ─────────────────────────────────────────────────────────────────────────────
 function RestrictedHolidayModal({
   open,
@@ -803,7 +926,10 @@ function RestrictedHolidayModal({
                 Used this year: <span className="font-bold">{activeRHCount}/2</span>
               </p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full">
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full"
+            >
               ✕
             </button>
           </div>
@@ -891,7 +1017,10 @@ function RestrictedHolidayModal({
                       <td className="px-6 py-4 text-sm text-gray-500">{r.note || "-"}</td>
                       <td className="px-6 py-4">
                         {["applied", "pending"].includes(r.status) ? (
-                          <button className="text-red-600 hover:text-red-800 text-sm font-medium" onClick={() => cancelRH(r._id)}>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            onClick={() => cancelRH(r._id)}
+                          >
                             Cancel
                           </button>
                         ) : (
@@ -942,7 +1071,10 @@ function LeaveModal({
               <h3 className="text-xl font-semibold text-gray-900">Apply for Leave</h3>
               <p className="text-sm text-gray-600 mt-1">Submit your leave application</p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full">
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full"
+            >
               ✕
             </button>
           </div>
@@ -972,7 +1104,11 @@ function LeaveModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Total Days</label>
-              <input className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50" value={leaveDays} readOnly />
+              <input
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50"
+                value={leaveDays}
+                readOnly
+              />
             </div>
 
             <div className="md:col-span-3">
@@ -1023,7 +1159,9 @@ function LeaveModal({
                     <tr key={L._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatIndianDate(L.startDate)}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{formatIndianDate(L.endDate)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{L.days || daysBetween(iso(L.startDate), iso(L.endDate))}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {L.days || daysBetween(iso(L.startDate), iso(L.endDate))}
+                      </td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 text-xs font-medium rounded-full ${
@@ -1040,7 +1178,10 @@ function LeaveModal({
                       <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{L.purpose || "-"}</td>
                       <td className="px-6 py-4">
                         {["applied", "pending"].includes(L.status) ? (
-                          <button className="text-red-600 hover:text-red-800 text-sm font-medium" onClick={() => cancelLeave(L._id)}>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            onClick={() => cancelLeave(L._id)}
+                          >
                             Cancel
                           </button>
                         ) : (
