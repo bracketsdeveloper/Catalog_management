@@ -7,7 +7,7 @@ const Attendance = require("../models/Attendance");
 const Holiday = require("../models/Holiday");
 const Leave = require("../models/Leave");
 const RestrictedHolidayRequest = require("../models/RestrictedHolidayRequest");
-const SalaryRecord = require("../models/SalaryRecord");
+const SalaryRecord = require("../models/Salaryrecord");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
