@@ -19,7 +19,7 @@ function TaskDetailModal({ task, onClose, formatDate, currentUserId }) {
         {/* Task Info */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="text-sm font-medium text-gray-500">Ticket Name</label>
+            <label className="text-sm font-medium text-gray-500">Task Name</label>
             <p className="font-medium">{task.ticketName}</p>
           </div>
           <div>

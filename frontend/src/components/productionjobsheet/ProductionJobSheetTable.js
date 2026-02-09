@@ -9,7 +9,7 @@ const dt = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).
 /* header filter row - UPDATED VERSION */
 function FilterRow({ filters, onChange }) {
   const statusOptions = ["All", "pending", "received", "alert", "Not Set"];
-  
+
   const dateKeys = [
     "jobSheetCreatedDate",
     "deliveryDateTime",
@@ -43,7 +43,7 @@ function FilterRow({ filters, onChange }) {
     try {
       const date = new Date(value);
       if (isNaN(date.getTime())) return "";
-      
+
       if (isDateTime) {
         // For datetime-local, format as YYYY-MM-DDTHH:MM
         const pad = (num) => num.toString().padStart(2, '0');
@@ -65,7 +65,7 @@ function FilterRow({ filters, onChange }) {
   // Parse date from input value
   const parseDateFromInput = (value, isDateTime = false) => {
     if (!value) return "";
-    
+
     if (isDateTime) {
       // For datetime-local, ensure proper format
       const date = new Date(value);
@@ -100,7 +100,7 @@ function FilterRow({ filters, onChange }) {
       {cols.map(({ key, type, options }) => {
         const isDateField = dateKeys.includes(key);
         const isDateTime = key === "schedulePickUp";
-        
+
         return (
           <th key={key} className="border px-1 py-0.5">
             {type === "select" ? (
@@ -153,28 +153,28 @@ export default function ProductionJobSheetTable({
 
   const [selectedJobSheetNumber, setSelectedJobSheetNumber] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   const handleOpenModal = (jobSheetNumber) => {
     setSelectedJobSheetNumber(jobSheetNumber);
     setIsModalOpen(true);
   };
-  
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedJobSheetNumber(null);
   };
-  
+
 
   const rowCls = (s) =>
     !s
       ? ""
       : s === "pending"
-      ? "bg-orange-200"
-      : s === "received"
-      ? "bg-green-300"
-      : s === "alert"
-      ? "bg-red-200"
-      : "";
+        ? "bg-orange-200"
+        : s === "received"
+          ? "bg-green-300"
+          : s === "alert"
+            ? "bg-red-200"
+            : "";
 
   const icon = (f) =>
     sortField !== f ? (
@@ -274,7 +274,7 @@ export default function ProductionJobSheetTable({
       </div>
 
       <JobSheetGlobal
-        jobSheetNumber={selectedJobSheetNumber} 
+        jobSheetNumber={selectedJobSheetNumber}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />

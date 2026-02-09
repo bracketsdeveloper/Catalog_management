@@ -10,7 +10,7 @@ import ProductionJobSheetInvoiceModal from
 
 /* ───────── helpers ───────── */
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const token       = localStorage.getItem("token");
+const token = localStorage.getItem("token");
 const toDate = (d) => (d ? new Date(d) : new Date(0));
 const cmp = (a, b, t) =>
   t === "date"
@@ -19,10 +19,10 @@ const cmp = (a, b, t) =>
 
 /* advanced-filter shape */
 const initRange = { from: "", to: "" };
-const initAdv   = {
-  jobSheetNumber:        { ...initRange },
+const initAdv = {
+  jobSheetNumber: { ...initRange },
   orderConfirmationDate: { ...initRange },
-  vendorInvoiceReceived: "",          // "", "yes", "no"
+  vendorInvoiceReceived: "", // "", "yes", "no"
 };
 
 export default function ManageProductionInvoice() {
@@ -30,10 +30,10 @@ export default function ManageProductionInvoice() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [search, setSearch]   = useState("");
+  const [search, setSearch] = useState("");
   const [headerF, setHeaderF] = useState({});
-  const [adv, setAdv]         = useState(initAdv);
-  const [showFilters, setShow]= useState(false);
+  const [adv, setAdv] = useState(initAdv);
+  const [showFilters, setShow] = useState(false);
 
   const [sort, setSort] = useState({
     key: "orderConfirmationDate",
@@ -46,6 +46,10 @@ export default function ManageProductionInvoice() {
   const [modal, setModal] = useState(null);
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  /* ✅ Pagination (ONLY ADDITION) */
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(1);
 
   /* --------------- permissions --------------- */
   useEffect(() => {
@@ -82,38 +86,38 @@ export default function ManageProductionInvoice() {
     [rows, search]
   );
 
-  // FIXED: Header filters with proper date handling
+  // Header filters with proper date handling
   const head = useMemo(
     () =>
       global.filter((r) =>
         Object.entries(headerF).every(([k, v]) => {
           if (!v) return true;
-          
+
           let val = r[k] ?? "";
-          
+
           // Handle date field specifically
           if (k === "orderConfirmationDate" && val && v) {
             try {
               const rowDate = new Date(val);
               const filterDate = new Date(v);
-              
+
               if (isNaN(rowDate.getTime()) || isNaN(filterDate.getTime())) {
                 return String(val).toLowerCase().includes(v.toLowerCase());
               }
-              
-              const rowDateStr = rowDate.toISOString().split('T')[0];
-              const filterDateStr = filterDate.toISOString().split('T')[0];
+
+              const rowDateStr = rowDate.toISOString().split("T")[0];
+              const filterDateStr = filterDate.toISOString().split("T")[0];
               return rowDateStr === filterDateStr;
             } catch {
               return String(val).toLowerCase().includes(v.toLowerCase());
             }
           }
-          
+
           // Handle payment status and vendor invoice received as exact matches
           if (k === "paymentStatus" || k === "vendorInvoiceReceived") {
             return (val || "").toLowerCase() === v.toLowerCase();
           }
-          
+
           // Handle other text fields (case-insensitive partial match)
           return String(val).toLowerCase().includes(v.toLowerCase());
         })
@@ -134,8 +138,8 @@ export default function ManageProductionInvoice() {
     return head.filter(
       (r) =>
         (!adv.jobSheetNumber.from || r.jobSheetNumber >= adv.jobSheetNumber.from) &&
-        (!adv.jobSheetNumber.to   || r.jobSheetNumber <= adv.jobSheetNumber.to)   &&
-        inRange(r.orderConfirmationDate, adv.orderConfirmationDate)               &&
+        (!adv.jobSheetNumber.to || r.jobSheetNumber <= adv.jobSheetNumber.to) &&
+        inRange(r.orderConfirmationDate, adv.orderConfirmationDate) &&
         (adv.vendorInvoiceReceived === ""
           ? true
           : (r.vendorInvoiceReceived || "no").toLowerCase() === adv.vendorInvoiceReceived)
@@ -155,10 +159,29 @@ export default function ManageProductionInvoice() {
   const sorted = useMemo(
     () =>
       [...tabbed].sort(
-        (a, b) => cmp(a[sort.key], b[sort.key], sort.type) * (sort.direction === "asc" ? 1 : -1)
+        (a, b) =>
+          cmp(a[sort.key], b[sort.key], sort.type) *
+          (sort.direction === "asc" ? 1 : -1)
       ),
     [tabbed, sort]
   );
+
+  /* ✅ Reset to page 1 whenever result-set changes (ONLY ADDITION) */
+  useEffect(() => {
+    setPage(1);
+  }, [search, headerF, adv, tab, sort.key, sort.direction, sort.type]);
+
+  /* ✅ Pagination derived (ONLY ADDITION) */
+  const totalPages = useMemo(
+    () => Math.max(Math.ceil(sorted.length / PAGE_SIZE), 1),
+    [sorted.length]
+  );
+
+  const pagedSorted = useMemo(() => {
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+    const start = (safePage - 1) * PAGE_SIZE;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, page, totalPages]);
 
   /* --------------- handlers --------------- */
   const sortBy = (k, t = "string") =>
@@ -223,7 +246,9 @@ export default function ManageProductionInvoice() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded ${tab === t ? "bg-[#Ff8045] text-white" : "bg-gray-200"}`}
+            className={`px-4 py-2 rounded ${
+              tab === t ? "bg-[#Ff8045] text-white" : "bg-gray-200"
+            }`}
           >
             {t === "open" ? "Open Invoices" : "Closed Invoices"}
           </button>
@@ -252,6 +277,42 @@ export default function ManageProductionInvoice() {
             Export to Excel
           </button>
         )}
+      </div>
+
+      {/* ✅ Pagination controls (ONLY ADDITION) */}
+      <div className="flex items-center justify-between mb-2 text-xs">
+        <div className="text-gray-600">
+          Showing{" "}
+          <b>
+            {sorted.length === 0
+              ? 0
+              : (Math.min(page, totalPages) - 1) * PAGE_SIZE + 1}
+          </b>
+          {" - "}
+          <b>{Math.min(Math.min(page, totalPages) * PAGE_SIZE, sorted.length)}</b>
+          {" of "}
+          <b>{sorted.length}</b>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            className="px-3 py-1 rounded border disabled:opacity-50"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+          >
+            Prev
+          </button>
+          <span className="text-gray-700">
+            Page <b>{Math.min(page, totalPages)}</b> / <b>{totalPages}</b>
+          </span>
+          <button
+            className="px-3 py-1 rounded border disabled:opacity-50"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+          >
+            Next
+          </button>
+        </div>
       </div>
 
       {/* drawer */}
@@ -336,7 +397,7 @@ export default function ManageProductionInvoice() {
 
       {/* table */}
       <ProductionJobSheetInvoiceTable
-        data={sorted}
+        data={pagedSorted}  
         sortConfig={sort}
         onSortChange={(k) =>
           sortBy(

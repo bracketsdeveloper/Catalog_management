@@ -30,7 +30,7 @@ const adminPages = [
     subItems: [
       { name: "Dashboard", path: "/admin-dashboard/manage-tasks", permission: "manage-task" },
       { name: "Manage Tasks", path: "/admin-dashboard/manage-tickets" },
-      { name:"Manuals",path:"/admin-dashboard/file-management"  }
+      { name: "Manuals", path: "/admin-dashboard/file-management" }
     ],
   },
   {
@@ -220,7 +220,7 @@ export default function AdminDashboard() {
       let perms = [];
       try {
         perms = JSON.parse(localStorage.getItem("permissions") || "[]");
-      } catch {}
+      } catch { }
       setPermissions(perms);
       setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
     }
@@ -325,17 +325,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-white text-gray-800">
-      <div className="flex">
-      <NotificationBell />
-
-<Link
-  to="/admin-dashboard/my-profile"
-  aria-label="My Profile"
-  className="fixed top-3 right-7 z-50 inline-flex items-center justify-center h-12 w-12 rounded-full bg-white/90 backdrop-blur border border-gray-200 shadow hover:bg-white active:scale-[0.98] transition"
-  title="My Profile"
->
-  <UserCircleIcon className="h-7 w-7 text-gray-700" />
-</Link>
+      <div className="fixed top-3 right-5 z-50">
+        <NotificationBell />
       </div>
 
       <aside
@@ -562,9 +553,8 @@ export default function AdminDashboard() {
                     </Link>
 
                     <div
-                      className={`ml-3 transition-all duration-200 ease-in-out overflow-hidden whitespace-nowrap ${
-                        packDelHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-                      }`}
+                      className={`ml-3 transition-all duration-200 ease-in-out overflow-hidden whitespace-nowrap ${packDelHovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                        }`}
                     >
                       {Object.entries(grouped).map(([groupName, items]) => (
                         <div key={groupName} className="mb-2">
@@ -655,9 +645,8 @@ function MegaMenu({ page, hovered, setHovered, sidebarOpen, sidebarHover }) {
       </Link>
 
       <div
-        className={`ml-3 transition-all duration-200 ease-in-out overflow-hidden whitespace-nowrap ${
-          hovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-        }`}
+        className={`ml-3 transition-all duration-200 ease-in-out overflow-hidden whitespace-nowrap ${hovered ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          }`}
       >
         <div className="grid gap-1.5">
           {page.subItems.map((sub) => (

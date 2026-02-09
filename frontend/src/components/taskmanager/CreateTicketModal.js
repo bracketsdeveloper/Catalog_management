@@ -359,10 +359,10 @@ export default function CreateTicketModal({
         <form onSubmit={handleSubmit}>
           {/* Ticket Name */}
           <div className="mb-4">
-            <label className="block text-sm font-medium">Ticket Name *</label>
+            <label className="block text-sm font-medium">Task Name *</label>
             <input
               type="text"
-              name="ticketName"
+              name="Task Name"
               value={formData.ticketName}
               onChange={handleChange}
               required

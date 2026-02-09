@@ -336,12 +336,12 @@ export default function ManageTicketsPage() {
         {/* Tickets Section */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex justify-between items-center mb-3">
-            <h2 className="text-lg font-medium text-gray-700">Tickets</h2>
+            <h2 className="text-lg font-medium text-gray-700">Tasks</h2>
             <button
               onClick={() => setShowCreateModal({})}
               className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
             >
-              Create Ticket
+              Create Task
             </button>
           </div>
           <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />

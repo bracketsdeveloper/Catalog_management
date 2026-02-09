@@ -130,8 +130,8 @@ export default function CatalogManagementPage() {
         approvalFilter === "all"
           ? res.data
           : res.data.filter((cat) =>
-              approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
-            );
+            approvalFilter === "approved" ? cat.approveStatus : !cat.approveStatus
+          );
       if (fromDateFilter) {
         const from = new Date(fromDateFilter);
         data = data.filter((item) => new Date(item.createdAt) >= from);
@@ -264,9 +264,8 @@ export default function CatalogManagementPage() {
           return {
             slNo: idx + 1,
             productId: prod.productId,
-            product: `${productName}${prod.color ? `(${prod.color})` : ""}${
-              prod.size ? `[${prod.size}]` : ""
-            }`,
+            product: `${productName}${prod.color ? `(${prod.color})` : ""}${prod.size ? `[${prod.size}]` : ""
+              }`,
             hsnCode: prod.hsnCode || "",
             quantity,
             rate,
@@ -398,282 +397,282 @@ export default function CatalogManagementPage() {
   }
 
   async function handleExportCombinedPDF(catalog, templateId = "1") {
-  try {
-    const tmpl = templateConfig[templateId];
-    if (!tmpl) {
-      alert("Invalid template selection");
-      return;
-    }
-
-    const pdf1Bytes = await fetch(tmpl.pdf1).then((res) => res.arrayBuffer());
-    const pdf2Bytes = await fetch(tmpl.pdf2).then((res) => res.arrayBuffer());
-    const pdf3Bytes = await fetch(tmpl.pdf3).then((res) => res.arrayBuffer());
-
-    const pdf1Doc = await PDFDocument.load(pdf1Bytes);
-    const pdf2Doc = await PDFDocument.load(pdf2Bytes);
-    const pdf3Doc = await PDFDocument.load(pdf3Bytes);
-
-    const newPdf = await PDFDocument.create();
-    const pdf1Pages = await newPdf.copyPages(pdf1Doc, pdf1Doc.getPageIndices());
-    pdf1Pages.forEach((page) => newPdf.addPage(page));
-
-    const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
-    const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
-
-    for (let i = 0; i < (catalog.products || []).length; i++) {
-      const sub = catalog.products[i];
-      const prod =
-        sub.productId && typeof sub.productId === "object" ? sub.productId : {};
-
-      // Get product ID - handle both object and string formats
-      const productId = prod.productId || 
-                       (typeof sub.productId === 'string' ? sub.productId : 
-                       (sub.productId && sub.productId.productId) || 
-                       sub.productCode || 
-                       "N/A");
-
-      const [page] = await newPdf.copyPages(pdf2Doc, [0]);
-      const { width, height } = page.getSize();
-      const fixedHeight = 550;
-      const imageX = 100;
-      const imageY = height - 780;
-      let mainImg =
-        (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
-      if (mainImg && mainImg.startsWith("http://")) {
-        mainImg = mainImg.replace("http://", "https://");
+    try {
+      const tmpl = templateConfig[templateId];
+      if (!tmpl) {
+        alert("Invalid template selection");
+        return;
       }
-      let imageData = "";
-      if (mainImg) {
-        try {
-          imageData = await getBase64ImageFromUrl(mainImg);
-        } catch (err) {
-          console.error("Error fetching product image:", err);
+
+      const pdf1Bytes = await fetch(tmpl.pdf1).then((res) => res.arrayBuffer());
+      const pdf2Bytes = await fetch(tmpl.pdf2).then((res) => res.arrayBuffer());
+      const pdf3Bytes = await fetch(tmpl.pdf3).then((res) => res.arrayBuffer());
+
+      const pdf1Doc = await PDFDocument.load(pdf1Bytes);
+      const pdf2Doc = await PDFDocument.load(pdf2Bytes);
+      const pdf3Doc = await PDFDocument.load(pdf3Bytes);
+
+      const newPdf = await PDFDocument.create();
+      const pdf1Pages = await newPdf.copyPages(pdf1Doc, pdf1Doc.getPageIndices());
+      pdf1Pages.forEach((page) => newPdf.addPage(page));
+
+      const normalFont = await newPdf.embedFont(StandardFonts.Helvetica);
+      const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
+
+      for (let i = 0; i < (catalog.products || []).length; i++) {
+        const sub = catalog.products[i];
+        const prod =
+          sub.productId && typeof sub.productId === "object" ? sub.productId : {};
+
+        // Get product ID - handle both object and string formats
+        const productId = prod.productId ||
+          (typeof sub.productId === 'string' ? sub.productId :
+            (sub.productId && sub.productId.productId) ||
+            sub.productCode ||
+            "N/A");
+
+        const [page] = await newPdf.copyPages(pdf2Doc, [0]);
+        const { width, height } = page.getSize();
+        const fixedHeight = 550;
+        const imageX = 100;
+        const imageY = height - 780;
+        let mainImg =
+          (prod.images && prod.images[0]) || (sub.images && sub.images[0]) || "";
+        if (mainImg && mainImg.startsWith("http://")) {
+          mainImg = mainImg.replace("http://", "https://");
         }
-      }
-      if (imageData) {
-        let embeddedImage;
-        if (imageData.startsWith("data:image/png")) {
-          embeddedImage = await newPdf.embedPng(imageData);
+        let imageData = "";
+        if (mainImg) {
+          try {
+            imageData = await getBase64ImageFromUrl(mainImg);
+          } catch (err) {
+            console.error("Error fetching product image:", err);
+          }
+        }
+        if (imageData) {
+          let embeddedImage;
+          if (imageData.startsWith("data:image/png")) {
+            embeddedImage = await newPdf.embedPng(imageData);
+          } else {
+            embeddedImage = await newPdf.embedJpg(imageData);
+          }
+          const autoWidth = (embeddedImage.width / embeddedImage.height) * fixedHeight;
+          page.drawImage(embeddedImage, { x: imageX, y: imageY, width: autoWidth, height: fixedHeight });
+
+          // Draw product ID badge on image
+          page.drawRectangle({
+            x: imageX + autoWidth - 120, // Right side of image
+            y: imageY + fixedHeight - 35, // Top of image
+            width: 120,
+            height: 35,
+            color: rgb(0.2, 0.2, 0.2), // Dark background
+            borderColor: rgb(1, 1, 1),
+            borderWidth: 1,
+          });
+
+          page.drawText(`ID: ${productId}`, {
+            x: imageX + autoWidth - 115,
+            y: imageY + fixedHeight - 25,
+            size: 12,
+            font: boldFont,
+            color: rgb(1, 1, 1), // White text
+          });
         } else {
-          embeddedImage = await newPdf.embedJpg(imageData);
+          page.drawRectangle({
+            x: imageX,
+            y: imageY,
+            width: 600,
+            height: fixedHeight,
+            borderColor: rgb(0.8, 0.8, 0.8),
+            borderWidth: 1,
+          });
+          page.drawText("No Image", {
+            x: imageX + 40,
+            y: imageY + 60,
+            size: 5,
+            font: normalFont,
+            color: rgb(0.5, 0.5, 0.5),
+          });
+
+          // Still show product ID even without image
+          page.drawRectangle({
+            x: imageX + 480,
+            y: imageY + fixedHeight - 35,
+            width: 120,
+            height: 35,
+            color: rgb(0.2, 0.2, 0.2),
+            borderColor: rgb(1, 1, 1),
+            borderWidth: 1,
+          });
+
+          page.drawText(`ID: ${productId}`, {
+            x: imageX + 485,
+            y: imageY + fixedHeight - 25,
+            size: 12,
+            font: boldFont,
+            color: rgb(1, 1, 1),
+          });
         }
-        const autoWidth = (embeddedImage.width / embeddedImage.height) * fixedHeight;
-        page.drawImage(embeddedImage, { x: imageX, y: imageY, width: autoWidth, height: fixedHeight });
-        
-        // Draw product ID badge on image
-        page.drawRectangle({
-          x: imageX + autoWidth - 120, // Right side of image
-          y: imageY + fixedHeight - 35, // Top of image
-          width: 120,
-          height: 35,
-          color: rgb(0.2, 0.2, 0.2), // Dark background
-          borderColor: rgb(1, 1, 1),
-          borderWidth: 1,
-        });
-        
-        page.drawText(`ID: ${productId}`, {
-          x: imageX + autoWidth - 115,
-          y: imageY + fixedHeight - 25,
-          size: 12,
-          font: boldFont,
-          color: rgb(1, 1, 1), // White text
-        });
-      } else {
-        page.drawRectangle({
-          x: imageX,
-          y: imageY,
-          width: 600,
-          height: fixedHeight,
-          borderColor: rgb(0.8, 0.8, 0.8),
-          borderWidth: 1,
-        });
-        page.drawText("No Image", {
-          x: imageX + 40,
-          y: imageY + 60,
-          size: 5,
-          font: normalFont,
-          color: rgb(0.5, 0.5, 0.5),
-        });
-        
-        // Still show product ID even without image
-        page.drawRectangle({
-          x: imageX + 480,
-          y: imageY + fixedHeight - 35,
-          width: 120,
-          height: 35,
-          color: rgb(0.2, 0.2, 0.2),
-          borderColor: rgb(1, 1, 1),
-          borderWidth: 1,
-        });
-        
-        page.drawText(`ID: ${productId}`, {
-          x: imageX + 485,
-          y: imageY + fixedHeight - 25,
-          size: 12,
-          font: boldFont,
-          color: rgb(1, 1, 1),
-        });
-      }
 
-      let xText = 1000;
-      let yText = height - 200;
-      const lineHeight = 48;
-      
-      // Product Name
-      page.drawText(prod.name || sub.productName || "", {
-        x: xText,
-        y: yText,
-        size: 32,
-        font: boldFont,
-        color: rgb(0, 0, 0),
-        maxWidth: 800,
-      });
-      yText -= lineHeight * 0.7;
-      
-      // Product ID below name
-      page.drawText(`Product ID: ${productId}`, {
-        x: xText,
-        y: yText,
-        size: 20,
-        font: normalFont,
-        color: rgb(0.4, 0.4, 0.4),
-        maxWidth: 800,
-      });
-      yText -= lineHeight * 1.5;
+        let xText = 1000;
+        let yText = height - 200;
+        const lineHeight = 48;
 
-      if (prod.ProductBrand || sub.ProductBrand) {
-        page.drawText("Brand Name: ", {
+        // Product Name
+        page.drawText(prod.name || sub.productName || "", {
           x: xText,
           y: yText,
-          size: 25,
+          size: 32,
           font: boldFont,
           color: rgb(0, 0, 0),
           maxWidth: 800,
         });
-        page.drawText(prod.ProductBrand || sub.ProductBrand || "", {
-          x: xText + 310,
-          y: yText,
-          size: 25,
-          font: normalFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        yText -= lineHeight;
-      }
+        yText -= lineHeight * 0.7;
 
-      if (prod.ProductDescription || sub.ProductDescription) {
-        page.drawText("Description:", {
+        // Product ID below name
+        page.drawText(`Product ID: ${productId}`, {
           x: xText,
           y: yText,
-          size: 25,
-          font: boldFont,
-          color: rgb(0, 0, 0),
+          size: 20,
+          font: normalFont,
+          color: rgb(0.4, 0.4, 0.4),
           maxWidth: 800,
         });
-        yText -= lineHeight;
+        yText -= lineHeight * 1.5;
 
-        const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(
-          /\n/g,
-          " "
-        );
-        const wrapped = wrapText(descriptionText, 500, normalFont, 7);
-        wrapped.forEach((line) => {
-          page.drawText(line, {
+        if (prod.ProductBrand || sub.ProductBrand) {
+          page.drawText("Brand Name: ", {
             x: xText,
             y: yText,
-            size: 20,
+            size: 25,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          page.drawText(prod.ProductBrand || sub.ProductBrand || "", {
+            x: xText + 310,
+            y: yText,
+            size: 25,
             font: normalFont,
             color: rgb(0, 0, 0),
             maxWidth: 800,
           });
           yText -= lineHeight;
-        });
-        yText -= lineHeight * 0.5;
+        }
+
+        if (prod.ProductDescription || sub.ProductDescription) {
+          page.drawText("Description:", {
+            x: xText,
+            y: yText,
+            size: 25,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          yText -= lineHeight;
+
+          const descriptionText = (prod.ProductDescription || sub.ProductDescription || "").replace(
+            /\n/g,
+            " "
+          );
+          const wrapped = wrapText(descriptionText, 500, normalFont, 7);
+          wrapped.forEach((line) => {
+            page.drawText(line, {
+              x: xText,
+              y: yText,
+              size: 20,
+              font: normalFont,
+              color: rgb(0, 0, 0),
+              maxWidth: 800,
+            });
+            yText -= lineHeight;
+          });
+          yText -= lineHeight * 0.5;
+        }
+
+        if (sub.quantity) {
+          page.drawText("Qty: ", {
+            x: xText,
+            y: yText,
+            size: 25,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          page.drawText(String(sub.quantity), {
+            x: xText + 310,
+            y: yText,
+            size: 25,
+            font: normalFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          yText -= lineHeight;
+        }
+
+        if (sub.productCost !== undefined) {
+          const baseCost = sub.productCost;
+          const margin = catalog.margin || 0;
+          const effPrice = baseCost * (1 + margin / 100);
+          page.drawText("Indicative Rate: ", {
+            x: xText,
+            y: yText,
+            size: 25,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          page.drawText(`${effPrice.toFixed(2)}/-`, {
+            x: xText + 310,
+            y: yText,
+            size: 25,
+            font: normalFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          yText -= lineHeight;
+        }
+
+        if (sub.productGST !== undefined) {
+          page.drawText("GST (Additional): ", {
+            x: xText,
+            y: yText,
+            size: 25,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          page.drawText(String(sub.productGST) + "%", {
+            x: xText + 310,
+            y: yText,
+            size: 25,
+            font: normalFont,
+            color: rgb(0, 0, 0),
+            maxWidth: 800,
+          });
+          yText -= lineHeight;
+        }
+
+        newPdf.addPage(page);
       }
 
-      if (sub.quantity) {
-        page.drawText("Qty: ", {
-          x: xText,
-          y: yText,
-          size: 25,
-          font: boldFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        page.drawText(String(sub.quantity), {
-          x: xText + 310,
-          y: yText,
-          size: 25,
-          font: normalFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        yText -= lineHeight;
-      }
+      const pdf3Pages = await newPdf.copyPages(pdf3Doc, pdf3Doc.getPageIndices());
+      pdf3Pages.forEach((page) => newPdf.addPage(page));
 
-      if (sub.productCost !== undefined) {
-        const baseCost = sub.productCost;
-        const margin = catalog.margin || 0;
-        const effPrice = baseCost * (1 + margin / 100);
-        page.drawText("Indicative Rate: ", {
-          x: xText,
-          y: yText,
-          size: 25,
-          font: boldFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        page.drawText(`${effPrice.toFixed(2)}/-`, {
-          x: xText + 310,
-          y: yText,
-          size: 25,
-          font: normalFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        yText -= lineHeight;
-      }
-
-      if (sub.productGST !== undefined) {
-        page.drawText("GST (Additional): ", {
-          x: xText,
-          y: yText,
-          size: 25,
-          font: boldFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        page.drawText(String(sub.productGST) + "%", {
-          x: xText + 310,
-          y: yText,
-          size: 25,
-          font: normalFont,
-          color: rgb(0, 0, 0),
-          maxWidth: 800,
-        });
-        yText -= lineHeight;
-      }
-
-      newPdf.addPage(page);
+      const finalPdfBytes = await newPdf.save();
+      const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Catalog-${catalog.catalogName}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Combined PDF export error:", error);
+      alert("Combined PDF export failed");
     }
-
-    const pdf3Pages = await newPdf.copyPages(pdf3Doc, pdf3Doc.getPageIndices());
-    pdf3Pages.forEach((page) => newPdf.addPage(page));
-
-    const finalPdfBytes = await newPdf.save();
-    const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `Catalog-${catalog.catalogName}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  } catch (error) {
-    console.error("Combined PDF export error:", error);
-    alert("Combined PDF export failed");
   }
-}
 
   async function handleExportPPT(catalog) {
     try {
@@ -769,11 +768,11 @@ export default function CatalogManagementPage() {
       const opp = opportunities.find((o) => o.opportunityCode === cat?.opportunityNumber);
       const matchesGlobalSearch = searchTerm
         ? String(cat?.catalogNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.customerCompany ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.customerName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.catalogName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(cat?.opportunityNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(opp?.opportunityOwner ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+        String(cat?.customerCompany ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(cat?.customerName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(cat?.catalogName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(cat?.opportunityNumber ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(opp?.opportunityOwner ?? "").toLowerCase().includes(searchTerm.toLowerCase())
         : true;
 
       const matchesHeaderSearch = Object.entries(searchValues).every(([field, value]) => {
@@ -807,25 +806,22 @@ export default function CatalogManagementPage() {
       <div className="flex space-x-2">
         <button
           onClick={() => setApprovalFilter("all")}
-          className={`px-3 py-1 rounded ${
-            approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"
-          }`}
+          className={`px-3 py-1 rounded ${approvalFilter === "all" ? "bg-[#66C3D0] text-white" : "bg-[#66C3D0] text-white"
+            }`}
         >
           All
         </button>
         <button
           onClick={() => setApprovalFilter("approved")}
-          className={`px-3 py-1 rounded ${
-            approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-[#44b977] text-white"
-          }`}
+          className={`px-3 py-1 rounded ${approvalFilter === "approved" ? "bg-[#44b977] text-white" : "bg-[#44b977] text-white"
+            }`}
         >
           Approved
         </button>
         <button
           onClick={() => setApprovalFilter("notApproved")}
-          className={`px-3 py-1 rounded ${
-            approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-[#e73d3e] text-white"
-          }`}
+          className={`px-3 py-1 rounded ${approvalFilter === "notApproved" ? "bg-[#e73d3e] text-white" : "bg-[#e73d3e] text-white"
+            }`}
         >
           Not Approved
         </button>

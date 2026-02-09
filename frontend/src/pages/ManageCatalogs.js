@@ -95,6 +95,7 @@ export default function CreateManualCatalog() {
   const [quotationId, setQuotationId] = useState(null);
   const [quotationNumber, setQuotationNumber] = useState(null);
   const [isDraftQuotation, setIsDraftQuotation] = useState(false);
+  const [terms, setTerms] = useState([]);
 
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyData, setSelectedCompanyData] = useState(null);
@@ -327,32 +328,32 @@ export default function CreateManualCatalog() {
         setSelectedProducts(
           Array.isArray(data.products)
             ? data.products.map((item) => ({
-                _id: item._id,
-                productId: item.productId?._id || item.productId,
-                productName: item.productName || item.name || "Unknown",
-                ProductDescription: item.ProductDescription || item.productDetails || "",
-                ProductBrand: item.ProductBrand || item.brandName || "",
-                color: item.color || "",
-                size: item.size || "",
-                quantity: item.quantity || 1,
-                productCost: item.productCost || 0,
-                productGST: item.productGST || 0,
-                material: item.material || "",
-                weight: item.weight || "",
-                brandingTypes: Array.isArray(item.brandingTypes)
-                  ? item.brandingTypes.map((bt) => bt._id || bt)
-                  : [],
-                baseCost: item.baseCost ?? item.productCost ?? 0,
-                suggestedBreakdown: item.suggestedBreakdown ?? {
-                  baseCost: 0,
-                  marginPct: 0,
-                  marginAmount: 0,
-                  logisticsCost: 0,
-                  brandingCost: 0,
-                  finalPrice: 0,
-                },
-                imageIndex: item.imageIndex || 0,
-              }))
+              _id: item._id,
+              productId: item.productId?._id || item.productId,
+              productName: item.productName || item.name || "Unknown",
+              ProductDescription: item.ProductDescription || item.productDetails || "",
+              ProductBrand: item.ProductBrand || item.brandName || "",
+              color: item.color || "",
+              size: item.size || "",
+              quantity: item.quantity || 1,
+              productCost: item.productCost || 0,
+              productGST: item.productGST || 0,
+              material: item.material || "",
+              weight: item.weight || "",
+              brandingTypes: Array.isArray(item.brandingTypes)
+                ? item.brandingTypes.map((bt) => bt._id || bt)
+                : [],
+              baseCost: item.baseCost ?? item.productCost ?? 0,
+              suggestedBreakdown: item.suggestedBreakdown ?? {
+                baseCost: 0,
+                marginPct: 0,
+                marginAmount: 0,
+                logisticsCost: 0,
+                brandingCost: 0,
+                finalPrice: 0,
+              },
+              imageIndex: item.imageIndex || 0,
+            }))
             : []
         );
 
@@ -385,6 +386,7 @@ export default function CreateManualCatalog() {
         setCustomerCompany(data.customerCompany || "");
         setFieldsToDisplay(Array.isArray(data.fieldsToDisplay) ? data.fieldsToDisplay : []);
         setSalutation(data.salutation || "Mr.");
+        setTerms(data.terms || []);
 
         const m = data.margin ?? presetMarginOptions[0];
         if (presetMarginOptions.includes(m)) {
@@ -409,31 +411,31 @@ export default function CreateManualCatalog() {
         setSelectedProducts(
           Array.isArray(data.items)
             ? data.items.map((item) => ({
-                productId: item.productId?._id || item.productId,
-                productName: item.product || "Unknown",
-                ProductDescription: "",
-                ProductBrand: "",
-                color: item.color || "",
-                size: item.size || "",
-                quantity: item.quantity || 1,
-                productCost: item.productprice || 0,
-                productGST: item.productGST || 0,
-                material: item.material || "",
-                weight: item.weight || "",
-                brandingTypes: Array.isArray(item.brandingTypes)
-                  ? item.brandingTypes.map((bt) => bt._id || bt)
-                  : [],
-                baseCost: item.baseCost || 0,
-                suggestedBreakdown: item.suggestedBreakdown || {
-                  baseCost: 0,
-                  marginPct: 0,
-                  marginAmount: 0,
-                  logisticsCost: 0,
-                  brandingCost: 0,
-                  finalPrice: 0,
-                },
-                imageIndex: item.imageIndex || 0,
-              }))
+              productId: item.productId?._id || item.productId,
+              productName: item.product || "Unknown",
+              ProductDescription: "",
+              ProductBrand: "",
+              color: item.color || "",
+              size: item.size || "",
+              quantity: item.quantity || 1,
+              productCost: item.productprice || 0,
+              productGST: item.productGST || 0,
+              material: item.material || "",
+              weight: item.weight || "",
+              brandingTypes: Array.isArray(item.brandingTypes)
+                ? item.brandingTypes.map((bt) => bt._id || bt)
+                : [],
+              baseCost: item.baseCost || 0,
+              suggestedBreakdown: item.suggestedBreakdown || {
+                baseCost: 0,
+                marginPct: 0,
+                marginAmount: 0,
+                logisticsCost: 0,
+                brandingCost: 0,
+                finalPrice: 0,
+              },
+              imageIndex: item.imageIndex || 0,
+            }))
             : []
         );
       } catch (err) {
@@ -520,7 +522,7 @@ export default function CreateManualCatalog() {
   const lastCompanyDataRef = useRef({ segment: null, pincode: null });
   const lastProductCountRef = useRef(0);
   const hasInitializedRef = useRef(false);
-  
+
 
   const toggleFilter = (val, arr, setArr) =>
     arr.includes(val) ? setArr(arr.filter((v) => v !== val)) : setArr([...arr, val]);
@@ -553,7 +555,7 @@ export default function CreateManualCatalog() {
       alert("This item with the same color & size is already added!");
       return;
     }
-    
+
     const newItem = {
       ...item,
       productprice: item.productCost || 0,
@@ -563,10 +565,10 @@ export default function CreateManualCatalog() {
       suggestedBreakdown: {}, // Will be calculated in edit modal
       imageIndex: 0,
     };
-    
+
     // Add to selected products
     setSelectedProducts((prev) => [...prev, newItem]);
-    
+
     // Immediately open edit modal for the newly added item
     setTimeout(() => {
       const newIndex = selectedProducts.length; // This will be the index of the newly added item
@@ -577,7 +579,7 @@ export default function CreateManualCatalog() {
 
   const handleAddVariations = async (variations) => {
     if (!variationModalProduct) return;
-    
+
     const newItems = variations.map((v) => ({
       _id: `${variationModalProduct._id}-${Date.now()}-${Math.random()}`,
       productId: variationModalProduct._id,
@@ -604,22 +606,22 @@ export default function CreateManualCatalog() {
       },
       imageIndex: 0,
     }));
-    
+
     // Filter out duplicates
-    const filtered = newItems.filter((newItem) => 
-      !selectedProducts.some((existingItem) => 
-        existingItem.productId === newItem.productId && 
-        existingItem.color === newItem.color && 
+    const filtered = newItems.filter((newItem) =>
+      !selectedProducts.some((existingItem) =>
+        existingItem.productId === newItem.productId &&
+        existingItem.color === newItem.color &&
         existingItem.size === newItem.size
       )
     );
-    
+
     if (filtered.length < newItems.length) {
       alert(`${newItems.length - filtered.length} variations were duplicates and were not added.`);
     }
-    
+
     setSelectedProducts((prev) => [...prev, ...filtered]);
-    
+
     // Open edit modal for each newly added variation
     if (filtered.length > 0) {
       setTimeout(() => {
@@ -632,7 +634,7 @@ export default function CreateManualCatalog() {
         });
       }, 100);
     }
-    
+
     closeVariationModal();
   };
 
@@ -656,8 +658,8 @@ export default function CreateManualCatalog() {
         return arr;
       }
       // Use the cost and breakdown from the edit modal
-      arr[editIndex] = { 
-        ...arr[editIndex], 
+      arr[editIndex] = {
+        ...arr[editIndex],
         ...upd,
         productprice: upd.productCost || arr[editIndex].productCost
       };
@@ -699,8 +701,8 @@ export default function CreateManualCatalog() {
       items: selectedProducts.map((p, i) => {
         const qty = p.quantity || 1;
         // Use productCost if explicitly set (even if 0), otherwise fall back to suggested breakdown
-        const base = (p.productCost != null && p.productCost !== undefined) 
-          ? p.productCost 
+        const base = (p.productCost != null && p.productCost !== undefined)
+          ? p.productCost
           : (p.suggestedBreakdown?.finalPrice || 0);
         const rate = parseFloat(base.toFixed(2));
         const amount = rate * qty;
@@ -730,7 +732,7 @@ export default function CreateManualCatalog() {
           imageIndex: p.imageIndex || 0,
         };
       }),
-      terms: [],
+      terms: terms,
       displayTotals: true,
       displayHSNCodes: true,
     };
@@ -856,8 +858,8 @@ export default function CreateManualCatalog() {
         color: p.color,
         size: p.size,
         quantity: p.quantity,
-        productCost: (p.productCost != null && p.productCost !== undefined) 
-          ? p.productCost 
+        productCost: (p.productCost != null && p.productCost !== undefined)
+          ? p.productCost
           : (p.suggestedBreakdown?.finalPrice || 0),
         productGST: p.productGST,
         material: p.material,
@@ -954,13 +956,13 @@ export default function CreateManualCatalog() {
         clients:
           selectedCompanyData.clients && selectedCompanyData.clients.length > 0
             ? [
-                {
-                  name: customerName,
-                  contactNumber: selectedCompanyData.clients[0].contactNumber,
-                  email: customerEmail,
-                },
-                ...selectedCompanyData.clients.slice(1),
-              ]
+              {
+                name: customerName,
+                contactNumber: selectedCompanyData.clients[0].contactNumber,
+                email: customerEmail,
+              },
+              ...selectedCompanyData.clients.slice(1),
+            ]
             : [{ name: customerName, contactNumber: "", email: customerEmail }],
       };
       await axios.put(
@@ -1266,12 +1268,12 @@ export default function CreateManualCatalog() {
         selectedBrands.length > 0 ||
         selectedPriceRanges.length > 0 ||
         selectedVariationHinges.length > 0) && (
-        <div className="mb-4">
-          <button onClick={clearFilters} className="px-4 py-2 bg-red-500 text-white text-xs rounded">
-            Clear Filters
-          </button>
-        </div>
-      )}
+          <div className="mb-4">
+            <button onClick={clearFilters} className="px-4 py-2 bg-red-500 text-white text-xs rounded">
+              Clear Filters
+            </button>
+          </div>
+        )}
 
       <div className="flex flex-wrap gap-2 mb-6">
         <FilterDropdown
@@ -1464,7 +1466,7 @@ export default function CreateManualCatalog() {
                                 <div className="font-semibold">{row.productName}</div>
                                 {row.color && <div className="text-xs">Color: {row.color}</div>}
                                 {row.size && <div className="text-xs">Size: {row.size}</div>}
-                                
+
                                 {/* PRICE INPUT FIELD */}
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-xs">Price:</span>
@@ -1478,7 +1480,7 @@ export default function CreateManualCatalog() {
                                   />
                                   <span className="text-xs">₹</span>
                                 </div>
-                                
+
                                 <div className="text-xs">Base Cost: ₹{Number(row.baseCost || 0).toFixed(2)}</div>
                                 <div className="text-xs">Qty: {row.quantity}</div>
                                 <div className="text-xs">GST: {row.productGST}%</div>

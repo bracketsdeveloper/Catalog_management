@@ -9,7 +9,7 @@ const d = (v) => (!v || v === "-" ? "" : new Date(v).toLocaleDateString());
 /* header filter row - UPDATED VERSION */
 function FilterRow({ filters, onChange }) {
   const dateKeys = ["orderConfirmationDate"];
-  
+
   const cols = [
     { key: "orderConfirmationDate", type: "date" },
     { key: "jobSheetNumber", type: "text" },
@@ -23,9 +23,9 @@ function FilterRow({ filters, onChange }) {
     { key: "negotiatedCost", type: "text" },
     { key: "paymentModes", type: "text" },
     { key: "vendorInvoiceNumber", type: "text" },
-    { 
-      key: "paymentStatus", 
-      type: "select", 
+    {
+      key: "paymentStatus",
+      type: "select",
       options: [
         { value: "", label: "All" },
         { value: "Not Paid", label: "Not Paid" },
@@ -33,9 +33,9 @@ function FilterRow({ filters, onChange }) {
         { value: "Fully Paid", label: "Fully Paid" }
       ]
     },
-    { 
-      key: "vendorInvoiceReceived", 
-      type: "select", 
+    {
+      key: "vendorInvoiceReceived",
+      type: "select",
       options: [
         { value: "", label: "All" },
         { value: "Yes", label: "Yes" },
@@ -85,7 +85,7 @@ function FilterRow({ filters, onChange }) {
     <tr className="bg-gray-100">
       {cols.map(({ key, type, options }) => {
         const isDateField = dateKeys.includes(key);
-        
+
         return (
           <th key={key} className="border px-1 py-0.5">
             {type === "date" ? (

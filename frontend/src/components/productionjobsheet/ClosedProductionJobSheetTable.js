@@ -10,7 +10,7 @@ const d = (v) => (!v || v === "-" ? "" : isNaN(new Date(v)) ? "" : new Date(v).t
 /* header filter row - UPDATED VERSION */
 function FilterRow({ filters, onChange }) {
   const statusOptions = ["All", "pending", "received", "alert"];
-  
+
   const dateKeys = [
     "jobSheetCreatedDate",
     "deliveryDateTime",
@@ -44,7 +44,7 @@ function FilterRow({ filters, onChange }) {
     try {
       const date = new Date(value);
       if (isNaN(date.getTime())) return "";
-      
+
       if (isDateTime) {
         // For datetime-local, format as YYYY-MM-DDTHH:MM
         const pad = (num) => num.toString().padStart(2, '0');
@@ -66,7 +66,7 @@ function FilterRow({ filters, onChange }) {
   // Parse date from input value
   const parseDateFromInput = (value, isDateTime = false) => {
     if (!value) return "";
-    
+
     if (isDateTime) {
       // For datetime-local, ensure proper format
       const date = new Date(value);
@@ -101,7 +101,7 @@ function FilterRow({ filters, onChange }) {
       {cols.map(({ key, type, options }) => {
         const isDateField = dateKeys.includes(key);
         const isDateTime = key === "schedulePickUp";
-        
+
         return (
           <th key={key} className="border px-1 py-0.5">
             {type === "select" ? (
@@ -248,15 +248,15 @@ export default function ClosedProductionJobSheetTable({
               <tr key={r._id} className="bg-green-200">
                 <td className="p-2 border">{d(r.jobSheetCreatedDate)}</td>
                 <td className="p-2 border">
-                   <button
-                      className="border-b text-blue-500 hover:text-blue-700"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onActionClick(r);
-                      }}
-                    >
-                      {t(r.jobSheetNumber) || "(No Number)"}
-                    </button>
+                  <button
+                    className="border-b text-blue-500 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onActionClick(r);
+                    }}
+                  >
+                    {t(r.jobSheetNumber) || "(No Number)"}
+                  </button>
                 </td>
                 <td className="p-2 border">{d(r.deliveryDateTime)}</td>
                 <td className="p-2 border">{t(r.clientCompanyName)}</td>

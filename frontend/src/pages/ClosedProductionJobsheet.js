@@ -1,148 +1,131 @@
-// src/pages/ClosedProductionJobsheet.js
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
-import ClosedProductionJobSheetTable from "../components/productionjobsheet/ClosedProductionJobSheetTable";
+import ProductionJobSheetInvoiceTable from
+  "../components/productionjobsheet/ProductionJobSheetInvoiceTable";
+import ProductionJobSheetInvoiceModal from
+  "../components/productionjobsheet/ProductionJobSheetInvoiceModal";
 
-/* ───────────────────── helpers ───────────────────── */
+/* ───────── helpers ───────── */
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const token = localStorage.getItem("token");
-
-const dateKeys = [
-  "jobSheetCreatedDate",
-  "deliveryDateTime",
-  "expectedReceiveDate",
-  "expectedPostBranding",
-  "schedulePickUp",
-];
+const token       = localStorage.getItem("token");
 const toDate = (d) => (d ? new Date(d) : new Date(0));
 const cmp = (a, b, t) =>
   t === "date"
     ? toDate(a) - toDate(b)
-    : String(a ?? "").localeCompare(String(b ?? ""), "en", {
-        sensitivity: "base",
-      });
+    : String(a ?? "").localeCompare(String(b ?? ""), "en", { sensitivity: "base" });
 
-/* ─────────── initial adv-filter shape ─────── */
+/* advanced-filter shape */
 const initRange = { from: "", to: "" };
-const initAdv = {
-  jobSheetNumber: { ...initRange },
-  jobSheetCreatedDate: { ...initRange },
-  deliveryDateTime: { ...initRange },
-  expectedReceiveDate: { ...initRange },
-  schedulePickUp: { ...initRange },
+const initAdv   = {
+  jobSheetNumber:        { ...initRange },
+  orderConfirmationDate: { ...initRange },
+  vendorInvoiceReceived: "",          // "", "yes", "no"
 };
 
-export default function ClosedProductionJobsheet() {
+export default function ManageProductionInvoice() {
+  /* ✅ pagination ONLY */
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(1);
+
   /* --------------- state --------------- */
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [search, setSearch] = useState("");
-  const [headerFilters, setHeader] = useState({});
-  const [advFilters, setAdv] = useState(initAdv);
-  const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch]   = useState("");
+  const [headerF, setHeaderF] = useState({});
+  const [adv, setAdv]         = useState(initAdv);
+  const [showFilters, setShow]= useState(false);
 
   const [sort, setSort] = useState({
-    key: "jobSheetCreatedDate",
+    key: "orderConfirmationDate",
     direction: "asc",
     type: "date",
   });
 
+  const [tab, setTab] = useState("open"); // open | closed
+  const [perms, setPerms] = useState([]);
+  const [modal, setModal] = useState(null);
+
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  // Add this state for modal handling
-  const [modalOpen, setModalOpen] = useState(false);
-  const [current, setCurrent] = useState(null);
+  /* --------------- permissions --------------- */
+  useEffect(() => {
+    try {
+      setPerms(JSON.parse(localStorage.getItem("permissions") || "[]"));
+      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
+    } catch {/* ignore */}
+  }, []);
+  const canEdit = perms.includes("write-production");
+  const canExport = isSuperAdmin || perms.includes("export-production");
 
   /* --------------- fetch --------------- */
-  const fetchRows = async () => {
+  const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(
-        `${BACKEND_URL}/api/admin/productionjobsheets/aggregated`,
+      const { data } = await axios.get(
+        `${BACKEND_URL}/api/admin/productionjobsheetinvoice/aggregated`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setRows(res.data.filter((r) => (r.status || "").toLowerCase() === "received"));
+      setRows(data);
     } catch (e) {
-      console.error("Fetch closed prod-jobsheets failed:", e);
+      console.error("Fetch invoices failed:", e);
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => {
-    fetchRows();
+    fetchInvoices();
   }, []);
 
-  useEffect(() => {
-    try {
-      setIsSuperAdmin(localStorage.getItem("isSuperAdmin") === "true");
-    } catch {}
-  }, []);
-
-  /* --------------- filtering pipeline --------------- */
+  /* --------------- filter pipeline --------------- */
   const global = useMemo(
-    () =>
-      rows.filter((r) =>
-        JSON.stringify(r).toLowerCase().includes(search.toLowerCase())
-      ),
+    () => rows.filter((r) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase())),
     [rows, search]
   );
 
-  // FIXED: Header filters with proper date handling
-  const headered = useMemo(
+  // Header filters with proper date handling
+  const head = useMemo(
     () =>
       global.filter((r) =>
-        Object.entries(headerFilters).every(([k, v]) => {
+        Object.entries(headerF).every(([k, v]) => {
           if (!v) return true;
-          
-          // Special handling for status
-          if (k === "status") {
-            return (r[k] || "").toLowerCase() === v.toLowerCase();
-          }
-          
+
           let val = r[k] ?? "";
-          
-          // Handle date fields with native date inputs
-          if (dateKeys.includes(k) && val && v) {
+
+          // Handle date field specifically
+          if (k === "orderConfirmationDate" && val && v) {
             try {
               const rowDate = new Date(val);
               const filterDate = new Date(v);
-              
+
               if (isNaN(rowDate.getTime()) || isNaN(filterDate.getTime())) {
-                // If date parsing fails, fall back to string search
                 return String(val).toLowerCase().includes(v.toLowerCase());
               }
-              
-              // For date type (without time) - compare dates only
-              if (k !== "schedulePickUp") {
-                const rowDateStr = rowDate.toISOString().split('T')[0];
-                const filterDateStr = filterDate.toISOString().split('T')[0];
-                return rowDateStr === filterDateStr;
-              }
-              // For datetime type - compare full date-time
-              return rowDate.toISOString().slice(0, 16) === filterDate.toISOString().slice(0, 16);
+
+              const rowDateStr = rowDate.toISOString().split("T")[0];
+              const filterDateStr = filterDate.toISOString().split("T")[0];
+              return rowDateStr === filterDateStr;
             } catch {
-              // Fallback to string search if date parsing fails
               return String(val).toLowerCase().includes(v.toLowerCase());
             }
           }
-          
-          // Handle number fields
-          if (["qtyRequired", "qtyOrdered"].includes(k)) {
-            return String(val).includes(v);
+
+          // Handle payment status and vendor invoice received as exact matches
+          if (k === "paymentStatus" || k === "vendorInvoiceReceived") {
+            return (val || "").toLowerCase() === v.toLowerCase();
           }
-          
-          // Handle text fields (case-insensitive partial match)
+
+          // Handle other text fields (case-insensitive partial match)
           return String(val).toLowerCase().includes(v.toLowerCase());
         })
       ),
-    [global, headerFilters]
+    [global, headerF]
   );
 
-  const adv = useMemo(() => {
+  const advFiltered = useMemo(() => {
     const inRange = (d, { from, to }) => {
       if (!from && !to) return true;
       if (!d) return false;
@@ -151,30 +134,57 @@ export default function ClosedProductionJobsheet() {
       if (to && dt > new Date(to)) return false;
       return true;
     };
-    return headered.filter(
+
+    return head.filter(
       (r) =>
-        (!advFilters.jobSheetNumber.from ||
-          r.jobSheetNumber >= advFilters.jobSheetNumber.from) &&
-        (!advFilters.jobSheetNumber.to ||
-          r.jobSheetNumber <= advFilters.jobSheetNumber.to) &&
-        inRange(r.jobSheetCreatedDate, advFilters.jobSheetCreatedDate) &&
-        inRange(r.deliveryDateTime, advFilters.deliveryDateTime) &&
-        inRange(r.expectedReceiveDate, advFilters.expectedReceiveDate) &&
-        inRange(r.schedulePickUp, advFilters.schedulePickUp)
+        (!adv.jobSheetNumber.from || r.jobSheetNumber >= adv.jobSheetNumber.from) &&
+        (!adv.jobSheetNumber.to   || r.jobSheetNumber <= adv.jobSheetNumber.to)   &&
+        inRange(r.orderConfirmationDate, adv.orderConfirmationDate)               &&
+        (adv.vendorInvoiceReceived === ""
+          ? true
+          : (r.vendorInvoiceReceived || "no").toLowerCase() === adv.vendorInvoiceReceived)
     );
-  }, [headered, advFilters]);
+  }, [head, adv]);
+
+  const tabbed = useMemo(
+    () =>
+      advFiltered.filter((i) =>
+        tab === "open"
+          ? (i.vendorInvoiceReceived || "no").toLowerCase() === "no"
+          : (i.vendorInvoiceReceived || "no").toLowerCase() === "yes"
+      ),
+    [advFiltered, tab]
+  );
 
   const sorted = useMemo(
     () =>
-      [...adv].sort(
+      [...tabbed].sort(
         (a, b) => cmp(a[sort.key], b[sort.key], sort.type) * (sort.direction === "asc" ? 1 : -1)
       ),
-    [adv, sort]
+    [tabbed, sort]
   );
 
+  /* ✅ pagination happens ONLY after full sorting/filtering */
+  const totalPages = useMemo(
+    () => Math.max(Math.ceil(sorted.length / PAGE_SIZE), 1),
+    [sorted.length]
+  );
+
+  // reset to page 1 when dataset changes (filters/search/tab/sort)
+  useEffect(() => {
+    setPage(1);
+  }, [search, headerF, adv, tab, sort]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+
+  const pagedSorted = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, page]);
+
   /* --------------- handlers --------------- */
-  const setHeaderFilter = (k, v) => setHeader((p) => ({ ...p, [k]: v }));
-  const setAdvFilter = (f, k, v) => setAdv((p) => ({ ...p, [f]: { ...p[f], [k]: v } }));
   const sortBy = (k, t = "string") =>
     setSort((p) => ({
       key: k,
@@ -182,50 +192,71 @@ export default function ClosedProductionJobsheet() {
       direction: p.key === k && p.direction === "asc" ? "desc" : "asc",
     }));
 
-  // Add this handler function
-  const handleActionClick = (record) => {
-    setCurrent(record);
-    setModalOpen(true);
-  };
+  const setAdvRange = (field, bound, value) =>
+    setAdv((p) => ({ ...p, [field]: { ...p[field], [bound]: value } }));
+
+  /* ✅ pagination controls */
+  const goPrev = () => setPage((p) => Math.max(p - 1, 1));
+  const goNext = () => setPage((p) => Math.min(p + 1, totalPages));
 
   /* --------------- export --------------- */
   const exportXlsx = () => {
+    if (!canExport) {
+      alert("You don't have permission to export production invoices.");
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
-    const sheet = sorted.map((r) => ({
-      "Order Date": r.jobSheetCreatedDate
-        ? new Date(r.jobSheetCreatedDate).toLocaleDateString()
-        : "",
-      "Job Sheet": r.jobSheetNumber,
-      "Delivery Date": r.deliveryDateTime
-        ? new Date(r.deliveryDateTime).toLocaleDateString()
-        : "",
-      Client: r.clientCompanyName,
-      Event: r.eventName,
-      Product: r.product,
-      "Qty Req": r.qtyRequired,
-      "Qty Ord": r.qtyOrdered,
-      "Expected In-Hand": r.expectedReceiveDate
-        ? new Date(r.expectedReceiveDate).toLocaleDateString()
-        : "",
-      "Branding Type": r.brandingType,
-      "Branding Vendor": r.brandingVendor,
-      "Expected Post Brand": r.expectedPostBranding,
-      "Schedule Pick-Up": r.schedulePickUp
-        ? new Date(r.schedulePickUp).toLocaleString()
-        : "",
-      Remarks: r.remarks,
-      Status: r.status,
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheet), "Closed");
-    XLSX.writeFile(wb, "ClosedProductionJobSheets.xlsx");
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        sorted.map((i) => ({
+          "Order Confirmation": d(i.orderConfirmationDate),
+          "Job Sheet": i.jobSheetNumber,
+          Client: i.clientCompanyName,
+          Event: i.eventName,
+          Product: i.product,
+          "Qty Req": i.qtyRequired,
+          "Qty Ord": i.qtyOrdered,
+          "Source From": i.sourceFrom,
+          Cost: i.cost,
+          "Negotiated Cost": i.negotiatedCost,
+          "Payment Modes": i.paymentModes?.map((p) => p.mode).join(", "),
+          "Vendor Inv #": i.vendorInvoiceNumber,
+          "Inv Received": i.vendorInvoiceReceived,
+          "Payment Status": i.paymentStatus,
+        }))
+      ),
+      "Invoices"
+    );
+    XLSX.writeFile(wb, "ProductionJobSheetInvoice.xlsx");
   };
 
   /* --------------- UI --------------- */
   return (
     <div className="p-4">
-      <h1 className="text-2xl text-purple-700 font-bold mb-4">
-        Closed Production Job Sheet
+      <h1 className="text-2xl font-bold text-[#Ff8045] mb-4">
+        Production Job Sheet Invoice
       </h1>
+
+      {!canEdit && (
+        <div className="mb-4 p-2 bg-red-200 text-red-700 border border-red-400 rounded">
+          You don't have permission to edit production job sheet invoices.
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="mb-4 flex gap-4">
+        {["open", "closed"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 rounded ${tab === t ? "bg-[#Ff8045] text-white" : "bg-gray-200"}`}
+          >
+            {t === "open" ? "Open Invoices" : "Closed Invoices"}
+          </button>
+        ))}
+      </div>
 
       {/* toolbar */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -236,98 +267,157 @@ export default function ClosedProductionJobsheet() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <button
-          onClick={() => setShowFilters((p) => !p)}
-          className="bg-purple-600 text-white text-xs px-4 py-2 rounded"
+          onClick={() => setShow((p) => !p)}
+          className="bg-[#Ff8045] hover:bg-[#Ff8045]/90 text-white text-xs px-4 py-2 rounded"
         >
           Filters
         </button>
-        {isSuperAdmin && (
+        {canExport && (
           <button
             onClick={exportXlsx}
-            className="bg-green-600 text-white text-xs px-4 py-2 rounded"
+            className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded"
           >
-            Export&nbsp;to&nbsp;Excel
+            Export to Excel
           </button>
         )}
       </div>
 
+      {/* ✅ pagination bar (new) */}
+      <div className="flex items-center justify-end gap-2 mb-2 text-xs">
+        <button
+          onClick={goPrev}
+          disabled={page <= 1 || loading}
+          className="border px-3 py-1 rounded disabled:opacity-50"
+        >
+          Prev
+        </button>
+        <span>
+          Page <b>{page}</b> / <b>{totalPages}</b> (Showing{" "}
+          <b>{pagedSorted.length}</b> of <b>{sorted.length}</b>)
+        </span>
+        <button
+          onClick={goNext}
+          disabled={page >= totalPages || loading}
+          className="border px-3 py-1 rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* drawer */}
       {showFilters && (
         <div className="border border-purple-200 rounded-lg p-4 mb-4 text-xs bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {["from", "to"].map((k) => (
-              <div key={`js-${k}`}>
-                <label className="block font-semibold mb-1">
-                  Job Sheet #{k === "from" ? "From" : "To"}
+            {["from", "to"].map((b) => (
+              <div key={`js-${b}`}>
+                <label className="font-semibold block mb-1">
+                  Job Sheet #{b === "from" ? "From" : "To"}
                 </label>
                 <input
-                  type="text"
                   className="w-full border p-1 rounded"
-                  value={advFilters.jobSheetNumber[k]}
-                  onChange={(e) => setAdvFilter("jobSheetNumber", k, e.target.value.trim())}
+                  value={adv.jobSheetNumber[b]}
+                  onChange={(e) => setAdvRange("jobSheetNumber", b, e.target.value.trim())}
                 />
               </div>
             ))}
-
-            {[
-              ["jobSheetCreatedDate", "Order Date"],
-              ["deliveryDateTime", "Delivery Date"],
-              ["expectedReceiveDate", "Expected Receive"],
-              ["schedulePickUp", "Schedule Pick-Up"],
-            ].flatMap(([key, label]) => [
-              <div key={`${key}-from`}>
-                <label className="block font-semibold mb-1">{label} From</label>
+            {["from", "to"].map((b) => (
+              <div key={`ocd-${b}`}>
+                <label className="font-semibold block mb-1">
+                  Order Confirmation {b === "from" ? "From" : "To"}
+                </label>
                 <input
-                  type={key === "schedulePickUp" ? "datetime-local" : "date"}
+                  type="date"
                   className="w-full border p-1 rounded"
-                  value={advFilters[key].from}
-                  onChange={(e) => setAdvFilter(key, "from", e.target.value)}
+                  value={adv.orderConfirmationDate[b]}
+                  onChange={(e) => setAdvRange("orderConfirmationDate", b, e.target.value)}
                 />
-              </div>,
-              <div key={`${key}-to`}>
-                <label className="block font-semibold mb-1">{label} To</label>
-                <input
-                  type={key === "schedulePickUp" ? "datetime-local" : "date"}
-                  className="w-full border p-1 rounded"
-                  value={advFilters[key].to}
-                  onChange={(e) => setAdvFilter(key, "to", e.target.value)}
-                />
-              </div>,
-            ])}
+              </div>
+            ))}
+            <div className="col-span-full md:col-span-1">
+              <label className="font-semibold block mb-1">
+                Vendor Invoice Received
+              </label>
+              <select
+                className="w-full border p-1 rounded"
+                value={adv.vendorInvoiceReceived}
+                onChange={(e) => setAdv((p) => ({ ...p, vendorInvoiceReceived: e.target.value }))}
+              >
+                <option value="">All</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div className="col-span-full md:col-span-1">
+              <label className="font-semibold block mb-1">
+                Payment Status
+              </label>
+              <select
+                className="w-full border p-1 rounded"
+                value={headerF.paymentStatus || ""}
+                onChange={(e) => setHeaderF((p) => ({ ...p, paymentStatus: e.target.value }))}
+              >
+                <option value="">All</option>
+                <option value="Not Paid">Not Paid</option>
+                <option value="Partially Paid">Partially Paid</option>
+                <option value="Fully Paid">Fully Paid</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex gap-2 mt-4">
             <button
-              onClick={() => setShowFilters(false)}
+              onClick={() => setShow(false)}
               className="bg-purple-600 text-white px-3 py-1 rounded"
             >
               Apply
             </button>
             <button
-              onClick={() => setAdv(initAdv)}
+              onClick={() => {
+                setAdv(initAdv);
+                setHeaderF({});
+              }}
               className="bg-gray-400 text-white px-3 py-1 rounded"
             >
-              Clear
+              Clear All
             </button>
           </div>
         </div>
       )}
 
-      <ClosedProductionJobSheetTable
-        data={sorted}
-        sortField={sort.key}
-        sortOrder={sort.direction}
-        onSortChange={(fld) =>
-          sortBy(
-            fld,
-            dateKeys.includes(fld) ? "date" : ["qtyRequired", "qtyOrdered"].includes(fld)
-              ? "number"
-              : "string"
-          )
-        }
-        headerFilters={headerFilters}
-        onHeaderFilterChange={setHeaderFilter}
-        onActionClick={handleActionClick}
-      />
+      {/* ✅ freeze header: wrap in scroll container + pass stickyHeader */}
+      <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+        <ProductionJobSheetInvoiceTable
+          data={pagedSorted}     // ✅ ONLY change vs your original: paginated data
+          sortConfig={sort}
+          onSortChange={(k) =>
+            sortBy(
+              k,
+              k === "orderConfirmationDate" || k === "cost" || k === "negotiatedCost"
+                ? "date"
+                : "string"
+            )
+          }
+          onActionClick={(inv) => (canEdit ? setModal(inv) : alert("No permission."))}
+          headerFilters={headerF}
+          onHeaderFilterChange={(k, v) => setHeaderF((p) => ({ ...p, [k]: v }))}
+          stickyHeader={true}    // ✅ NEW prop (small change in table component)
+        />
+      </div>
+
+      {modal && (
+        <ProductionJobSheetInvoiceModal
+          invoice={modal}
+          onClose={() => {
+            setModal(null);
+            fetchInvoices();
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/* local util for export */
+function d(v) {
+  return !v ? "" : new Date(v).toLocaleDateString();
 }

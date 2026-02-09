@@ -48,6 +48,10 @@ const SkeletonRow = () => (
 export default function ManageProductionJobsheet() {
   const token = localStorage.getItem("token");
 
+  /* ✅ pagination ONLY */
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(1);
+
   /* --------------- state --------------- */
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +76,6 @@ export default function ManageProductionJobsheet() {
   const [modalOpen, setModalOpen] = useState(false);
   const [current, setCurrent] = useState(null);
 
-  
   /* --------------- permissions --------------- */
   useEffect(() => {
     try {
@@ -82,7 +85,7 @@ export default function ManageProductionJobsheet() {
     } catch {}
   }, []);
 
-  /* --------------- fetch --------------- */
+  /* --------------- fetch (UNCHANGED) --------------- */
   const fetchRows = async () => {
     try {
       setLoading(true);
@@ -99,6 +102,7 @@ export default function ManageProductionJobsheet() {
   };
   useEffect(() => {
     fetchRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* --------------- filter pipeline --------------- */
@@ -126,30 +130,30 @@ export default function ManageProductionJobsheet() {
       global.filter((r) =>
         Object.entries(headerFilters).every(([k, v]) => {
           if (!v) return true;
-          
+
           // Special handling for status
           if (k === "status") {
             if (v === "Not Set") return !r[k];
             return (r[k] || "").toLowerCase() === v.toLowerCase();
           }
-          
+
           let val = r[k] ?? "";
-          
+
           // Handle date fields
           if (dateKeys.includes(k) && val && v) {
             try {
               const rowDate = new Date(val);
               const filterDate = new Date(v);
-              
+
               if (isNaN(rowDate.getTime()) || isNaN(filterDate.getTime())) {
                 // If date parsing fails, fall back to string search
                 return String(val).toLowerCase().includes(v.toLowerCase());
               }
-              
+
               // For date type (without time) - compare dates only
               if (k !== "schedulePickUp") {
-                const rowDateStr = rowDate.toISOString().split('T')[0];
-                const filterDateStr = filterDate.toISOString().split('T')[0];
+                const rowDateStr = rowDate.toISOString().split("T")[0];
+                const filterDateStr = filterDate.toISOString().split("T")[0];
                 return rowDateStr === filterDateStr;
               }
               // For datetime type - compare full date-time
@@ -159,12 +163,12 @@ export default function ManageProductionJobsheet() {
               return String(val).toLowerCase().includes(v.toLowerCase());
             }
           }
-          
+
           // Handle number fields
           if (["qtyRequired", "qtyOrdered"].includes(k)) {
             return String(val).includes(v);
           }
-          
+
           // Handle text fields (case-insensitive partial match)
           return String(val).toLowerCase().includes(v.toLowerCase());
         })
@@ -204,8 +208,12 @@ export default function ManageProductionJobsheet() {
 
         // Handle special cases
         if (sort.key === "followUp") {
-          aVal = a.followUp?.length ? Math.max(...a.followUp.map(f => new Date(f.followUpDate))) : 0;
-          bVal = b.followUp?.length ? Math.max(...b.followUp.map(f => new Date(f.followUpDate))) : 0;
+          aVal = a.followUp?.length
+            ? Math.max(...a.followUp.map((f) => new Date(f.followUpDate)))
+            : 0;
+          bVal = b.followUp?.length
+            ? Math.max(...b.followUp.map((f) => new Date(f.followUpDate)))
+            : 0;
         }
 
         // Handle different types
@@ -213,15 +221,36 @@ export default function ManageProductionJobsheet() {
           case "date":
             return (toDate(aVal) - toDate(bVal)) * (sort.direction === "asc" ? 1 : -1);
           case "number":
-            return ((Number(aVal) || 0) - (Number(bVal) || 0)) * (sort.direction === "asc" ? 1 : -1);
+            return (
+              ((Number(aVal) || 0) - (Number(bVal) || 0)) *
+              (sort.direction === "asc" ? 1 : -1)
+            );
           default:
-            return String(aVal ?? "").localeCompare(String(bVal ?? ""), "en", {
-              sensitivity: "base",
-            }) * (sort.direction === "asc" ? 1 : -1);
+            return (
+              String(aVal ?? "").localeCompare(String(bVal ?? ""), "en", {
+                sensitivity: "base",
+              }) * (sort.direction === "asc" ? 1 : -1)
+            );
         }
       }),
     [adv, sort]
   );
+
+  /* ✅ NEW: total pages + final page slice ONLY */
+  const totalPages = useMemo(
+    () => Math.max(Math.ceil(sorted.length / PAGE_SIZE), 1),
+    [sorted.length]
+  );
+
+  // keep page in bounds if filters reduce results
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [totalPages, page]);
+
+  const pagedSorted = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, page]);
 
   /* --------------- handlers --------------- */
   const changeHeader = (k, v) => setHeaderFilters((p) => ({ ...p, [k]: v }));
@@ -244,35 +273,29 @@ export default function ManageProductionJobsheet() {
   const exportXlsx = () => {
     const wb = XLSX.utils.book_new();
     const sheetData = sorted.map((r) => ({
-      "Order Date": r.jobSheetCreatedDate
-        ? new Date(r.jobSheetCreatedDate).toLocaleDateString()
-        : "",
-      "Delivery Date": r.deliveryDateTime
-        ? new Date(r.deliveryDateTime).toLocaleDateString()
-        : "",
+      "Order Date": r.jobSheetCreatedDate ? new Date(r.jobSheetCreatedDate).toLocaleDateString() : "",
+      "Delivery Date": r.deliveryDateTime ? new Date(r.deliveryDateTime).toLocaleDateString() : "",
       "Job Sheet": r.jobSheetNumber,
       Client: r.clientCompanyName,
       Event: r.eventName,
       Product: r.product,
       "Qty Req": r.qtyRequired,
       "Qty Ord": r.qtyOrdered,
-      "Expected In-Hand": r.expectedReceiveDate
-        ? new Date(r.expectedReceiveDate).toLocaleDateString()
-        : "",
+      "Expected In-Hand": r.expectedReceiveDate ? new Date(r.expectedReceiveDate).toLocaleDateString() : "",
       "Branding Type": r.brandingType,
       "Branding Vendor": r.brandingVendor,
-      "Expected Post-Brand": r.expectedPostBranding
-        ? new Date(r.expectedPostBranding).toLocaleDateString()
-        : "",
-      "Schedule Pick-Up": r.schedulePickUp
-        ? new Date(r.schedulePickUp).toLocaleString()
-        : "",
+      "Expected Post-Brand": r.expectedPostBranding ? new Date(r.expectedPostBranding).toLocaleDateString() : "",
+      "Schedule Pick-Up": r.schedulePickUp ? new Date(r.schedulePickUp).toLocaleString() : "",
       Remarks: r.remarks,
       Status: r.status,
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetData), "Production");
     XLSX.writeFile(wb, "production_jobsheets.xlsx");
   };
+
+  /* ✅ pagination handlers */
+  const goPrev = () => setPage((p) => Math.max(p - 1, 1));
+  const goNext = () => setPage((p) => Math.min(p + 1, totalPages));
 
   /* --------------- UI --------------- */
   return (
@@ -309,6 +332,28 @@ export default function ManageProductionJobsheet() {
             Export&nbsp;to&nbsp;Excel
           </button>
         )}
+      </div>
+
+      {/* ✅ pagination bar (ONLY ADDITION) */}
+      <div className="flex items-center justify-end gap-2 mb-2 text-xs">
+        <button
+          onClick={goPrev}
+          disabled={page <= 1 || loading}
+          className="border px-3 py-1 rounded disabled:opacity-50"
+        >
+          Prev
+        </button>
+        <span>
+          Page <b>{page}</b> / <b>{totalPages}</b> (Showing{" "}
+          <b>{pagedSorted.length}</b> of <b>{sorted.length}</b>)
+        </span>
+        <button
+          onClick={goNext}
+          disabled={page >= totalPages || loading}
+          className="border px-3 py-1 rounded disabled:opacity-50"
+        >
+          Next
+        </button>
       </div>
 
       {/* advanced drawer */}
@@ -380,14 +425,16 @@ export default function ManageProductionJobsheet() {
         </table>
       ) : (
         <ProductionJobSheetTable
-          data={sorted}
+          data={pagedSorted}  
           onActionClick={openModal}
           sortField={sort.key}
           sortOrder={sort.direction}
           onSortChange={(fld) =>
             sortBy(
               fld,
-              dateKeys.includes(fld) ? "date" : ["qtyRequired", "qtyOrdered"].includes(fld)
+              dateKeys.includes(fld)
+                ? "date"
+                : ["qtyRequired", "qtyOrdered"].includes(fld)
                 ? "number"
                 : "string"
             )
@@ -398,8 +445,11 @@ export default function ManageProductionJobsheet() {
       )}
 
       {modalOpen && current && (
-        <ProductionJobSheetModal record={current} onClose={() => (setModalOpen(false), fetchRows())} />
+        <ProductionJobSheetModal
+          record={current}
+          onClose={() => (setModalOpen(false), fetchRows())}
+        />
       )}
     </div>
   );
-} 
+}

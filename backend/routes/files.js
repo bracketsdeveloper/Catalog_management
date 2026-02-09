@@ -211,54 +211,60 @@ router.post("/create-document", authenticate, async (req, res) => {
 /* ---------- Get Files (with role-based access) ---------- */
 router.get("/", authenticate, async (req, res) => {
   try {
-    const { search, sortBy = "uploadedOn", sortOrder = "desc", documentOnly } = req.query;
-    
+    const { search, sortBy = "updatedOn", sortOrder = "desc", documentOnly } = req.query;
+
     let query = {};
-    
+
     // If user is not super admin, filter by their roles
     if (!req.user.isSuperAdmin) {
       const user = await User.findById(req.user.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      // Combine legacy role and new roles for compatibility
-      const userRoles = [user.role, ...user.roles].filter(role => 
-        role && role !== "GENERAL" && ROLE_ENUM.includes(role)
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const userRoles = [user.role, ...(user.roles || [])].filter(
+        (role) => role && role !== "GENERAL" && ROLE_ENUM.includes(role)
       );
-      
-      if (userRoles.length === 0) {
-        return res.status(200).json([]);
-      }
-      
+
+      if (userRoles.length === 0) return res.status(200).json([]);
+
       query.accessibleRoles = { $in: userRoles };
     }
 
     // Filter for documents only if requested
-    if (documentOnly === "true") {
-      query.isDocument = true;
-    }
+    if (documentOnly === "true") query.isDocument = true;
 
-    // Search functionality
+    // Search
     if (search) {
       query.$or = [
         { fileName: { $regex: search, $options: "i" } },
         { originalName: { $regex: search, $options: "i" } },
         { description: { $regex: search, $options: "i" } },
-        { uploadedByName: { $regex: search, $options: "i" } }
+        { uploadedByName: { $regex: search, $options: "i" } },
       ];
     }
 
-    // Sort configuration
+    // Map sort keys from UI → DB fields
+    const sortFieldMap = {
+      uploadedOn: "createdAt",
+      updatedOn: "updatedAt",
+      fileName: "fileName",
+      fileSize: "fileSize",
+      uploadedBy: "uploadedByName",
+      fileType: "fileType",
+    };
+
+    const dbSortField = sortFieldMap[sortBy] || "updatedAt";
+
     const sortConfig = {};
-    sortConfig[sortBy] = sortOrder === "asc" ? 1 : -1;
+    sortConfig[dbSortField] = sortOrder === "asc" ? 1 : -1;
 
     const files = await File.find(query)
-      .select("fileName originalName fileSize uploadedByName uploadedBy accessibleRoles createdAt description fileType documentContent isDocument")
+      .select(
+        "fileName originalName fileSize uploadedByName uploadedBy accessibleRoles createdAt updatedAt description fileType documentContent isDocument"
+      )
       .sort(sortConfig)
       .lean();
 
-    const formattedFiles = files.map(file => ({
+    const formattedFiles = files.map((file) => ({
       id: file._id,
       fileName: file.fileName,
       fileSize: file.fileSize,
@@ -266,19 +272,22 @@ router.get("/", authenticate, async (req, res) => {
       uploadedById: file.uploadedBy,
       accessibleRoles: file.accessibleRoles,
       uploadedOn: file.createdAt,
+      updatedOn: file.updatedAt, // ✅ NEW
       description: file.description,
       fileType: file.fileType,
-      // NEW: Include document fields
       documentContent: file.documentContent,
-      isDocument: file.isDocument || false
+      isDocument: file.isDocument || false,
     }));
 
     res.status(200).json(formattedFiles);
-
   } catch (error) {
-    res.status(500).json({ message: "Server error while fetching files", error: error.message });
+    res.status(500).json({
+      message: "Server error while fetching files",
+      error: error.message,
+    });
   }
 });
+
 
 router.put("/update-document/:fileId", authenticate, async (req, res) => {
   try {

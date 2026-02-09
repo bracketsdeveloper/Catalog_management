@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BellIcon, ExclamationCircleIcon, ArrowPathIcon, ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import { BellIcon, ExclamationCircleIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, Bars3Icon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
@@ -19,14 +19,14 @@ const NotificationBell = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      
+
       const data = response.data;
       if (data.success) {
         setNotifications(data.tasks || []);
         setReplyNotifications(data.replyNotifications || []);
         setUnreadCount(data.totalNotifications || 0);
       }
-      
+
     } catch (error) {
       console.error("Error fetching notifications:", error);
     } finally {
@@ -36,9 +36,9 @@ const NotificationBell = () => {
 
   useEffect(() => {
     fetchNotifications();
-    
+
     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -51,12 +51,12 @@ const NotificationBell = () => {
     const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const dueDateOnly = new Date(date);
     dueDateOnly.setHours(0, 0, 0, 0);
-    
+
     const diffDays = Math.floor((dueDateOnly - today) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) {
       if (date < now) {
         const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
@@ -67,9 +67,9 @@ const NotificationBell = () => {
     }
     if (diffDays === 1) return "Tomorrow";
     if (diffDays < 7) return `In ${diffDays} days`;
-    
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
     });
@@ -80,12 +80,12 @@ const NotificationBell = () => {
     const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const dueDateOnly = new Date(dueDate);
     dueDateOnly.setHours(0, 0, 0, 0);
-    
+
     const diffDays = Math.floor((dueDateOnly - today) / (1000 * 60 * 60 * 24));
-    
+
     if (task.reopened) return "bg-purple-500";
     if (dueDate < now && diffDays === 0) return "bg-red-500";
     if (diffDays === 0) return "bg-orange-500";
@@ -101,11 +101,11 @@ const NotificationBell = () => {
         icon: <ArrowPathIcon className="h-3 w-3 mr-1" />
       };
     }
-    
+
     const createdDate = new Date(task.createdAt || task.assignedOn);
     const now = new Date();
     const hoursSinceCreation = Math.floor((now - createdDate) / (1000 * 60 * 60));
-    
+
     if (hoursSinceCreation <= 24) {
       return {
         text: "New",
@@ -113,16 +113,16 @@ const NotificationBell = () => {
         icon: <ExclamationCircleIcon className="h-3 w-3 mr-1" />
       };
     }
-    
+
     return null;
   };
 
   const getFormattedTime = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
   };
 
@@ -141,9 +141,9 @@ const NotificationBell = () => {
     } else if (diffDays < 7) {
       return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
     } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
       });
     }
   };
@@ -156,10 +156,10 @@ const NotificationBell = () => {
     <div className="relative">
       <button
         onClick={handleBellClick}
-        className="fixed top-3 right-24 z-50 inline-flex items-center justify-center h-12 w-12 rounded-full bg-white/90 backdrop-blur border border-gray-200 shadow hover:bg-white active:scale-[0.98] transition"
+        className="relative z-50 inline-flex items-center justify-center h-12 w-12 rounded-full bg-white/90 backdrop-blur border border-gray-200 shadow hover:bg-white active:scale-[0.98] transition"
         aria-label="Notifications"
       >
-        <BellIcon className="h-6 w-6 text-gray-700" />
+        <Bars3Icon className="h-6 w-6 text-gray-700" />
         {totalNotifications > 0 && (
           <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 bg-red-500 text-white text-xs font-bold rounded-full">
             {totalNotifications > 9 ? '9+' : totalNotifications}
@@ -173,8 +173,26 @@ const NotificationBell = () => {
             className="fixed inset-0 z-40"
             onClick={() => setShowNotifications(false)}
           />
-          
-          <div className="fixed top-16 right-24 z-50 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+
+          <div className="absolute top-12 right-0 mt-2 z-50 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden origin-top-right">
+            <div className="p-0 border-b border-gray-100 bg-white">
+              {/* Profile Link Section */}
+              <Link
+                to="/admin-dashboard/my-profile"
+                onClick={() => setShowNotifications(false)}
+                className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                title="My Profile"
+              >
+                <div className="bg-gray-100 p-2 rounded-full">
+                  <UserCircleIcon className="h-6 w-6 text-gray-700" />
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900">My Profile</div>
+                  <div className="text-xs text-gray-500">View and edit your profile</div>
+                </div>
+              </Link>
+            </div>
+
             <div className="p-4 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center justify-between">
                 <div>
@@ -192,7 +210,7 @@ const NotificationBell = () => {
                 </Link>
               </div>
             </div>
-            
+
             <div className="max-h-96 overflow-y-auto">
               {totalNotifications === 0 ? (
                 <div className="p-6 text-center text-gray-500">
@@ -253,7 +271,7 @@ const NotificationBell = () => {
                       ))}
                     </div>
                   )}
-                  
+
                   {/* Task Notifications */}
                   {notifications.length > 0 && (
                     <>
@@ -265,9 +283,9 @@ const NotificationBell = () => {
                       </div>
                       {notifications.map((task) => {
                         const taskType = getTaskTypeBadge(task);
-                        const isOverdueToday = new Date(task.toBeClosedBy) < new Date() && 
+                        const isOverdueToday = new Date(task.toBeClosedBy) < new Date() &&
                           new Date(task.toBeClosedBy).toDateString() === new Date().toDateString();
-                        
+
                         return (
                           <Link
                             key={task._id}
@@ -306,7 +324,7 @@ const NotificationBell = () => {
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex items-center justify-between mt-2">
                                   <div className="flex items-center space-x-2">
                                     {task.opportunityCode && (
@@ -326,7 +344,7 @@ const NotificationBell = () => {
                                     )}
                                   </div>
                                 </div>
-                                
+
                                 {task.reopened && task.reopenDescription && (
                                   <div className="mt-2 p-2 bg-purple-50 border border-purple-100 rounded text-xs text-purple-800">
                                     <div className="font-medium mb-0.5">Reopen Reason:</div>
@@ -343,7 +361,7 @@ const NotificationBell = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="border-t border-gray-100 bg-gray-50">
               <div className="px-4 py-3">
                 <div className="flex items-center justify-between text-xs text-gray-500">

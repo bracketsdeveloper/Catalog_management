@@ -45,7 +45,7 @@ function TicketsTable({
 
   const headers = [
     { key: "taskRef", label: "Task #" },
-    { key: "ticketName", label: "Ticket Name" },
+    { key: "ticketName", label: "Task Name" },
     { key: "taskDescription", label: "Description" },
     { key: "opportunityCode", label: "OPP #" },
     { key: "createdBy", label: "Created By" },

@@ -39,25 +39,25 @@ export async function exportToPPT(catalog, getBase64ImageFromUrl) {
     let template2BgData = "";
     let productBgData = "";
     let closingBgData = "";
-    
+
     try {
       coverBgData = await getBase64ImageFromUrl("/ppttemplates/templateSlide1.jpg");
     } catch (err) {
       console.error("Error fetching cover slide background:", err);
     }
-    
+
     try {
       template2BgData = await getBase64ImageFromUrl("/ppttemplates/templateSlide2.jpg");
     } catch (err) {
       console.error("Error fetching templateSlide2 background:", err);
     }
-    
+
     try {
       productBgData = await getBase64ImageFromUrl("/ppttemplates/templateSlide3.jpg");
     } catch (err) {
       console.error("Error fetching product slide background:", err);
     }
-    
+
     try {
       closingBgData = await getBase64ImageFromUrl("/ppttemplates/templateSlideLast.jpg");
     } catch (err) {
@@ -196,7 +196,7 @@ export async function exportToPPT(catalog, getBase64ImageFromUrl) {
           slide.addText(line, {
             x: textX,
             y: textY,
-            w: textWidth+3,
+            w: textWidth + 3,
             h: 0.4,
             fontSize: 8.5,
             color: "333333",
