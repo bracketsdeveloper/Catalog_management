@@ -208,7 +208,7 @@ function parseExcelDateCell(v) {
       if (dec) {
         return new Date(Date.UTC(dec.y, dec.m - 1, dec.d));
       }
-    } catch {}
+    } catch { }
   }
   const d = new Date(String(v));
   if (!isNaN(d)) return d;
@@ -382,13 +382,33 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
 
     const $set = {};
 
-    // ✅ Personal: update fields individually (do NOT replace personal object)
+    // ✅ Personal: properly handle the entire personal object with date conversion
     if (personal) {
-      const p = { ...personal };
-      delete p.employeeId; // still prevent changing it
-      for (const [k, v] of Object.entries(p)) {
-        $set[`personal.${k}`] = v;
+      // Get the current employee first to preserve employeeId
+      const currentEmp = await Employee.findOne({
+        $expr: {
+          $eq: [
+            { $toUpper: { $trim: { input: "$personal.employeeId" } } },
+            String(req.params.employeeId || "").trim().toUpperCase(),
+          ],
+        },
+      }).lean();
+
+      if (!currentEmp) {
+        return res.status(404).json({ message: "Employee not found" });
       }
+
+      // Build the complete personal object with proper date handling
+      const updatedPersonal = {
+        ...currentEmp.personal,
+        ...personal,
+        employeeId: currentEmp.personal.employeeId, // Always preserve original employeeId
+        // Convert date strings to Date objects
+        dob: personal.dob ? new Date(personal.dob) : currentEmp.personal.dob,
+        dateOfJoining: personal.dateOfJoining ? new Date(personal.dateOfJoining) : currentEmp.personal.dateOfJoining,
+      };
+
+      $set.personal = updatedPersonal;
     }
 
     // Org
@@ -418,8 +438,15 @@ router.put("/hrms/employees/:employeeId", authenticate, requireAdmin, async (req
       $set.assets = normalizedAssets;
     }
 
-    // Financial / Schedule
-    if (financial) $set.financial = financial;
+    // Financial / Schedule (with proper date handling)
+    if (financial) {
+      const updatedFinancial = {
+        ...financial,
+        lastRevisedSalaryAt: financial.lastRevisedSalaryAt ? new Date(financial.lastRevisedSalaryAt) : undefined,
+        nextAppraisalOn: financial.nextAppraisalOn ? new Date(financial.nextAppraisalOn) : undefined,
+      };
+      $set.financial = updatedFinancial;
+    }
     if (schedule) $set.schedule = schedule;
 
     // Other fields
@@ -703,7 +730,7 @@ router.post(
     try {
       wb = XLSX.readFile(filePath, { cellDates: false, raw: false });
     } catch (e) {
-      fs.unlink(filePath, () => {});
+      fs.unlink(filePath, () => { });
       return res.status(400).json({ message: `Failed to read file: ${e.message}` });
     }
 
@@ -740,7 +767,7 @@ router.post(
         headerMap[norm] = k;
       });
     } else {
-      fs.unlink(filePath, () => {});
+      fs.unlink(filePath, () => { });
       return res.status(400).json({ message: "No rows found in the first sheet" });
     }
 
@@ -774,7 +801,7 @@ router.post(
     const colRemarks = pickCol("Remarks", "Remark", "Note", "Notes");
 
     if (!colEmployee) {
-      fs.unlink(filePath, () => {});
+      fs.unlink(filePath, () => { });
       return res.status(400).json({ message: "Required header not found: E. Code" });
     }
 
@@ -782,14 +809,14 @@ router.post(
     if (!colDate) {
       const qp = (req.query?.date || req.body?.date || "").toString().trim();
       if (!qp) {
-        fs.unlink(filePath, () => {});
+        fs.unlink(filePath, () => { });
         return res.status(400).json({
           message: "Date column not found. Pass ?date=YYYY-MM-DD or include a Date column.",
         });
       }
       const d = new Date(qp);
       if (isNaN(d)) {
-        fs.unlink(filePath, () => {});
+        fs.unlink(filePath, () => { });
         return res.status(400).json({ message: "Invalid ?date=YYYY-MM-DD" });
       }
       defaultDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -818,7 +845,7 @@ router.post(
           try {
             const dec = XLSX.SSF.parse_date_code(+v);
             if (dec) d = new Date(Date.UTC(dec.y, dec.m - 1, dec.d));
-          } catch {}
+          } catch { }
         }
         if (!d) d = new Date(String(v));
         if (!isNaN(d)) {
@@ -863,7 +890,7 @@ router.post(
       let holiday = false;
       try {
         holiday = await isHolidayDate(dateOnly);
-      } catch {}
+      } catch { }
 
       const statusRaw = colStatus ? String(src[colStatus] || "").trim() : "";
       const remarksRaw = colRemarks ? String(src[colRemarks] || "").trim() : "";
@@ -916,7 +943,7 @@ router.post(
       }
     }
 
-    fs.unlink(filePath, () => {});
+    fs.unlink(filePath, () => { });
     res.json({ imported, skipped, errors });
   }
 );
@@ -1678,7 +1705,7 @@ router.put("/me/profile", authenticate, ensureAuthUser, async (req, res) => {
         if (e.leaveMonthlyAllocation !== undefined) {
           try {
             emp.leaveMonthlyAllocation = normalizeLeaveMonthlyAllocation(e.leaveMonthlyAllocation);
-          } catch {}
+          } catch { }
         }
 
         await emp.save();

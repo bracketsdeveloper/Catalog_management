@@ -459,9 +459,16 @@ export default function EmployeesPage() {
                     </Link>
 
                     <button
-                      onClick={() => {
-                        setEditing(e);
-                        setEditOpen(true);
+                      onClick={async () => {
+                        try {
+                          // Fetch full employee data including financial info
+                          const fullEmployee = await HRMS.getEmployee(e.personal.employeeId);
+                          setEditing(fullEmployee.data);
+                          setEditOpen(true);
+                        } catch (err) {
+                          toast.error("Failed to load employee data");
+                          console.error(err);
+                        }
                       }}
                       className="text-indigo-600 text-xs underline"
                     >
