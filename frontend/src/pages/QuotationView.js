@@ -708,100 +708,101 @@ export default function QuotationView() {
     }
   }, [editableQuotation, catalogData]);
 
-// Live sync: Map operations breakdown rate, GST%, QUANTITY, and PRODUCT to quotation items
-useEffect(() => {
-  // Skip sync during initial load or when removing items
-  if (isInitialLoad.current) return;
-  if (!editableQuotation || !opRows.length) return;
+  // Live sync: Map operations breakdown rate, GST%, QUANTITY, and PRODUCT to quotation items
+  useEffect(() => {
+    // Skip sync during initial load or when removing items
+    if (isInitialLoad.current) return;
+    if (!editableQuotation || !opRows.length) return;
 
-  console.log("Live sync triggered - Quotation items:", editableQuotation.items.length, "Op rows:", opRows.length);
+    console.log("Live sync triggered - Quotation items:", editableQuotation.items.length, "Op rows:", opRows.length);
 
-  setEditableQuotation((prev) => {
-    if (!prev || !prev.items) return prev;
+    setEditableQuotation((prev) => {
+      if (!prev || !prev.items) return prev;
 
-    // Create maps for better matching
-    const opRowByProduct = {};
-    const opRowByIndex = {};
+      // Create maps for better matching
+      const opRowByProduct = {};
+      const opRowByIndex = {};
 
-    opRows.forEach((opRow, idx) => {
-      if (opRow.product) {
-        opRowByProduct[opRow.product.toLowerCase()] = opRow;
-      }
-      opRowByIndex[idx] = opRow;
-    });
-
-    const updatedItems = prev.items.map((item, idx) => {
-      // Try to find matching opRow by product name first (exact match)
-      let opRow = opRowByProduct[item.product.toLowerCase()];
-
-      // If no exact match, try partial match
-      if (!opRow) {
-        const matchingKey = Object.keys(opRowByProduct).find(key =>
-          item.product.toLowerCase().includes(key) || key.includes(item.product.toLowerCase())
-        );
-        if (matchingKey) {
-          opRow = opRowByProduct[matchingKey];
+      opRows.forEach((opRow, idx) => {
+        if (opRow.product) {
+          opRowByProduct[opRow.product.toLowerCase()] = opRow;
         }
-      }
+        opRowByIndex[idx] = opRow;
+      });
 
-      // If still no match and index is within bounds, use by index
-      if (!opRow && idx < opRows.length) {
-        opRow = opRowByIndex[idx];
-      }
+      const updatedItems = prev.items.map((item, idx) => {
+        // Try to find matching opRow by product name first (exact match)
+        let opRow = opRowByProduct[item.product.toLowerCase()];
 
-      // If no corresponding opRow, keep item unchanged
-      if (!opRow) {
-        console.log(`No opRow found for item "${item.product}" at index ${idx}, keeping unchanged`);
-        return item;
-      }
+        // If no exact match, try partial match
+        if (!opRow) {
+          const matchingKey = Object.keys(opRowByProduct).find(key =>
+            item.product.toLowerCase().includes(key) || key.includes(item.product.toLowerCase())
+          );
+          if (matchingKey) {
+            opRow = opRowByProduct[matchingKey];
+          }
+        }
 
-      // Get values from operations breakdown
-      const opRate = num(opRow.rate);
-      const opGst = parseGstPercent(opRow.gst);
-      const opQuantity = num(opRow.quantity);
-      const opProduct = opRow.product?.trim() || "";
+        // If still no match and index is within bounds, use by index
+        if (!opRow && idx < opRows.length) {
+          opRow = opRowByIndex[idx];
+        }
 
-      // Keep original values if opRow values are 0/empty (not set)
-      const newRate = opRate > 0 ? opRate : num(item.rate);
-      const newGst = opGst > 0 ? opGst : (item.productGST != null ? num(item.productGST) : 0);
-      const newQuantity = opQuantity > 0 ? opQuantity : (num(item.quantity) || 1);
-      const newProduct = opProduct || item.product || "";
+        // If no corresponding opRow, keep item unchanged
+        if (!opRow) {
+          console.log(`No opRow found for item "${item.product}" at index ${idx}, keeping unchanged`);
+          return item;
+        }
 
-      // Only update if values are different to prevent unnecessary re-renders
-      if (
-        newRate === num(item.rate) && 
-        newGst === (item.productGST != null ? num(item.productGST) : 0) &&
-        newQuantity === (num(item.quantity) || 1) &&
-        newProduct === item.product
-      ) {
-        return item;
-      }
+        // Get values from operations breakdown
+        const opRate = num(opRow.rate);
+        const opGst = parseGstPercent(opRow.gst);
+        const opQuantity = num(opRow.quantity);
+        const opProduct = opRow.product?.trim() || "";
 
-      console.log(`Updating item "${item.product}" -> "${newProduct}" - Rate: ${item.rate} -> ${newRate}, GST: ${item.productGST} -> ${newGst}, Quantity: ${item.quantity} -> ${newQuantity}`);
+        // Keep original values if opRow values are 0/empty (not set)
+        const newRate = opRate > 0 ? opRate : num(item.rate);
+        const newGst = opGst > 0 ? opGst : (item.productGST != null ? num(item.productGST) : 0);
+        const newQuantity = opQuantity > 0 ? opQuantity : (num(item.quantity) || 1);
+        // Allow product name to be cleared or changed completely
+        const newProduct = opRow.product !== undefined ? opRow.product : (item.product || "");
 
-      // Recalculate amount and total with new values
-      const amount = newQuantity * newRate;
-      const total = amount * (1 + newGst / 100);
+        // Only update if values are different to prevent unnecessary re-renders
+        if (
+          newRate === num(item.rate) &&
+          newGst === (item.productGST != null ? num(item.productGST) : 0) &&
+          newQuantity === (num(item.quantity) || 1) &&
+          newProduct === item.product
+        ) {
+          return item;
+        }
+
+        console.log(`Updating item "${item.product}" -> "${newProduct}" - Rate: ${item.rate} -> ${newRate}, GST: ${item.productGST} -> ${newGst}, Quantity: ${item.quantity} -> ${newQuantity}`);
+
+        // Recalculate amount and total with new values
+        const amount = newQuantity * newRate;
+        const total = amount * (1 + newGst / 100);
+
+        return {
+          ...item,
+          product: newProduct,
+          rate: newRate,
+          productprice: newRate,
+          productGST: newGst,
+          quantity: newQuantity,
+          amount,
+          total,
+        };
+      });
 
       return {
-        ...item,
-        product: newProduct,
-        rate: newRate,
-        productprice: newRate,
-        productGST: newGst,
-        quantity: newQuantity,
-        amount,
-        total,
+        ...prev,
+        items: updatedItems,
       };
     });
-
-    return {
-      ...prev,
-      items: updatedItems,
-    };
-  });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [opRows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opRows]);
 
   // FIX: Create new quotation instead of updating existing one
   async function handleSaveQuotation() {
@@ -1147,11 +1148,11 @@ useEffect(() => {
                     handleFormFieldChange(subKey, e.target.value, key)
                   }
                   className={`border p-2 w-full text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${key === "RefDtls" &&
-                      subKey === "InvRm" &&
-                      (parsedJson[key][subKey]?.length < 3 ||
-                        parsedJson[key][subKey]?.length > 100)
-                      ? "border-red-500"
-                      : "border-gray-300"
+                    subKey === "InvRm" &&
+                    (parsedJson[key][subKey]?.length < 3 ||
+                      parsedJson[key][subKey]?.length > 100)
+                    ? "border-red-500"
+                    : "border-gray-300"
                     }`}
                 />
                 {key === "RefDtls" &&
@@ -1647,8 +1648,8 @@ useEffect(() => {
           <div className="font-semibold text-xs text-gray-800">
             Operations Cost — Quotation #{editableQuotation.quotationNumber || "N/A"}
             <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] ${hasCatalog
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-yellow-100 text-yellow-700'
               }`}>
               {hasCatalog ? '📁 From Catalog' : '📝 From SuggestedBreakdown'}
             </span>
@@ -2394,7 +2395,7 @@ useEffect(() => {
                         onChange={(e) => updateItemField(index, "product", e.target.value)}
                         className="border p-0.5 w-full text-[10px] rounded wrap-text"
                         disabled
-                        
+
                       />
                     </td>
                     {editableQuotation.displayHSNCodes && (
