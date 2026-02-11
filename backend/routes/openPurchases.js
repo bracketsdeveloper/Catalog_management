@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 
 const dayjs = require("dayjs");
-
 const OpenPurchase = require("../models/OpenPurchase");
 const ClosedPurchase = require("../models/ClosedPurchase");
 const JobSheet = require("../models/JobSheet");
@@ -19,7 +18,9 @@ const User = require("../models/User");
 
 async function isNewVendor(vendorId) {
   if (!vendorId) return false;
-  const count = await PurchaseOrder.countDocuments({ "vendor.vendorId": vendorId });
+  const count = await PurchaseOrder.countDocuments({
+    "vendor.vendorId": vendorId,
+  });
   return count === 0;
 }
 
@@ -70,329 +71,173 @@ function pickVendorGst(vendorDoc) {
   return (v.gst || "").trim();
 }
 
-function asInt(v, def) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
+function norm(s) {
+  return String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function toDateOrNull(v) {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isFinite(d.getTime()) ? d : null;
+function pickPrice(p) {
+  const candidates = [p.productCost, p.purchasePrice, p.unitPrice, p.price, p.MRP];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
 }
 
-function normStr(s) {
-  return String(s || "").trim();
+// IMPORTANT: use jobSheetId (not jobSheetNumber) to avoid collisions + missing rows
+function makeKey(jobSheetId, product, size) {
+  return `${String(jobSheetId || "")}__${norm(product)}__${norm(size || "")}`;
 }
 
-function buildQueryFromParams(qp = {}) {
-  const q = {};
-
-  // status filter (supports __empty__)
-  if (qp.status) {
-    if (qp.status === "__empty__") q.status = { $in: [null, ""] };
-    else q.status = String(qp.status);
-  }
-
-  // completionState filter
-  if (qp.completionState) q.completionState = String(qp.completionState);
-
-  // PO status filter (generated / not)
-  if (qp.__poStatus) {
-    const v = String(qp.__poStatus);
-    if (v === "generated") q.poId = { $ne: null };
-    if (v === "not") q.poId = { $in: [null] };
-  }
-
-  // optional: hide fully-received jobsheets (default true for compatibility with your current frontend)
-  const hideReceived = qp.hideReceived === undefined ? "1" : String(qp.hideReceived);
-  // applied later (needs aggregation of jobSheetNumber statuses), so we leave a flag for caller
-  const _hideReceived = hideReceived === "1" || hideReceived.toLowerCase() === "true";
-
-  // global search across common fields
-  const search = normStr(qp.search);
-  if (search) {
-    const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    q.$or = [
-      { jobSheetNumber: re },
-      { clientCompanyName: re },
-      { eventName: re },
-      { product: re },
-      { size: re },
-      { sourcingFrom: re },
-      { vendorContactNumber: re },
-      { remarks: re },
-      { invoiceRemarks: re },
-    ];
-  }
-
-  // optional numeric range filters (if you want to push the advanced filters server-side)
-  if (qp.jobSheetNumberFrom) q.jobSheetNumber = { ...(q.jobSheetNumber || {}), $gte: String(qp.jobSheetNumberFrom) };
-  if (qp.jobSheetNumberTo) q.jobSheetNumber = { ...(q.jobSheetNumber || {}), $lte: String(qp.jobSheetNumberTo) };
-
-  // optional date ranges
-  const dateFields = [
-    ["jobSheetCreatedDateFrom", "jobSheetCreatedDateTo", "jobSheetCreatedDate"],
-    ["deliveryDateFrom", "deliveryDateTo", "deliveryDateTime"],
-    ["orderConfirmedFrom", "orderConfirmedTo", "orderConfirmedDate"],
-    ["expectedReceiveFrom", "expectedReceiveTo", "expectedReceiveDate"],
-    ["schedulePickUpFrom", "schedulePickUpTo", "schedulePickUp"],
-  ];
-  for (const [fromKey, toKey, field] of dateFields) {
-    const from = toDateOrNull(qp[fromKey]);
-    const to = toDateOrNull(qp[toKey]);
-    if (from || to) {
-      q[field] = {};
-      if (from) q[field].$gte = from;
-      if (to) {
-        // include the full day if date-only was sent
-        const end = new Date(to);
-        if (String(qp[toKey]).length <= 10) {
-          end.setHours(23, 59, 59, 999);
-        }
-        q[field].$lte = end;
-      }
-    }
-  }
-
-  return { mongoQuery: q, hideReceived: _hideReceived };
-}
-
-/* ---------------- Materialization (BEST FIX) ---------------- */
-/**
- * Upsert OpenPurchase rows for every item in a JobSheet.
- * This removes the need to build "temporary" rows at read time.
- */
-async function syncOpenPurchasesFromJobSheet(jobSheet) {
-  if (!jobSheet || jobSheet.isDraft) return { upserts: 0 };
-
-  const deliveryDateTime = jobSheet.deliveryDate ? new Date(jobSheet.deliveryDate) : null;
-
-  const items = Array.isArray(jobSheet.items) ? jobSheet.items : [];
-  if (items.length === 0) return { upserts: 0 };
-
-  const ops = items.map((item) => {
-    const product = item.product;
-    const size = item.size || "";
-
-    // Keep behavior consistent with your old "temp rows"
-    const baseInsert = {
-      jobSheetCreatedDate: jobSheet.createdAt,
-      jobSheetNumber: jobSheet.jobSheetNumber,
-      clientCompanyName: jobSheet.clientCompanyName,
-      eventName: jobSheet.eventName,
-      product,
-      size,
-      sourcedBy: item.sourcedBy || "",
-      sourcingFrom: item.sourcingFrom || "",
-      qtyRequired: item.quantity,
-      qtyOrdered: 0,
-      deliveryDateTime,
-      vendorContactNumber: "",
-      orderConfirmedDate: null,
-      expectedReceiveDate: null,
-      schedulePickUp: null,
-      followUp: [],
-      remarks: "",
-      invoiceRemarks: "",
-      status: "",
-      completionState: "",
-      jobSheetId: jobSheet._id,
-    };
-
-    const baseUpdate = {
-      qtyRequired: item.quantity,
-      sourcedBy: item.sourcedBy || "",
-      sourcingFrom: item.sourcingFrom || "",
-      deliveryDateTime,
-      clientCompanyName: jobSheet.clientCompanyName,
-      eventName: jobSheet.eventName,
-      jobSheetNumber: jobSheet.jobSheetNumber,
-    };
-
-    return {
-      updateOne: {
-        filter: { jobSheetId: jobSheet._id, product, size },
-        update: {
-          $setOnInsert: baseInsert,
-          $set: baseUpdate,
-        },
-        upsert: true,
-      },
-    };
-  });
-
-  const result = await OpenPurchase.bulkWrite(ops, { ordered: false });
-  const upserts =
-    (result && (result.upsertedCount || (result.getUpsertedIds && result.getUpsertedIds().length))) || 0;
-
-  return { upserts };
-}
-
-/**
- * Backfill all job sheets -> open purchases in batches.
- */
-async function syncAllOpenPurchases({ batchSize = 200 } = {}) {
-  let processed = 0;
-  let upserts = 0;
-
-  const cursor = JobSheet.find({ isDraft: false })
-    .select("_id jobSheetNumber clientCompanyName eventName deliveryDate createdAt items")
-    .lean()
-    .cursor();
-
-  let batch = [];
-  for await (const js of cursor) {
-    batch.push(js);
-    if (batch.length >= batchSize) {
-      for (const one of batch) {
-        const r = await syncOpenPurchasesFromJobSheet(one);
-        upserts += r.upserts || 0;
-        processed += 1;
-      }
-      batch = [];
-    }
-  }
-  for (const one of batch) {
-    const r = await syncOpenPurchasesFromJobSheet(one);
-    upserts += r.upserts || 0;
-    processed += 1;
-  }
-
-  return { processed, upserts };
-}
-
-/* ---------------- SYNC ENDPOINTS ---------------- */
-
-// Backfill / repair (run once, or whenever you suspect missing rows)
-router.post("/sync-all", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const batchSize = asInt(req.body?.batchSize, 200);
-    const result = await syncAllOpenPurchases({ batchSize });
-    res.json({ message: "Sync complete", ...result });
-  } catch (error) {
-    console.error("Error syncing open purchases:", error);
-    res.status(500).json({ message: "Server error syncing open purchases" });
-  }
-});
-
-// Sync a single jobSheet -> open purchases (useful after edits)
-router.post("/sync-job/:jobSheetId", authenticate, authorizeAdmin, async (req, res) => {
-  try {
-    const { jobSheetId } = req.params;
-    const js = await JobSheet.findById(jobSheetId)
-      .select("_id jobSheetNumber clientCompanyName eventName deliveryDate createdAt items isDraft")
-      .lean();
-
-    if (!js) return res.status(404).json({ message: "JobSheet not found" });
-    const result = await syncOpenPurchasesFromJobSheet(js);
-    res.json({ message: "JobSheet sync complete", ...result });
-  } catch (error) {
-    console.error("Error syncing job sheet open purchases:", error);
-    res.status(500).json({ message: "Server error syncing job sheet open purchases" });
-  }
-});
-
-/* ---------------- LIST (FAST) ----------------
- * This endpoint is now fast because it reads ONLY from OpenPurchase.
- * IMPORTANT: To ensure all rows exist, run POST /sync-all once after deploy,
- * and call /sync-job/:jobSheetId from your JobSheet update flow if needed.
- */
+/* ---------------- LIST ---------------- */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sortKey = req.query.sortKey || "deliveryDateTime";
     const sortDirection = req.query.sortDirection === "desc" ? -1 : 1;
 
-    // pagination (optional). if not provided, keeps old behavior (returns array).
-    const pageRaw = req.query.page;
-    const limitRaw = req.query.limit;
+    // Fetch only what is needed + lean for speed
+    const [jobSheets, dbRecords] = await Promise.all([
+      JobSheet.find({ isDraft: false })
+        .select("createdAt jobSheetNumber clientCompanyName eventName deliveryDate items _id")
+        .lean(),
+      OpenPurchase.find({})
+        .lean(),
+    ]);
 
-    const page = pageRaw ? Math.max(1, asInt(pageRaw, 1)) : null;
-    const limit = limitRaw ? Math.max(1, Math.min(1000, asInt(limitRaw, 200))) : null;
-
-    const { mongoQuery, hideReceived } = buildQueryFromParams(req.query);
-
-    // only pull what you need
-    const projection = req.query.fields
-      ? String(req.query.fields)
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .join(" ")
-      : "";
-
-    // Query base
-    let baseQuery = OpenPurchase.find(mongoQuery);
-    if (projection) baseQuery = baseQuery.select(projection);
-
-    // sort (mongo)
-    baseQuery = baseQuery.sort({ [sortKey]: sortDirection });
-
-    // paginate if requested
-    if (page && limit) {
-      baseQuery = baseQuery.skip((page - 1) * limit).limit(limit);
-    }
-
-    let rows = await baseQuery.lean();
-
-    // Optional: hide jobsheets where all items are received (your old UI behavior)
-    // This check is now done on the current result set (fast for paginated),
-    // or on full set if you didn't paginate (still much cheaper than old jobsheet+merge).
-    if (hideReceived && rows.length) {
-      const byJS = new Map();
-      for (const r of rows) {
-        const key = r.jobSheetNumber || "";
-        if (!byJS.has(key)) byJS.set(key, { allReceived: true, items: 0 });
-        const s = byJS.get(key);
-        s.items += 1;
-        if (r.status !== "received") s.allReceived = false;
+    // Map existing OpenPurchase by (jobSheetId + product + size)
+    const dbMap = new Map();
+    for (const db of dbRecords) {
+      const key = makeKey(db.jobSheetId, db.product, db.size || "");
+      // keep latest doc if duplicates exist
+      const existing = dbMap.get(key);
+      if (!existing) dbMap.set(key, db);
+      else {
+        const a = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+        const b = new Date(db.updatedAt || db.createdAt || 0).getTime();
+        if (b >= a) dbMap.set(key, db);
       }
-      rows = rows.filter((r) => !(byJS.get(r.jobSheetNumber || "")?.allReceived));
     }
 
-    // Optional lightweight productPrice fallback (ONLY for returned rows)
-    // (avoids the previous expensive regex $in across ALL records)
-    const withProductFallback = req.query.withProductFallback === undefined ? "1" : String(req.query.withProductFallback);
-    if ((withProductFallback === "1" || withProductFallback.toLowerCase() === "true") && rows.length) {
-      const need = rows.filter((r) => !(Number.isFinite(Number(r.productPrice)) && Number(r.productPrice) > 0));
-      if (need.length) {
-        const names = [...new Set(need.map((r) => normStr(r.product)).filter(Boolean))];
-        if (names.length) {
-          const prodDocs = await Product.find({ name: { $in: names } })
-            .select("name productCost purchasePrice unitPrice price MRP")
-            .lean()
-            .collation({ locale: "en", strength: 2 });
+    // Build aggregated rows with O(1) merges (no findIndex loops)
+    const aggregated = [];
+    const finalSeen = new Set();
 
-          const pickPrice = (p) => {
-            const candidates = [p.productCost, p.purchasePrice, p.unitPrice, p.price, p.MRP];
-            for (const c of candidates) {
-              const n = Number(c);
-              if (Number.isFinite(n) && n > 0) return n;
-            }
-            return null;
-          };
+    // Collect product names for pricing lookup
+    const productNamesRaw = new Set();
 
-          const priceByName = new Map(prodDocs.map((p) => [String(p.name).toLowerCase(), pickPrice(p)]));
-          rows = rows.map((r) => {
-            const rowNum = Number(r.productPrice);
-            const hasUsableRowPrice = Number.isFinite(rowNum) && rowNum > 0;
-            if (hasUsableRowPrice) return r;
-            const fallback = priceByName.get(String(r.product || "").toLowerCase()) ?? null;
-            return { ...r, productPrice: fallback };
+    for (const js of jobSheets) {
+      const deliveryDate = js.deliveryDate ? new Date(js.deliveryDate) : null;
+
+      const items = Array.isArray(js.items) ? js.items : [];
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index] || {};
+        const product = item.product || "";
+        const size = item.size || "";
+
+        const key = makeKey(js._id, product, size);
+
+        // de-dupe at source (prevents accidental duplicates)
+        if (finalSeen.has(key)) continue;
+        finalSeen.add(key);
+
+        productNamesRaw.add(String(product || "").trim());
+
+        const fromDb = dbMap.get(key);
+        if (fromDb) {
+          aggregated.push({ ...fromDb, isTemporary: false });
+        } else {
+          aggregated.push({
+            _id: `temp_${js._id}_${index}`,
+            jobSheetCreatedDate: js.createdAt,
+            jobSheetNumber: js.jobSheetNumber,
+            clientCompanyName: js.clientCompanyName,
+            eventName: js.eventName,
+            product,
+            size,
+            sourcedBy: item.sourcedBy || "",
+            sourcingFrom: item.sourcingFrom || "",
+            qtyRequired: item.quantity,
+            qtyOrdered: 0,
+            deliveryDateTime: deliveryDate,
+            vendorContactNumber: "",
+            orderConfirmedDate: null,
+            expectedReceiveDate: null,
+            schedulePickUp: null,
+            followUp: [],
+            remarks: "",
+            invoiceRemarks: "",
+            status: "",
+            completionState: "",
+            jobSheetId: js._id,
+            isTemporary: true,
           });
         }
       }
     }
 
-    // Response shape:
-    // - If client requested pagination -> return { items, total, page, limit }
-    // - Else -> return array (backward compatible with your current frontend)
-    if (page && limit) {
-      const total = await OpenPurchase.countDocuments(mongoQuery);
-      return res.json({ items: rows, total, page, limit });
+    // Add any dbRecords that don't have a corresponding jobsheet item row
+    // (edge cases: imports/manual entries)
+    for (const db of dbRecords) {
+      const key = makeKey(db.jobSheetId, db.product, db.size || "");
+      if (finalSeen.has(key)) continue;
+      finalSeen.add(key);
+      productNamesRaw.add(String(db.product || "").trim());
+      aggregated.push({ ...db, isTemporary: false });
     }
 
-    return res.json(rows);
+    // Pricing lookup (fast + case-insensitive via collation)
+    const productNames = [...productNamesRaw].filter(Boolean);
+    let priceByName = new Map();
+    if (productNames.length) {
+      const prodDocs = await Product.find({ name: { $in: productNames } })
+        .select("name productCost purchasePrice unitPrice price MRP")
+        .collation({ locale: "en", strength: 2 })
+        .lean();
+
+      priceByName = new Map(prodDocs.map((p) => [norm(p.name), pickPrice(p)]));
+    }
+
+    const finalAggregated = aggregated.map((rec) => {
+      const rowNum = Number(rec.productPrice);
+      const hasUsableRowPrice = Number.isFinite(rowNum) && rowNum > 0;
+      const fallback = priceByName.get(norm(rec.product)) ?? null;
+      return {
+        ...rec,
+        productPrice: hasUsableRowPrice ? rowNum : fallback,
+      };
+    });
+
+    // Sort
+    finalAggregated.sort((a, b) => {
+      let aVal = a[sortKey];
+      let bVal = b[sortKey];
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return sortDirection === 1 ? 1 : -1;
+      if (bVal == null) return sortDirection === 1 ? -1 : 1;
+
+      if (
+        sortKey.includes("Date") ||
+        sortKey === "schedulePickUp" ||
+        sortKey === "deliveryDateTime"
+      ) {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+        return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
+      }
+
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
+      }
+
+      aVal = String(aVal).toLowerCase();
+      bVal = String(bVal).toLowerCase();
+      if (aVal < bVal) return -sortDirection;
+      if (aVal > bVal) return sortDirection;
+      return 0;
+    });
+
+    res.json(finalAggregated);
   } catch (error) {
     console.error("Error fetching open purchases:", error);
     res.status(500).json({ message: "Server error fetching open purchases" });
@@ -406,7 +251,8 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
       .populate("vendorId", "vendorCompany vendorName email phone address")
       .populate("poId")
       .lean();
-    if (!row) return res.status(404).json({ message: "Open purchase not found" });
+    if (!row)
+      return res.status(404).json({ message: "Open purchase not found" });
     res.json(row);
   } catch (error) {
     console.error("Error fetching open purchase:", error);
@@ -418,7 +264,7 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const data = { ...req.body };
-    if (data._id && String(data._id).startsWith("temp_")) delete data._id;
+    if (data._id && data._id.startsWith("temp_")) delete data._id;
 
     if (data.productPrice !== undefined && data.productPrice !== null && data.productPrice !== "") {
       data.productPrice = Number(data.productPrice) || 0;
@@ -436,7 +282,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     if (data.jobSheetId) {
-      const js = await JobSheet.findById(data.jobSheetId);
+      const js = await JobSheet.findById(data.jobSheetId).select("deliveryDate").lean();
       if (!js) return res.status(404).json({ message: "JobSheet not found" });
       if (js.deliveryDate) data.deliveryDateTime = new Date(js.deliveryDate);
     }
@@ -447,17 +293,19 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
     // If newly created row is already received, propagate to Closed
     if (newPurchase.status === "received") {
       const jobSheetId = newPurchase.jobSheetId;
-      const jobSheet = await JobSheet.findById(jobSheetId);
+      const jobSheet = await JobSheet.findById(jobSheetId).select("items").lean();
       if (jobSheet) {
-        const products = jobSheet.items.map((item) => ({
+        const products = (jobSheet.items || []).map((item) => ({
           product: item.product,
           size: item.size || "",
         }));
+
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
           $or: products.map((p) => ({ product: p.product, size: p.size })),
-        });
-        if (openPurchases.every((p) => p.status === "received")) {
+        }).lean();
+
+        if (openPurchases.length && openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
             const closedData = {
               jobSheetCreatedDate: p.jobSheetCreatedDate,
@@ -480,16 +328,17 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               createdAt: p.createdAt,
               deliveryDateTime: p.deliveryDateTime,
             };
+
             const existingClosed = await ClosedPurchase.findOne({
               jobSheetId: p.jobSheetId,
               product: p.product,
               size: p.size || "",
-            });
+            }).lean();
+
             if (existingClosed) {
               await ClosedPurchase.updateOne({ _id: existingClosed._id }, { $set: closedData });
             } else {
-              const newClosed = new ClosedPurchase(closedData);
-              await newClosed.save();
+              await ClosedPurchase.create(closedData);
             }
           }
         }
@@ -506,7 +355,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
 /* ---------------- UPDATE ---------------- */
 router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const before = await OpenPurchase.findById(req.params.id);
+    const before = await OpenPurchase.findById(req.params.id).lean();
     if (!before) return res.status(404).json({ message: "Open purchase not found" });
 
     const updateData = { ...req.body };
@@ -527,7 +376,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     }
 
     if (updateData.jobSheetId) {
-      const js = await JobSheet.findById(updateData.jobSheetId);
+      const js = await JobSheet.findById(updateData.jobSheetId).select("deliveryDate").lean();
       if (!js) return res.status(404).json({ message: "JobSheet not found" });
       if (js.deliveryDate) updateData.deliveryDateTime = new Date(js.deliveryDate);
     }
@@ -546,7 +395,12 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    ).lean();
+
     if (!updatedPurchase) {
       return res.status(404).json({ message: "Open purchase not found" });
     }
@@ -554,17 +408,19 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     // If received, sync to ClosedPurchase (includes invoiceRemarks)
     if (updatedPurchase.status === "received") {
       const jobSheetId = updatedPurchase.jobSheetId;
-      const jobSheet = await JobSheet.findById(jobSheetId);
+      const jobSheet = await JobSheet.findById(jobSheetId).select("items").lean();
       if (jobSheet) {
-        const products = jobSheet.items.map((item) => ({
+        const products = (jobSheet.items || []).map((item) => ({
           product: item.product,
           size: item.size || "",
         }));
+
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
           $or: products.map((p) => ({ product: p.product, size: p.size })),
-        });
-        if (openPurchases.every((p) => p.status === "received")) {
+        }).lean();
+
+        if (openPurchases.length && openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
             const closedData = {
               jobSheetCreatedDate: p.jobSheetCreatedDate,
@@ -587,16 +443,17 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               createdAt: p.createdAt,
               deliveryDateTime: p.deliveryDateTime,
             };
+
             const existingClosed = await ClosedPurchase.findOne({
               jobSheetId: p.jobSheetId,
               product: p.product,
               size: p.size || "",
-            });
+            }).lean();
+
             if (existingClosed) {
               await ClosedPurchase.updateOne({ _id: existingClosed._id }, { $set: closedData });
             } else {
-              const newClosed = new ClosedPurchase(closedData);
-              await newClosed.save();
+              await ClosedPurchase.create(closedData);
             }
           }
         }
@@ -605,7 +462,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     // Alert email (unchanged)
     if (updatedPurchase.status === "alert") {
-      const purchaseObj = updatedPurchase.toObject();
+      const purchaseObj = updatedPurchase;
       let mailBody = "";
       const fields = [
         "jobSheetCreatedDate",
@@ -619,6 +476,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         "jobSheetId",
         "deliveryDateTime",
       ];
+
       fields.forEach((field) => {
         let value = purchaseObj[field];
         if (value && (field.includes("Date") || field === "deliveryDateTime")) {
@@ -627,8 +485,8 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         mailBody += `<b>${field}:</b> ${value}<br/>`;
       });
 
-      const superAdmins = await User.find({ isSuperAdmin: true });
-      const emails = superAdmins.map((user) => user.email);
+      const superAdmins = await User.find({ isSuperAdmin: true }).select("email").lean();
+      const emails = superAdmins.map((user) => user.email).filter(Boolean);
       if (emails.length > 0) {
         await sendMail({
           to: emails.join(","),
@@ -638,10 +496,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    res.json({
-      message: "Open purchase updated",
-      purchase: updatedPurchase,
-    });
+    res.json({ message: "Open purchase updated", purchase: updatedPurchase });
   } catch (error) {
     console.error("Error updating open purchase:", error);
     res.status(500).json({ message: "Server error updating open purchase" });
@@ -676,7 +531,7 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
       terms,
     } = req.body;
 
-    const row = await OpenPurchase.findById(id);
+    const row = await OpenPurchase.findById(id).lean();
     if (!row) return res.status(404).json({ message: "Open purchase not found" });
 
     const vendor = await Vendor.findOne({ _id: vendorId, deleted: false }).lean();
@@ -692,7 +547,9 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
         return res.status(400).json({ message: "Product code not found in Manage Products" });
       }
     } else {
-      product = await Product.findOne({ name: row.product }).lean().collation({ locale: "en", strength: 2 });
+      product = await Product.findOne({ name: row.product })
+        .collation({ locale: "en", strength: 2 })
+        .lean();
     }
 
     const qty = row.qtyOrdered || row.qtyRequired || 0;
