@@ -953,7 +953,7 @@ export default function OpenPurchaseList() {
   const [headerFilters, setHeaderFilters] = useState({});
   const [advFilters, setAdvFilters] = useState(initAdv);
   const [showFilters, setShowFilters] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: "deliveryDateTime", direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: "jobSheetCreatedDate", direction: "desc" });
   const [showFollowUpView, setShowFollowUpView] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [createdByUsers, setCreatedByUsers] = useState({});
