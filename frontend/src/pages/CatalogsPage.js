@@ -381,7 +381,7 @@ export default function CatalogManagementPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `Catalog-${item.catalogName}.xlsx`);
+      link.setAttribute("download", `catalog-${item.catalogName} ${item.catalogNumber}.xlsx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -664,7 +664,7 @@ export default function CatalogManagementPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `Catalog-${catalog.catalogName}.pdf`);
+      link.setAttribute("download", `catalog-${catalog.catalogName} ${catalog.catalogNumber}.pdf`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const dayjs = require("dayjs");
+
 const OpenPurchase = require("../models/OpenPurchase");
 const ClosedPurchase = require("../models/ClosedPurchase");
 const JobSheet = require("../models/JobSheet");
@@ -69,152 +70,332 @@ function pickVendorGst(vendorDoc) {
   return (v.gst || "").trim();
 }
 
-/* ---------------- LIST ---------------- */
+function asInt(v, def) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+
+function toDateOrNull(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function normStr(s) {
+  return String(s || "").trim();
+}
+
+function buildQueryFromParams(qp = {}) {
+  const q = {};
+
+  // status filter (supports __empty__)
+  if (qp.status) {
+    if (qp.status === "__empty__") q.status = { $in: [null, ""] };
+    else q.status = String(qp.status);
+  }
+
+  // completionState filter
+  if (qp.completionState) q.completionState = String(qp.completionState);
+
+  // PO status filter (generated / not)
+  if (qp.__poStatus) {
+    const v = String(qp.__poStatus);
+    if (v === "generated") q.poId = { $ne: null };
+    if (v === "not") q.poId = { $in: [null] };
+  }
+
+  // optional: hide fully-received jobsheets (default true for compatibility with your current frontend)
+  const hideReceived = qp.hideReceived === undefined ? "1" : String(qp.hideReceived);
+  // applied later (needs aggregation of jobSheetNumber statuses), so we leave a flag for caller
+  const _hideReceived = hideReceived === "1" || hideReceived.toLowerCase() === "true";
+
+  // global search across common fields
+  const search = normStr(qp.search);
+  if (search) {
+    const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    q.$or = [
+      { jobSheetNumber: re },
+      { clientCompanyName: re },
+      { eventName: re },
+      { product: re },
+      { size: re },
+      { sourcingFrom: re },
+      { vendorContactNumber: re },
+      { remarks: re },
+      { invoiceRemarks: re },
+    ];
+  }
+
+  // optional numeric range filters (if you want to push the advanced filters server-side)
+  if (qp.jobSheetNumberFrom) q.jobSheetNumber = { ...(q.jobSheetNumber || {}), $gte: String(qp.jobSheetNumberFrom) };
+  if (qp.jobSheetNumberTo) q.jobSheetNumber = { ...(q.jobSheetNumber || {}), $lte: String(qp.jobSheetNumberTo) };
+
+  // optional date ranges
+  const dateFields = [
+    ["jobSheetCreatedDateFrom", "jobSheetCreatedDateTo", "jobSheetCreatedDate"],
+    ["deliveryDateFrom", "deliveryDateTo", "deliveryDateTime"],
+    ["orderConfirmedFrom", "orderConfirmedTo", "orderConfirmedDate"],
+    ["expectedReceiveFrom", "expectedReceiveTo", "expectedReceiveDate"],
+    ["schedulePickUpFrom", "schedulePickUpTo", "schedulePickUp"],
+  ];
+  for (const [fromKey, toKey, field] of dateFields) {
+    const from = toDateOrNull(qp[fromKey]);
+    const to = toDateOrNull(qp[toKey]);
+    if (from || to) {
+      q[field] = {};
+      if (from) q[field].$gte = from;
+      if (to) {
+        // include the full day if date-only was sent
+        const end = new Date(to);
+        if (String(qp[toKey]).length <= 10) {
+          end.setHours(23, 59, 59, 999);
+        }
+        q[field].$lte = end;
+      }
+    }
+  }
+
+  return { mongoQuery: q, hideReceived: _hideReceived };
+}
+
+/* ---------------- Materialization (BEST FIX) ---------------- */
+/**
+ * Upsert OpenPurchase rows for every item in a JobSheet.
+ * This removes the need to build "temporary" rows at read time.
+ */
+async function syncOpenPurchasesFromJobSheet(jobSheet) {
+  if (!jobSheet || jobSheet.isDraft) return { upserts: 0 };
+
+  const deliveryDateTime = jobSheet.deliveryDate ? new Date(jobSheet.deliveryDate) : null;
+
+  const items = Array.isArray(jobSheet.items) ? jobSheet.items : [];
+  if (items.length === 0) return { upserts: 0 };
+
+  const ops = items.map((item) => {
+    const product = item.product;
+    const size = item.size || "";
+
+    // Keep behavior consistent with your old "temp rows"
+    const baseInsert = {
+      jobSheetCreatedDate: jobSheet.createdAt,
+      jobSheetNumber: jobSheet.jobSheetNumber,
+      clientCompanyName: jobSheet.clientCompanyName,
+      eventName: jobSheet.eventName,
+      product,
+      size,
+      sourcedBy: item.sourcedBy || "",
+      sourcingFrom: item.sourcingFrom || "",
+      qtyRequired: item.quantity,
+      qtyOrdered: 0,
+      deliveryDateTime,
+      vendorContactNumber: "",
+      orderConfirmedDate: null,
+      expectedReceiveDate: null,
+      schedulePickUp: null,
+      followUp: [],
+      remarks: "",
+      invoiceRemarks: "",
+      status: "",
+      completionState: "",
+      jobSheetId: jobSheet._id,
+    };
+
+    const baseUpdate = {
+      qtyRequired: item.quantity,
+      sourcedBy: item.sourcedBy || "",
+      sourcingFrom: item.sourcingFrom || "",
+      deliveryDateTime,
+      clientCompanyName: jobSheet.clientCompanyName,
+      eventName: jobSheet.eventName,
+      jobSheetNumber: jobSheet.jobSheetNumber,
+    };
+
+    return {
+      updateOne: {
+        filter: { jobSheetId: jobSheet._id, product, size },
+        update: {
+          $setOnInsert: baseInsert,
+          $set: baseUpdate,
+        },
+        upsert: true,
+      },
+    };
+  });
+
+  const result = await OpenPurchase.bulkWrite(ops, { ordered: false });
+  const upserts =
+    (result && (result.upsertedCount || (result.getUpsertedIds && result.getUpsertedIds().length))) || 0;
+
+  return { upserts };
+}
+
+/**
+ * Backfill all job sheets -> open purchases in batches.
+ */
+async function syncAllOpenPurchases({ batchSize = 200 } = {}) {
+  let processed = 0;
+  let upserts = 0;
+
+  const cursor = JobSheet.find({ isDraft: false })
+    .select("_id jobSheetNumber clientCompanyName eventName deliveryDate createdAt items")
+    .lean()
+    .cursor();
+
+  let batch = [];
+  for await (const js of cursor) {
+    batch.push(js);
+    if (batch.length >= batchSize) {
+      for (const one of batch) {
+        const r = await syncOpenPurchasesFromJobSheet(one);
+        upserts += r.upserts || 0;
+        processed += 1;
+      }
+      batch = [];
+    }
+  }
+  for (const one of batch) {
+    const r = await syncOpenPurchasesFromJobSheet(one);
+    upserts += r.upserts || 0;
+    processed += 1;
+  }
+
+  return { processed, upserts };
+}
+
+/* ---------------- SYNC ENDPOINTS ---------------- */
+
+// Backfill / repair (run once, or whenever you suspect missing rows)
+router.post("/sync-all", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const batchSize = asInt(req.body?.batchSize, 200);
+    const result = await syncAllOpenPurchases({ batchSize });
+    res.json({ message: "Sync complete", ...result });
+  } catch (error) {
+    console.error("Error syncing open purchases:", error);
+    res.status(500).json({ message: "Server error syncing open purchases" });
+  }
+});
+
+// Sync a single jobSheet -> open purchases (useful after edits)
+router.post("/sync-job/:jobSheetId", authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { jobSheetId } = req.params;
+    const js = await JobSheet.findById(jobSheetId)
+      .select("_id jobSheetNumber clientCompanyName eventName deliveryDate createdAt items isDraft")
+      .lean();
+
+    if (!js) return res.status(404).json({ message: "JobSheet not found" });
+    const result = await syncOpenPurchasesFromJobSheet(js);
+    res.json({ message: "JobSheet sync complete", ...result });
+  } catch (error) {
+    console.error("Error syncing job sheet open purchases:", error);
+    res.status(500).json({ message: "Server error syncing job sheet open purchases" });
+  }
+});
+
+/* ---------------- LIST (FAST) ----------------
+ * This endpoint is now fast because it reads ONLY from OpenPurchase.
+ * IMPORTANT: To ensure all rows exist, run POST /sync-all once after deploy,
+ * and call /sync-job/:jobSheetId from your JobSheet update flow if needed.
+ */
 router.get("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sortKey = req.query.sortKey || "deliveryDateTime";
     const sortDirection = req.query.sortDirection === "desc" ? -1 : 1;
 
-    const jobSheets = await JobSheet.find({ isDraft: false });
-    const dbRecords = await OpenPurchase.find({});
+    // pagination (optional). if not provided, keeps old behavior (returns array).
+    const pageRaw = req.query.page;
+    const limitRaw = req.query.limit;
 
-    let aggregated = [];
-    jobSheets.forEach((js) => {
-      js.items.forEach((item, index) => {
-        const deliveryDate = js.deliveryDate ? new Date(js.deliveryDate) : null;
-        aggregated.push({
-          _id: `temp_${js._id}_${index}`,
-          jobSheetCreatedDate: js.createdAt,
-          jobSheetNumber: js.jobSheetNumber,
-          clientCompanyName: js.clientCompanyName,
-          eventName: js.eventName,
-          product: item.product,
-          size: item.size || "",
-          sourcedBy: item.sourcedBy || "",
-          sourcingFrom: item.sourcingFrom || "",
-          qtyRequired: item.quantity,
-          qtyOrdered: 0,
-          deliveryDateTime: deliveryDate,
-          vendorContactNumber: "",
-          orderConfirmedDate: null,
-          expectedReceiveDate: null,
-          schedulePickUp: null,
-          followUp: [],
-          remarks: "",
-          invoiceRemarks: "",
-          status: "",
-          completionState: "", // NEW default for temp rows
-          jobSheetId: js._id,
-          isTemporary: true,
-        });
-      });
-    });
+    const page = pageRaw ? Math.max(1, asInt(pageRaw, 1)) : null;
+    const limit = limitRaw ? Math.max(1, Math.min(1000, asInt(limitRaw, 200))) : null;
 
-    dbRecords.forEach((db) => {
-      const idx = aggregated.findIndex(
-        (rec) =>
-          rec.jobSheetId?.toString() === db.jobSheetId?.toString() &&
-          rec.product === db.product &&
-          (rec.size || "") === (db.size || "")
-      );
-      if (idx !== -1) {
-        aggregated[idx] = { ...db.toObject(), isTemporary: false };
-      } else {
-        aggregated.push({ ...db.toObject(), isTemporary: false });
+    const { mongoQuery, hideReceived } = buildQueryFromParams(req.query);
+
+    // only pull what you need
+    const projection = req.query.fields
+      ? String(req.query.fields)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .join(" ")
+      : "";
+
+    // Query base
+    let baseQuery = OpenPurchase.find(mongoQuery);
+    if (projection) baseQuery = baseQuery.select(projection);
+
+    // sort (mongo)
+    baseQuery = baseQuery.sort({ [sortKey]: sortDirection });
+
+    // paginate if requested
+    if (page && limit) {
+      baseQuery = baseQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    let rows = await baseQuery.lean();
+
+    // Optional: hide jobsheets where all items are received (your old UI behavior)
+    // This check is now done on the current result set (fast for paginated),
+    // or on full set if you didn't paginate (still much cheaper than old jobsheet+merge).
+    if (hideReceived && rows.length) {
+      const byJS = new Map();
+      for (const r of rows) {
+        const key = r.jobSheetNumber || "";
+        if (!byJS.has(key)) byJS.set(key, { allReceived: true, items: 0 });
+        const s = byJS.get(key);
+        s.items += 1;
+        if (r.status !== "received") s.allReceived = false;
       }
-    });
+      rows = rows.filter((r) => !(byJS.get(r.jobSheetNumber || "")?.allReceived));
+    }
 
-    const norm = (s) =>
-      String(s || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-    const escapeRegex = (str = "") =>
-      str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Optional lightweight productPrice fallback (ONLY for returned rows)
+    // (avoids the previous expensive regex $in across ALL records)
+    const withProductFallback = req.query.withProductFallback === undefined ? "1" : String(req.query.withProductFallback);
+    if ((withProductFallback === "1" || withProductFallback.toLowerCase() === "true") && rows.length) {
+      const need = rows.filter((r) => !(Number.isFinite(Number(r.productPrice)) && Number(r.productPrice) > 0));
+      if (need.length) {
+        const names = [...new Set(need.map((r) => normStr(r.product)).filter(Boolean))];
+        if (names.length) {
+          const prodDocs = await Product.find({ name: { $in: names } })
+            .select("name productCost purchasePrice unitPrice price MRP")
+            .lean()
+            .collation({ locale: "en", strength: 2 });
 
-    const productNames = [
-      ...new Set(aggregated.map((r) => norm(r.product)).filter(Boolean)),
-    ];
-    const nameRegexes = productNames.map(
-      (n) => new RegExp(`^${escapeRegex(n)}$`, "i")
-    );
+          const pickPrice = (p) => {
+            const candidates = [p.productCost, p.purchasePrice, p.unitPrice, p.price, p.MRP];
+            for (const c of candidates) {
+              const n = Number(c);
+              if (Number.isFinite(n) && n > 0) return n;
+            }
+            return null;
+          };
 
-    const prodDocs = await Product.find({ name: { $in: nameRegexes } })
-      .select("name productCost purchasePrice unitPrice price MRP")
-      .lean();
-
-    const pickPrice = (p) => {
-      const candidates = [
-        p.productCost,
-        p.purchasePrice,
-        p.unitPrice,
-        p.price,
-        p.MRP,
-      ];
-      for (const c of candidates) {
-        const n = Number(c);
-        if (Number.isFinite(n) && n > 0) return n;
+          const priceByName = new Map(prodDocs.map((p) => [String(p.name).toLowerCase(), pickPrice(p)]));
+          rows = rows.map((r) => {
+            const rowNum = Number(r.productPrice);
+            const hasUsableRowPrice = Number.isFinite(rowNum) && rowNum > 0;
+            if (hasUsableRowPrice) return r;
+            const fallback = priceByName.get(String(r.product || "").toLowerCase()) ?? null;
+            return { ...r, productPrice: fallback };
+          });
+        }
       }
-      return null;
-    };
+    }
 
-    const priceByName = new Map(
-      prodDocs.map((p) => [norm(p.name), pickPrice(p)])
-    );
+    // Response shape:
+    // - If client requested pagination -> return { items, total, page, limit }
+    // - Else -> return array (backward compatible with your current frontend)
+    if (page && limit) {
+      const total = await OpenPurchase.countDocuments(mongoQuery);
+      return res.json({ items: rows, total, page, limit });
+    }
 
-    const seen = new Set();
-    const finalAggregated = aggregated
-      .filter((rec) => {
-        const key = `${rec.jobSheetNumber}_${rec.product}_${rec.size || ""}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map((rec) => {
-        const rowNum = Number(rec.productPrice);
-        const hasUsableRowPrice = Number.isFinite(rowNum) && rowNum > 0;
-        const fallback = priceByName.get(norm(rec.product)) ?? null;
-        return {
-          ...rec,
-          productPrice: hasUsableRowPrice ? rowNum : fallback,
-        };
-      });
-
-    finalAggregated.sort((a, b) => {
-      let aVal = a[sortKey];
-      let bVal = b[sortKey];
-
-      if (aVal == null && bVal == null) return 0;
-      if (aVal == null) return sortDirection === 1 ? 1 : -1;
-      if (bVal == null) return sortDirection === 1 ? -1 : 1;
-
-      if (
-        sortKey.includes("Date") ||
-        sortKey === "schedulePickUp" ||
-        sortKey === "deliveryDateTime"
-      ) {
-        aVal = new Date(aVal).getTime();
-        bVal = new Date(bVal).getTime();
-        return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
-      }
-
-      if (typeof aVal === "number" && typeof bVal === "number") {
-        return aVal < bVal ? -sortDirection : aVal > bVal ? sortDirection : 0;
-      }
-
-      aVal = String(aVal).toLowerCase();
-      bVal = String(bVal).toLowerCase();
-      if (aVal < bVal) return -sortDirection;
-      if (aVal > bVal) return sortDirection;
-      return 0;
-    });
-
-    res.json(finalAggregated);
+    return res.json(rows);
   } catch (error) {
     console.error("Error fetching open purchases:", error);
-    res
-      .status(500)
-      .json({ message: "Server error fetching open purchases" });
+    res.status(500).json({ message: "Server error fetching open purchases" });
   }
 });
 
@@ -229,9 +410,7 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
     res.json(row);
   } catch (error) {
     console.error("Error fetching open purchase:", error);
-    res
-      .status(500)
-      .json({ message: "Server error fetching open purchase" });
+    res.status(500).json({ message: "Server error fetching open purchase" });
   }
 });
 
@@ -239,29 +418,21 @@ router.get("/:id", authenticate, authorizeAdmin, async (req, res) => {
 router.post("/", authenticate, authorizeAdmin, async (req, res) => {
   try {
     const data = { ...req.body };
-    if (data._id && data._id.startsWith("temp_")) delete data._id;
+    if (data._id && String(data._id).startsWith("temp_")) delete data._id;
 
-    if (
-      data.productPrice !== undefined &&
-      data.productPrice !== null &&
-      data.productPrice !== ""
-    ) {
+    if (data.productPrice !== undefined && data.productPrice !== null && data.productPrice !== "") {
       data.productPrice = Number(data.productPrice) || 0;
     }
-    if (
-      typeof data.invoiceRemarks === "string" ||
-      data.invoiceRemarks === undefined
-    ) {
+    if (typeof data.invoiceRemarks === "string" || data.invoiceRemarks === undefined) {
       data.invoiceRemarks = data.invoiceRemarks || "";
     }
 
-    // NEW: normalize completionState on create
+    // normalize completionState on create
     if (data.completionState === undefined || data.completionState === null) {
       data.completionState = "";
     } else {
       const v = String(data.completionState).trim();
-      data.completionState =
-        v === "Partially" || v === "Fully" ? v : "";
+      data.completionState = v === "Partially" || v === "Fully" ? v : "";
     }
 
     if (data.jobSheetId) {
@@ -284,10 +455,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
         }));
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          $or: products.map((p) => ({
-            product: p.product,
-            size: p.size,
-          })),
+          $or: products.map((p) => ({ product: p.product, size: p.size })),
         });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
@@ -318,10 +486,7 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
               size: p.size || "",
             });
             if (existingClosed) {
-              await ClosedPurchase.updateOne(
-                { _id: existingClosed._id },
-                { $set: closedData }
-              );
+              await ClosedPurchase.updateOne({ _id: existingClosed._id }, { $set: closedData });
             } else {
               const newClosed = new ClosedPurchase(closedData);
               await newClosed.save();
@@ -331,14 +496,10 @@ router.post("/", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    res
-      .status(201)
-      .json({ message: "Open purchase created", purchase: newPurchase });
+    res.status(201).json({ message: "Open purchase created", purchase: newPurchase });
   } catch (error) {
     console.error("Error creating open purchase:", error);
-    res
-      .status(500)
-      .json({ message: "Server error creating open purchase" });
+    res.status(500).json({ message: "Server error creating open purchase" });
   }
 });
 
@@ -350,11 +511,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
 
     const updateData = { ...req.body };
 
-    if (
-      updateData.productPrice !== undefined &&
-      updateData.productPrice !== null &&
-      updateData.productPrice !== ""
-    ) {
+    if (updateData.productPrice !== undefined && updateData.productPrice !== null && updateData.productPrice !== "") {
       updateData.productPrice = Number(updateData.productPrice) || 0;
     }
     if (updateData.invoiceRemarks === undefined) {
@@ -363,11 +520,10 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       updateData.invoiceRemarks = String(updateData.invoiceRemarks || "");
     }
 
-    // NEW: normalize completionState on update
+    // normalize completionState on update
     if (updateData.completionState !== undefined) {
       const v = String(updateData.completionState || "").trim();
-      updateData.completionState =
-        v === "Partially" || v === "Fully" ? v : "";
+      updateData.completionState = v === "Partially" || v === "Fully" ? v : "";
     }
 
     if (updateData.jobSheetId) {
@@ -390,11 +546,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       }
     }
 
-    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
+    const updatedPurchase = await OpenPurchase.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedPurchase) {
       return res.status(404).json({ message: "Open purchase not found" });
     }
@@ -410,10 +562,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
         }));
         const openPurchases = await OpenPurchase.find({
           jobSheetId,
-          $or: products.map((p) => ({
-            product: p.product,
-            size: p.size,
-          })),
+          $or: products.map((p) => ({ product: p.product, size: p.size })),
         });
         if (openPurchases.every((p) => p.status === "received")) {
           for (const p of openPurchases) {
@@ -444,10 +593,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
               size: p.size || "",
             });
             if (existingClosed) {
-              await ClosedPurchase.updateOne(
-                { _id: existingClosed._id },
-                { $set: closedData }
-              );
+              await ClosedPurchase.updateOne({ _id: existingClosed._id }, { $set: closedData });
             } else {
               const newClosed = new ClosedPurchase(closedData);
               await newClosed.save();
@@ -475,10 +621,7 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
       ];
       fields.forEach((field) => {
         let value = purchaseObj[field];
-        if (
-          value &&
-          (field.includes("Date") || field === "deliveryDateTime")
-        ) {
+        if (value && (field.includes("Date") || field === "deliveryDateTime")) {
           value = new Date(value).toLocaleString();
         }
         mailBody += `<b>${field}:</b> ${value}<br/>`;
@@ -501,27 +644,21 @@ router.put("/:id", authenticate, authorizeAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating open purchase:", error);
-    res
-      .status(500)
-      .json({ message: "Server error updating open purchase" });
+    res.status(500).json({ message: "Server error updating open purchase" });
   }
 });
 
 /* ---------------- DELETE ---------------- */
 router.delete("/:id", authenticate, authorizeAdmin, async (req, res) => {
   try {
-    const deletedPurchase = await OpenPurchase.findByIdAndDelete(
-      req.params.id
-    );
+    const deletedPurchase = await OpenPurchase.findByIdAndDelete(req.params.id);
     if (!deletedPurchase) {
       return res.status(404).json({ message: "Open purchase not found" });
     }
     res.json({ message: "Open purchase deleted" });
   } catch (error) {
     console.error("Error deleting open purchase:", error);
-    res
-      .status(500)
-      .json({ message: "Server error deleting open purchase" });
+    res.status(500).json({ message: "Server error deleting open purchase" });
   }
 });
 
@@ -552,12 +689,10 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
     if (productCode) {
       product = await Product.findOne({ productId: productCode }).lean();
       if (!product) {
-        return res
-          .status(400)
-          .json({ message: "Product code not found in Manage Products" });
+        return res.status(400).json({ message: "Product code not found in Manage Products" });
       }
     } else {
-      product = await Product.findOne({ name: row.product }).lean();
+      product = await Product.findOne({ name: row.product }).lean().collation({ locale: "en", strength: 2 });
     }
 
     const qty = row.qtyOrdered || row.qtyRequired || 0;
@@ -586,9 +721,7 @@ router.post("/:id/generate-po", authenticate, authorizeAdmin, async (req, res) =
     const po = await PurchaseOrder.create({
       poNumber,
       issueDate: issueDate ? new Date(issueDate) : new Date(),
-      requiredDeliveryDate: requiredDeliveryDate
-        ? new Date(requiredDeliveryDate)
-        : row.deliveryDateTime,
+      requiredDeliveryDate: requiredDeliveryDate ? new Date(requiredDeliveryDate) : row.deliveryDateTime,
       deliveryAddress: deliveryAddress || "Ace Gifting Solutions",
       vendor: {
         vendorId: vendor._id,

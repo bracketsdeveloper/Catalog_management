@@ -281,7 +281,7 @@ export async function exportToPPT(catalog, getBase64ImageFromUrl) {
       ? { data: closingBgData }
       : { color: "F5F5F5" }; // Fallback to light gray
 
-    await pptx.writeFile({ fileName: `Catalog-${catalog.catalogName}.pptx` });
+    await pptx.writeFile({ fileName: `catalog-${catalog.catalogName} ${catalog.catalogNumber}.pptx` });
   } catch (error) {
     console.error("PPT export error:", error);
     throw new Error("PPT export failed");
