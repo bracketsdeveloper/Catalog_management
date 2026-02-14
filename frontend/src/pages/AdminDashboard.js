@@ -162,7 +162,7 @@ const adminPages = [
     subItems: [
       { name: "Employees", path: "/admin-dashboard/hrms/employees", permission: "hrms-employees" },
       { name: "Common Configuration", path: "/admin-dashboard/hrms/configuration", permission: "hrms-employees" },
-      { name: "Salary", path: "/admin-dashboard/salary", permission: "hrms-employees" },
+      { name: "Salary", path: "/admin-dashboard/hrms/salary", permission: "hrms-employees" },
       { name: "Holidays", path: "/admin-dashboard/holidays", permission: "holidays" },
       { name: "Leave Tracker", path: "/admin-dashboard/leaves-super-admin", permission: "leaves" },
       { name: "Upload Attendance", path: "/admin-dashboard/hrms/attendance", permission: "hrms-attendance" },

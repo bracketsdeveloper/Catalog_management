@@ -1,3 +1,4 @@
+// server/routes/salary.js
 const express = require("express");
 const router = express.Router();
 
@@ -59,7 +60,11 @@ function getHoursForAttendance(att, expectedHoursPerDay) {
   if (hoursWorked > 0) return hoursWorked;
 
   // If present/wfh/weeklyoff present but hours missing -> assume full day hours
-  if (status.includes("present") || status.includes("wfh") || (status.includes("weeklyoff") && status.includes("present"))) {
+  if (
+    status.includes("present") ||
+    status.includes("wfh") ||
+    (status.includes("weeklyoff") && status.includes("present"))
+  ) {
     return expectedHoursPerDay;
   }
 
@@ -87,7 +92,7 @@ function splitIntoIsoWeeks(periodStart, periodEnd) {
 
   // move cursor to Monday of its week
   const day = cursor.getUTCDay(); // Sun=0..Sat=6
-  const deltaToMonday = (day === 0 ? -6 : 1 - day);
+  const deltaToMonday = day === 0 ? -6 : 1 - day;
   cursor.setUTCDate(cursor.getUTCDate() + deltaToMonday);
 
   while (cursor <= end) {
@@ -141,7 +146,7 @@ async function getHolidaysInRange(startDate, endDate) {
 async function getAttendanceInRange(employeeId, startDate, endDate) {
   return Attendance.find({
     employeeId,
-    date: { $gte: startDate, $lte: endDate }
+    date: { $gte: startDate, $lte: endDate },
   }).lean();
 }
 
@@ -150,7 +155,7 @@ async function getApprovedLeavesInRange(employeeId, startDate, endDate) {
     employeeId,
     status: "approved",
     startDate: { $lte: endDate },
-    endDate: { $gte: startDate }
+    endDate: { $gte: startDate },
   }).lean();
 }
 
@@ -158,7 +163,7 @@ async function getApprovedRHRequestsInRange(employeeId, userId, startDate, endDa
   return RestrictedHolidayRequest.find({
     $or: [{ employeeId }, { userId }],
     status: "approved",
-    holidayDate: { $gte: startDate, $lte: endDate }
+    holidayDate: { $gte: startDate, $lte: endDate },
   }).lean();
 }
 
@@ -215,11 +220,13 @@ function computeSalaryForEmployee({
   incentive = 0,
   bonus = 0,
   damages = 0,
-  advanceRecovery = 0
+  advanceRecovery = 0,
 }) {
   const leaveDates = expandLeaveDates(approvedLeaves);
-  const { publicSet: publicHolidayDates, restrictedByDate: approvedRestrictedHolidayByDate } =
-    buildHolidayMaps(holidays, approvedRHRequests);
+  const { publicSet: publicHolidayDates, restrictedByDate: approvedRestrictedHolidayByDate } = buildHolidayMaps(
+    holidays,
+    approvedRHRequests
+  );
 
   // map attendance by date
   const attByDate = new Map();
@@ -248,7 +255,7 @@ function computeSalaryForEmployee({
     hourlyDeduction: 0,
     payableWorkingDays: 0,
     paidSundays: 0,
-    notes: ""
+    notes: "",
   }));
 
   const weekIndexForDate = (dateObj) => {
@@ -264,7 +271,7 @@ function computeSalaryForEmployee({
 
   // Payable days logic
   // - PUBLIC holiday payable
-  // - Approved leave payable (as per your earlier approach)
+  // - Approved leave payable
   // - Approved RH payable (employee requested)
   // - Saturday off by pattern: payable weekly off
   // - Sunday payable only if >=3 payable working-days in that week
@@ -383,13 +390,13 @@ function computeSalaryForEmployee({
   const grossSalary = clamp2(perDay * payableDays);
 
   const takeHome = clamp2(
-    grossSalary
-      - Number(totalHourlyDeduction || 0)
-      - Number(pfTaxDeduction || 0)
-      - Number(damages || 0)
-      - Number(advanceRecovery || 0)
-      + Number(incentive || 0)
-      + Number(bonus || 0)
+    grossSalary -
+      Number(totalHourlyDeduction || 0) -
+      Number(pfTaxDeduction || 0) -
+      Number(damages || 0) -
+      Number(advanceRecovery || 0) +
+      Number(incentive || 0) +
+      Number(bonus || 0)
   );
 
   return {
@@ -418,7 +425,7 @@ function computeSalaryForEmployee({
     advanceRecovery: Number(advanceRecovery || 0),
 
     takeHome,
-    weeks
+    weeks,
   };
 }
 
@@ -451,7 +458,8 @@ router.get("/preview", authenticate, requireAdmin, async (req, res) => {
       personal: 1,
       org: 1,
       schedule: 1,
-      mappedUser: 1
+      mappedUser: 1,
+      financial: 1, // ✅ needed for financial.currentTakeHome
     }).lean();
 
     const holidays = await getHolidaysInRange(periodStart, periodEnd);
@@ -464,22 +472,13 @@ router.get("/preview", authenticate, requireAdmin, async (req, res) => {
 
       const attendance = await getAttendanceInRange(empId, periodStart, periodEnd);
       const approvedLeaves = await getApprovedLeavesInRange(empId, periodStart, periodEnd);
-      const approvedRHRequests = await getApprovedRHRequestsInRange(
-        empId,
-        emp.mappedUser,
-        periodStart,
-        periodEnd
-      );
+      const approvedRHRequests = await getApprovedRHRequestsInRange(empId, emp.mappedUser, periodStart, periodEnd);
 
-      const saturdaysPattern =
-        emp?.schedule?.saturdaysOffPattern ||
-        emp?.schedule?.saturdaysPattern ||
-        "1st_3rd";
-
+      const saturdaysPattern = emp?.schedule?.saturdaysOffPattern || emp?.schedule?.saturdaysPattern || "1st_3rd";
       const expectedHoursPerDay = 9;
 
-      // Salary offered: pick from employee.salaryConfig if you have it; fallback 0
-      const salaryOffered = Number(emp?.salary?.offered || emp?.org?.salaryOffered || 0);
+      // ✅ Salary Offered must come from employee.financial.currentTakeHome
+      const salaryOffered = Number(emp?.financial?.currentTakeHome || 0);
 
       const computed = computeSalaryForEmployee({
         employee: emp,
@@ -496,7 +495,7 @@ router.get("/preview", authenticate, requireAdmin, async (req, res) => {
         incentive: 0,
         bonus: 0,
         damages: 0,
-        advanceRecovery: 0
+        advanceRecovery: 0,
       });
 
       results.push(computed);
@@ -507,7 +506,7 @@ router.get("/preview", authenticate, requireAdmin, async (req, res) => {
       startDate: toISODate(periodStart),
       endDate: toISODate(periodEnd),
       count: results.length,
-      results
+      results,
     });
   } catch (error) {
     console.error("Salary preview error:", error);
@@ -527,7 +526,7 @@ router.post("/generate", authenticate, requireAdmin, async (req, res) => {
       endDate,
       employeeId,
       frequency = "custom",
-      overrides = {} // { salaryOffered, pfTaxDeduction, incentive, bonus, damages, advanceRecovery }
+      overrides = {}, // { salaryOffered, pfTaxDeduction, incentive, bonus, damages, advanceRecovery }
     } = req.body || {};
 
     if (!startDate || !endDate) {
@@ -547,7 +546,8 @@ router.post("/generate", authenticate, requireAdmin, async (req, res) => {
       personal: 1,
       org: 1,
       schedule: 1,
-      mappedUser: 1
+      mappedUser: 1,
+      financial: 1, // ✅ needed for financial.currentTakeHome
     }).lean();
 
     const holidays = await getHolidaysInRange(periodStart, periodEnd);
@@ -563,14 +563,11 @@ router.post("/generate", authenticate, requireAdmin, async (req, res) => {
       const approvedLeaves = await getApprovedLeavesInRange(empId, periodStart, periodEnd);
       const approvedRHRequests = await getApprovedRHRequestsInRange(empId, emp.mappedUser, periodStart, periodEnd);
 
-      const saturdaysPattern =
-        emp?.schedule?.saturdaysOffPattern ||
-        emp?.schedule?.saturdaysPattern ||
-        "1st_3rd";
-
+      const saturdaysPattern = emp?.schedule?.saturdaysOffPattern || emp?.schedule?.saturdaysPattern || "1st_3rd";
       const expectedHoursPerDay = 9;
 
-      const baseSalaryOffered = Number(emp?.salary?.offered || emp?.org?.salaryOffered || 0);
+      // ✅ Salary Offered must come from employee.financial.currentTakeHome
+      const baseSalaryOffered = Number(emp?.financial?.currentTakeHome || 0);
 
       const computed = computeSalaryForEmployee({
         employee: emp,
@@ -588,7 +585,7 @@ router.post("/generate", authenticate, requireAdmin, async (req, res) => {
         incentive: Number(overrides.incentive ?? 0),
         bonus: Number(overrides.bonus ?? 0),
         damages: Number(overrides.damages ?? 0),
-        advanceRecovery: Number(overrides.advanceRecovery ?? 0)
+        advanceRecovery: Number(overrides.advanceRecovery ?? 0),
       });
 
       try {
@@ -598,8 +595,8 @@ router.post("/generate", authenticate, requireAdmin, async (req, res) => {
             $set: {
               ...computed,
               frequency,
-              meta: { createdBy: req.user?._id, note: "" }
-            }
+              meta: { createdBy: req.user?._id, note: "" },
+            },
           },
           { new: true, upsert: true }
         );
@@ -615,7 +612,7 @@ router.post("/generate", authenticate, requireAdmin, async (req, res) => {
       savedCount: saved.length,
       skippedCount: skipped.length,
       saved,
-      skipped
+      skipped,
     });
   } catch (error) {
     console.error("Salary generate error:", error);
@@ -646,8 +643,12 @@ router.get("/records", authenticate, requireAdmin, async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [rows, total] = await Promise.all([
-      SalaryRecord.find(query).sort({ periodStart: -1, employeeName: 1 }).skip(skip).limit(parseInt(limit)).lean(),
-      SalaryRecord.countDocuments(query)
+      SalaryRecord.find(query)
+        .sort({ periodStart: -1, employeeName: 1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      SalaryRecord.countDocuments(query),
     ]);
 
     res.json({
@@ -657,8 +658,8 @@ router.get("/records", authenticate, requireAdmin, async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+        pages: Math.ceil(total / parseInt(limit)),
+      },
     });
   } catch (error) {
     console.error("Salary records error:", error);
@@ -674,15 +675,7 @@ router.get("/records", authenticate, requireAdmin, async (req, res) => {
 router.patch("/records/:id", authenticate, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      salaryOffered,
-      pfTaxDeduction,
-      incentive,
-      bonus,
-      damages,
-      advanceRecovery,
-      metaNote
-    } = req.body || {};
+    const { salaryOffered, pfTaxDeduction, incentive, bonus, damages, advanceRecovery, metaNote } = req.body || {};
 
     const rec = await SalaryRecord.findById(id);
     if (!rec) return res.status(404).json({ success: false, message: "Record not found" });
@@ -697,13 +690,13 @@ router.patch("/records/:id", authenticate, requireAdmin, async (req, res) => {
 
     // recompute takeHome (weekly calc stays same)
     rec.takeHome =
-      Number(rec.grossSalary || 0)
-      - Number(rec.hourlyDeduction || 0)
-      - Number(rec.pfTaxDeduction || 0)
-      - Number(rec.damages || 0)
-      - Number(rec.advanceRecovery || 0)
-      + Number(rec.incentive || 0)
-      + Number(rec.bonus || 0);
+      Number(rec.grossSalary || 0) -
+      Number(rec.hourlyDeduction || 0) -
+      Number(rec.pfTaxDeduction || 0) -
+      Number(rec.damages || 0) -
+      Number(rec.advanceRecovery || 0) +
+      Number(rec.incentive || 0) +
+      Number(rec.bonus || 0);
 
     await rec.save();
 
